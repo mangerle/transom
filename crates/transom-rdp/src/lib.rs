@@ -5,8 +5,7 @@
 //!
 //! 核心架构组成：
 //! - [`session`]：独立操作系统线程 + current-thread 运行时的会话驱动器与取消停机机制；
-//! - [`tiles`]：256x256 纯 RGBA8 增量瓦片补丁提取器；
-//! - [`pointer`]：远端光标纯像素位图数据结构；
+//! - [`tiles`]：128x128 纯 RGBA8 增量瓦片补丁提取器；
 //! - [`keyboard`]：逻辑按键到 PC XT 扫描码的无堆分配按键映射；
 //! - [`audio`]：RDPSND 远端音频流与本地 cpal 静音直通后端；
 //! - [`clipboard`]：双向 UTF-16LE 文本剪贴板与沙箱路径防穿越校验；
@@ -16,7 +15,6 @@ pub mod audio;
 pub mod clipboard;
 pub mod error;
 pub mod keyboard;
-pub mod pointer;
 pub mod session;
 pub mod settings;
 pub mod tiles;
@@ -26,7 +24,6 @@ pub use audio::TransomAudioBackend;
 pub use clipboard::ClipboardEvent;
 pub use error::RdpError;
 pub use keyboard::{KeyChord, ModifierState};
-pub use pointer::CursorUpdate;
 pub use session::{MouseBtn, RdpInput, RdpOutput, RdpReceivers, RdpSession};
 pub use settings::{SessionConfig, TlsCertVerifier, TlsCertificateInfo};
 pub use tiles::{FrameUpdate, TILE_SIZE, TilePatch};

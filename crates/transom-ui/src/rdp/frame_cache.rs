@@ -12,7 +12,7 @@
 use gpui_kit::{Bounds, Pixels, Point, RenderImage, Size, Window, px};
 use image::{Frame, RgbaImage};
 use std::sync::Arc;
-use transom_rdp::{CursorUpdate, FrameUpdate, TilePatch};
+use transom_rdp::{FrameUpdate, TilePatch};
 
 /// UI 侧常驻的桌面瓦片 GPU 纹理缓存。
 #[derive(Default)]
@@ -95,11 +95,6 @@ impl TiledFrameCache {
         }
     }
 
-    /// 将一张已淘汰的 GPU 纹理（瓦片或自定义光标）登记到待回收队列。
-    pub(crate) fn retire_image(&mut self, img: Arc<RenderImage>) {
-        self.stale_images.push(img);
-    }
-
     /// 在持有窗口上下文时，确定性释放全部已淘汰的 GPU Sprite Atlas 纹理。
     pub(crate) fn drain_stale_images(&mut self, window: &mut Window) {
         for img in self.stale_images.drain(..) {
@@ -132,50 +127,6 @@ impl TiledFrameCache {
         for slot in &mut self.tiles {
             if let Some(old) = slot.take() {
                 self.stale_images.push(old);
-            }
-        }
-    }
-}
-
-/// UI 侧已解码的光标渲染状态。
-#[derive(Clone)]
-pub(crate) enum RenderedCursor {
-    Default,
-    Hidden,
-    Custom {
-        width: u16,
-        height: u16,
-        hot_x: u16,
-        hot_y: u16,
-        image: Arc<RenderImage>,
-    },
-}
-
-impl From<CursorUpdate> for RenderedCursor {
-    fn from(update: CursorUpdate) -> Self {
-        match update {
-            CursorUpdate::Default => Self::Default,
-            CursorUpdate::Hidden => Self::Hidden,
-            CursorUpdate::Custom {
-                width,
-                height,
-                hot_x,
-                hot_y,
-                rgba,
-            } => {
-                if let Some(img) =
-                    RgbaImage::from_raw(u32::from(width), u32::from(height), rgba.to_vec())
-                {
-                    Self::Custom {
-                        width,
-                        height,
-                        hot_x,
-                        hot_y,
-                        image: Arc::new(RenderImage::new(vec![Frame::new(img)])),
-                    }
-                } else {
-                    Self::Default
-                }
             }
         }
     }

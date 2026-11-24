@@ -66,11 +66,11 @@ pub fn map_modifiers(modifiers: gpui_kit::Modifiers) -> ModifierState {
 }
 
 impl RdpView {
-    /// 处理鼠标指针在视口内的移动事件（集成 125Hz 流量整形与坐标无重入缓存）。
+    /// 处理鼠标指针在视口内的移动事件（集成 125Hz 流量整形与坐标缓存）。
     pub(crate) fn handle_mouse_move(
         &mut self,
         event: &gpui_kit::MouseMoveEvent,
-        cx: &mut gpui_kit::Context<Self>,
+        _cx: &mut gpui_kit::Context<Self>,
     ) {
         let RdpViewState::Connected { width, height } = self.state else {
             return;
@@ -85,12 +85,7 @@ impl RdpView {
             self.input.pan_offset,
         );
 
-        if mapped != self.input.last_mouse_pos.get() {
-            self.input.last_mouse_pos.set(mapped);
-            if self.is_custom_cursor_active() {
-                cx.notify();
-            }
-        }
+        self.input.last_mouse_pos = mapped;
 
         if let Some((x, y)) = mapped
             && self.input.last_mouse_sent_at.elapsed() >= MOUSE_MOVE_THROTTLE_INTERVAL
@@ -101,10 +96,8 @@ impl RdpView {
     }
 
     /// 鼠标移出视口：仅清理悬停坐标状态，不干扰仍在焦点的键盘输入。
-    pub(crate) fn handle_mouse_exit(&mut self, cx: &mut gpui_kit::Context<Self>) {
-        if self.input.last_mouse_pos.replace(None).is_some() && self.is_custom_cursor_active() {
-            cx.notify();
-        }
+    pub(crate) fn handle_mouse_exit(&mut self, _cx: &mut gpui_kit::Context<Self>) {
+        self.input.last_mouse_pos = None;
     }
 
     /// 处理鼠标按下：夺回键盘焦点、原子补齐最新坐标并派发点击。
@@ -115,7 +108,7 @@ impl RdpView {
         cx: &mut gpui_kit::Context<Self>,
     ) {
         self.focus(window, cx);
-        if let Some((x, y)) = self.input.last_mouse_pos.get() {
+        if let Some((x, y)) = self.input.last_mouse_pos {
             self.send_mouse_move(x, y);
         }
         if let Some(input) = map_mouse_button(btn, true) {

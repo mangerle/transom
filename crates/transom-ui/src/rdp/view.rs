@@ -5,14 +5,14 @@
 //! 按键清理；渲染层统一使用 [`Palette`] 主题语义色与设计令牌，彻底消除硬编码颜色。
 
 use super::canvas::ViewportSyncHandle;
-use super::frame_cache::{RenderedCursor, TiledFrameCache};
+use super::frame_cache::TiledFrameCache;
 use super::toolbar::{RdpToolbarParams, render_rdp_toolbar};
 use crate::palette::Palette;
 use gpui_kit::base::v_flex;
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::Button;
 use gpui_kit::*;
-use std::cell::{Cell, RefCell};
+use std::cell::RefCell;
 use std::rc::Rc;
 use std::time::Instant;
 use tokio::sync::mpsc;
@@ -47,7 +47,7 @@ impl EventEmitter<RdpViewEvent> for RdpView {}
 
 /// 收敛在视口内的交互输入子状态，避免将输入细节平铺到视图顶层。
 pub(crate) struct RdpInputState {
-    pub(crate) last_mouse_pos: Rc<Cell<Option<(u16, u16)>>>,
+    pub(crate) last_mouse_pos: Option<(u16, u16)>,
     pub(crate) last_mouse_sent_at: Instant,
     pub(crate) scroll_remainder_x: f32,
     pub(crate) scroll_remainder_y: f32,
@@ -57,7 +57,7 @@ pub(crate) struct RdpInputState {
 impl Default for RdpInputState {
     fn default() -> Self {
         Self {
-            last_mouse_pos: Rc::new(Cell::new(None)),
+            last_mouse_pos: None,
             last_mouse_sent_at: Instant::now(),
             scroll_remainder_x: 0.0,
             scroll_remainder_y: 0.0,
@@ -75,7 +75,6 @@ pub struct RdpView {
     is_muted: bool,
     pub(crate) is_scaled: bool,
     pub(crate) dynamic_resolution: bool,
-    pub(crate) cursor: RenderedCursor,
     pub(crate) viewport_sync: ViewportSyncHandle,
     last_synced_clipboard: Option<String>,
     focus_handle: FocusHandle,
@@ -98,7 +97,6 @@ impl RdpView {
             is_muted: initial_muted,
             is_scaled: true,
             dynamic_resolution,
-            cursor: RenderedCursor::Default,
             viewport_sync: ViewportSyncHandle::default(),
             last_synced_clipboard: None,
             focus_handle: cx.focus_handle(),
@@ -192,12 +190,6 @@ impl RdpView {
                 self.viewport_sync.set_last_sent_resize(Some((width, height)));
                 self.state = RdpViewState::Connected { width, height };
             }
-            RdpOutput::Cursor(cursor) => {
-                if let RenderedCursor::Custom { image, .. } = &self.cursor {
-                    self.frame_cache.borrow_mut().retire_image(image.clone());
-                }
-                self.cursor = RenderedCursor::from(cursor);
-            }
             RdpOutput::Clipboard(ClipboardEvent::RemoteText(text)) => {
                 self.last_synced_clipboard = Some(text.clone());
                 cx.write_to_clipboard(ClipboardItem::new_string(text));
@@ -228,11 +220,6 @@ impl RdpView {
     /// 聚焦当前 RDP 桌面视图以接收后续键盘输入。
     pub(crate) fn focus(&self, window: &mut Window, cx: &mut Context<Self>) {
         window.focus(&self.focus_handle, cx);
-    }
-
-    /// 当前是否处于客户端自绘自定义光标模式。
-    pub(crate) fn is_custom_cursor_active(&self) -> bool {
-        matches!(self.cursor, RenderedCursor::Custom { .. })
     }
 
     /// 投递最新鼠标坐标（覆盖式无阻塞槽位，绝不挤占按键通道）。
@@ -267,15 +254,9 @@ impl RdpView {
         }
     }
 
-    /// 清理本地缓存瓦片与自定义光标纹理并移入待回收队列。
+    /// 清理本地缓存瓦片并移入待回收队列。
     fn retire_rendered_resources(&mut self) {
-        let mut cache = self.frame_cache.borrow_mut();
-        cache.clear();
-        if let RenderedCursor::Custom { image, .. } =
-            std::mem::replace(&mut self.cursor, RenderedCursor::Default)
-        {
-            cache.retire_image(image);
-        }
+        self.frame_cache.borrow_mut().clear();
     }
 
     /// 发送断开请求并释放按键与会话句柄。

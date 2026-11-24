@@ -11,7 +11,6 @@
 //!    偶数对齐且不丢尾，收到 `DeactivateAll` 后支持取消与失败上报。
 
 use crate::error::RdpError;
-use crate::pointer::{CursorUpdate, create_custom_cursor};
 use crate::session::channel::{RdpInput, RdpOutput, SessionSenders};
 use crate::session::cliprdr::drive_cliprdr_events;
 use crate::session::connector::{ErasedStream, EstablishedConnection};
@@ -397,29 +396,6 @@ impl SessionLoopRunner {
         let mut need_reactivate = false;
         for out in outputs {
             match out {
-                ActiveStageOutput::PointerDefault => {
-                    let _ = self
-                        .senders
-                        .events
-                        .try_send(RdpOutput::Cursor(CursorUpdate::Default));
-                }
-                ActiveStageOutput::PointerHidden => {
-                    let _ = self
-                        .senders
-                        .events
-                        .try_send(RdpOutput::Cursor(CursorUpdate::Hidden));
-                }
-                ActiveStageOutput::PointerBitmap(ptr) => {
-                    if let Some(cursor) = create_custom_cursor(
-                        ptr.width,
-                        ptr.height,
-                        ptr.hotspot_x,
-                        ptr.hotspot_y,
-                        &ptr.bitmap_data,
-                    ) {
-                        let _ = self.senders.events.try_send(RdpOutput::Cursor(cursor));
-                    }
-                }
                 ActiveStageOutput::DeactivateAll => {
                     need_reactivate = true;
                 }
