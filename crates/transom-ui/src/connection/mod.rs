@@ -368,11 +368,13 @@ fn open_rdp_session(
     let view =
         cx.new(|cx| crate::rdp::RdpView::new_pending(!rdp.audio, rdp.dynamic_resolution, cx));
     let secret_store = app_state.runtime.services.secret_store.clone();
+    let known_hosts = app_state.runtime.services.known_hosts.clone();
     let secret_owner = session.secret_owner();
 
     launch_rdp_session_async(
         view.clone(),
         secret_store.clone(),
+        known_hosts.clone(),
         secret_owner.clone(),
         rdp.clone(),
         cx,
@@ -385,6 +387,7 @@ fn open_rdp_session(
                 launch_rdp_session_async(
                     view,
                     secret_store.clone(),
+                    known_hosts.clone(),
                     secret_owner.clone(),
                     rdp.clone(),
                     cx,
@@ -424,6 +427,7 @@ fn open_rdp_session(
 fn launch_rdp_session_async(
     view: Entity<crate::rdp::RdpView>,
     secret_store: std::sync::Arc<dyn transom_core::SecretStore>,
+    known_hosts: std::sync::Arc<dyn transom_core::KnownHostsStore>,
     secret_owner: transom_core::SecretOwner,
     rdp: transom_core::RdpConnection,
     cx: &mut Context<AppShell>,
@@ -442,9 +446,11 @@ fn launch_rdp_session_async(
 
         match password_result {
             Ok(password) => {
+                let port = rdp.port;
                 view.update(cx, |rdp_view, cx| {
                     let initial_size = rdp_view.current_viewport_size().unwrap_or((1280, 800));
-                    let config = transom_rdp::SessionConfig::new(&rdp, password, initial_size);
+                    let mut config = transom_rdp::SessionConfig::new(&rdp, password, initial_size);
+                    config.cert_verifier = Some(build_rdp_cert_verifier(known_hosts, port));
                     rdp_view.start_session(config, cx);
                 });
             }
@@ -457,6 +463,45 @@ fn launch_rdp_session_async(
         }
     })
     .detach();
+}
+
+/// 基于 `KnownHostsStore` 构造 RDP TLS 公钥 TOFU 指纹校验回调。
+fn build_rdp_cert_verifier(
+    known_hosts: std::sync::Arc<dyn transom_core::KnownHostsStore>,
+    port: u16,
+) -> transom_rdp::TlsCertVerifier {
+    std::sync::Arc::new(move |cert: &transom_rdp::TlsCertificateInfo| {
+        let info = transom_core::HostKeyInfo::new(
+            "rdp-tls-sha256",
+            cert.sha256_fingerprint.clone(),
+            None,
+        );
+        match known_hosts.check(&cert.host, port, &info) {
+            Ok(transom_core::HostKeyStatus::Match) => Ok(()),
+            Ok(transom_core::HostKeyStatus::Unknown) => {
+                if let Err(err) = known_hosts.record(&cert.host, port, &info) {
+                    log::warn!("记录 RDP TLS 首次信任指纹失败，忽略继续: {err}");
+                } else {
+                    log::info!(
+                        "首次信任 RDP 主机 TLS 公钥指纹并已持久化，主机: {}:{port}，指纹: {}",
+                        cert.host,
+                        cert.sha256_fingerprint
+                    );
+                }
+                Ok(())
+            }
+            Ok(transom_core::HostKeyStatus::Mismatch {
+                previous_fingerprint,
+            }) => Err(format!(
+                "服务器 TLS 公钥指纹已变更（原记录: {previous_fingerprint}，当前: {}），疑似中间人拦截",
+                cert.sha256_fingerprint
+            )),
+            Err(err) => {
+                log::warn!("检查 RDP known_hosts 失败，降级放行: {err}");
+                Ok(())
+            }
+        }
+    })
 }
 
 /// 当前支持通过界面建立的连接类型；未知类型在派发前拒绝。
