@@ -2,6 +2,7 @@
 
 use crate::palette::Palette;
 use crate::theme::tokens::{size, space, typography};
+use crate::widgets::{underline_tab_active_line, underline_tab_bar_line};
 use gpui_kit::base::{Tab, Tabs, h_flex};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
@@ -41,17 +42,7 @@ pub(super) fn render_underline_tabs(
                 el.hover(|style| style.text_color(p.foreground))
             })
             .child(label.clone())
-            .when(selected, |el| {
-                el.child(
-                    div()
-                        .absolute()
-                        .bottom_0()
-                        .left_0()
-                        .right_0()
-                        .h(px(2.0))
-                        .bg(p.primary),
-                )
-            });
+            .when(selected, |el| el.child(underline_tab_active_line(p)));
 
         Tab::new(item.id)
             .h_full()
@@ -70,15 +61,7 @@ pub(super) fn render_underline_tabs(
         .w_full()
         .px(rems(space::SM))
         .items_center()
-        .child(
-            div()
-                .absolute()
-                .bottom_0()
-                .left_0()
-                .right_0()
-                .h(px(1.0))
-                .bg(p.divider(p.border)),
-        )
+        .child(underline_tab_bar_line(p))
         .child(
             Tabs::new(id)
                 .h_full()
