@@ -2,6 +2,7 @@
 
 use super::*;
 use crate::container::ContainerWorkspace;
+use crate::search::contains_case_insensitive;
 use crate::widgets::{IconButton, IconButtonSize, action_button};
 use gpui_kit::ClipboardItem;
 use transom_core::{ContainerFileSystemChange, ContainerPathChangeKind};
@@ -89,7 +90,7 @@ fn filter_changes<'a>(
     let keyword = search_keyword.trim().to_lowercase();
     changes
         .iter()
-        .filter(|change| keyword.is_empty() || change.path.to_lowercase().contains(&keyword))
+        .filter(|change| contains_case_insensitive(&change.path, &keyword))
         .collect()
 }
 

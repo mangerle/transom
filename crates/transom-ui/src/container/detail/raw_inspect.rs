@@ -6,6 +6,7 @@
 
 use super::*;
 use crate::container::ContainerWorkspace;
+use crate::search::contains_case_insensitive;
 use crate::widgets::action_button;
 use gpui_kit::ClipboardItem;
 use transom_ui_icons::UiIcon;
@@ -45,7 +46,7 @@ pub(crate) fn render_raw_inspect(
     } else {
         lines
             .iter()
-            .filter(|line| line.to_lowercase().contains(&search_keyword))
+            .filter(|line| contains_case_insensitive(line, &search_keyword))
             .count()
     };
 
@@ -137,8 +138,7 @@ pub(crate) fn render_raw_inspect(
         .text_size(p.mono_font_size);
 
     for (idx, line) in lines.iter().enumerate() {
-        let is_matched =
-            !search_keyword.is_empty() && line.to_lowercase().contains(&search_keyword);
+        let is_matched = contains_case_insensitive(line, &search_keyword);
 
         let mut row = h_flex()
             .items_start()

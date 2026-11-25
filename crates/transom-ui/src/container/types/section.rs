@@ -204,9 +204,30 @@ impl ContainerSortKey {
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub(crate) struct SortFields {
     pub(crate) name: String,
-    pub(crate) state: String,
+    /// 稳定 tie-break 使用的小写名称；构造时计算一次，避免排序比较反复分配。
+    name_folded: String,
+    /// 状态排序键；保持与旧实现一致的 ASCII 小写语义。
+    state_folded: String,
     pub(crate) created: i64,
     pub(crate) size: u64,
+}
+
+impl SortFields {
+    /// 构造排序字段，并预计算名称与状态的折叠值。
+    ///
+    /// 设计原理（Why）：列表排序会对同一字段调用比较器 `O(n log n)` 次；
+    /// 在这里一次性折叠，既保持现有大小写不敏感语义，又消除比较阶段的字符串分配。
+    pub(crate) fn new(name: String, state: String, created: i64, size: u64) -> Self {
+        let name_folded = name.to_lowercase();
+        let state_folded = state.to_ascii_lowercase();
+        Self {
+            name,
+            name_folded,
+            state_folded,
+            created,
+            size,
+        }
+    }
 }
 
 /// 按排序键比较两条条目；降序时取反，名称永远作为最后的稳定 tie-break。
@@ -219,26 +240,23 @@ pub(crate) fn compare_fields(
     use std::cmp::Ordering;
     let primary = match key {
         ContainerSortKey::Name => Ordering::Equal,
-        ContainerSortKey::State => left
-            .state
-            .to_ascii_lowercase()
-            .cmp(&right.state.to_ascii_lowercase()),
+        ContainerSortKey::State => left.state_folded.cmp(&right.state_folded),
         ContainerSortKey::Created => left.created.cmp(&right.created),
         ContainerSortKey::Size => left.size.cmp(&right.size),
     };
     let ordered = match primary {
-        Ordering::Equal => left.name.to_lowercase().cmp(&right.name.to_lowercase()),
+        Ordering::Equal => left.name_folded.cmp(&right.name_folded),
         other => other,
     };
     if desc { ordered.reverse() } else { ordered }
 }
 
 /// 关键词是否命中任一字段（大小写不敏感）；空关键词恒为真。
-pub(crate) fn matches_query(query: &str, fields: &[impl AsRef<str>]) -> bool {
-    if query.is_empty() {
-        return true;
-    }
-    fields
-        .iter()
-        .any(|field| field.as_ref().to_lowercase().contains(query))
+///
+/// `query_lower` 由调用方在整批列表扫描前统一转为小写，避免每条记录重复转换。
+pub(crate) fn matches_query<'a>(
+    query_lower: &str,
+    fields: impl IntoIterator<Item = &'a str>,
+) -> bool {
+    crate::search::any_field_matches(query_lower, fields)
 }

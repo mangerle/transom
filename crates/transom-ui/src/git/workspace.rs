@@ -1,20 +1,18 @@
-//! Git 标签页主体：顶部工具栏 + 日志工作区 / 概览。
+//! Git 标签页主体：提交概览与可折叠的底部日志。
 //!
 //! 设计原理（Why）：
-//! - 布局照 IDEA 的 Git 工具窗口：左引用栏、中提交表（含提交图与文件清单）、
-//!   右详情与差异三栏。用户从 IDE 过来时不需要重新学一遍信息在哪；
-//! - 顶部固定两个入口——「提交」开模态框，「操作」在概览与日志工作区之间切换；
-//!   刷新 / 抓取 / 拉取 / 推送作为工具栏动作，与 IDEA 的工具条一致；
+//! - 提交页承载日常改动、提交消息与差异检查；日志通过底部工具窗口按需展开，
+//!   不再维护一条没有入口的独立日志状态分支；
 //! - 渲染期只 `read` 标签页的 `Entity<GitWorkspace>` 状态，任何变更都经实体
 //!   `update` 或 `GitWorkspaceEvent` 回调：这样既避开借用冲突，也让"点击后改什么"
 //!   集中在一处。
 
 use super::GitWorkspace;
 use super::log_view;
-use super::types::{GitBadge, GitView};
+use super::types::GitBadge;
 use crate::divider::{h_resizable, v_resizable};
 use crate::palette::Palette;
-use gpui_kit::base::{h_flex, v_flex};
+use gpui_kit::base::v_flex;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::resizable::resizable_panel;
 use gpui_kit::component::{Disableable, Sizable};
@@ -31,163 +29,50 @@ pub(crate) fn render_git_tab(
     p: &Palette,
 ) -> AnyElement {
     workspace.update(cx, |ws, cx| ws.clear_pending_commit_message(window, cx));
-    let (tab_id, view, bottom_log_open, bottom_log_split) = {
+    let (tab_id, bottom_log_open, bottom_log_split) = {
         let ws = workspace.read(cx);
         let state = &ws.state;
         (
             ws.tab_id,
-            state.view,
             state.bottom_log_open,
             state.bottom_log_split.clone(),
         )
     };
-    let body = match view {
-        GitView::Log => render_git_log_view(workspace.clone(), p, cx),
-        GitView::Overview => {
-            let commit_page = super::commit_page::render_git_commit_page(workspace.clone(), p, cx);
-            if bottom_log_open {
-                let bottom_panel = super::bottom_log::render_git_bottom_log_panel(
-                    workspace.clone(),
-                    badge.branch.clone(),
-                    p,
-                    cx,
-                );
-                div()
-                    .flex_1()
-                    .min_h_0()
-                    .size_full()
-                    .child(
-                        v_resizable(ElementId::Name(
-                            format!("git-bottom-log-split-{tab_id}").into(),
-                        ))
-                        .with_state(&bottom_log_split)
-                        .child(resizable_panel().child(commit_page))
-                        .child(
-                            resizable_panel()
-                                .size(px(320.0))
-                                .size_range(px(180.0)..px(600.0))
-                                .fixed()
-                                .child(bottom_panel),
-                        ),
-                    )
-                    .into_any_element()
-            } else {
-                commit_page
-            }
-        }
+    let commit_page = super::commit_page::render_git_commit_page(workspace.clone(), p, cx);
+    let body = if bottom_log_open {
+        let bottom_panel = super::bottom_log::render_git_bottom_log_panel(
+            workspace.clone(),
+            badge.branch.clone(),
+            p,
+            cx,
+        );
+        div()
+            .flex_1()
+            .min_h_0()
+            .size_full()
+            .child(
+                v_resizable(ElementId::Name(
+                    format!("git-bottom-log-split-{tab_id}").into(),
+                ))
+                .with_state(&bottom_log_split)
+                .child(resizable_panel().child(commit_page))
+                .child(
+                    resizable_panel()
+                        .size(px(320.0))
+                        .size_range(px(180.0)..px(600.0))
+                        .fixed()
+                        .child(bottom_panel),
+                ),
+            )
+            .into_any_element()
+    } else {
+        commit_page
     };
-    let mut root = v_flex().size_full().bg(p.background).relative();
-    // 提交页自带页签与工具条；只有日志页还用这条顶部工具条。
-    if matches!(view, GitView::Log) {
-        root = root.child(render_git_toolbar(workspace, badge, p));
-    }
-    root.child(body).into_any_element()
-}
-
-/// 顶部工具条（日志页）：分支角标 + 远程动作。
-fn render_git_toolbar(workspace: Entity<GitWorkspace>, badge: GitBadge, p: &Palette) -> AnyElement {
-    h_flex()
-        .id("git-toolbar")
-        .px_2()
-        .py_1()
-        .gap_2()
-        .items_center()
-        .flex_none()
-        .border_color(p.divider(p.border))
-        .border_b_1()
+    v_flex()
+        .size_full()
         .bg(p.background)
-        .child(div().flex_1())
-        .child(render_git_branch_chip(badge, p))
-        .child(render_git_remote_actions(workspace))
-        .into_any_element()
-}
-
-/// 远程动作按钮组：提交页与日志页共用。
-fn render_git_remote_actions(workspace: Entity<GitWorkspace>) -> AnyElement {
-    let ws_refresh = workspace.clone();
-    let ws_fetch = workspace.clone();
-    let ws_pull = workspace.clone();
-    let ws_push = workspace;
-    h_flex()
-        .gap_1()
-        .items_center()
-        .child(
-            Button::new("git-toolbar-refresh")
-                .ghost()
-                .xsmall()
-                .child(AppIconElement::new(UiIcon::REFRESH))
-                .accessibility_label(rust_i18n::t!("git.menu.refresh").to_string())
-                .tooltip(rust_i18n::t!("git.menu.refresh").to_string())
-                .on_click(move |_, _, cx| {
-                    ws_refresh.update(cx, |ws, cx| {
-                        ws.refresh();
-                        ws.load_log(0);
-                        cx.notify();
-                    });
-                }),
-        )
-        .child(
-            Button::new("git-toolbar-fetch")
-                .ghost()
-                .xsmall()
-                .child(AppIconElement::new(UiIcon::FETCH))
-                .accessibility_label(rust_i18n::t!("git.toolbar.fetch").to_string())
-                .tooltip(rust_i18n::t!("git.toolbar.fetch").to_string())
-                .on_click(move |_, _, cx| {
-                    ws_fetch.update(cx, |ws, cx| ws.fetch(cx));
-                }),
-        )
-        .child(
-            Button::new("git-toolbar-pull")
-                .ghost()
-                .xsmall()
-                .child(AppIconElement::new(UiIcon::UPDATE))
-                .accessibility_label(rust_i18n::t!("git.toolbar.pull").to_string())
-                .tooltip(rust_i18n::t!("git.toolbar.pull").to_string())
-                .on_click(move |_, _, cx| {
-                    ws_pull.update(cx, |ws, cx| ws.pull(false, cx));
-                }),
-        )
-        .child(
-            Button::new("git-toolbar-push")
-                .ghost()
-                .xsmall()
-                .child(AppIconElement::new(UiIcon::PUSH))
-                .accessibility_label(rust_i18n::t!("git.toolbar.push").to_string())
-                .tooltip(rust_i18n::t!("git.toolbar.push").to_string())
-                .on_click(move |_, _, cx| {
-                    ws_push.update(cx, |ws, cx| ws.open_push_modal(cx));
-                }),
-        )
-        .into_any_element()
-}
-
-/// 当前分支 + 领先/落后角标。
-fn render_git_branch_chip(badge: GitBadge, p: &Palette) -> AnyElement {
-    h_flex()
-        .gap_1()
-        .items_center()
-        .px_2()
-        .py_0p5()
-        .rounded(px(3.0))
-        .bg(p.muted)
-        .child(
-            AppIconElement::new(UiIcon::VCS)
-                .xsmall()
-                .text_color(p.primary),
-        )
-        .child(
-            div()
-                .text_xs()
-                .text_color(p.foreground)
-                .child(badge.branch.unwrap_or_else(|| "-".into())),
-        )
-        .child(
-            div()
-                .text_xs()
-                .text_color(p.muted_foreground)
-                .child(format!("↑{} ↓{}", badge.ahead, badge.behind)),
-        )
+        .relative()
+        .child(body)
         .into_any_element()
 }
 

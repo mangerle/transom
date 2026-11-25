@@ -3,6 +3,7 @@
 use super::ApiWorkspace;
 use super::workspace_view::ApiWorkspaceParams;
 use crate::palette::Palette;
+use crate::search::contains_case_insensitive;
 use crate::theme::tokens::space;
 use crate::widgets::{IconButton, IconButtonSize};
 use gpui_kit::base::{h_flex, v_flex};
@@ -77,22 +78,20 @@ fn render_save_destination_menu(
     cx: &App,
 ) -> AnyElement {
     let query = search.read(cx).value().trim().to_lowercase();
-    let root_matches = query.is_empty()
-        || rust_i18n::t!("api.request.save_root")
-            .to_lowercase()
-            .contains(&query);
+    let root_label = rust_i18n::t!("api.request.save_root").to_string();
+    let root_matches = contains_case_insensitive(&root_label, &query);
     let mut rows = Vec::with_capacity(folders.len().saturating_add(1));
     if root_matches {
         rows.push(destination_row(
             "api-save-root",
-            rust_i18n::t!("api.request.save_root").to_string(),
+            root_label,
             AppIcon::Ui(UiIcon::HOME_FOLDER),
             view,
             None,
         ));
     }
     for folder in folders {
-        if !query.is_empty() && !folder.name.to_lowercase().contains(&query) {
+        if !contains_case_insensitive(&folder.name, &query) {
             continue;
         }
         rows.push(destination_row(

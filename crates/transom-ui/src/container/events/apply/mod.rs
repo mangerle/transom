@@ -5,6 +5,7 @@
 //! 需要后续请求（如自动 inspect 第一项）时由实体直接投递，不再回交外壳。
 
 use super::super::*;
+use crate::search::contains_case_insensitive;
 
 /// 自动调度下一条下载任务所需的参数：任务 ID、工作区、镜像引用与仓库凭据。
 type ScheduledPull = (
@@ -292,7 +293,7 @@ impl ContainerWorkspace {
         if self.state.stats_processes_request == Some(request_id) {
             self.state.stats_processes_request = None;
             self.state.stats_processes_loading = false;
-            let friendly_err = if err_desc.to_lowercase().contains("is not running") {
+            let friendly_err = if contains_case_insensitive(err_desc, "is not running") {
                 rust_i18n::t!("container.stats.container_stopped").to_string()
             } else {
                 err_desc.to_string()

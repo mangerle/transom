@@ -17,6 +17,11 @@ mod tests;
 
 pub use backup::{backup_volume, restore_volume};
 
+/// 清空取消路径登记的全部临时探针容器清理项。
+pub(crate) async fn flush_pending_cleanup() {
+    probe::flush_pending_cleanup().await;
+}
+
 use crate::engine::Engine;
 use crate::error::ContainerError;
 use crate::files::{download, list_dir, read_file, validate_container_path, write_file_bytes};

@@ -129,14 +129,6 @@ impl RdpView {
         }
     }
 
-    /// 构造新的 RDP 桌面视图并立即启动后台会话连接。
-    #[allow(dead_code)]
-    pub fn new(config: SessionConfig, cx: &mut Context<Self>) -> Self {
-        let mut view = Self::new_pending(!config.audio, config.dynamic_resolution, cx);
-        view.start_session(config, None, cx);
-        view
-    }
-
     /// 使用就绪的会话配置启动或重新启动后台 RDP 连接（原地复用标签页）。
     pub fn start_session(
         &mut self,

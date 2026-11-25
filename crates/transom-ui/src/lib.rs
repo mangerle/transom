@@ -60,6 +60,7 @@ pub(crate) mod performance;
 pub(crate) mod probe;
 pub(crate) mod rdp;
 pub(crate) mod record;
+pub(crate) mod search;
 pub(crate) mod session_appearance;
 pub(crate) mod session_form;
 pub(crate) mod settings;
@@ -83,6 +84,7 @@ pub use workspace::WorkspaceState;
 use app_assets::AppAssets;
 use gpui_kit::component as gpui_component;
 use gpui_kit::*;
+use parking_lot::Mutex;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use transom_api::{ApiHttpService, ApiProjectStore, ApiWebSocketService};
@@ -114,7 +116,19 @@ pub struct UiServices {
     pub event_tx: flume::Sender<AppEvent>,
 }
 
-pub fn run(services: UiServices) -> bool {
+/// 主界面启动失败。
+#[derive(Debug, thiserror::Error)]
+pub enum UiRunError {
+    #[error("创建主应用窗口失败，原因: {reason}")]
+    OpenWindow { reason: String },
+}
+
+/// 启动 GPUI 主循环，并返回是否需要在退出后重启进程。
+///
+/// # Errors
+/// 主窗口无法创建时返回 [`UiRunError::OpenWindow`]；调用方应在控制器完成
+/// 优雅停机后再将错误向上传播。
+pub fn run(services: UiServices) -> Result<bool, UiRunError> {
     // 关于页安装完成后只置位本标志并退出事件循环；真正拉起新进程由 `main`
     // 在控制器优雅停机之后执行，避免 SSH 连接与审计写入被直接截断。
     let restart_requested = Arc::new(AtomicBool::new(false));
@@ -162,6 +176,8 @@ pub fn run(services: UiServices) -> bool {
     );
 
     let restart_flag = restart_requested.clone();
+    let window_error = Arc::new(Mutex::new(None::<String>));
+    let window_error_slot = Arc::clone(&window_error);
     let external_url_tx = services.event_tx.clone();
     let application = application().with_assets(AppAssets);
     application.on_open_urls(move |urls| {
@@ -239,17 +255,22 @@ pub fn run(services: UiServices) -> bool {
             }),
             ..Default::default()
         };
-        open_window(options, cx, move |window, cx| {
+        if let Err(error) = open_window(options, cx, move |window, cx| {
             // 桌面标识用于任务栏分组与 `ssh://` 处理程序回指本应用，必须与
             // packaging/linux 下 .desktop 的 StartupWMClass 保持一致。
             window.set_app_id(transom_platform::paths::APP_ID);
             cx.new(move |cx| AppShell::new(window, cx, services, settings, restart_flag))
-        })
-        .expect("创建并打开主应用窗口失败");
+        }) {
+            *window_error_slot.lock() = Some(error.to_string());
+            cx.quit();
+        }
     });
-    // 安装更新后用户点了"立即重启"：把意图交回 main，由它在控制器优雅停机
-    // 之后拉起新进程，而不是在 UI 回调里直接退出。
-    restart_requested.load(Ordering::Relaxed)
+    match window_error.lock().take() {
+        Some(reason) => Err(UiRunError::OpenWindow { reason }),
+        // 安装更新后用户点了"立即重启"：把意图交回 main，由它在控制器优雅停机
+        // 之后拉起新进程，而不是在 UI 回调里直接退出。
+        None => Ok(restart_requested.load(Ordering::Relaxed)),
+    }
 }
 
 /// 开关为"开"时校验并（仅在不一致时）重言默认终端注册。

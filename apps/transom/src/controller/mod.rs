@@ -356,7 +356,7 @@ async fn run_controller(wiring: ControlPlaneWiring) {
         };
 
         if matches!(control, commands::LoopControl::Shutdown) {
-            commands::shutdown(&mut state, &shutdown_tx).await;
+            commands::shutdown(&mut state, &ctx, &shutdown_tx).await;
             break;
         }
     }

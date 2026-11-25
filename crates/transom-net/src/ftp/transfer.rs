@@ -22,7 +22,7 @@ use transom_core::{
     AppError, ErrorCode, TransferFilter, TransferMatcher, TransferStart, TransferSummary,
 };
 
-use super::FtpClient;
+use super::{FtpClient, transfer_io_error};
 use crate::sftp::hash::hex_encode;
 use crate::sftp::transfer::{
     TransferProgressResult, finish_download_target, open_local_download_target,
@@ -463,9 +463,4 @@ async fn scan_local_dir(
 /// 传输会话未连接时的兜底错误（正常路径中 ensure_connected 已保证）。
 fn transfer_stream_missing() -> AppError {
     AppError::with_detail(ErrorCode::FtpFailed, "FTP 传输连接未能建立")
-}
-
-/// 传输数据流的底层 IO 故障统一转为领域错误。
-fn transfer_io_error(error: std::io::Error) -> AppError {
-    AppError::with_detail(ErrorCode::FtpFailed, format!("FTP 数据传输失败: {error}"))
 }

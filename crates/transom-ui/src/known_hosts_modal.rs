@@ -3,6 +3,7 @@
 use crate::divider::{DividerEdge, DividerStyled};
 use crate::keys::KnownHostsView;
 use crate::palette::Palette;
+use crate::search::contains_case_insensitive;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::input::Input;
@@ -16,20 +17,21 @@ impl KnownHostsView {
     /// 渲染期实体已被租借，因此只读自身状态；按钮回调经 `cx.listener` 回到
     /// 本实体，不再经外壳转发。
     pub(crate) fn render_body(&mut self, cx: &mut Context<Self>, p: &Palette) -> AnyElement {
-        let records = self.records().to_vec();
         let search = self.search().clone();
         let search_query = search.read(cx).value().trim().to_lowercase();
         let mut rows: Vec<AnyElement> = Vec::new();
-        let filtered: Vec<_> = records
-            .into_iter()
+        let filtered: Vec<_> = self
+            .records()
+            .iter()
             .filter(|record| {
                 if search_query.is_empty() {
                     return true;
                 }
-                record.host.to_lowercase().contains(&search_query)
-                    || record.port.to_string().contains(&search_query)
-                    || record.algorithm.to_lowercase().contains(&search_query)
-                    || record.fingerprint.to_lowercase().contains(&search_query)
+                let port = record.port.to_string();
+                contains_case_insensitive(&record.host, &search_query)
+                    || contains_case_insensitive(&port, &search_query)
+                    || contains_case_insensitive(&record.algorithm, &search_query)
+                    || contains_case_insensitive(&record.fingerprint, &search_query)
             })
             .collect();
 
@@ -44,7 +46,7 @@ impl KnownHostsView {
             );
         } else {
             for (index, record) in filtered.into_iter().enumerate() {
-                rows.push(known_host_row(index, &record, cx, p));
+                rows.push(known_host_row(index, record, cx, p));
             }
         }
 

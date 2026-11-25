@@ -157,16 +157,16 @@ mod tests {
                 id: id.to_string(),
                 name: name.to_string(),
             },
-            fields: SortFields {
-                name: name.to_string(),
-                state: if running {
+            fields: SortFields::new(
+                name.to_string(),
+                if running {
                     "running".to_string()
                 } else {
                     "exited".to_string()
                 },
-                created: 100,
-                size: 200,
-            },
+                100,
+                200,
+            ),
         }
     }
 

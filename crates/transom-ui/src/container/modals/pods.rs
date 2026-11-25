@@ -2,6 +2,7 @@
 
 use crate::container::{ContainerWorkspace, ContainerWorkspaceState};
 use crate::palette::Palette;
+use crate::search::contains_case_insensitive;
 use crate::widgets::{action_button, dialog_actions, dialog_body, dialog_cancel_button};
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants};
@@ -51,7 +52,7 @@ pub(crate) fn render_container_pods_dialog_body(
     }
     for pod in &state.pods {
         let pod_id = pod.id.clone();
-        let status_running = pod.status.to_ascii_lowercase().contains("running");
+        let status_running = contains_case_insensitive(&pod.status, "running");
         let row = h_flex()
             .gap_2()
             .items_center()

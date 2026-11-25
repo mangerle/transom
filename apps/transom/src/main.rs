@@ -105,10 +105,11 @@ fn main() -> anyhow::Result<()> {
         event_tx: controller.event_sender(),
     };
 
-    let restart_requested = transom_ui::run(services);
+    let ui_result = transom_ui::run(services);
     // 优雅停机：控制平面断开全部远端、停止转发并限时收尾，随后关闭运行时。
     // 不能直接 drop：那会让收尾任务随运行时取消，远端收不到 DISCONNECT。
     controller.shutdown();
+    let restart_requested = ui_result?;
     // 更新安装完成后用户点了"立即重启"：此时旧进程的资源已经收尾，
     // 再拉起当前可执行文件的新进程并退出本进程。
     if restart_requested && let Err(error) = transom_updater::restart_current_process() {

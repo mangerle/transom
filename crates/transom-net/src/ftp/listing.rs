@@ -97,7 +97,7 @@ pub(crate) fn civil_to_unix_seconds(
 }
 
 /// 把 suppaftp 解析出的服务端时间收敛为 Unix 秒；早于纪元按 0 处理。
-fn system_time_to_unix(time: std::time::SystemTime) -> Option<u32> {
+pub(super) fn system_time_to_unix(time: std::time::SystemTime) -> Option<u32> {
     let seconds = time
         .duration_since(std::time::SystemTime::UNIX_EPOCH)
         .ok()?

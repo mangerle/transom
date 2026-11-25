@@ -4,6 +4,7 @@
 //! 与 GPUI 渲染解耦后可以独立测试，也避免界面文件继续膨胀。
 
 use super::super::current_head_name;
+use crate::search::contains_case_insensitive;
 use std::collections::BTreeMap;
 use transom_core::TagEntry;
 
@@ -113,7 +114,7 @@ fn build_local_nodes(state: &State, query: &str) -> Vec<RefNode> {
     let items: Vec<PrefixItem> = state
         .branches
         .iter()
-        .filter(|branch| !branch.remote && matches_query(&branch.name, query))
+        .filter(|branch| !branch.remote && contains_case_insensitive(&branch.name, query))
         .map(|branch| PrefixItem {
             full_name: branch.name.clone(),
             rest: branch.name.clone(),
@@ -130,7 +131,7 @@ fn build_remote_nodes(state: &State, query: &str) -> Vec<RefNode> {
     for branch in state
         .branches
         .iter()
-        .filter(|branch| branch.remote && matches_query(&branch.name, query))
+        .filter(|branch| branch.remote && contains_case_insensitive(&branch.name, query))
     {
         let Some((remote, rest)) = branch.name.split_once('/') else {
             continue;
@@ -173,7 +174,7 @@ fn build_tag_nodes(state: &State, query: &str) -> Vec<RefNode> {
     let mut tags: Vec<&TagEntry> = state
         .tags
         .iter()
-        .filter(|tag| matches_query(&tag.name, query))
+        .filter(|tag| contains_case_insensitive(&tag.name, query))
         .collect();
     tags.sort_by(|left, right| right.name.cmp(&left.name));
     tags.into_iter()
@@ -269,11 +270,6 @@ fn node_rank(node: &RefNode) -> u8 {
     } else {
         2
     }
-}
-
-/// 名称是否符合当前搜索词。
-fn matches_query(name: &str, query: &str) -> bool {
-    query.is_empty() || name.to_lowercase().contains(query)
 }
 
 #[cfg(test)]

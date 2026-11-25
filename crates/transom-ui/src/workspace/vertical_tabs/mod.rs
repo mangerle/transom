@@ -21,6 +21,7 @@ use crate::app::app_settings;
 use crate::app::{AppShell, AppState};
 use crate::connection::session_host;
 use crate::palette::Palette;
+use crate::search::contains_case_insensitive;
 use crate::session_appearance::session_icon;
 use crate::sidebar::SidebarSection;
 use crate::theme::tokens::size;
@@ -55,7 +56,7 @@ impl AppState {
             text.push(' ');
             text.push_str(&host);
         }
-        text_matches_query(query_lower, &text)
+        contains_case_insensitive(&text, query_lower)
     }
 
     fn new_session_menu_data(&self) -> NewSessionMenuData {
@@ -357,11 +358,6 @@ fn session_menu_item(entry: &NewSessionEntry, app: &Entity<AppShell>) -> PopupMe
     })
 }
 
-/// 大小写不敏感的包含匹配；查询词已由调用方转小写。
-fn text_matches_query(query_lower: &str, text: &str) -> bool {
-    text.to_lowercase().contains(query_lower)
-}
-
 impl AppState {
     /// 切到左侧槽位的标签面板；顶部模式或面板已可见时为空操作。
     ///
@@ -381,13 +377,16 @@ impl AppState {
 
 #[cfg(test)]
 mod tests {
-    use super::text_matches_query;
+    use crate::search::contains_case_insensitive;
 
     #[test]
     fn search_is_case_insensitive_and_substring_based() {
-        assert!(text_matches_query("prod", "Prod-DB"));
-        assert!(text_matches_query("db", "Prod-DB"));
-        assert!(!text_matches_query("staging", "Prod-DB"));
-        assert!(text_matches_query("", "任意文本"), "空查询视为全部命中");
+        assert!(contains_case_insensitive("Prod-DB", "prod"));
+        assert!(contains_case_insensitive("Prod-DB", "db"));
+        assert!(!contains_case_insensitive("Prod-DB", "staging"));
+        assert!(
+            contains_case_insensitive("任意文本", ""),
+            "空查询视为全部命中"
+        );
     }
 }

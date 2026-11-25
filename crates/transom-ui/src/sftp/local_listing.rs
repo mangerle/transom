@@ -42,22 +42,21 @@ impl LocalDirectoryLister {
             });
         }
 
-        // 统一排序：目录优先，随后按名称小写字母序排序
-        entries.sort_by(|a, b| {
-            b.is_dir.cmp(&a.is_dir).then_with(|| {
-                a.name
-                    .to_ascii_lowercase()
-                    .cmp(&b.name.to_ascii_lowercase())
-            })
-        });
+        sort_local_entries(&mut entries);
         Ok(entries)
     }
 }
 
+/// 目录优先、名称忽略大小写；排序键每项只生成一次。
+fn sort_local_entries(entries: &mut [LocalFileEntry]) {
+    entries.sort_by_cached_key(|entry| (!entry.is_dir, entry.name.to_ascii_lowercase()));
+}
+
 #[cfg(test)]
 mod tests {
-    use super::LocalDirectoryLister;
-    use std::path::Path;
+    use super::{LocalDirectoryLister, sort_local_entries};
+    use crate::sftp::LocalFileEntry;
+    use std::path::{Path, PathBuf};
 
     #[test]
     fn local_provider_lists_current_dir_with_dirs_first() {
@@ -68,5 +67,32 @@ mod tests {
         if let (Some(file), Some(dir)) = (first_file, last_dir) {
             assert!(dir < file, "目录应当排列在普通文件前面");
         }
+    }
+
+    fn entry(name: &str, is_dir: bool) -> LocalFileEntry {
+        LocalFileEntry {
+            name: name.to_string(),
+            path: PathBuf::from(name),
+            is_dir,
+            size: 0,
+        }
+    }
+
+    #[test]
+    fn local_entries_sort_directories_first_and_ignore_ascii_case() {
+        let mut entries = vec![
+            entry("beta", false),
+            entry("Zulu", true),
+            entry("Alpha", false),
+            entry("alpha", true),
+        ];
+
+        sort_local_entries(&mut entries);
+
+        let names = entries
+            .iter()
+            .map(|entry| entry.name.as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(names, vec!["alpha", "Zulu", "Alpha", "beta"]);
     }
 }

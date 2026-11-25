@@ -7,6 +7,7 @@
 //!   命中高亮通过 `Diff::decorations` 声明式注入，不侵入组件库内部状态。
 
 use crate::palette::Palette;
+use crate::search::contains_case_insensitive;
 use gpui_kit::base::{Disableable, h_flex};
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
@@ -121,7 +122,7 @@ pub(crate) fn find_diff_matches(
         match change.tag() {
             ChangeTag::Equal => {
                 if let Some(line) = new_lines.get(new_line - 1)
-                    && line.to_lowercase().contains(&needle)
+                    && contains_case_insensitive(line, &needle)
                 {
                     matches.push(DiffLinePosition::new(
                         clean_path.clone(),
@@ -134,7 +135,7 @@ pub(crate) fn find_diff_matches(
             }
             ChangeTag::Delete => {
                 if let Some(line) = old_lines.get(old_line - 1)
-                    && line.to_lowercase().contains(&needle)
+                    && contains_case_insensitive(line, &needle)
                 {
                     matches.push(DiffLinePosition::new(
                         clean_path.clone(),
@@ -146,7 +147,7 @@ pub(crate) fn find_diff_matches(
             }
             ChangeTag::Insert => {
                 if let Some(line) = new_lines.get(new_line - 1)
-                    && line.to_lowercase().contains(&needle)
+                    && contains_case_insensitive(line, &needle)
                 {
                     matches.push(DiffLinePosition::new(
                         clean_path.clone(),

@@ -19,7 +19,22 @@ const POOL_CAPACITY: usize = 4;
 /// 可复用的 HTTP/1.1 连接。
 struct PooledConnection {
     sender: SendRequest<RequestBody>,
-    driver: tokio::task::JoinHandle<hyper::Result<()>>,
+    driver: DriverGuard,
+}
+
+/// hyper 连接驱动句柄；守卫销毁即中止任务，防止连接池销毁后任务脱管。
+struct DriverGuard(tokio::task::JoinHandle<hyper::Result<()>>);
+
+impl DriverGuard {
+    fn abort(&self) {
+        self.0.abort();
+    }
+}
+
+impl Drop for DriverGuard {
+    fn drop(&mut self) {
+        self.0.abort();
+    }
 }
 /// 按端点缓存的空闲连接池。
 #[derive(Default)]
@@ -131,7 +146,7 @@ async fn open_connection(
     })?;
     Ok(PooledConnection {
         sender,
-        driver: tokio::spawn(connection),
+        driver: DriverGuard(tokio::spawn(connection)),
     })
 }
 async fn send_on_connection(
@@ -198,4 +213,33 @@ async fn send_on_connection(
             reusable: false,
         },
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::DriverGuard;
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    #[tokio::test]
+    async fn dropping_driver_guard_aborts_connection_task() {
+        let cancelled = Arc::new(AtomicUsize::new(0));
+        let cancelled_task = Arc::clone(&cancelled);
+        let task = tokio::spawn(async move {
+            struct Guard(Arc<AtomicUsize>);
+            impl Drop for Guard {
+                fn drop(&mut self) {
+                    self.0.fetch_add(1, Ordering::Relaxed);
+                }
+            }
+            let _guard = Guard(cancelled_task);
+            std::future::pending::<hyper::Result<()>>().await
+        });
+        tokio::task::yield_now().await;
+
+        drop(DriverGuard(task));
+        tokio::task::yield_now().await;
+
+        assert_eq!(cancelled.load(Ordering::Relaxed), 1);
+    }
 }

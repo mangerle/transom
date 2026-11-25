@@ -1,6 +1,7 @@
 //! 引擎侧栏行构建：按分组与搜索词扁平化。
 
 use super::*;
+use crate::search::{any_field_matches, contains_case_insensitive};
 
 /// 侧栏图标按钮：与会话树的图标按钮同尺寸、同悬停口径（Regular 26px / 16px 图标）。
 pub(crate) fn engine_sidebar_button(
@@ -52,20 +53,16 @@ pub(crate) fn build_engine_rows(catalog: &SessionCatalog, query: &str) -> Vec<Co
                 .and_then(|id| folder_paths.get(&id))
                 .map(String::as_str)
                 .unwrap_or_default();
-            let haystack = format!(
-                "{} {} {}",
-                profile.display_name().to_ascii_lowercase(),
-                profile.engine.describe().to_ascii_lowercase(),
-                path.to_ascii_lowercase()
-            );
-            haystack.contains(&query)
+            let display_name = profile.display_name();
+            let description = profile.engine.describe();
+            any_field_matches(&query, [display_name.as_str(), description.as_str(), path])
         })
         .map(|profile| profile.id)
         .collect();
 
     let mut visible_folders = HashSet::new();
     for folder in &catalog.engine_folders {
-        let name_matches = !query.is_empty() && folder.name.to_ascii_lowercase().contains(&query);
+        let name_matches = !query.is_empty() && contains_case_insensitive(&folder.name, &query);
         let has_engine = child_engines.get(&Some(folder.id)).is_some_and(|engines| {
             engines
                 .iter()
@@ -113,7 +110,7 @@ pub(crate) fn build_engine_rows(catalog: &SessionCatalog, query: &str) -> Vec<Co
                     continue;
                 };
                 let name_matched =
-                    !query.is_empty() && folder.name.to_ascii_lowercase().contains(&query);
+                    !query.is_empty() && contains_case_insensitive(&folder.name, &query);
                 let show_all = ancestor_matched || name_matched;
                 if !query.is_empty() && !show_all && !visible_folders.contains(&id) {
                     continue;

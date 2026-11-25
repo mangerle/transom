@@ -222,6 +222,7 @@ fn close_tab(state: &mut ControllerState, ctx: &ControllerCtx, tab_id: TabId) {
 /// 让远端断开会话随运行时关闭被取消。
 pub(super) async fn shutdown(
     state: &mut ControllerState,
+    ctx: &ControllerCtx,
     shutdown_tx: &std::sync::mpsc::Sender<()>,
 ) {
     // 在途云同步没有可续传的事务，停机即中止。
@@ -245,6 +246,8 @@ pub(super) async fn shutdown(
         workspace.shutdown();
     }
     state.container_ops.shutdown().await;
+    // 容器任务取消时只同步登记探针清理项；运行时关闭前在这里统一清空。
+    ctx.container.shutdown().await;
     // Git 请求全部是自带超时的子进程，限时等完即可，不需要单独中止。
     state.git_set.shutdown().await;
     let _ = shutdown_tx.send(());

@@ -184,22 +184,27 @@ fn percent_decode(input: &str) -> String {
     let mut out = Vec::with_capacity(bytes.len());
     let mut i = 0;
     while i < bytes.len() {
-        if bytes[i] == b'%' && i + 2 < bytes.len() && is_hex(bytes[i + 1]) && is_hex(bytes[i + 2]) {
-            // 不变性：i+1、i+2 已通过 is_hex 校验，from_str_radix 必然成功。
-            let value = u8::from_str_radix(&input[i + 1..i + 3], 16)
-                .expect("已通过 is_hex 校验的两位十六进制序列必然可解析");
-            out.push(value);
+        if bytes[i] == b'%'
+            && i + 2 < bytes.len()
+            && let (Some(high), Some(low)) = (hex_value(bytes[i + 1]), hex_value(bytes[i + 2]))
+        {
+            out.push((high << 4) | low);
             i += 3;
-        } else {
-            out.push(bytes[i]);
-            i += 1;
+            continue;
         }
+        out.push(bytes[i]);
+        i += 1;
     }
     String::from_utf8_lossy(&out).into_owned()
 }
 
-fn is_hex(b: u8) -> bool {
-    b.is_ascii_hexdigit()
+fn hex_value(byte: u8) -> Option<u8> {
+    match byte {
+        b'0'..=b'9' => Some(byte - b'0'),
+        b'a'..=b'f' => Some(byte - b'a' + 10),
+        b'A'..=b'F' => Some(byte - b'A' + 10),
+        _ => None,
+    }
 }
 
 /// 判断命令行参数是否为 `ssh://` 深链地址（大小写不敏感）。

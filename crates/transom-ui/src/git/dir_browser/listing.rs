@@ -4,7 +4,6 @@
 //! 所以「隐藏项过滤、目录优先、大小写不敏感排序、防穿越校验」这些口径能在
 //! 这里一次定死并被单测覆盖；面板与动作层读的是同一份结果，不会各列各的。
 
-use std::cmp::Ordering;
 use std::path::{Path, PathBuf};
 
 /// 一个目录一次最多列出的条目数：再多只取前若干并如实说明。
@@ -83,13 +82,7 @@ pub(crate) fn list_entries(
             size,
         });
     }
-    entries.sort_by(|left, right| {
-        match right.is_dir.cmp(&left.is_dir) {
-            Ordering::Equal => {}
-            ordered => return ordered,
-        }
-        left.name.to_lowercase().cmp(&right.name.to_lowercase())
-    });
+    entries.sort_by_cached_key(|entry| (!entry.is_dir, entry.name.to_lowercase()));
     (entries, truncated, None)
 }
 

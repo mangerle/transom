@@ -84,3 +84,18 @@ fn volume_create_conflict_is_tolerated_but_real_failure_is_not() {
         message: "volume already exists".into(),
     }));
 }
+
+/// 探针容器的 Drop 不得再派生脱管异步任务。
+#[test]
+fn temporary_probe_drop_uses_tracked_cleanup_queue() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/volume_files/probe.rs");
+    let source = std::fs::read_to_string(&path).expect("读取探针实现失败");
+    assert!(
+        !source.contains("tokio::spawn"),
+        "探针 Drop 不得派生脱管任务，必须登记到可等待的清理队列"
+    );
+    assert!(
+        source.contains("PENDING_CLEANUP") && source.contains("flush_pending_cleanup"),
+        "探针清理必须保留可观测、可等待的队列"
+    );
+}

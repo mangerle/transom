@@ -103,7 +103,7 @@ fn chinese_literals(src: &str) -> Vec<(usize, String)> {
 ///
 /// 不能简单地从第一个 `#[cfg(test)]` 截断：不少模块把 `mod tests;` 声明在
 /// 文件顶部，截断会把其后全部生产代码漏掉，硬编码文案因此逃过扫描。
-fn blank_test_modules(src: &str) -> String {
+pub(crate) fn blank_test_modules(src: &str) -> String {
     let bytes = src.as_bytes();
     let mut out = String::with_capacity(src.len());
     let mut i = 0;

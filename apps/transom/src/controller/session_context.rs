@@ -26,6 +26,8 @@ pub(crate) struct ManagedSessionContext {
     pub(crate) ftp_client: Option<FtpClient>,
     pub(crate) forwards: HashMap<ForwardId, ForwardTask>,
     pub(crate) traffic_task: Option<JoinHandle<()>>,
+    /// 监听底层连接退出的哨兵任务；随会话销毁而中止，避免停机时留下孤儿任务。
+    pub(crate) connection_watcher: Option<JoinHandle<()>>,
     pub(crate) key_deploy_task: Option<JoinHandle<()>>,
     pub(crate) stats_task: Option<JoinHandle<()>>,
     pub(crate) zmodem_task: Option<JoinHandle<()>>,
@@ -43,6 +45,7 @@ impl ManagedSessionContext {
             ftp_client: None,
             forwards: HashMap::new(),
             traffic_task: None,
+            connection_watcher: None,
             key_deploy_task: None,
             stats_task: None,
             zmodem_task: None,
@@ -53,6 +56,13 @@ impl ManagedSessionContext {
     /// 停止当前会话绑定的流量采样。
     pub(super) fn stop_traffic(&mut self) {
         if let Some(task) = self.traffic_task.take() {
+            task.abort();
+        }
+    }
+
+    /// 停止监听底层连接退出的哨兵任务。
+    pub(super) fn stop_connection_watcher(&mut self) {
+        if let Some(task) = self.connection_watcher.take() {
             task.abort();
         }
     }
@@ -91,6 +101,7 @@ impl ManagedSessionContext {
     /// 销毁并回收会话持有的全部异步任务与网络连接。
     pub(super) fn shutdown(mut self, cleanup: &mut JoinSet<()>, disconnect_reason: &str) {
         self.stop_traffic();
+        self.stop_connection_watcher();
         self.stop_key_deploy();
         self.stop_stats();
         self.stop_zmodem();
@@ -118,6 +129,12 @@ impl ManagedSessionContext {
     pub(super) fn set_traffic_task(&mut self, task: JoinHandle<()>) {
         self.stop_traffic();
         self.traffic_task = Some(task);
+    }
+
+    /// 设置底层连接退出哨兵；重复设置会先中止旧任务。
+    pub(super) fn set_connection_watcher(&mut self, task: JoinHandle<()>) {
+        self.stop_connection_watcher();
+        self.connection_watcher = Some(task);
     }
 
     /// 设置系统统计采样任务句柄，若已有旧任务则先行中止。
@@ -161,6 +178,7 @@ mod tests {
         let mut context = ManagedSessionContext::new(ConnectionId::new(), None);
         context.set_stats_task(pending_task(cancelled.clone()));
         context.set_traffic_task(pending_task(cancelled.clone()));
+        context.set_connection_watcher(pending_task(cancelled.clone()));
         context.set_key_deploy_task(pending_task(cancelled.clone()));
 
         // 先让每个任务跑到 pending 并建立 Drop 守卫，再验证取消路径。
@@ -168,7 +186,7 @@ mod tests {
         let mut cleanup = JoinSet::new();
         context.shutdown(&mut cleanup, "测试断开");
         tokio::time::timeout(std::time::Duration::from_secs(1), async {
-            while cancelled.load(Ordering::Relaxed) < 3 {
+            while cancelled.load(Ordering::Relaxed) < 4 {
                 tokio::task::yield_now().await;
             }
         })

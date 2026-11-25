@@ -4,6 +4,7 @@
 //! 数组顺序就是用户拖拽排定的显示顺序，一旦在这里排序，拖拽结果会被静默覆盖。
 
 use super::{FolderRow, SessionRow, SidebarRow};
+use crate::search::contains_case_insensitive;
 use std::collections::{HashMap, HashSet};
 use transom_core::{FolderId, Session, SessionCatalog, SessionFolder, SessionId};
 
@@ -49,7 +50,7 @@ pub(crate) fn build_rows(catalog: &SessionCatalog, query: &str) -> Vec<SidebarRo
     // 名称命中的文件夹会展示整个子树；其余文件夹仅在包含命中会话时显示。
     let mut visible_folders = HashSet::new();
     for folder in &catalog.folders {
-        let name_matches = !query.is_empty() && folder.name.to_ascii_lowercase().contains(&query);
+        let name_matches = !query.is_empty() && contains_case_insensitive(&folder.name, &query);
         let has_session = child_sessions
             .get(&Some(folder.id))
             .is_some_and(|sessions| {
@@ -101,7 +102,7 @@ pub(crate) fn build_rows(catalog: &SessionCatalog, query: &str) -> Vec<SidebarRo
                     continue;
                 };
                 let name_matched =
-                    !query.is_empty() && folder.name.to_ascii_lowercase().contains(&query);
+                    !query.is_empty() && contains_case_insensitive(&folder.name, &query);
                 let show_all = ancestor_matched || name_matched;
                 if !query.is_empty() && !show_all && !visible_folders.contains(&id) {
                     continue;
@@ -156,11 +157,8 @@ fn subtree_counts(
 
 fn session_matches(session: &Session, query: &str, folder_path: &str) -> bool {
     let endpoint = crate::connection::display_with_port(&session.connection);
-    let haystack = format!(
-        "{} {} {}",
-        session.name.to_ascii_lowercase(),
-        folder_path.to_ascii_lowercase(),
-        endpoint.to_ascii_lowercase()
-    );
-    haystack.contains(query)
+    crate::search::any_field_matches(
+        query,
+        [session.name.as_str(), folder_path, endpoint.as_str()],
+    )
 }

@@ -91,6 +91,20 @@ pub(super) async fn adopt_connection<J>(
         }
     });
     session.zmodem_task = Some(zmodem_task);
+
+    let internal_tx = internal_tx.clone();
+    // 断线哨兵纳入会话上下文：底层传输自然结束时投递断开事件；会话被顶掉
+    // 或进程停机时由 `ManagedSessionContext::shutdown` 主动中止并回收句柄。
+    let connection_watcher = tokio::spawn(async move {
+        let _ = setup.join.await;
+        let _ = internal_tx
+            .send_async(Internal::Disconnected {
+                tab_id,
+                connection_id,
+            })
+            .await;
+    });
+    session.set_connection_watcher(connection_watcher);
     sessions.insert(tab_id, session);
 
     let _ = event_tx
@@ -103,18 +117,6 @@ pub(super) async fn adopt_connection<J>(
             .into(),
         )
         .await;
-    let internal_tx = internal_tx.clone();
-    // 断线哨兵任务：生命周期由 `setup.join`（底层传输退出）与 `internal_tx`
-    // （控制平面事件循环关闭）双重有界约束，会话结束或停机时必然自然退出。
-    tokio::spawn(async move {
-        let _ = setup.join.await;
-        let _ = internal_tx
-            .send_async(Internal::Disconnected {
-                tab_id,
-                connection_id,
-            })
-            .await;
-    });
 }
 
 /// 优雅停机的状态表借用集合。

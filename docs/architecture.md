@@ -62,6 +62,40 @@ apps/transom (组合根 + 控制平面)
 
 镜像构建历史视图按关注点拆为 `image_history/{mod,layer_card,fallback,slimming}.rs`，单文件保持在 500 行内；源码守卫 `no_source_file_over_500_lines` 阻止生产文件重新超过阈值。
 
+### 全工作区结构与热路径守卫
+
+2026-11 的结构治理把原先只覆盖 UI 的约束扩展到全部 `apps/*/src` 与
+`crates/*/src`：
+
+- `workspace_sources_respect_line_limits`：生产区域不得超过 500 个非空行，
+  包含内联测试的物理文件不得超过 800 行；测试模块由共享解析器剔除，避免
+  `#[cfg(test)] mod tests;` 隐藏其后的生产代码。
+- `drop_impls_do_not_spawn_tasks`：`Drop` 中禁止调用 `tokio::spawn` 或
+  `tokio::task::spawn`。同步析构只能登记拥有型清理请求，由显式异步收尾路径
+  统一执行。
+- `production_code_does_not_discard_spawn_handles`：禁止
+  `let _ = tokio::spawn(...)` 丢弃任务句柄。
+- `ui_search_uses_shared_matcher`：UI 搜索必须复用 `transom-ui/src/search.rs`，
+  不得重新手写 `to_lowercase().contains(...)`。
+
+共享搜索器要求调用方先把查询统一转为小写。ASCII 字段直接在字节窗口上比较，
+不创建逐项小写副本；只有含 Unicode 字段或查询时才回退到完整小写折叠。容器
+列表、会话树、引擎侧栏、Git 引用树、命令面板、监控列表、差异查找和已知主机
+弹窗均走这一口径。
+
+异步任务生命周期同样按所有权收敛：连接断线哨兵由
+`ManagedSessionContext` 持有；容器卷临时探针在异常取消时只同步登记清理项，
+下一次卷操作或 `ContainerService::shutdown` 再统一删除，不在 `Drop` 中派生
+脱管任务。容器 HTTP 连接池的 hyper 驱动句柄由 `DriverGuard` 持有，连接池或
+连接租约被销毁时主动 abort，避免 `JoinHandle` 被静默丢弃后留下后台驱动。
+
+主窗口启动不再以 panic 结束：`transom_ui::run` 返回
+`Result<bool, UiRunError>`。`main` 先执行控制器优雅停机，再传播窗口创建错误，
+避免网络连接、转发表和后台写盘被启动失败直接截断。
+
+`GitView::Log` 等没有入口的独立视图状态已删除；日志能力统一由提交页上的底部
+日志面板提供，不再保留等待“某天接回”的不可达渲染分支。
+
 可复用的无状态表现层组件与设计令牌独立在 `transom-ui-kit`（`crates/transom-ui-kit/`）：图标按钮、弹窗动作按钮与动作条、设置/表单行、空状态、菜单项（含禁用态）、列表行与表头、状态徽标、工具栏、语义调色板 `Palette`、字号/间距/控件尺寸令牌。组件只接收数据与回调，不依赖 `AppShell` 或应用业务状态；`transom-ui/src/widgets` 与 `theme::tokens` / `palette` / `format` / `divider` 仅作重导出与极薄的 i18n 包装。
 
 状态查询与变更优先写在 `impl AppState` 或对应 feature 实体；跨域协调不接收整个 `AppShell`，而是使用只借用所需字段的窄上下文（如 `MonitorOps`、`CloudSyncActions`、`DiffViewerOps`、`BroadcastOps`、`SplitOps`）。`AppShell` 只保留渲染、事件路由、连接补建与窗口聚焦等生命周期入口。
@@ -298,19 +332,20 @@ Git 可执行文件路径与提交作者是进程级配置，只能由控制平�
 回到界面。`Shelve` 的顺序是“导出补丁 → 落盘条目 → 丢弃工作区”，落盘失败
 时保留工作区改动，避免不可恢复的数据丢失。
 
-## 目录结构（2026-10 整理后）
+## 目录结构（2026-11 整理后）
 
 ```
 crates/transom-core/src/
   model/     领域模型与算法：session / settings / catalog / merge / appearance ...
   protocol/  线格式与契约：ssh_config / ssh_url / sftp / sync / system_stats(types) ...
   根        commands（命令/事件）、error、ids、prompt、secrets、storage、backup、transport（终端字节流契约）
+  commands/domain_events/  按 terminal/sftp/forward/host/sync/zmodem/container/deep_link 拆分事件契约
   注：模块路径即规范路径，不再保留历史别名；
   仅界面队列使用的 TransferTask 系列模型在 transom-ui/sftp/task.rs。
 
 crates/transom-platform/src/
   paths.rs       用户目录与文件命名约定
-  private_fs.rs  私有目录 0700 / 私有文件 0600 的创建与收紧
+  private_fs/    私有目录 0700 / 私有文件 0600 的创建与收紧
   os_release.rs  /etc/os-release 发行版识别
 
 crates/transom-crypto/src/
@@ -329,6 +364,7 @@ crates/transom-ui/src/
   widgets/    跨页面复用的表现层组件
   theme/      主题、设计令牌与外观解析
   palette.rs  主题调色板快照与本地化辅助
+  search.rs   列表搜索的 ASCII 无分配快速路径与 Unicode 回退
 
 crates/transom-zmodem/src/
   frames / scanner / receiver / sender / fsm / attach：字节级协议与会话驱动
@@ -338,6 +374,9 @@ crates/transom-updater/src/
 
 crates/transom-net/src/
   system_stats/ Linux 宿主与远端资源采样输出解析器与状态机
+  file_order.rs FTP/SFTP 共用的目录优先、名称忽略大小写稳定排序
+  ftp/        客户端生命周期、目录操作、文本内容与断点续传分层
+  sftp/transfer.rs + sftp/transfer/local.rs  网络传输编排与本地目标管理分离
 
 crates/transom-container/src/
   api/          Docker/Podman REST 客户端：按资源域拆分（容器/镜像/卷/网络/系统/exec）
@@ -348,7 +387,7 @@ crates/transom-container/src/
                 discovery.rs 发现/显式探测
   discovery/    候选发现：parse/unix/cli/windows 分平台
   registry/     仓库检索与鉴权：search/auth/tags/io
-  volume_files/ 数据卷文件访问：probe/backup/直接读写
+  volume_files/ 数据卷文件访问：probe/backup/直接读写；probe 支持可等待的异常清理队列
   transport.rs / http/（请求入口、连接池、响应体读取）
   build/（ignore/stream/http/cli）/ logs.rs / exec.rs
                 通道、归档与长任务
@@ -366,6 +405,9 @@ apps/transom/src/controller/
 apps/transom/src/
   local_pty.rs 普通本地标签与提权代理共用的 Shell 解析、参数拼接和 PTY 启动
   pty_broker.rs Windows UAC 提权 PTY 代理：私有命名管道、控制帧、进程树回收
+
+crates/transom-rdp/src/session/loop_runner.rs + loop_runner/{cycle,pdu}.rs
+               主循环入口、单步事件循环与 PDU/重激活处理分层
 ```
 
 ## 关键决策记录
@@ -386,6 +428,9 @@ apps/transom/src/
 | 统计采样按机器共享（本地标签） | 标签一多避免 N 倍 /proc 与 df | 新标签等下一轮（3-5 秒）才见数据 |
 | 远端统计 5 秒、df 每 3 轮 | 降低远端负载与子进程开销 | 磁盘指标最多陈 15 秒 |
 | Windows 管理员终端经隐藏 PTY 代理桥接 | UAC 不能给现有 PTY 子进程原地加管理员令牌；代理在提升进程中创建 ConPTY，再把字节与控制接回当前标签 | 多一个短生命周期代理进程和一组私有命名管道 |
+| 全工作区源码守卫 | 行数、任务句柄和搜索热路径约束在 CI 中自动回归 | 文本扫描仍有局限，类型与模块私有性仍是首选边界 |
+| UI 搜索统一共享匹配器 | 查询只转小写一次，ASCII 常规路径零分配且语义一致 | 非 ASCII 查询仍需完整小写折叠 |
+| 主窗口创建错误向上返回 | 启动失败可走控制器优雅停机，不以 panic 截断资源 | `transom_ui::run` 调用方必须处理 `UiRunError` |
 
 ## 改动指引
 

@@ -4,6 +4,7 @@ use crate::monitor::MonitorPalette;
 use crate::monitor::components::CollapsibleCard;
 use crate::monitor::types::ProcessSort;
 use crate::palette::Palette;
+use crate::search::contains_case_insensitive;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Sizable;
 use gpui_kit::component::input::Input;
@@ -215,13 +216,13 @@ impl MonitorView {
             .enumerate()
             .filter(|(_, process)| {
                 filter.is_empty()
-                    || process.cmdline.to_lowercase().contains(&filter)
-                    || process.user.to_lowercase().contains(&filter)
-                    || process.pid.to_string().contains(&filter)
+                    || contains_case_insensitive(&process.cmdline, &filter)
+                    || contains_case_insensitive(&process.user, &filter)
+                    || contains_case_insensitive(&process.pid.to_string(), &filter)
                     || process
                         .args
                         .as_ref()
-                        .is_some_and(|args| args.to_lowercase().contains(&filter))
+                        .is_some_and(|args| contains_case_insensitive(args, &filter))
             })
             .map(|(index, _)| index)
             .collect();

@@ -29,11 +29,6 @@ impl GitWorkspace {
         cx.notify();
     }
 
-    /// 请求外壳打开当前仓库的推送弹窗。
-    pub(crate) fn open_push_modal(&mut self, cx: &mut Context<Self>) {
-        self.push_branch(None, cx);
-    }
-
     /// 推送指定分支或当前默认上游。
     pub(crate) fn push_branch(&mut self, target: Option<String>, cx: &mut Context<Self>) {
         cx.emit(GitWorkspaceEvent::OpenPushModal {

@@ -5,6 +5,7 @@ mod auth;
 mod bridge;
 mod client;
 mod error;
+mod file_order;
 mod forward;
 pub mod ftp;
 mod host;

@@ -158,11 +158,7 @@ fn render_audit_content(viewer: &AuditViewer, current_search: &str, p: &Palette)
     // 右侧内容查看区
     let mut filtered_lines = Vec::new();
     for line in viewer.content.lines() {
-        if current_search.is_empty()
-            || line
-                .to_ascii_lowercase()
-                .contains(current_search.to_ascii_lowercase().as_str())
-        {
+        if contains_ascii_case_insensitive(line, current_search) {
             filtered_lines.push(line);
         }
     }
@@ -211,6 +207,20 @@ fn render_audit_content(viewer: &AuditViewer, current_search: &str, p: &Palette)
         );
 
     right_pane.into_any_element()
+}
+
+/// ASCII 不区分大小写的子串匹配，不创建临时小写字符串。
+///
+/// 审计日志过滤处于渲染热路径，原实现会在每一行重复分配查询串和整行副本；
+/// 这里直接在字节窗口上比较，语义仍与原 `to_ascii_lowercase + contains` 一致。
+fn contains_ascii_case_insensitive(haystack: &str, needle: &str) -> bool {
+    if needle.is_empty() {
+        return true;
+    }
+    haystack
+        .as_bytes()
+        .windows(needle.len())
+        .any(|window| window.eq_ignore_ascii_case(needle.as_bytes()))
 }
 
 /// 单条审计日志行：文件名、时间/大小与删除入口。
@@ -342,4 +352,32 @@ fn audit_file_action_buttons(
             .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.copy_content(cx))),
     );
     buttons
+}
+
+#[cfg(test)]
+mod tests {
+    use super::contains_ascii_case_insensitive;
+
+    #[test]
+    fn case_insensitive_search_matches_ascii_letters() {
+        assert!(contains_ascii_case_insensitive(
+            "ERROR connecting to Host",
+            "error"
+        ));
+        assert!(contains_ascii_case_insensitive(
+            "ERROR connecting to Host",
+            "HOST"
+        ));
+        assert!(!contains_ascii_case_insensitive("ERROR", "warning"));
+    }
+
+    #[test]
+    fn empty_search_matches_every_line() {
+        assert!(contains_ascii_case_insensitive("任意内容", ""));
+    }
+
+    #[test]
+    fn longer_needle_does_not_match_or_panic() {
+        assert!(!contains_ascii_case_insensitive("短", "更长的查询"));
+    }
 }

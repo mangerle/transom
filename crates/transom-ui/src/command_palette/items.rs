@@ -10,6 +10,7 @@
 use crate::app::AppState;
 use crate::app::app_settings;
 use crate::keymap;
+use crate::search::contains_case_insensitive;
 use gpui_kit::component::ActiveTheme;
 use gpui_kit::component::command::{CommandGroup, CommandItem};
 use gpui_kit::component::theme::ThemeRegistry;
@@ -79,11 +80,10 @@ impl PaletteModel {
 
 /// 大小写无关的子串匹配：空查询命中一切。
 fn hit(needle: &str, label: &str, keywords: &[SharedString]) -> bool {
-    needle.is_empty()
-        || label.to_lowercase().contains(needle)
+    contains_case_insensitive(label, needle)
         || keywords
             .iter()
-            .any(|keyword| keyword.to_lowercase().contains(needle))
+            .any(|keyword| contains_case_insensitive(keyword, needle))
 }
 
 impl AppState {

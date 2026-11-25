@@ -1,6 +1,7 @@
 //! SFTP 目录列表、元数据与常规文件系统操作。
 
 use super::client::{SftpClient, list_limit_reached, sftp_error};
+use crate::file_order::sort_remote_files;
 use transom_core::{AppError, ErrorCode, RemoteFile, RemoteMetadata, is_safe_file_name};
 
 impl SftpClient {
@@ -46,13 +47,7 @@ impl SftpClient {
             // 聚合为一条告警：恶意服务端可以返回大量非法名字，逐条记录会刷爆日志。
             log::warn!("SFTP 目录列表包含 {rejected} 个非法文件名，已跳过，目录: {canonical}");
         }
-        entries.sort_by(|a, b| {
-            b.is_dir.cmp(&a.is_dir).then_with(|| {
-                a.name
-                    .to_ascii_lowercase()
-                    .cmp(&b.name.to_ascii_lowercase())
-            })
-        });
+        sort_remote_files(&mut entries);
         Ok((canonical, entries))
     }
 

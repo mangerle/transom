@@ -2,11 +2,25 @@
 
 use crate::api::DockerApi;
 use crate::error::ContainerError;
+use parking_lot::Mutex;
+use std::sync::LazyLock;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::SystemTime;
 use transom_core::{ContainerCreateSpec, ContainerLifecycleAction};
 
 static PROBE_COUNTER: AtomicU64 = AtomicU64::new(1);
+
+/// 异常取消时待删除的探针容器。
+///
+/// `Drop` 不能等待网络，也不应派生脱管任务；这里只登记拥有型 API 句柄与容器 ID，
+/// 由下一次卷操作或服务停机时统一清理。
+struct PendingCleanup {
+    api: DockerApi,
+    container_id: String,
+}
+
+static PENDING_CLEANUP: LazyLock<Mutex<Vec<PendingCleanup>>> =
+    LazyLock::new(|| Mutex::new(Vec::new()));
 
 /// 卷文件访问目标：由已挂载容器或临时探针容器提供。
 pub(super) struct VolumeTarget {
@@ -43,12 +57,27 @@ impl<'a> TemporaryTargetGuard<'a> {
 impl Drop for TemporaryTargetGuard<'_> {
     fn drop(&mut self) {
         if let Some(id) = self.container_id.take() {
-            let api = self.api.clone();
-            // 同步 Drop 无法 `.await`：正常路径由 `dismiss().await` 回收；仅在提前返回或
-            // 任务取消时派生异步兜底任务删除临时探针容器，防止宿主机残留孤儿容器。
-            tokio::spawn(async move {
-                cleanup_temporary(&api, &id).await;
+            // 同步 Drop 无法 `.await`，但也不能派生脱管任务；登记拥有型句柄，
+            // 由下一次卷操作或 ContainerService 停机统一清理。
+            PENDING_CLEANUP.lock().push(PendingCleanup {
+                api: self.api.clone(),
+                container_id: id,
             });
+        }
+    }
+}
+
+/// 清空异常取消留下的探针容器清理队列。
+///
+/// 清理失败按可恢复降级处理：记录告警后继续处理后续项，不影响新的卷操作。
+pub(super) async fn flush_pending_cleanup() {
+    loop {
+        let pending = std::mem::take(&mut *PENDING_CLEANUP.lock());
+        if pending.is_empty() {
+            break;
+        }
+        for item in pending {
+            cleanup_temporary(&item.api, &item.container_id).await;
         }
     }
 }
@@ -66,6 +95,9 @@ pub(super) async fn resolve_volume_target(
     volume: &str,
     writeable: bool,
 ) -> Result<VolumeTarget, ContainerError> {
+    // 上一次操作可能因取消而只登记了清理项；新建探针前先回收，避免容器堆积。
+    flush_pending_cleanup().await;
+
     // 1. 优先在现有容器中查找是否已有挂载该卷且满足读写要求的容器
     if let Ok(containers) = api.list_containers().await {
         for summary in containers {
@@ -165,10 +197,13 @@ pub(super) fn select_probe_image(images: &[transom_core::ContainerImageSummary])
 
 /// 清理临时探针容器。
 async fn cleanup_temporary(api: &DockerApi, container_id: &str) {
-    let _ = api
+    if let Err(error) = api
         .lifecycle(
             container_id,
             ContainerLifecycleAction::Remove { force: true },
         )
-        .await;
+        .await
+    {
+        log::warn!("删除临时探针容器失败，容器: {container_id}，原因: {error}");
+    }
 }

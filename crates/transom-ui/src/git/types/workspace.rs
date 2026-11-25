@@ -14,17 +14,6 @@ use transom_core::{
 use super::diff::{GitDiffOptions, GitDiffState};
 use super::log::GitLogState;
 
-/// 标签页主体显示哪一屏。
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub(crate) enum GitView {
-    /// 概览：内嵌提交页（改动树 + 提交消息 + 右侧 diff）。
-    #[default]
-    Overview,
-    /// 日志工作区：入口按钮本轮先移除（用户尚未决定放哪），代码保留待接回。
-    #[expect(dead_code, reason = "日志页暂无入口，保留视图与匹配分支待接回")]
-    Log,
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub(crate) enum GitCommitTab {
     /// 提交：改动树 + 消息 + 提交按钮。
@@ -39,8 +28,6 @@ pub(crate) enum GitCommitTab {
 /// 一个仓库标签页的全部状态。
 pub(crate) struct GitWorkspaceState {
     pub project: GitProject,
-    /// 顶部「操作」按钮切换的屏。
-    pub view: GitView,
     pub status: Option<RepoStatus>,
     pub status_loading: bool,
     pub status_error: Option<String>,
@@ -190,7 +177,6 @@ impl GitWorkspaceState {
 
         Self {
             project,
-            view: GitView::default(),
             status: None,
             status_loading: false,
             status_error: None,

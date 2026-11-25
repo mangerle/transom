@@ -6,12 +6,7 @@ use super::{
 };
 
 fn fields(name: &str, state: &str, created: i64, size: u64) -> SortFields {
-    SortFields {
-        name: name.to_string(),
-        state: state.to_string(),
-        created,
-        size,
-    }
+    SortFields::new(name.to_string(), state.to_string(), created, size)
 }
 
 fn order(items: &[SortFields], key: ContainerSortKey, desc: bool) -> Vec<String> {
@@ -188,16 +183,15 @@ fn port_and_list_parsing_follows_run_flags() {
 
 #[test]
 fn query_matches_any_field_case_insensitively() {
-    assert!(matches_query(
-        "nginx",
-        &["Web".to_string(), "nginx:latest".to_string()]
-    ));
-    assert!(!matches_query(
-        "redis",
-        &["Web".to_string(), "nginx:latest".to_string()]
-    ));
-    assert!(matches_query("", &["anything".to_string()]));
-    assert!(!matches_query("x", &[] as &[String]));
+    assert!(matches_query("nginx", ["Web", "nginx:latest"]));
+    assert!(!matches_query("redis", ["Web", "nginx:latest"]));
+    assert!(matches_query("", ["anything"]));
+    assert!(!matches_query("x", [] as [&str; 0]));
+}
+
+#[test]
+fn query_falls_back_to_unicode_case_folding() {
+    assert!(matches_query("über", ["ÜBER-SERVICE"]));
 }
 
 #[test]

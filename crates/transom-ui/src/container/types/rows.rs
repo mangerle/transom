@@ -1,6 +1,7 @@
 //! 列表行标识、行内动作与批量动作。
 
 use super::*;
+use crate::search::contains_case_insensitive;
 use transom_ui_icons::CustomIcon;
 use transom_ui_icons::DomainIcon;
 use transom_ui_icons::UiIcon;
@@ -175,7 +176,7 @@ pub(crate) fn filtered_log_lines<'a>(
         .lines()
         .rev()
         .take(max_lines)
-        .filter(|line| filter.is_empty() || line.to_lowercase().contains(&filter_lower))
+        .filter(|line| contains_case_insensitive(line, &filter_lower))
         .collect();
     if !reversed {
         lines.reverse();

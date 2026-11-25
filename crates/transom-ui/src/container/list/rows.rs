@@ -52,29 +52,31 @@ pub(crate) fn collect_rows(
             .filter(|item| filter.accepts(item.state.is_running()))
             .filter(|item| workspace.include_compose || item.compose_project.is_none())
             .filter(|item| {
-                matches_query(
-                    query,
-                    &[
-                        item.name.clone(),
-                        item.image.clone(),
-                        item.state.key().to_string(),
-                        item.compose_project.clone().unwrap_or_default(),
-                    ],
-                )
+                let fields = [
+                    item.name.as_str(),
+                    item.image.as_str(),
+                    item.state.key(),
+                    item.compose_project.as_deref().unwrap_or_default(),
+                ];
+                matches_query(query, fields)
             })
             .map(container_row_spec)
             .collect(),
         ContainerSection::Images => workspace
             .images
             .iter()
-            .filter(|item| matches_query(query, &[item.display_name(), short_id(&item.id)]))
+            .filter(|item| {
+                let display_name = item.display_name();
+                let short_id = short_id(&item.id);
+                matches_query(query, [display_name.as_str(), short_id.as_str()])
+            })
             .filter(|item| image_passes_filter(quick, &item.tags))
             .map(image_row_spec)
             .collect(),
         ContainerSection::Volumes => workspace
             .volumes
             .iter()
-            .filter(|item| matches_query(query, &[item.name.clone(), item.driver.clone()]))
+            .filter(|item| matches_query(query, [item.name.as_str(), item.driver.as_str()]))
             .filter(|item| volume_passes_filter(quick, used_volumes.contains(&item.name)))
             .map(|item| volume_row_spec(item, usage_known, used_volumes.contains(&item.name)))
             .collect(),
@@ -82,14 +84,12 @@ pub(crate) fn collect_rows(
             .networks
             .iter()
             .filter(|item| {
-                matches_query(
-                    query,
-                    &[
-                        item.name.clone(),
-                        item.driver.clone(),
-                        item.subnet.clone().unwrap_or_default(),
-                    ],
-                )
+                let fields = [
+                    item.name.as_str(),
+                    item.driver.as_str(),
+                    item.subnet.as_deref().unwrap_or_default(),
+                ];
+                matches_query(query, fields)
             })
             .map(network_row_spec)
             .collect(),
@@ -97,13 +97,11 @@ pub(crate) fn collect_rows(
             .compose
             .iter()
             .filter(|item| {
-                matches_query(
-                    query,
-                    &[
-                        item.name.clone(),
-                        item.working_dir.clone().unwrap_or_default(),
-                    ],
-                )
+                let fields = [
+                    item.name.as_str(),
+                    item.working_dir.as_deref().unwrap_or_default(),
+                ];
+                matches_query(query, fields)
             })
             .map(compose_row_spec)
             .collect(),
@@ -123,12 +121,12 @@ pub(crate) fn container_row_spec(item: &ContainerSummary) -> ListRow {
             id: item.id.clone(),
             name: item.name.clone(),
         },
-        fields: SortFields {
-            name: item.name.clone(),
-            state: item.state.key().to_string(),
-            created: item.created,
-            size: 0,
-        },
+        fields: SortFields::new(
+            item.name.clone(),
+            item.state.key().to_string(),
+            item.created,
+            0,
+        ),
     }
 }
 
@@ -145,12 +143,7 @@ pub(crate) fn image_row_spec(item: &ContainerImageSummary) -> ListRow {
         badge: None,
         running: None,
         target: RowTarget::Image(item.id.clone()),
-        fields: SortFields {
-            name: item.display_name(),
-            state: String::new(),
-            created: item.created,
-            size: item.size,
-        },
+        fields: SortFields::new(item.display_name(), String::new(), item.created, item.size),
     }
 }
 
@@ -168,12 +161,12 @@ pub(crate) fn volume_row_spec(
         badge: None,
         running: usage_known.then_some(in_use),
         target: RowTarget::Volume(item.name.clone()),
-        fields: SortFields {
-            name: item.name.clone(),
-            state: String::new(),
-            created: parse_created(item.created.as_deref()),
-            size: 0,
-        },
+        fields: SortFields::new(
+            item.name.clone(),
+            String::new(),
+            parse_created(item.created.as_deref()),
+            0,
+        ),
     }
 }
 
@@ -193,12 +186,7 @@ pub(crate) fn network_row_spec(item: &ContainerNetworkSummary) -> ListRow {
         badge: None,
         running: None,
         target: RowTarget::Network(item.id.clone()),
-        fields: SortFields {
-            name: item.name.clone(),
-            state: String::new(),
-            created: 0,
-            size: 0,
-        },
+        fields: SortFields::new(item.name.clone(), String::new(), 0, 0),
     }
 }
 
@@ -214,12 +202,12 @@ pub(crate) fn compose_row_spec(item: &ComposeProject) -> ListRow {
         badge: None,
         running: Some(item.total > 0 && item.running == item.total),
         target: RowTarget::Compose(item.name.clone()),
-        fields: SortFields {
-            name: item.name.clone(),
-            state: item.state_label().to_string(),
-            created: 0,
-            size: item.total as u64,
-        },
+        fields: SortFields::new(
+            item.name.clone(),
+            item.state_label().to_string(),
+            0,
+            item.total as u64,
+        ),
     }
 }
 

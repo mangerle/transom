@@ -2,6 +2,7 @@
 
 use crate::monitor::components::CollapsibleCard;
 use crate::palette::Palette;
+use crate::search::contains_case_insensitive;
 use gpui_kit::base::{ScrollBounce, h_flex, v_flex, v_virtual_list};
 use gpui_kit::component::Sizable;
 use gpui_kit::component::input::Input;
@@ -60,13 +61,13 @@ impl MonitorView {
             .iter()
             .filter(|port| {
                 query.is_empty()
-                    || port.port.to_string().contains(&query)
-                    || port.protocol.to_lowercase().contains(&query)
-                    || port.bind_addr.to_lowercase().contains(&query)
+                    || contains_case_insensitive(&port.port.to_string(), &query)
+                    || contains_case_insensitive(&port.protocol, &query)
+                    || contains_case_insensitive(&port.bind_addr, &query)
                     || port
                         .process_name
                         .as_ref()
-                        .is_some_and(|name| name.to_lowercase().contains(&query))
+                        .is_some_and(|name| contains_case_insensitive(name, &query))
             })
             .collect();
 

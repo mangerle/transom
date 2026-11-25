@@ -119,12 +119,11 @@ pub(super) fn parse_listing<R: Read>(
         );
     }
     let mut list: Vec<ContainerFileEntry> = entries_map.into_values().collect();
-    list.sort_by(|left, right| {
-        let left_dir = left.kind == ContainerFileKind::Directory;
-        let right_dir = right.kind == ContainerFileKind::Directory;
-        right_dir
-            .cmp(&left_dir)
-            .then_with(|| left.name.to_lowercase().cmp(&right.name.to_lowercase()))
+    list.sort_by_cached_key(|entry| {
+        (
+            entry.kind != ContainerFileKind::Directory,
+            entry.name.to_lowercase(),
+        )
     });
     Ok(list)
 }

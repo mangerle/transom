@@ -109,6 +109,18 @@ impl ContainerService {
             .get(task_id)
             .is_some_and(|flag| flag.load(std::sync::atomic::Ordering::Relaxed))
     }
+
+    /// 停机时清空临时探针容器清理队列，并释放取消登记表。
+    ///
+    /// 清理项可能由任务取消路径通过 `Drop` 同步登记；这里在运行时关闭前统一
+    /// 等待网络删除完成，避免临时容器或任务句柄残留到下一次启动。
+    pub async fn shutdown(&self) {
+        // 先让刚被中止的长任务执行析构，确保其守卫把清理项同步登记到队列。
+        tokio::task::yield_now().await;
+        crate::volume_files::flush_pending_cleanup().await;
+        self.cancels.lock().clear();
+        self.task_cancels.lock().clear();
+    }
 }
 
 #[cfg(test)]
@@ -127,5 +139,18 @@ mod tests {
         service.finish(request);
         assert!(!service.is_cancelled(request));
         assert!(!service.cancel(request));
+    }
+
+    #[tokio::test]
+    async fn shutdown_clears_cancel_tables() {
+        let service = ContainerService::new();
+        let request = ContainerRequestId::new();
+        service.register_cancel(request);
+        service.register_task_cancel("拉取任务");
+
+        service.shutdown().await;
+
+        assert!(!service.is_cancelled(request));
+        assert!(!service.is_task_cancelled("拉取任务"));
     }
 }

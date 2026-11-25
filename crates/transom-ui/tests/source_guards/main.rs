@@ -16,3 +16,4 @@ mod i18n;
 mod icons_a11y;
 mod tab_model;
 mod tokens;
+mod workspace;
