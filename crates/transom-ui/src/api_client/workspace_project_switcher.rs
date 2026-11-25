@@ -17,7 +17,7 @@ pub(super) fn render_project_switcher(params: &ApiWorkspaceParams<'_>, _p: &Pale
     action_button("api-project-switcher", AppIcon::Ui(UiIcon::PROJECT), label)
         .ghost()
         .dropdown_caret(true)
-        .dropdown_menu_with_anchor(Anchor::BottomLeft, move |menu, _, cx| {
+        .dropdown_menu_with_anchor(Anchor::TopLeft, move |menu, _, cx| {
             let projects = view
                 .read(cx)
                 .state
