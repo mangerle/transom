@@ -57,11 +57,26 @@ impl EnvironmentEditor {
         cx: &mut Context<Self>,
     ) {
         self.syncing = true;
-        self.rows.clear();
-        for variable in variables {
-            self.push_row(variable.clone(), window, cx);
+        let blank = blank_variable();
+        let target_len = variables.len() + 1;
+        let reuse_len = self.rows.len().min(target_len);
+        for index in 0..reuse_len {
+            let variable = variables.get(index).unwrap_or(&blank);
+            let row = &mut self.rows[index];
+            row.enabled = variable.enabled;
+            row.secret = variable.secret;
+            row.name.update(cx, |state, cx| {
+                state.set_value(variable.name.clone(), window, cx)
+            });
+            row.value.update(cx, |state, cx| {
+                state.set_value(variable.value.clone(), window, cx)
+            });
         }
-        self.push_row(blank_variable(), window, cx);
+        self.rows.truncate(target_len);
+        for index in reuse_len..target_len {
+            let variable = variables.get(index).cloned().unwrap_or_else(blank_variable);
+            self.push_row(variable, window, cx);
+        }
         self.syncing = false;
         cx.notify();
     }

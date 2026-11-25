@@ -53,11 +53,25 @@ impl AssertionEditor {
         cx: &mut Context<Self>,
     ) {
         self.syncing = true;
-        self.rows.clear();
-        for assertion in assertions {
-            self.push_row(assertion.clone(), window, cx);
+        let blank = blank_assertion();
+        let target_len = assertions.len() + 1;
+        let reuse_len = self.rows.len().min(target_len);
+        for index in 0..reuse_len {
+            let assertion = assertions.get(index).unwrap_or(&blank);
+            let row = &mut self.rows[index];
+            row.enabled = assertion.enabled;
+            row.expression.update(cx, |state, cx| {
+                state.set_value(assertion.expression.clone(), window, cx)
+            });
         }
-        self.push_row(blank_assertion(), window, cx);
+        self.rows.truncate(target_len);
+        for index in reuse_len..target_len {
+            let assertion = assertions
+                .get(index)
+                .cloned()
+                .unwrap_or_else(blank_assertion);
+            self.push_row(assertion, window, cx);
+        }
         self.syncing = false;
         cx.notify();
     }

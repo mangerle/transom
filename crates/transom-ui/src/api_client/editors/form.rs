@@ -61,7 +61,7 @@ impl FormEditor {
         editor
     }
 
-    /// 设置表单字段，并控制当前是否允许文件类型。
+    /// 增量设置表单字段，优先复用已有行实体并控制当前是否允许文件类型。
     pub(crate) fn set_fields(
         &mut self,
         fields: &[ApiFormField],
@@ -71,11 +71,41 @@ impl FormEditor {
     ) {
         self.syncing = true;
         self.allow_files = allow_files;
-        self.rows.clear();
-        for field in fields {
-            self.push_row(field.clone(), window, cx);
+        let blank = blank_field();
+        let target_len = fields.len() + 1;
+        let reuse_len = self.rows.len().min(target_len);
+        for index in 0..reuse_len {
+            let field = fields.get(index).unwrap_or(&blank);
+            let file_path = if field.kind == ApiFormFieldKind::File {
+                path_from_field_value(&field.value)
+            } else {
+                None
+            };
+            let row = &mut self.rows[index];
+            row.enabled = field.enabled;
+            row.kind = field.kind;
+            row.file_path = file_path;
+            row.file_status = FormFileStatus::Unknown;
+            row.name.update(cx, |state, cx| {
+                state.set_value(field.name.clone(), window, cx)
+            });
+            row.value.update(cx, |state, cx| {
+                let text = if field.kind == ApiFormFieldKind::File {
+                    String::new()
+                } else {
+                    field.value.clone()
+                };
+                state.set_value(text, window, cx);
+            });
+            row.description.update(cx, |state, cx| {
+                state.set_value(field.description.clone(), window, cx)
+            });
         }
-        self.push_row(blank_field(), window, cx);
+        self.rows.truncate(target_len);
+        for index in reuse_len..target_len {
+            let field = fields.get(index).cloned().unwrap_or_else(blank_field);
+            self.push_row(field, window, cx);
+        }
         self.syncing = false;
         self.refresh_file_statuses(window, cx);
         cx.notify();

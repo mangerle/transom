@@ -292,10 +292,12 @@ impl ApiWorkspace {
         cx: &mut Context<Self>,
     ) {
         self.exec.assertion_results = evaluate_assertions(request, &response);
-        for cookie in response.set_cookies.drain(..) {
-            self.project.upsert_cookie(cookie);
+        if !response.set_cookies.is_empty() {
+            for cookie in response.set_cookies.drain(..) {
+                self.project.upsert_cookie(cookie);
+            }
+            self.load_cookies(window, cx);
         }
-        self.load_cookies(window, cx);
         let (passed, total) = transom_api::assertion_summary(&self.exec.assertion_results);
         self.project.push_history(ApiHistoryEntry {
             request_id: request.id,

@@ -64,11 +64,33 @@ impl CookieEditor {
         cx: &mut Context<Self>,
     ) {
         self.syncing = true;
-        self.rows.clear();
-        for cookie in cookies {
-            self.push_row(cookie.clone(), window, cx);
+        let blank = blank_cookie();
+        let target_len = cookies.len() + 1;
+        let reuse_len = self.rows.len().min(target_len);
+        for index in 0..reuse_len {
+            let cookie = cookies.get(index).unwrap_or(&blank);
+            let row = &mut self.rows[index];
+            row.secure = cookie.secure;
+            row.http_only = cookie.http_only;
+            row.expires_at = cookie.expires_at;
+            row.name.update(cx, |state, cx| {
+                state.set_value(cookie.name.clone(), window, cx)
+            });
+            row.value.update(cx, |state, cx| {
+                state.set_value(cookie.value.clone(), window, cx)
+            });
+            row.domain.update(cx, |state, cx| {
+                state.set_value(cookie.domain.clone().unwrap_or_default(), window, cx)
+            });
+            row.path.update(cx, |state, cx| {
+                state.set_value(cookie.path.clone(), window, cx)
+            });
         }
-        self.push_row(blank_cookie(), window, cx);
+        self.rows.truncate(target_len);
+        for index in reuse_len..target_len {
+            let cookie = cookies.get(index).cloned().unwrap_or_else(blank_cookie);
+            self.push_row(cookie, window, cx);
+        }
         self.syncing = false;
         cx.notify();
     }

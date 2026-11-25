@@ -68,7 +68,7 @@ impl KvEditor {
         editor
     }
 
-    /// 用请求快照重建表格，并始终保留一个可继续输入的空白行。
+    /// 用请求快照增量刷新表格，优先复用已有行实体，并始终保留一个空白行。
     pub(crate) fn set_entries(
         &mut self,
         entries: &[KvEntry],
@@ -76,11 +76,28 @@ impl KvEditor {
         cx: &mut Context<Self>,
     ) {
         self.syncing = true;
-        self.rows.clear();
-        for entry in entries {
-            self.push_row(entry.clone(), window, cx);
+        let blank = blank_entry();
+        let target_len = entries.len() + 1;
+        let reuse_len = self.rows.len().min(target_len);
+        for index in 0..reuse_len {
+            let entry = entries.get(index).unwrap_or(&blank);
+            let row = &mut self.rows[index];
+            row.enabled = entry.enabled;
+            row.name.update(cx, |state, cx| {
+                state.set_value(entry.name.clone(), window, cx)
+            });
+            row.value.update(cx, |state, cx| {
+                state.set_value(entry.value.clone(), window, cx)
+            });
+            row.description.update(cx, |state, cx| {
+                state.set_value(entry.description.clone(), window, cx)
+            });
         }
-        self.push_row(blank_entry(), window, cx);
+        self.rows.truncate(target_len);
+        for index in reuse_len..target_len {
+            let entry = entries.get(index).cloned().unwrap_or_else(blank_entry);
+            self.push_row(entry, window, cx);
+        }
         self.syncing = false;
         cx.notify();
     }
