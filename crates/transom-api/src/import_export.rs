@@ -40,6 +40,33 @@ pub fn import_projects(text: &str, format: ApiImportFormat) -> Result<Vec<ApiPro
     }
 }
 
+/// 根据文本内容自动识别导入格式（cURL / OpenAPI / Postman / Transom）。
+pub fn detect_import_format(text: &str) -> ApiImportFormat {
+    let trimmed = text.trim();
+    if trimmed.starts_with("curl ") {
+        return ApiImportFormat::Curl;
+    }
+    if let Ok(value) = serde_json::from_str::<serde_json::Value>(trimmed) {
+        if value.get("openapi").is_some() || value.get("swagger").is_some() {
+            ApiImportFormat::OpenApi
+        } else if value.pointer("/info/name").is_some() && value.get("item").is_some() {
+            ApiImportFormat::Postman
+        } else {
+            ApiImportFormat::Transom
+        }
+    } else {
+        ApiImportFormat::OpenApi
+    }
+}
+
+/// 自动识别文本格式并导入项目。
+///
+/// # Errors
+/// 文本解析失败或格式不合法时返回中文错误。
+pub fn import_projects_auto(text: &str) -> Result<Vec<ApiProject>, AppError> {
+    import_projects(text, detect_import_format(text))
+}
+
 /// 按格式导出项目。
 ///
 /// # Errors
@@ -223,5 +250,29 @@ paths:
         assert_eq!(projects[0].requests.len(), 1);
         assert_eq!(projects[0].requests[0].name, "用户列表");
         assert!(projects[0].requests[0].folder_id.is_some());
+    }
+
+    #[test]
+    fn detects_import_formats_accurately() {
+        assert_eq!(
+            detect_import_format("  curl https://example.com"),
+            ApiImportFormat::Curl
+        );
+        assert_eq!(
+            detect_import_format(r#"{"openapi":"3.0.3","paths":{}}"#),
+            ApiImportFormat::OpenApi
+        );
+        assert_eq!(
+            detect_import_format(r#"{"info":{"name":"Demo"},"item":[]}"#),
+            ApiImportFormat::Postman
+        );
+        assert_eq!(
+            detect_import_format(r#"{"schema_version":1,"name":"Transom"}"#),
+            ApiImportFormat::Transom
+        );
+        assert_eq!(
+            detect_import_format("openapi: 3.0.3\npaths: {}"),
+            ApiImportFormat::OpenApi
+        );
     }
 }

@@ -28,7 +28,10 @@ pub use http::{
     MAX_UPLOAD_BYTES,
 };
 pub use id::{ApiEnvironmentId, ApiFolderId, ApiProjectId, ApiRequestId};
-pub use import_export::{ApiExportFormat, ApiImportFormat, export_project, import_projects};
+pub use import_export::{
+    ApiExportFormat, ApiImportFormat, detect_import_format, export_project, import_projects,
+    import_projects_auto,
+};
 pub use model::{
     API_SCHEMA_VERSION, ApiCookie, ApiEnvironment, ApiFolder, ApiGlobalParameter,
     ApiGlobalParameterTarget, ApiHistoryEntry, ApiProject, ApiRegistry, ApiVariable,

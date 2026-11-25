@@ -4,6 +4,7 @@ use super::{ApiWorkspace, ApiWorkspaceEvent};
 use gpui_kit::*;
 use transom_api::{
     ApiFolderId, ApiImportFormat, ApiProtocol, ApiRequest, ApiRequestId, import_projects,
+    import_projects_auto,
 };
 
 impl ApiWorkspace {
@@ -92,22 +93,12 @@ impl ApiWorkspace {
             cx.notify();
             return;
         };
-        let format = if curl_only {
-            ApiImportFormat::Curl
-        } else if text.starts_with("curl ") {
-            ApiImportFormat::Curl
-        } else if let Ok(value) = serde_json::from_str::<serde_json::Value>(&text) {
-            if value.get("openapi").is_some() || value.get("swagger").is_some() {
-                ApiImportFormat::OpenApi
-            } else if value.pointer("/info/name").is_some() && value.get("item").is_some() {
-                ApiImportFormat::Postman
-            } else {
-                ApiImportFormat::Transom
-            }
+        let result = if curl_only {
+            import_projects(&text, ApiImportFormat::Curl)
         } else {
-            ApiImportFormat::OpenApi
+            import_projects_auto(&text)
         };
-        match import_projects(&text, format) {
+        match result {
             Ok(projects) => {
                 let mut first_id = None;
                 for project in projects {
