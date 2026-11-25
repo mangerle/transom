@@ -1,7 +1,7 @@
 //! API 工作区的项目级工具栏与环境、Cookie 配置面板。
 
 use super::ApiAuxiliarySection;
-use super::workspace_view::ApiWorkspaceParams;
+use super::view::ApiWorkspaceParams;
 use crate::palette::Palette;
 use crate::theme::tokens::space;
 use crate::widgets::{IconButton, IconButtonSize, action_button, dropdown, menu_item};
@@ -76,11 +76,13 @@ pub(crate) fn render_auxiliary_panel(params: &ApiWorkspaceParams<'_>, p: &Palett
     let (title, body) = match section {
         ApiAuxiliarySection::Environment => (
             rust_i18n::t!("api.request.environment_management").to_string(),
-            super::environment_manager_view::render_environment_manager(params),
+            crate::api_client::editors::environment_manager_view::render_environment_manager(
+                params,
+            ),
         ),
         ApiAuxiliarySection::GlobalParameters => (
             rust_i18n::t!("api.request.global_parameters").to_string(),
-            super::workspace_global_params_view::render_global_parameters(params, p),
+            super::global_params_view::render_global_parameters(params, p),
         ),
         ApiAuxiliarySection::GlobalVariables => (
             rust_i18n::t!("api.request.global_variables").to_string(),

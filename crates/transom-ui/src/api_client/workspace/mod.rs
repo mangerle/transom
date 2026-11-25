@@ -1,11 +1,30 @@
 //! API 项目工作区实体：请求、环境、认证、断言和协议运行状态。
 
-use super::kv_editor::KvEditorEvent;
-use super::workspace_folder::FolderEditor;
-pub(crate) use super::workspace_types::{
-    ApiAuxiliarySection, ApiBodyMode, ApiConfigModalSection, ApiGlobalParameterTab, ApiRequestTab,
-    ApiResponseTab, ApiWorkspaceEditors, ApiWorkspaceEvent, ApiWorkspaceServices,
-};
+mod actions;
+mod advanced_view;
+mod body_actions;
+mod body_view;
+mod editor_state;
+mod editors;
+mod folder;
+mod global_config;
+pub(in crate::api_client) mod global_params_view;
+mod history_view;
+mod kv_sync;
+mod project_switcher;
+mod request_actions;
+mod request_view;
+mod response_tables;
+mod response_view;
+mod save_menu;
+mod tabs_bar;
+mod tree_view;
+mod types;
+mod view;
+
+use super::editors::kv::KvEditorEvent;
+use super::sidebar::{ApiSidebarState, ApiSidebarView};
+use folder::FolderEditor;
 use gpui_kit::component::input::InputEvent;
 use gpui_kit::component::resizable::ResizableState;
 use gpui_kit::*;
@@ -13,6 +32,11 @@ use transom_api::{
     ApiAssertionResult, ApiEnvironmentId, ApiFolderId, ApiImportFormat, ApiMethod, ApiProject,
     ApiProtocol, ApiRequestId, ApiResponseSnapshot, ApiWebSocketHandle, import_projects,
 };
+pub(crate) use types::{
+    ApiAuxiliarySection, ApiBodyMode, ApiConfigModalSection, ApiGlobalParameterTab, ApiRequestTab,
+    ApiResponseTab, ApiWorkspaceEditors, ApiWorkspaceEvent, ApiWorkspaceServices,
+};
+pub(crate) use view::{ApiWorkspaceParams, render_api_workspace};
 
 /// 单个 API 项目标签的工作区实体。
 pub(crate) struct ApiWorkspace {
@@ -60,7 +84,7 @@ impl ApiWorkspace {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
-        let editors = super::workspace_editors::new_editors(window, cx);
+        let editors = editors::new_editors(window, cx);
         let active_environment_id = project.active_environment_id;
         let mut workspace = Self {
             selected_request: project.requests.first().map(|request| request.id),
@@ -140,18 +164,20 @@ impl ApiWorkspace {
                 },
             ),
             cx.subscribe_in(&workspace.editors.form, window, |this, _, event, _, cx| {
-                let super::form_editor::FormEditorEvent::Changed(fields) = event;
+                let crate::api_client::editors::form::FormEditorEvent::Changed(fields) = event;
                 this.apply_form_fields(fields, cx);
             }),
             cx.subscribe_in(&workspace.editors.auth, window, |this, _, event, _, cx| {
-                let super::auth_editor::AuthEditorEvent::Changed(auth) = event;
+                let crate::api_client::editors::auth::AuthEditorEvent::Changed(auth) = event;
                 this.apply_auth(auth.clone(), cx);
             }),
             cx.subscribe_in(
                 &workspace.editors.assertions,
                 window,
                 |this, _, event, _, cx| {
-                    let super::assertion_editor::AssertionEditorEvent::Changed(assertions) = event;
+                    let crate::api_client::editors::assertion::AssertionEditorEvent::Changed(
+                        assertions,
+                    ) = event;
                     this.apply_assertions(assertions.clone(), cx);
                 },
             ),
@@ -159,8 +185,9 @@ impl ApiWorkspace {
                 &workspace.editors.environment,
                 window,
                 |this, _, event, _, cx| {
-                    let super::environment_editor::EnvironmentEditorEvent::Changed(variables) =
-                        event;
+                    let crate::api_client::editors::environment::EnvironmentEditorEvent::Changed(
+                        variables,
+                    ) = event;
                     this.apply_environment_variables(variables.clone(), cx);
                 },
             ),
@@ -168,7 +195,8 @@ impl ApiWorkspace {
                 &workspace.editors.cookies,
                 window,
                 |this, _, event, _, cx| {
-                    let super::cookie_editor::CookieEditorEvent::Changed(cookies) = event;
+                    let crate::api_client::editors::cookie::CookieEditorEvent::Changed(cookies) =
+                        event;
                     this.apply_cookies(cookies.clone(), cx);
                 },
             ),
@@ -176,8 +204,9 @@ impl ApiWorkspace {
                 &workspace.editors.global_variables,
                 window,
                 |this, _, event, _, cx| {
-                    let super::environment_editor::EnvironmentEditorEvent::Changed(variables) =
-                        event;
+                    let crate::api_client::editors::environment::EnvironmentEditorEvent::Changed(
+                        variables,
+                    ) = event;
                     this.apply_global_variables(variables.clone(), cx);
                 },
             ),

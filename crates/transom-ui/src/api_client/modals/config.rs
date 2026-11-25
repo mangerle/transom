@@ -1,7 +1,7 @@
 //! 环境变量与全局配置模态弹窗：左侧导航（全局/环境管理）与右侧编辑区。
 
-use super::ApiConfigModalSection;
-use super::workspace_view::ApiWorkspaceParams;
+use crate::api_client::ApiConfigModalSection;
+use crate::api_client::ApiWorkspaceParams;
 use crate::palette::Palette;
 use crate::theme::tokens::{size, space, typography};
 use crate::widgets::{IconButton, IconButtonSize, action_button_with_icon_tint};
@@ -15,7 +15,7 @@ use gpui_kit::*;
 use transom_ui_icons::{AppIcon, AppIconElement, CustomIcon, UiIcon};
 
 /// 渲染环境变量、全局变量、全局参数与 Cookie 管理器弹窗。
-pub(super) fn render_config_modal(
+pub(in crate::api_client) fn render_config_modal(
     params: &ApiWorkspaceParams<'_>,
     section: ApiConfigModalSection,
     p: &Palette,
@@ -168,14 +168,10 @@ fn render_sidebar(
             params.view,
             p,
         ))
-        .child(
-            div()
-                .pt(rems(space::SM))
-                .child(section_label(
-                    rust_i18n::t!("api.request.environment_management").to_string(),
-                    p,
-                )),
-        )
+        .child(div().pt(rems(space::SM)).child(section_label(
+            rust_i18n::t!("api.request.environment_management").to_string(),
+            p,
+        )))
         .child(
             div()
                 .id("api-config-env-list")
@@ -218,7 +214,7 @@ fn nav_item(
     label: String,
     selected: bool,
     target: ApiConfigModalSection,
-    view: &Entity<super::ApiWorkspace>,
+    view: &Entity<crate::api_client::ApiWorkspace>,
     p: &Palette,
 ) -> AnyElement {
     let view = view.clone();
@@ -240,15 +236,11 @@ fn nav_item(
                 this.select_config_modal_section(target, window, cx)
             });
         })
-        .child(
-            AppIconElement::new(icon)
-                .xsmall()
-                .text_color(if selected {
-                    p.primary
-                } else {
-                    p.muted_foreground
-                }),
-        )
+        .child(AppIconElement::new(icon).xsmall().text_color(if selected {
+            p.primary
+        } else {
+            p.muted_foreground
+        }))
         .child(
             div()
                 .flex_1()
@@ -276,7 +268,7 @@ fn render_content(
         ),
         ApiConfigModalSection::GlobalParameters => (
             rust_i18n::t!("api.request.global_parameters").to_string(),
-            super::workspace_global_params_view::render_global_parameters(params, p),
+            crate::api_client::workspace::global_params_view::render_global_parameters(params, p),
         ),
         ApiConfigModalSection::GlobalVariables => (
             rust_i18n::t!("api.request.global_variables").to_string(),

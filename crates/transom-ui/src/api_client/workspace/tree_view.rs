@@ -1,7 +1,7 @@
 //! API 工作区接口树视图。
 
 use super::ApiWorkspace;
-use super::workspace_view::ApiWorkspaceParams;
+use super::view::ApiWorkspaceParams;
 use crate::palette::Palette;
 use crate::theme::tokens::{size, space, typography};
 use crate::widgets::{IconButton, IconButtonSize, MenuItem, action_button, list_row, menu_item};
@@ -19,7 +19,7 @@ pub(crate) fn render_tree(params: &ApiWorkspaceParams<'_>, p: &Palette) -> AnyEl
     let view = params.view;
     let mut request_rows = v_flex().w_full().gap(rems(space::XXS));
     if let Some(editor) = &params.api_sidebar_state.editor {
-        request_rows = request_rows.child(super::sidebar_view::render_editor(
+        request_rows = request_rows.child(crate::api_client::sidebar::view::render_editor(
             params.api_sidebar,
             editor,
             p,
@@ -28,14 +28,14 @@ pub(crate) fn render_tree(params: &ApiWorkspaceParams<'_>, p: &Palette) -> AnyEl
     if let Some(project_id) = params.api_sidebar_state.pending_delete
         && let Some(project) = params.api_sidebar_state.registry.project(project_id)
     {
-        request_rows = request_rows.child(super::sidebar_view::render_delete_confirm(
+        request_rows = request_rows.child(crate::api_client::sidebar::view::render_delete_confirm(
             params.api_sidebar,
             project.display_name(),
             p,
         ));
     }
     if let Some(import) = &params.api_sidebar_state.pending_import {
-        request_rows = request_rows.child(super::sidebar_view::render_import_state(
+        request_rows = request_rows.child(crate::api_client::sidebar::view::render_import_state(
             params.api_sidebar,
             import,
             p,
@@ -138,9 +138,12 @@ pub(crate) fn render_tree(params: &ApiWorkspaceParams<'_>, p: &Palette) -> AnyEl
                 .gap(rems(space::XS))
                 .border_color(p.divider(p.border))
                 .border_b_1()
-                .child(div().flex_1().min_w_0().child(
-                    super::workspace_project_switcher::render_project_switcher(params, p),
-                ))
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .child(super::project_switcher::render_project_switcher(params, p)),
+                )
                 .child(
                     IconButton::new(
                         "api-folder-new",
@@ -308,7 +311,7 @@ fn render_folder_row(view: &Entity<ApiWorkspace>, folder: &ApiFolder, p: &Palett
 
 fn render_folder_editor(
     view: &Entity<ApiWorkspace>,
-    editor: &super::workspace_folder::FolderEditor,
+    editor: &super::folder::FolderEditor,
     p: &Palette,
 ) -> AnyElement {
     let submit_view = view.clone();

@@ -1,7 +1,7 @@
 //! API 项目工作区根布局：接口树、请求编辑器和响应面板。
 
-use super::workspace_request_view::render_request_editor;
-use super::workspace_response_view::render_response;
+use super::request_view::render_request_editor;
+use super::response_view::render_response;
 use super::{
     ApiAuxiliarySection, ApiConfigModalSection, ApiGlobalParameterTab, ApiRequestTab,
     ApiResponseTab, ApiSidebarState, ApiSidebarView, ApiWorkspace,
@@ -38,7 +38,7 @@ pub(crate) struct ApiWorkspaceParams<'a> {
     pub(crate) config_modal: Option<ApiConfigModalSection>,
     pub(crate) new_request_modal_open: bool,
     pub(crate) global_parameter_tab: ApiGlobalParameterTab,
-    pub(crate) folder_editor: Option<&'a super::workspace_folder::FolderEditor>,
+    pub(crate) folder_editor: Option<&'a super::folder::FolderEditor>,
     pub(crate) pending_folder_delete: Option<ApiFolderId>,
     pub(crate) codegen_target: transom_api::CodeTarget,
     pub(crate) ws_connected: bool,
@@ -48,23 +48,25 @@ pub(crate) struct ApiWorkspaceParams<'a> {
     pub(crate) error: Option<&'a str>,
     pub(crate) request_name: &'a Entity<InputState>,
     pub(crate) request_url: &'a Entity<InputState>,
-    pub(crate) query_editor: &'a Entity<super::kv_editor::KvEditor>,
-    pub(crate) header_editor: &'a Entity<super::kv_editor::KvEditor>,
+    pub(crate) query_editor: &'a Entity<crate::api_client::editors::kv::KvEditor>,
+    pub(crate) header_editor: &'a Entity<crate::api_client::editors::kv::KvEditor>,
     pub(crate) request_body: &'a Entity<EditorState>,
-    pub(crate) form_editor: &'a Entity<super::form_editor::FormEditor>,
+    pub(crate) form_editor: &'a Entity<crate::api_client::editors::form::FormEditor>,
     pub(crate) grpc_service: &'a Entity<InputState>,
     pub(crate) grpc_method: &'a Entity<InputState>,
     pub(crate) graphql_variables: &'a Entity<TextareaState>,
-    pub(crate) auth: &'a Entity<super::auth_editor::AuthEditor>,
-    pub(crate) assertions: &'a Entity<super::assertion_editor::AssertionEditor>,
+    pub(crate) auth: &'a Entity<crate::api_client::editors::auth::AuthEditor>,
+    pub(crate) assertions: &'a Entity<crate::api_client::editors::assertion::AssertionEditor>,
     pub(crate) timeout: &'a Entity<InputState>,
     pub(crate) docs: &'a Entity<TextareaState>,
-    pub(crate) environment_editor: &'a Entity<super::environment_editor::EnvironmentEditor>,
-    pub(crate) global_variables_editor: &'a Entity<super::environment_editor::EnvironmentEditor>,
-    pub(crate) global_query_editor: &'a Entity<super::kv_editor::KvEditor>,
-    pub(crate) global_headers_editor: &'a Entity<super::kv_editor::KvEditor>,
+    pub(crate) environment_editor:
+        &'a Entity<crate::api_client::editors::environment::EnvironmentEditor>,
+    pub(crate) global_variables_editor:
+        &'a Entity<crate::api_client::editors::environment::EnvironmentEditor>,
+    pub(crate) global_query_editor: &'a Entity<crate::api_client::editors::kv::KvEditor>,
+    pub(crate) global_headers_editor: &'a Entity<crate::api_client::editors::kv::KvEditor>,
     pub(crate) environment_name: &'a Entity<InputState>,
-    pub(crate) cookies_editor: &'a Entity<super::cookie_editor::CookieEditor>,
+    pub(crate) cookies_editor: &'a Entity<crate::api_client::editors::cookie::CookieEditor>,
     pub(crate) websocket_input: &'a Entity<TextareaState>,
     pub(crate) websocket_log: &'a Entity<TextareaState>,
     pub(crate) assertion_results: &'a [ApiAssertionResult],
@@ -78,7 +80,7 @@ pub(crate) struct ApiWorkspaceParams<'a> {
 
 /// 渲染 API 项目工作区。
 pub(crate) fn render_api_workspace(params: ApiWorkspaceParams<'_>, p: &Palette) -> AnyElement {
-    let tree = super::workspace_tree_view::render_tree(&params, p);
+    let tree = super::tree_view::render_tree(&params, p);
     let editor = render_request_editor(&params, p);
     let response = render_response(&params, p);
     let editor_and_response = v_resizable("api-request-response-split")
@@ -102,14 +104,12 @@ pub(crate) fn render_api_workspace(params: ApiWorkspaceParams<'_>, p: &Palette) 
         .bg(p.background)
         .child(body)
         .when_some(params.config_modal, |root, section| {
-            root.child(super::workspace_config_modal::render_config_modal(
+            root.child(crate::api_client::modals::config::render_config_modal(
                 &params, section, p,
             ))
         })
         .when(params.new_request_modal_open, |root| {
-            root.child(super::workspace_new_modal::render_new_request_modal(
-                &params, p,
-            ))
+            root.child(crate::api_client::modals::new_request::render_new_request_modal(&params, p))
         })
         .into_any_element()
 }

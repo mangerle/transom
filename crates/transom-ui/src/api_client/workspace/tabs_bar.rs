@@ -37,7 +37,9 @@ pub(super) fn render_underline_tabs(
             } else {
                 p.muted_foreground
             })
-            .when(!selected, |el| el.hover(|style| style.text_color(p.foreground)))
+            .when(!selected, |el| {
+                el.hover(|style| style.text_color(p.foreground))
+            })
             .child(label.clone())
             .when(selected, |el| {
                 el.child(

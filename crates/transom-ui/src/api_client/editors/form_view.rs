@@ -1,6 +1,6 @@
 //! 请求表单体表格的渲染。
 
-use super::form_editor::FormEditor;
+use super::form::FormEditor;
 use super::form_file::{FormFileIssue, FormFileStatus, file_display_name};
 use crate::format::format_compact_size;
 use crate::theme::tokens::{control, size, space, typography};

@@ -1,7 +1,7 @@
 //! 项目级全局 Query 参数与 Header 参数编辑视图。
 
 use super::ApiGlobalParameterTab;
-use super::workspace_view::ApiWorkspaceParams;
+use super::view::ApiWorkspaceParams;
 use crate::palette::Palette;
 use gpui_kit::base::v_flex;
 use gpui_kit::*;
@@ -9,7 +9,7 @@ use gpui_kit::*;
 const TABS: [ApiGlobalParameterTab; 2] =
     [ApiGlobalParameterTab::Query, ApiGlobalParameterTab::Header];
 
-pub(super) fn render_global_parameters(
+pub(in crate::api_client) fn render_global_parameters(
     params: &ApiWorkspaceParams<'_>,
     p: &Palette,
 ) -> AnyElement {
@@ -27,7 +27,7 @@ pub(super) fn render_global_parameters(
                     rust_i18n::t!("api.request.global_header_parameters").to_string(),
                 ),
             };
-            super::workspace_tabs_bar::UnderlineTabItem {
+            super::tabs_bar::UnderlineTabItem {
                 id,
                 label,
                 selected: tab == params.global_parameter_tab,
@@ -37,12 +37,7 @@ pub(super) fn render_global_parameters(
             }
         })
         .collect::<Vec<_>>();
-    let tabs = super::workspace_tabs_bar::render_underline_tabs(
-        "api-global-parameter-tabs",
-        items,
-        None,
-        p,
-    );
+    let tabs = super::tabs_bar::render_underline_tabs("api-global-parameter-tabs", items, None, p);
     let editor = match params.global_parameter_tab {
         ApiGlobalParameterTab::Query => params.global_query_editor.clone().into_any_element(),
         ApiGlobalParameterTab::Header => params.global_headers_editor.clone().into_any_element(),

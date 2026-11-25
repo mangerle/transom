@@ -1,7 +1,7 @@
 //! API 响应面板：摘要、响应级页签、正文、头、Cookie、断言与历史。
 
 use super::ApiResponseTab;
-use super::workspace_view::ApiWorkspaceParams;
+use super::view::ApiWorkspaceParams;
 use crate::palette::Palette;
 use crate::theme::tokens::space;
 use crate::widgets::{IconButton, IconButtonSize};
@@ -47,7 +47,7 @@ pub(super) fn render_response(params: &ApiWorkspaceParams<'_>, p: &Palette) -> A
         .into_iter()
         .map(|tab| {
             let view = params.view.clone();
-            super::workspace_tabs_bar::UnderlineTabItem {
+            super::tabs_bar::UnderlineTabItem {
                 id: response_tab_id(tab),
                 label: response_tab_label(tab, params),
                 selected: tab == params.response_tab,
@@ -57,7 +57,7 @@ pub(super) fn render_response(params: &ApiWorkspaceParams<'_>, p: &Palette) -> A
             }
         })
         .collect::<Vec<_>>();
-    let tab_bar = super::workspace_tabs_bar::render_underline_tabs(
+    let tab_bar = super::tabs_bar::render_underline_tabs(
         "api-response-tabs",
         items,
         Some(suffix.into_any_element()),
@@ -73,14 +73,12 @@ pub(super) fn render_response(params: &ApiWorkspaceParams<'_>, p: &Palette) -> A
 
     body = body.child(match params.response_tab {
         ApiResponseTab::Body => render_body(params, p, params.response),
-        ApiResponseTab::Headers => super::workspace_response_tables::render_headers(params, p),
-        ApiResponseTab::Cookies => {
-            super::workspace_response_tables::render_cookies(params.response, p)
-        }
+        ApiResponseTab::Headers => super::response_tables::render_headers(params, p),
+        ApiResponseTab::Cookies => super::response_tables::render_cookies(params.response, p),
         ApiResponseTab::Assertions => {
-            super::workspace_response_tables::render_assertions(params.assertion_results, p)
+            super::response_tables::render_assertions(params.assertion_results, p)
         }
-        ApiResponseTab::History => super::workspace_history_view::render_history(params, p),
+        ApiResponseTab::History => super::history_view::render_history(params, p),
     });
     body.into_any_element()
 }

@@ -69,11 +69,7 @@ impl ApiWorkspace {
     }
 
     /// 在配置弹窗中新建环境并自动选中。
-    pub(crate) fn create_modal_environment(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    pub(crate) fn create_modal_environment(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.create_environment(window, cx);
         if let Some(id) = self.project.active_environment_id {
             self.environment_id = Some(id);
@@ -100,7 +96,8 @@ impl ApiWorkspace {
             .environments
             .first()
             .map(|environment| environment.id);
-        if self.environment_id == Some(env_id) || self.project.active_environment_id == Some(env_id) {
+        if self.environment_id == Some(env_id) || self.project.active_environment_id == Some(env_id)
+        {
             self.project.active_environment_id = next;
             self.environment_id = next;
             self.load_environment(window, cx);
@@ -164,8 +161,8 @@ impl ApiWorkspace {
 
 fn global_parameter_entry(
     parameter: &transom_api::ApiGlobalParameter,
-) -> super::kv_editor::KvEntry {
-    super::kv_editor::KvEntry {
+) -> crate::api_client::editors::kv::KvEntry {
+    crate::api_client::editors::kv::KvEntry {
         name: parameter.name.clone(),
         value: parameter.value.clone(),
         description: parameter.description.clone(),

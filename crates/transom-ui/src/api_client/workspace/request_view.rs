@@ -1,7 +1,7 @@
 //! API 请求编辑器：方法与环境地址栏、请求页签和协议主体。
 
-use super::workspace_body_view::render_body;
-use super::workspace_view::ApiWorkspaceParams;
+use super::body_view::render_body;
+use super::view::ApiWorkspaceParams;
 use super::{ApiRequestTab, ApiWorkspace};
 use crate::palette::Palette;
 use crate::theme::tokens::{size, space};
@@ -158,7 +158,7 @@ pub(super) fn render_request_editor(params: &ApiWorkspaceParams<'_>, p: &Palette
                         send_view.update(cx, |this, cx| this.send_request(window, cx));
                     }),
                 )
-                .child(super::workspace_save_menu::render_save_controls(params, p)),
+                .child(super::save_menu::render_save_controls(params, p)),
         );
 
     if let Some(error) = params.error {
@@ -169,7 +169,7 @@ pub(super) fn render_request_editor(params: &ApiWorkspaceParams<'_>, p: &Palette
     }
 
     let editor = if params.auxiliary_section.is_some() {
-        super::workspace_advanced_view::render_auxiliary_panel(params, p)
+        super::advanced_view::render_auxiliary_panel(params, p)
     } else if params.selected_request.is_some() {
         render_tabbed_request(params, p)
     } else {
@@ -189,7 +189,7 @@ fn render_tabbed_request(params: &ApiWorkspaceParams<'_>, p: &Palette) -> AnyEle
         .copied()
         .map(|tab| {
             let view = params.view.clone();
-            super::workspace_tabs_bar::UnderlineTabItem {
+            super::tabs_bar::UnderlineTabItem {
                 id: request_tab_id(tab),
                 label: request_tab_label(tab, params),
                 selected: tab == params.request_tab,
@@ -199,16 +199,14 @@ fn render_tabbed_request(params: &ApiWorkspaceParams<'_>, p: &Palette) -> AnyEle
             }
         })
         .collect::<Vec<_>>();
-    let bar = super::workspace_tabs_bar::render_underline_tabs(
+    let bar = super::tabs_bar::render_underline_tabs(
         "api-request-tabs",
         items,
         Some(
             h_flex()
                 .gap(rems(space::XXS))
                 .items_center()
-                .child(super::workspace_advanced_view::render_project_actions_menu(
-                    params,
-                ))
+                .child(super::advanced_view::render_project_actions_menu(params))
                 .into_any_element(),
         ),
         p,

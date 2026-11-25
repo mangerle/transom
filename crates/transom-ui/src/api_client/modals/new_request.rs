@@ -1,7 +1,7 @@
 //! 接口树「+」新建与导入弹窗：按两列卡片展示协议新建与导入入口。
 
-use super::ApiSidebarEvent;
-use super::workspace_view::ApiWorkspaceParams;
+use crate::api_client::ApiSidebarEvent;
+use crate::api_client::ApiWorkspaceParams;
 use crate::palette::Palette;
 use crate::theme::tokens::{size, space, typography};
 use crate::widgets::{IconButton, IconButtonSize};
@@ -11,7 +11,7 @@ use transom_api::ApiProtocol;
 use transom_ui_icons::{AppIcon, AppIconElement, CustomIcon, UiIcon};
 
 /// 渲染新建协议与导入方式弹窗。
-pub(super) fn render_new_request_modal(
+pub(in crate::api_client) fn render_new_request_modal(
     params: &ApiWorkspaceParams<'_>,
     p: &Palette,
 ) -> AnyElement {
@@ -127,9 +127,8 @@ pub(super) fn render_new_request_modal(
                     rust_i18n::t!("api.request.curl_import").to_string(),
                     p,
                     move |_, window, cx| {
-                        curl_view.update(cx, |this, cx| {
-                            this.import_from_clipboard(true, window, cx)
-                        });
+                        curl_view
+                            .update(cx, |this, cx| this.import_from_clipboard(true, window, cx));
                     },
                 ))
                 .child(action_card(
@@ -138,9 +137,8 @@ pub(super) fn render_new_request_modal(
                     rust_i18n::t!("api.request.paste_import").to_string(),
                     p,
                     move |_, window, cx| {
-                        paste_view.update(cx, |this, cx| {
-                            this.import_from_clipboard(false, window, cx)
-                        });
+                        paste_view
+                            .update(cx, |this, cx| this.import_from_clipboard(false, window, cx));
                     },
                 )),
         )
@@ -183,7 +181,7 @@ struct ProtocolCardSpec {
 
 fn protocol_card(
     spec: ProtocolCardSpec,
-    view: &Entity<super::ApiWorkspace>,
+    view: &Entity<crate::api_client::ApiWorkspace>,
     p: &Palette,
 ) -> AnyElement {
     let view = view.clone();
@@ -205,11 +203,7 @@ fn protocol_card(
                 this.new_request_with_protocol(protocol, window, cx)
             });
         })
-        .child(
-            AppIconElement::new(spec.icon)
-                .small()
-                .text_color(p.primary),
-        )
+        .child(AppIconElement::new(spec.icon).small().text_color(p.primary))
         .child(
             div()
                 .flex_1()
@@ -252,11 +246,7 @@ fn action_card(
         .cursor_pointer()
         .hover(|style| style.bg(p.sidebar_accent.opacity(0.6)))
         .on_click(on_click)
-        .child(
-            AppIconElement::new(icon)
-                .small()
-                .text_color(p.warning),
-        )
+        .child(AppIconElement::new(icon).small().text_color(p.warning))
         .child(
             div()
                 .flex_1()

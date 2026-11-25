@@ -359,9 +359,9 @@ fn api_workspace_and_sidebar_are_entity_owned() {
             && tab.contains("workspace: Entity<ApiWorkspace>"),
         "TabContent::ApiClient 必须通过 ApiClientTab 持有 Entity<ApiWorkspace>"
     );
-    let workspace = std::fs::read_to_string(root.join("src/api_client/workspace.rs"))
+    let workspace = std::fs::read_to_string(root.join("src/api_client/workspace/mod.rs"))
         .expect("读取 API 工作区实体失败");
-    let sidebar = std::fs::read_to_string(root.join("src/api_client/sidebar.rs"))
+    let sidebar = std::fs::read_to_string(root.join("src/api_client/sidebar/mod.rs"))
         .expect("读取 API 侧栏实体失败");
     assert!(
         workspace.contains("pub(crate) struct ApiWorkspace")

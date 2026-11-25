@@ -1,7 +1,7 @@
 //! 请求保存按钮与保存位置弹层。
 
 use super::ApiWorkspace;
-use super::workspace_view::ApiWorkspaceParams;
+use super::view::ApiWorkspaceParams;
 use crate::palette::Palette;
 use crate::search::contains_case_insensitive;
 use crate::theme::tokens::space;

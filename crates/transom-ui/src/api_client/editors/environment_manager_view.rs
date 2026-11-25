@@ -1,7 +1,7 @@
 //! 环境切换、命名和增删管理视图。
 
-use super::ApiWorkspace;
-use super::workspace_view::ApiWorkspaceParams;
+use crate::api_client::ApiWorkspace;
+use crate::api_client::ApiWorkspaceParams;
 use crate::theme::tokens::space;
 use crate::widgets::{IconButton, IconButtonSize, dropdown};
 use gpui_kit::base::{h_flex, v_flex};
@@ -9,7 +9,9 @@ use gpui_kit::component::input::Input;
 use gpui_kit::*;
 use transom_api::ApiEnvironmentId;
 
-pub(super) fn render_environment_manager(params: &ApiWorkspaceParams<'_>) -> AnyElement {
+pub(in crate::api_client) fn render_environment_manager(
+    params: &ApiWorkspaceParams<'_>,
+) -> AnyElement {
     let view = params.view.clone();
     let add_view = params.view.clone();
     let delete_view = params.view.clone();

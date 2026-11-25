@@ -1,8 +1,8 @@
 //! API 请求历史列表与单条响应摘要详情。
 
-use super::workspace_response_tables::{table_cell, table_header_cell, table_header_cell_flex};
-use super::workspace_response_view::{centered_message, response_color};
-use super::workspace_view::ApiWorkspaceParams;
+use super::response_tables::{table_cell, table_header_cell, table_header_cell_flex};
+use super::response_view::{centered_message, response_color};
+use super::view::ApiWorkspaceParams;
 use crate::palette::Palette;
 use crate::theme::tokens::{size, space, typography};
 use crate::widgets::{IconButton, IconButtonSize, action_button};

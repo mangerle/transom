@@ -1,7 +1,7 @@
 //! API 工作区请求草稿的读取与回写。
 
-use super::workspace::ApiWorkspace;
-use super::workspace_kv::{header_entry, header_from_entry, query_entry, query_from_entry};
+use super::ApiWorkspace;
+use super::kv_sync::{header_entry, header_from_entry, query_entry, query_from_entry};
 use gpui_kit::*;
 use transom_api::{ApiAssertion, ApiAuth, ApiBodyType, ApiMethod, ApiProtocol};
 
@@ -157,28 +157,26 @@ impl ApiWorkspace {
         self.editors.form.update(cx, |editor, cx| {
             editor.set_fields(&form_fields, allow_files, window, cx);
         });
-        self.editors
-            .request_body
-            .update(cx, |state, cx| {
-                let lang = match self.protocol {
-                    ApiProtocol::Http => {
-                        let raw_lang = self
-                            .selected_request()
-                            .map(|request| {
-                                request
-                                    .body_type
-                                    .raw_language()
-                                    .unwrap_or(request.raw_language)
-                            })
-                            .unwrap_or_default();
-                        super::workspace_body_actions::raw_language_token(raw_lang)
-                    }
-                    ApiProtocol::GraphQl => "graphql",
-                    ApiProtocol::Grpc | ApiProtocol::WebSocket => "json",
-                };
-                state.set_highlighter(lang, cx);
-                state.set_value(body, window, cx);
-            });
+        self.editors.request_body.update(cx, |state, cx| {
+            let lang = match self.protocol {
+                ApiProtocol::Http => {
+                    let raw_lang = self
+                        .selected_request()
+                        .map(|request| {
+                            request
+                                .body_type
+                                .raw_language()
+                                .unwrap_or(request.raw_language)
+                        })
+                        .unwrap_or_default();
+                    super::body_actions::raw_language_token(raw_lang)
+                }
+                ApiProtocol::GraphQl => "graphql",
+                ApiProtocol::Grpc | ApiProtocol::WebSocket => "json",
+            };
+            state.set_highlighter(lang, cx);
+            state.set_value(body, window, cx);
+        });
         self.editors
             .grpc_service
             .update(cx, |state, cx| state.set_value(grpc_service, window, cx));

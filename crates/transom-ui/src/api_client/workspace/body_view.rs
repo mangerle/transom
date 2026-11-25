@@ -1,7 +1,7 @@
 //! HTTP、GraphQL、gRPC 与 WebSocket 的请求主体视图。
 
 use super::ApiBodyMode;
-use super::workspace_view::ApiWorkspaceParams;
+use super::view::ApiWorkspaceParams;
 use crate::palette::Palette;
 use crate::theme::tokens::{rem_px, space, typography};
 use crate::widgets::{IconButton, IconButtonSize, action_button, dropdown};

@@ -1,7 +1,7 @@
 //! API 请求树顶部的项目切换与管理菜单。
 
-use super::workspace_view::ApiWorkspaceParams;
-use super::{ApiSidebarEvent, ApiSidebarView};
+use super::view::ApiWorkspaceParams;
+use crate::api_client::{ApiSidebarEvent, ApiSidebarView};
 use crate::palette::Palette;
 use crate::widgets::{MenuItem, action_button};
 use gpui_kit::component::button::ButtonVariants;

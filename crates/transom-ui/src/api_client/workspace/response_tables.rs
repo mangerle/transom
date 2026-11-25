@@ -1,7 +1,7 @@
 //! API 响应 Headers、Cookies 与 Assertions 表格。
 
-use super::workspace_response_view::centered_message;
-use super::workspace_view::ApiWorkspaceParams;
+use super::response_view::centered_message;
+use super::view::ApiWorkspaceParams;
 use crate::palette::Palette;
 use crate::theme::tokens::{size, space, typography};
 use gpui_kit::base::{h_flex, v_flex};

@@ -1,7 +1,7 @@
 //! API 工作区查询参数与请求头的实体回写。
 
-use super::kv_editor::KvEntry;
-use super::workspace::ApiWorkspace;
+use super::ApiWorkspace;
+use crate::api_client::editors::kv::KvEntry;
 use gpui_kit::*;
 use transom_api::{
     ApiAssertion, ApiAuth, ApiCookie, ApiFormField, ApiGlobalParameter, ApiGlobalParameterTarget,

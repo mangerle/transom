@@ -3,14 +3,14 @@
 //! 将实体创建从工作区状态文件中分离，保证状态流转与编辑器初始化各自内聚，
 //! 同时避免单个文件随高级配置项增长突破 500 行上限。
 
-use super::assertion_editor::AssertionEditor;
-use super::auth_editor::AuthEditor;
-use super::cookie_editor::CookieEditor;
-use super::environment_editor::EnvironmentEditor;
-use super::form_editor::FormEditor;
-use super::kv_editor::{KvEditor, KvEditorKind};
-use super::workspace::ApiWorkspace;
-use super::workspace::ApiWorkspaceEditors;
+use super::ApiWorkspace;
+use super::ApiWorkspaceEditors;
+use crate::api_client::editors::assertion::AssertionEditor;
+use crate::api_client::editors::auth::AuthEditor;
+use crate::api_client::editors::cookie::CookieEditor;
+use crate::api_client::editors::environment::EnvironmentEditor;
+use crate::api_client::editors::form::FormEditor;
+use crate::api_client::editors::kv::{KvEditor, KvEditorKind};
 use gpui_kit::component::input::{EditorState, InputState, TextareaState};
 use gpui_kit::*;
 

@@ -6,49 +6,17 @@
 //! 并排与关闭模型，不引入第二个主界面状态源。
 
 mod actions;
-mod assertion_editor;
-mod auth_editor;
-mod cookie_editor;
-mod environment_editor;
-mod environment_manager_view;
-mod form_editor;
-mod form_editor_view;
-mod form_file;
-mod kv_editor;
+mod editors;
+mod modals;
 mod sidebar;
-mod sidebar_view;
 mod workspace;
-mod workspace_actions;
-mod workspace_advanced_view;
-mod workspace_body_actions;
-mod workspace_body_view;
-mod workspace_config_modal;
-mod workspace_editor_state;
-mod workspace_editors;
-mod workspace_folder;
-mod workspace_global_config;
-mod workspace_global_params_view;
-mod workspace_history_view;
-mod workspace_kv;
-mod workspace_new_modal;
-mod workspace_project_switcher;
-mod workspace_request_actions;
-mod workspace_request_view;
-mod workspace_response_tables;
-mod workspace_response_view;
-mod workspace_save_menu;
-mod workspace_tabs_bar;
-mod workspace_tree_view;
-mod workspace_types;
-mod workspace_view;
 
 pub(crate) use actions::{
     focus_api_client, on_sidebar_event, on_sidebar_request, on_workspace_event,
     on_workspace_request, open_api_project,
 };
-pub(crate) use sidebar::{ApiImportState, ApiSidebarEvent, ApiSidebarState, ApiSidebarView};
+pub(crate) use sidebar::{ApiSidebarEvent, ApiSidebarView};
 pub(crate) use workspace::{
-    ApiAuxiliarySection, ApiBodyMode, ApiConfigModalSection, ApiGlobalParameterTab, ApiRequestTab,
-    ApiResponseTab, ApiWorkspace, ApiWorkspaceEvent, ApiWorkspaceServices,
+    ApiConfigModalSection, ApiWorkspace, ApiWorkspaceEvent, ApiWorkspaceParams,
+    ApiWorkspaceServices, render_api_workspace,
 };
-pub(crate) use workspace_view::{ApiWorkspaceParams, render_api_workspace};

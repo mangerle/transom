@@ -1,5 +1,7 @@
 //! API 项目侧栏实体：项目登记表、搜索与内联新建/重命名/删除确认状态。
 
+pub(crate) mod view;
+
 use gpui_kit::component::input::InputState;
 use gpui_kit::*;
 use transom_api::{ApiExportFormat, ApiImportFormat, ApiProject, ApiProjectId, ApiRegistry};

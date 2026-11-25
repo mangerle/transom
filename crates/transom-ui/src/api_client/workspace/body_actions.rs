@@ -139,7 +139,8 @@ impl ApiWorkspace {
                 }
             }
             Err(_) => {
-                self.error = Some(rust_i18n::t!("api.request.format_body_invalid_json").to_string());
+                self.error =
+                    Some(rust_i18n::t!("api.request.format_body_invalid_json").to_string());
                 cx.notify();
             }
         }
