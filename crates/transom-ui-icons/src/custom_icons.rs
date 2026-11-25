@@ -30,6 +30,7 @@ pub struct CustomIcon(&'static str);
 
 impl CustomIcon {
     pub const NETWORK: Self = Self("network");
+    pub const API: Self = Self("api");
     pub const CPU: Self = Self("cpu");
     pub const DATABASE: Self = Self("database");
     pub const CLOUD: Self = Self("cloud");
@@ -102,6 +103,7 @@ mod tests {
     fn custom_assets_and_dark_variants_exist() {
         for icon in [
             CustomIcon::NETWORK,
+            CustomIcon::API,
             CustomIcon::CPU,
             CustomIcon::DATABASE,
             CustomIcon::CLOUD,

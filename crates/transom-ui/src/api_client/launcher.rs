@@ -8,7 +8,7 @@ use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::button::ButtonVariants;
 use gpui_kit::component::scroll::ScrollableElement;
 use gpui_kit::*;
-use transom_ui_icons::{AppIcon, AppIconElement, UiIcon};
+use transom_ui_icons::{AppIcon, AppIconElement, CustomIcon, UiIcon};
 
 impl AppShell {
     pub(crate) fn render_api_project_launcher(
@@ -79,7 +79,9 @@ impl AppShell {
                             h_flex()
                                 .gap(rems(space::XS))
                                 .items_center()
-                                .child(AppIconElement::new(AppIcon::Ui(UiIcon::WEB_SERVER)).small())
+                                .child(
+                                    AppIconElement::new(AppIcon::Custom(CustomIcon::API)).small(),
+                                )
                                 .child(div().flex_1().min_w_0().truncate().child(title)),
                         )
                         .child(div().text_color(p.muted_foreground).child(count))
@@ -93,7 +95,7 @@ impl AppShell {
             .gap(rems(space::LG))
             .items_center()
             .justify_center()
-            .child(AppIconElement::new(AppIcon::Ui(UiIcon::WEB_SERVER)).with_rems(rems(2.0)))
+            .child(AppIconElement::new(AppIcon::Custom(CustomIcon::API)).with_rems(rems(2.0)))
             .child(
                 div()
                     .text_size(rems(crate::theme::tokens::typography::TITLE))

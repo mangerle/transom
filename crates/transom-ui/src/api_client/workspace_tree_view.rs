@@ -13,7 +13,7 @@ use gpui_kit::component::scroll::ScrollableElement;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use transom_api::{ApiFolder, ApiRequest, ApiRequestId, method_for_request};
-use transom_ui_icons::{AppIcon, AppIconElement, UiIcon};
+use transom_ui_icons::{AppIcon, AppIconElement, CustomIcon, UiIcon};
 
 pub(crate) fn render_tree(params: &ApiWorkspaceParams<'_>, p: &Palette) -> AnyElement {
     let view = params.view;
@@ -112,7 +112,7 @@ pub(crate) fn render_tree(params: &ApiWorkspaceParams<'_>, p: &Palette) -> AnyEl
             .gap(rems(space::SM))
             .items_center()
             .text_color(p.muted_foreground)
-            .child(AppIconElement::new(AppIcon::Ui(UiIcon::WEB_SERVER)).small())
+            .child(AppIconElement::new(AppIcon::Custom(CustomIcon::API)).small())
             .child(rust_i18n::t!("api.request.empty_title").to_string())
             .child(rust_i18n::t!("api.request.empty_hint").to_string())
             .into_any_element()

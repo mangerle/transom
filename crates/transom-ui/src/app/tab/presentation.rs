@@ -106,7 +106,7 @@ pub(crate) fn tab_icon(
     }
     if tab.api_project_id().is_some() {
         return (
-            AppIcon::Custom(CustomIcon::NETWORK),
+            AppIcon::Custom(CustomIcon::API),
             if active {
                 p.sidebar_accent_foreground
             } else {
@@ -197,8 +197,8 @@ pub(crate) fn compact_tab_icon(tab: &WorkspaceTab) -> AppIcon {
             }
         }
         TabContent::Git(_) => AppIcon::Ui(UiIcon::VCS),
-        TabContent::ApiHome(_) => AppIcon::Custom(CustomIcon::NETWORK),
-        TabContent::ApiClient(_) => AppIcon::Custom(CustomIcon::NETWORK),
+        TabContent::ApiHome(_) => AppIcon::Custom(CustomIcon::API),
+        TabContent::ApiClient(_) => AppIcon::Custom(CustomIcon::API),
     }
 }
 

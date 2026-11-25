@@ -14,7 +14,7 @@ use gpui_kit::component::input::{Input, Textarea};
 use gpui_kit::component::tab::{Tab, TabBar};
 use gpui_kit::*;
 use transom_api::{ApiAuth, ApiEnvironmentId, ApiMethod, ApiProtocol};
-use transom_ui_icons::{AppIcon, AppIconElement, UiIcon};
+use transom_ui_icons::{AppIcon, AppIconElement, CustomIcon, UiIcon};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum RequestMode {
@@ -390,7 +390,7 @@ fn render_empty_request(p: &Palette) -> AnyElement {
         .justify_center()
         .gap(rems(space::SM))
         .text_color(p.muted_foreground)
-        .child(AppIconElement::new(AppIcon::Ui(UiIcon::WEB_SERVER)).small())
+        .child(AppIconElement::new(AppIcon::Custom(CustomIcon::API)).small())
         .child(rust_i18n::t!("api.request.empty_title").to_string())
         .child(rust_i18n::t!("api.request.empty_hint").to_string())
         .into_any_element()

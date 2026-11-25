@@ -379,7 +379,7 @@ mod labels {
             ActivityItemId::Keys => UiIcon::KEY.into(),
             ActivityItemId::Settings => UiIcon::SETTINGS.into(),
             ActivityItemId::Git => UiIcon::VCS.into(),
-            ActivityItemId::ApiClient => UiIcon::WEB_SERVER.into(),
+            ActivityItemId::ApiClient => CustomIcon::API.into(),
             ActivityItemId::CloudSync => CustomIcon::CLOUD.into(),
             ActivityItemId::Unknown => UiIcon::ERROR.into(),
         }

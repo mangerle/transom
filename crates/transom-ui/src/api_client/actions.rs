@@ -40,6 +40,16 @@ pub(crate) fn open_api_project(
     window: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
+    let home_tabs = state
+        .workspace
+        .tabs
+        .iter()
+        .filter(|tab| tab.is_api_home())
+        .map(|tab| tab.id)
+        .collect::<Vec<_>>();
+    for tab_id in home_tabs {
+        state.ui.window_requests.push_close_tab(tab_id);
+    }
     if let Some(existing) = state.workspace.api_tab_for_project(project.id) {
         state.ui.window_requests.push_activate_tab(existing);
         return;
