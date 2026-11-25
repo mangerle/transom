@@ -333,16 +333,6 @@ impl ApiWorkspace {
         cx.notify();
     }
 
-    /// 打开/关闭高级面板。
-    pub(crate) fn toggle_auxiliary(
-        &mut self,
-        section: ApiAuxiliarySection,
-        cx: &mut Context<Self>,
-    ) {
-        self.ui.auxiliary_section = (self.ui.auxiliary_section != Some(section)).then_some(section);
-        cx.notify();
-    }
-
     pub(super) fn load_environment(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let environment = self.project.active_environment();
         if self.project.active_environment_id.is_none() {

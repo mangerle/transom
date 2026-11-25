@@ -74,24 +74,6 @@ pub(crate) fn render_auxiliary_panel(params: &ApiWorkspaceParams<'_>, p: &Palett
         return div().into_any_element();
     };
     let (title, body) = match section {
-        ApiAuxiliarySection::Environment => (
-            rust_i18n::t!("api.request.environment_management").to_string(),
-            crate::api_client::editors::environment_manager_view::render_environment_manager(
-                params,
-            ),
-        ),
-        ApiAuxiliarySection::GlobalParameters => (
-            rust_i18n::t!("api.request.global_parameters").to_string(),
-            super::global_params_view::render_global_parameters(params, p),
-        ),
-        ApiAuxiliarySection::GlobalVariables => (
-            rust_i18n::t!("api.request.global_variables").to_string(),
-            params.editors.global_variables.clone().into_any_element(),
-        ),
-        ApiAuxiliarySection::Cookies => (
-            rust_i18n::t!("api.request.aux_cookies").to_string(),
-            params.editors.cookies.clone().into_any_element(),
-        ),
         ApiAuxiliarySection::Code => {
             let view = params.view.clone();
             let copy_view = params.view.clone();

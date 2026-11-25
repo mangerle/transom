@@ -15,8 +15,6 @@ use transom_ui_icons::AppIconElement;
 use transom_ui_icons::DomainIcon;
 use transom_ui_icons::UiIcon;
 
-mod api;
-
 /// 渲染一帧窗格树时共享的上下文。
 ///
 /// 递归渲染子节点时只读地需要活动窗格、最大化目标与视觉序号，而 `self` 在同一
@@ -440,3 +438,25 @@ fn pane_context_menu(
 }
 
 mod container_tab;
+
+impl AppShell {
+    pub(super) fn render_api_tab(
+        &mut self,
+        index: usize,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+        p: &Palette,
+    ) -> Option<AnyElement> {
+        let workspace = self.state.workspace.tabs[index].api_workspace()?;
+        let api_sidebar = self.state.features.api_sidebar.clone();
+        let api_sidebar_state = api_sidebar.read(cx);
+        let state = workspace.read(cx);
+        let params = state.render_params(
+            &workspace,
+            &api_sidebar,
+            &api_sidebar_state.state,
+            window.rem_size(),
+        );
+        Some(crate::api_client::render_api_workspace(params, p))
+    }
+}

@@ -399,12 +399,12 @@ fn truncate_response_preview(body: &str, max_bytes: usize) -> String {
     while end > 0 && !body.is_char_boundary(end) {
         end -= 1;
     }
-    format!(
-        "{}\n\n... [响应体过大（{}），预览已截断至 {}，点击复制可获取完整内容]",
-        &body[..end],
-        crate::format::format_compact_size(body.len() as u64),
-        crate::format::format_compact_size(max_bytes as u64),
-    )
+    let notice = rust_i18n::t!(
+        "api.response.preview_truncated",
+        total = crate::format::format_compact_size(body.len() as u64),
+        limit = crate::format::format_compact_size(max_bytes as u64),
+    );
+    format!("{}\n\n{notice}", &body[..end])
 }
 
 fn unix_now() -> u64 {
@@ -425,6 +425,7 @@ mod tests {
         let utf8 = "你好世界".repeat(10);
         let preview = truncate_response_preview(&utf8, 7);
         assert!(preview.starts_with("你好"));
-        assert!(preview.contains("预览已截断"));
+        assert!(preview.len() < utf8.len() + 200);
+        assert!(preview.contains(&crate::format::format_compact_size(utf8.len() as u64)));
     }
 }

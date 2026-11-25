@@ -1,8 +1,8 @@
 //! API 查询参数与请求头共用的三列表格编辑器。
 
 use super::table::{
-    ColumnWidth, table_action_slot, table_header_row, table_input_cell, table_leading_toggle_slot,
-    table_remove_button, table_row_container, table_scroll_frame,
+    ColumnWidth, LeadingToggleSlotParams, table_action_slot, table_header_row, table_input_cell,
+    table_leading_toggle_slot, table_remove_button, table_row_container, table_scroll_frame,
 };
 use gpui_kit::component::ActiveTheme;
 use gpui_kit::component::input::{InputEvent, InputState};
@@ -251,20 +251,20 @@ impl Render for KvEditor {
             let toggle = cx.entity().downgrade();
             let remove = cx.entity().downgrade();
             table_row_container("api-kv-row", id, !blank && !row.enabled, border)
-                .child(table_leading_toggle_slot(
-                    "api-kv-add",
-                    "api-kv-enabled",
+                .child(table_leading_toggle_slot(LeadingToggleSlotParams {
+                    add_key: "api-kv-add",
+                    toggle_key: "api-kv-enabled",
                     id,
                     blank,
-                    row.enabled,
-                    rust_i18n::t!("api.request.add_parameter").to_string(),
-                    move |_, window, cx| {
+                    enabled: row.enabled,
+                    add_tooltip: rust_i18n::t!("api.request.add_parameter").to_string(),
+                    on_add: Box::new(move |_, window, cx| {
                         let _ = add.update(cx, |this, cx| this.add_row(window, cx));
-                    },
-                    move |_, _, cx| {
+                    }),
+                    on_toggle: Box::new(move |_, _, cx| {
                         let _ = toggle.update(cx, |this, cx| this.toggle(id, cx));
-                    },
-                ))
+                    }),
+                }))
                 .child(table_input_cell(
                     &row.name,
                     ColumnWidth::Relative(0.28),

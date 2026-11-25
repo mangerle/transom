@@ -126,32 +126,6 @@ impl ApiWorkspace {
         self.load_environment(window, cx);
         cx.notify();
     }
-
-    /// 删除当前环境；最后一个环境不允许删除。
-    pub(crate) fn delete_current_environment(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        if self.project.environments.len() <= 1 {
-            return;
-        }
-        let Some(current) = self.active_environment_id() else {
-            return;
-        };
-        self.project
-            .environments
-            .retain(|environment| environment.id != current);
-        let next = self
-            .project
-            .environments
-            .first()
-            .map(|environment| environment.id);
-        self.project.active_environment_id = next;
-        self.project.touch();
-        self.load_environment(window, cx);
-        cx.notify();
-    }
 }
 
 fn global_parameter_entry(

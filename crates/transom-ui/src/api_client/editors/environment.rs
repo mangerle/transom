@@ -1,8 +1,9 @@
 //! 项目环境变量逐行编辑器。
 
 use super::table::{
-    ColumnWidth, table_action_slot, table_checkbox_cell, table_header_row, table_input_cell,
-    table_leading_toggle_slot, table_remove_button, table_row_container, table_scroll_frame,
+    ColumnWidth, LeadingToggleSlotParams, table_action_slot, table_checkbox_cell, table_header_row,
+    table_input_cell, table_leading_toggle_slot, table_remove_button, table_row_container,
+    table_scroll_frame,
 };
 use gpui_kit::component::ActiveTheme;
 use gpui_kit::component::input::{InputEvent, InputState};
@@ -207,20 +208,20 @@ impl Render for EnvironmentEditor {
             let secret = cx.entity().downgrade();
             let remove = cx.entity().downgrade();
             table_row_container("api-env-row", id, !blank && !row.enabled, border)
-                .child(table_leading_toggle_slot(
-                    "api-env-add",
-                    "api-env-enabled",
+                .child(table_leading_toggle_slot(LeadingToggleSlotParams {
+                    add_key: "api-env-add",
+                    toggle_key: "api-env-enabled",
                     id,
                     blank,
-                    row.enabled,
-                    rust_i18n::t!("api.request.add_environment").to_string(),
-                    move |_, window, cx| {
+                    enabled: row.enabled,
+                    add_tooltip: rust_i18n::t!("api.request.add_environment").to_string(),
+                    on_add: Box::new(move |_, window, cx| {
                         let _ = add.update(cx, |this, cx| this.add_row(window, cx));
-                    },
-                    move |_, _, cx| {
+                    }),
+                    on_toggle: Box::new(move |_, _, cx| {
                         let _ = enabled.update(cx, |this, cx| this.toggle_enabled(id, cx));
-                    },
-                ))
+                    }),
+                }))
                 .child(table_input_cell(
                     &row.name,
                     ColumnWidth::Relative(0.32),

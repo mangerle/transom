@@ -7,12 +7,15 @@ use gpui_kit::base::{Tab, Tabs, h_flex};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 
+/// 页签点击回调类型别名。
+pub(super) type TabSelectCallback = Box<dyn Fn(&mut Window, &mut App) + 'static>;
+
 /// 单个页签项的数据与点击回调。
 pub(super) struct UnderlineTabItem {
     pub(super) id: &'static str,
     pub(super) label: String,
     pub(super) selected: bool,
-    pub(super) on_select: Box<dyn Fn(&mut Window, &mut App) + 'static>,
+    pub(super) on_select: TabSelectCallback,
 }
 
 /// 渲染与主标签栏一致的底部蓝线页签栏。

@@ -203,23 +203,29 @@ pub(super) fn table_remove_button(
         .into_any_element()
 }
 
+pub(super) type TableAddCallback = Box<dyn Fn(&ClickEvent, &mut Window, &mut App) + 'static>;
+pub(super) type TableToggleCallback = Box<dyn Fn(&bool, &mut Window, &mut App) + 'static>;
+
+/// 行首标准启用/添加槽位的渲染参数。
+pub(super) struct LeadingToggleSlotParams {
+    pub(super) add_key: &'static str,
+    pub(super) toggle_key: &'static str,
+    pub(super) id: u64,
+    pub(super) blank: bool,
+    pub(super) enabled: bool,
+    pub(super) add_tooltip: String,
+    pub(super) on_add: TableAddCallback,
+    pub(super) on_toggle: TableToggleCallback,
+}
+
 /// 渲染行首标准启用/添加槽位（空白行显示添加按钮，已有行显示复选框）。
-pub(super) fn table_leading_toggle_slot(
-    add_key: &'static str,
-    toggle_key: &'static str,
-    id: u64,
-    blank: bool,
-    enabled: bool,
-    add_tooltip: String,
-    on_add: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-    on_toggle: impl Fn(&bool, &mut Window, &mut App) + 'static,
-) -> AnyElement {
-    let child = if blank {
-        table_add_button(add_key, id, add_tooltip, on_add)
+pub(super) fn table_leading_toggle_slot(params: LeadingToggleSlotParams) -> AnyElement {
+    let child = if params.blank {
+        table_add_button(params.add_key, params.id, params.add_tooltip, params.on_add)
     } else {
-        Checkbox::new((toggle_key, id))
-            .checked(enabled)
-            .on_click(on_toggle)
+        Checkbox::new((params.toggle_key, params.id))
+            .checked(params.enabled)
+            .on_click(params.on_toggle)
             .into_any_element()
     };
     table_action_slot(Some(child))

@@ -1,8 +1,8 @@
 //! 请求断言逐行编辑器。
 
 use super::table::{
-    ColumnWidth, table_action_slot, table_header_row, table_input_cell, table_leading_toggle_slot,
-    table_remove_button, table_row_container, table_scroll_frame,
+    ColumnWidth, LeadingToggleSlotParams, table_action_slot, table_header_row, table_input_cell,
+    table_leading_toggle_slot, table_remove_button, table_row_container, table_scroll_frame,
 };
 use gpui_kit::component::ActiveTheme;
 use gpui_kit::component::input::{InputEvent, InputState};
@@ -169,20 +169,20 @@ impl Render for AssertionEditor {
             let toggle = cx.entity().downgrade();
             let remove = cx.entity().downgrade();
             table_row_container("api-assertion-row", id, !blank && !row.enabled, border)
-                .child(table_leading_toggle_slot(
-                    "api-assertion-add",
-                    "api-assertion-enabled",
+                .child(table_leading_toggle_slot(LeadingToggleSlotParams {
+                    add_key: "api-assertion-add",
+                    toggle_key: "api-assertion-enabled",
                     id,
                     blank,
-                    row.enabled,
-                    rust_i18n::t!("api.request.add_assertion").to_string(),
-                    move |_, window, cx| {
+                    enabled: row.enabled,
+                    add_tooltip: rust_i18n::t!("api.request.add_assertion").to_string(),
+                    on_add: Box::new(move |_, window, cx| {
                         let _ = add.update(cx, |this, cx| this.add_row(window, cx));
-                    },
-                    move |_, _, cx| {
+                    }),
+                    on_toggle: Box::new(move |_, _, cx| {
                         let _ = toggle.update(cx, |this, cx| this.toggle(id, cx));
-                    },
-                ))
+                    }),
+                }))
                 .child(table_input_cell(&row.expression, ColumnWidth::Flex, border))
                 .child(table_action_slot((!blank).then(|| {
                     table_remove_button(

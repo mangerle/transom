@@ -45,11 +45,6 @@ impl ApiWorkspace {
         cx.notify();
     }
 
-    /// 新建请求并立即选中；保存动作仍由用户显式触发。
-    pub(crate) fn new_request(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.new_request_with_protocol(ApiProtocol::Http, window, cx);
-    }
-
     /// 按指定协议新建请求并立即选中。
     pub(crate) fn new_request_with_protocol(
         &mut self,

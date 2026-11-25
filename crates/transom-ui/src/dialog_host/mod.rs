@@ -176,6 +176,7 @@ impl ModalKind {
     }
 }
 
+mod api_client;
 mod body;
 mod container;
 mod git;
@@ -392,6 +393,9 @@ impl ModalKind {
         if let Some(element) = self.render_git_dialog_body(app_state, app, window, cx, p) {
             return element;
         }
+        if let Some(element) = self.render_api_dialog_body(app_state, window, cx, p) {
+            return element;
+        }
         match self {
             ModalKind::ForwardConfirm => {
                 crate::forward::render_forward_confirm_body(app_state, app, cx, p)
@@ -473,40 +477,6 @@ impl ModalKind {
                 cx,
                 p,
             ),
-            ModalKind::ApiNewRequest => {
-                let Some(workspace) = app_state
-                    .workspace
-                    .active_tab
-                    .and_then(|tab_id| app_state.workspace.tab(tab_id))
-                    .and_then(|tab| tab.api_workspace())
-                else {
-                    return div().into_any_element();
-                };
-                crate::api_client::render_api_new_request_dialog_body(
-                    &workspace,
-                    &app_state.features.api_sidebar,
-                    window,
-                    cx,
-                    p,
-                )
-            }
-            ModalKind::ApiConfig => {
-                let Some(workspace) = app_state
-                    .workspace
-                    .active_tab
-                    .and_then(|tab_id| app_state.workspace.tab(tab_id))
-                    .and_then(|tab| tab.api_workspace())
-                else {
-                    return div().into_any_element();
-                };
-                crate::api_client::render_api_config_dialog_body(
-                    &workspace,
-                    &app_state.features.api_sidebar,
-                    window,
-                    cx,
-                    p,
-                )
-            }
             _ => div().into_any_element(),
         }
     }

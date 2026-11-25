@@ -17,13 +17,9 @@ pub(crate) struct ApiWorkspaceServices {
     pub(crate) websocket: ApiWebSocketService,
 }
 
-/// 项目级配置面板；只承载不随单个请求切换的配置。
+/// 项目级辅助面板；目前承载请求代码预览。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ApiAuxiliarySection {
-    Environment,
-    GlobalParameters,
-    GlobalVariables,
-    Cookies,
     Code,
 }
 

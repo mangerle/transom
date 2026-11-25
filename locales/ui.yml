@@ -940,6 +940,9 @@ api:
     body_copied:
       en: Response body copied
       zh-CN: 响应正文已复制
+    preview_truncated:
+      en: '… [Response body too large (%{total}), preview truncated to %{limit}; click Copy for full content]'
+      zh-CN: '… [响应体过大（%{total}），预览已截断至 %{limit}，点击复制可获取完整内容]'
     no_cookies:
       en: This response has no cookies.
       zh-CN: 本次响应没有 Cookie。
