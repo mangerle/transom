@@ -22,7 +22,6 @@ pub(crate) struct ApiWorkspace {
     pub(crate) protocol: ApiProtocol,
     pub(crate) environment_id: Option<ApiEnvironmentId>,
     pub(crate) request_tab: ApiRequestTab,
-    pub(crate) editor_ratio: f32,
     pub(crate) response_tab: ApiResponseTab,
     pub(crate) selected_history: Option<usize>,
     pub(crate) auxiliary_section: Option<ApiAuxiliarySection>,
@@ -69,7 +68,6 @@ impl ApiWorkspace {
             project,
             method: ApiMethod::Get,
             request_tab: ApiRequestTab::Query,
-            editor_ratio: 0.5,
             response_tab: ApiResponseTab::Body,
             selected_history: None,
             auxiliary_section: None,
@@ -229,27 +227,6 @@ impl ApiWorkspace {
     }
 
     /// 按预设比例调整请求区与响应区高度。
-    pub(crate) fn set_editor_ratio(
-        &mut self,
-        ratio: f32,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let sizes = self.request_response_split.read(cx).sizes().clone();
-        if sizes.len() < 2 {
-            self.editor_ratio = ratio;
-            cx.notify();
-            return;
-        }
-        let total = sizes.iter().copied().sum::<Pixels>();
-        let target = total * ratio;
-        self.request_response_split.update(cx, |state, cx| {
-            state.resize_panel(0, target, window, cx);
-        });
-        self.editor_ratio = ratio;
-        cx.notify();
-    }
-
     /// 切换当前环境并刷新变量编辑区。
     pub(crate) fn set_environment(
         &mut self,

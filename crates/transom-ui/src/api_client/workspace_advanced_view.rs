@@ -7,6 +7,8 @@ use crate::theme::tokens::space;
 use crate::widgets::{IconButton, IconButtonSize, action_button, dropdown, menu_item};
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Sizable;
+use gpui_kit::component::button::Button;
+use gpui_kit::component::button::ButtonVariants;
 use gpui_kit::component::input::Textarea;
 use gpui_kit::component::menu::DropdownMenu;
 use gpui_kit::*;
@@ -16,76 +18,74 @@ use transom_ui_icons::{AppIcon, CustomIcon, FileTypeIcon, UiIcon};
 /// 页签栏右侧的项目动作菜单。
 pub(crate) fn render_project_actions_menu(params: &ApiWorkspaceParams<'_>) -> AnyElement {
     let view = params.view.clone();
-    action_button(
-        "api-project-actions",
-        AppIcon::Ui(UiIcon::MORE_HORIZONTAL),
-        rust_i18n::t!("common.more").to_string(),
-    )
-    .small()
-    .dropdown_caret(true)
-    .dropdown_menu_with_anchor(Anchor::TopRight, move |menu, _, _| {
-        let environment = view.clone();
-        let cookies = view.clone();
-        let code_cur = view.clone();
-        let code_js = view.clone();
-        let code_py = view.clone();
-        let code_rs = view.clone();
-        menu.item(menu_item(
-            rust_i18n::t!("api.project.environment").to_string(),
-            AppIcon::Ui(UiIcon::DEPENDENCIES),
-            move |_, _, cx| {
-                environment.update(cx, |this, cx| {
-                    this.toggle_auxiliary(ApiAuxiliarySection::Environment, cx)
-                });
-            },
-        ))
-        .item(menu_item(
-            rust_i18n::t!("api.project.cookies").to_string(),
-            AppIcon::Custom(CustomIcon::COOKIE),
-            move |_, _, cx| {
-                cookies.update(cx, |this, cx| {
-                    this.toggle_auxiliary(ApiAuxiliarySection::Cookies, cx)
-                });
-            },
-        ))
-        .item(menu_item(
-            "cURL",
-            AppIcon::FileType(FileTypeIcon::SHELL),
-            move |_, window, cx| {
-                code_cur.update(cx, |this, cx| {
-                    this.open_code_preview(CodeTarget::Curl, window, cx)
-                });
-            },
-        ))
-        .item(menu_item(
-            "JavaScript fetch",
-            AppIcon::FileType(FileTypeIcon::JAVASCRIPT),
-            move |_, window, cx| {
-                code_js.update(cx, |this, cx| {
-                    this.open_code_preview(CodeTarget::JavaScriptFetch, window, cx)
-                });
-            },
-        ))
-        .item(menu_item(
-            "Python requests",
-            AppIcon::FileType(FileTypeIcon::PYTHON),
-            move |_, window, cx| {
-                code_py.update(cx, |this, cx| {
-                    this.open_code_preview(CodeTarget::PythonRequests, window, cx)
-                });
-            },
-        ))
-        .item(menu_item(
-            "Rust reqwest",
-            AppIcon::FileType(FileTypeIcon::RUST),
-            move |_, window, cx| {
-                code_rs.update(cx, |this, cx| {
-                    this.open_code_preview(CodeTarget::RustReqwest, window, cx)
-                });
-            },
-        ))
-    })
-    .into_any_element()
+    Button::new("api-project-actions")
+        .ghost()
+        .small()
+        .label(rust_i18n::t!("common.more").to_string())
+        .dropdown_caret(true)
+        .dropdown_menu_with_anchor(Anchor::TopRight, move |menu, _, _| {
+            let environment = view.clone();
+            let cookies = view.clone();
+            let code_cur = view.clone();
+            let code_js = view.clone();
+            let code_py = view.clone();
+            let code_rs = view.clone();
+            menu.item(menu_item(
+                rust_i18n::t!("api.project.environment").to_string(),
+                AppIcon::Ui(UiIcon::DEPENDENCIES),
+                move |_, _, cx| {
+                    environment.update(cx, |this, cx| {
+                        this.toggle_auxiliary(ApiAuxiliarySection::Environment, cx)
+                    });
+                },
+            ))
+            .item(menu_item(
+                rust_i18n::t!("api.project.cookies").to_string(),
+                AppIcon::Custom(CustomIcon::COOKIE),
+                move |_, _, cx| {
+                    cookies.update(cx, |this, cx| {
+                        this.toggle_auxiliary(ApiAuxiliarySection::Cookies, cx)
+                    });
+                },
+            ))
+            .item(menu_item(
+                "cURL",
+                AppIcon::FileType(FileTypeIcon::SHELL),
+                move |_, window, cx| {
+                    code_cur.update(cx, |this, cx| {
+                        this.open_code_preview(CodeTarget::Curl, window, cx)
+                    });
+                },
+            ))
+            .item(menu_item(
+                "JavaScript fetch",
+                AppIcon::FileType(FileTypeIcon::JAVASCRIPT),
+                move |_, window, cx| {
+                    code_js.update(cx, |this, cx| {
+                        this.open_code_preview(CodeTarget::JavaScriptFetch, window, cx)
+                    });
+                },
+            ))
+            .item(menu_item(
+                "Python requests",
+                AppIcon::FileType(FileTypeIcon::PYTHON),
+                move |_, window, cx| {
+                    code_py.update(cx, |this, cx| {
+                        this.open_code_preview(CodeTarget::PythonRequests, window, cx)
+                    });
+                },
+            ))
+            .item(menu_item(
+                "Rust reqwest",
+                AppIcon::FileType(FileTypeIcon::RUST),
+                move |_, window, cx| {
+                    code_rs.update(cx, |this, cx| {
+                        this.open_code_preview(CodeTarget::RustReqwest, window, cx)
+                    });
+                },
+            ))
+        })
+        .into_any_element()
 }
 
 /// 项目级配置面板；只渲染环境或 Cookie 中当前选中的一项。

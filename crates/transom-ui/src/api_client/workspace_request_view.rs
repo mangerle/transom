@@ -169,7 +169,6 @@ pub(super) fn render_request_editor(params: &ApiWorkspaceParams<'_>, p: &Palette
 
 fn render_tabbed_request(params: &ApiWorkspaceParams<'_>, p: &Palette) -> AnyElement {
     let view = params.view.clone();
-    let ratio_view = params.view.clone();
     let save_view = params.view.clone();
     let tabs = visible_tabs(params);
     let selected = tabs
@@ -192,19 +191,6 @@ fn render_tabbed_request(params: &ApiWorkspaceParams<'_>, p: &Palette) -> AnyEle
             h_flex()
                 .gap(rems(space::XXS))
                 .items_center()
-                .child(dropdown(
-                    "api-request-ratio",
-                    params.editor_ratio,
-                    vec![
-                        (0.3, "30%".to_string()),
-                        (0.5, "50%".to_string()),
-                        (0.7, "70%".to_string()),
-                    ],
-                    |this: &mut ApiWorkspace, ratio, window, cx| {
-                        this.set_editor_ratio(ratio, window, cx);
-                    },
-                    ratio_view,
-                ))
                 .child(
                     IconButton::new(
                         "api-request-save",

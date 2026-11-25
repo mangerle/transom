@@ -30,7 +30,6 @@ pub(crate) struct ApiWorkspaceParams<'a> {
     pub(crate) protocol: ApiProtocol,
     pub(crate) environment_id: Option<ApiEnvironmentId>,
     pub(crate) request_tab: ApiRequestTab,
-    pub(crate) editor_ratio: f32,
     pub(crate) response_tab: ApiResponseTab,
     pub(crate) selected_history: Option<usize>,
     pub(crate) auxiliary_section: Option<ApiAuxiliarySection>,

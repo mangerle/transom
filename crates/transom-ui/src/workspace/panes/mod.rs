@@ -282,7 +282,6 @@ impl AppShell {
                     protocol: state.protocol,
                     environment_id: state.environment_id,
                     request_tab: state.request_tab,
-                    editor_ratio: state.editor_ratio,
                     response_tab: state.response_tab,
                     selected_history: state.selected_history,
                     auxiliary_section: state.auxiliary_section,
