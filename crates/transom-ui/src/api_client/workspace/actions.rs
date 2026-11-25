@@ -14,7 +14,7 @@ impl ApiWorkspace {
             cx.notify();
             return;
         }
-        if self.protocol == ApiProtocol::WebSocket {
+        if self.current_protocol() == ApiProtocol::WebSocket {
             self.connect_websocket(window, cx);
             return;
         }
@@ -126,7 +126,7 @@ impl ApiWorkspace {
 
     /// 复制当前响应正文；WebSocket 请求复制消息日志。
     pub(crate) fn copy_response_body(&mut self, cx: &mut Context<Self>) {
-        let text = if self.protocol == ApiProtocol::WebSocket {
+        let text = if self.current_protocol() == ApiProtocol::WebSocket {
             self.editors.websocket_log.read(cx).value().to_string()
         } else {
             self.editors.response_body.read(cx).value().to_string()

@@ -44,7 +44,7 @@ impl RequestMode {
 
 pub(super) fn render_request_editor(params: &ApiWorkspaceParams<'_>, p: &Palette) -> AnyElement {
     let view = params.view;
-    let current_mode = RequestMode::current(params.protocol, params.method);
+    let current_mode = RequestMode::current(params.protocol(), params.method());
     let mut mode_options = ApiMethod::ALL
         .into_iter()
         .map(|method| (RequestMode::Http(method), method.as_str().to_string()))
@@ -75,7 +75,7 @@ pub(super) fn render_request_editor(params: &ApiWorkspaceParams<'_>, p: &Palette
         .collect::<Vec<_>>();
     let environment = dropdown(
         "api-request-environment",
-        params.environment_id,
+        params.environment_id(),
         environment_options,
         |this: &mut ApiWorkspace, environment_id: Option<ApiEnvironmentId>, window, cx| {
             if let Some(environment_id) = environment_id {
@@ -148,7 +148,7 @@ pub(super) fn render_request_editor(params: &ApiWorkspaceParams<'_>, p: &Palette
                     action_button_with_icon_tint(
                         "api-request-send",
                         AppIcon::Ui(UiIcon::FETCH),
-                        if params.protocol == ApiProtocol::WebSocket {
+                        if params.protocol() == ApiProtocol::WebSocket {
                             rust_i18n::t!("api.request.websocket_connect").to_string()
                         } else {
                             rust_i18n::t!("api.request.send").to_string()
@@ -237,10 +237,10 @@ fn render_tabbed_request(params: &ApiWorkspaceParams<'_>, p: &Palette) -> AnyEle
 fn visible_tabs(params: &ApiWorkspaceParams<'_>) -> Vec<ApiRequestTab> {
     let mut tabs = Vec::with_capacity(5);
     tabs.push(ApiRequestTab::Headers);
-    if params.protocol == ApiProtocol::Http || params.protocol == ApiProtocol::GraphQl {
+    if params.protocol() == ApiProtocol::Http || params.protocol() == ApiProtocol::GraphQl {
         tabs.push(ApiRequestTab::Query);
     }
-    if params.protocol != ApiProtocol::Http || params.method.has_body() {
+    if params.protocol() != ApiProtocol::Http || params.method().has_body() {
         tabs.push(ApiRequestTab::Body);
     }
     tabs.push(ApiRequestTab::Auth);
@@ -276,7 +276,7 @@ fn request_tab_label(tab: ApiRequestTab, params: &ApiWorkspaceParams<'_>) -> Str
             labeled(rust_i18n::t!("api.request.query").to_string(), count)
         }
         ApiRequestTab::Body => {
-            let name = match params.protocol {
+            let name = match params.protocol() {
                 ApiProtocol::Http => rust_i18n::t!("api.request.body").to_string(),
                 ApiProtocol::GraphQl => rust_i18n::t!("api.request.graphql_query").to_string(),
                 ApiProtocol::Grpc => rust_i18n::t!("api.request.grpc_message").to_string(),

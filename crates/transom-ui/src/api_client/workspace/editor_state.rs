@@ -30,8 +30,6 @@ impl ApiWorkspace {
             .trim()
             .to_string();
         request.grpc_method = self.editors.grpc_method.read(cx).value().trim().to_string();
-        request.protocol = self.protocol;
-        request.method = self.method;
         request.query = self
             .editors
             .query
@@ -92,7 +90,7 @@ impl ApiWorkspace {
             name,
             url,
             body,
-            method,
+            _method,
             protocol,
             graphql,
             auth,
@@ -141,8 +139,6 @@ impl ApiWorkspace {
                 )
             },
         );
-        self.method = method;
-        self.protocol = protocol;
         self.editors
             .request_name
             .update(cx, |state, cx| state.set_value(name, window, cx));
@@ -159,7 +155,7 @@ impl ApiWorkspace {
             editor.set_fields(&form_fields, allow_files, window, cx);
         });
         self.editors.request_body.update(cx, |state, cx| {
-            let lang = match self.protocol {
+            let lang = match protocol {
                 ApiProtocol::Http => {
                     let raw_lang = self
                         .selected_request()

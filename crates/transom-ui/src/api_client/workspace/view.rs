@@ -25,14 +25,32 @@ pub(crate) struct ApiWorkspaceParams<'a> {
     pub(crate) project: &'a ApiProject,
     pub(crate) request: Option<&'a ApiRequest>,
     pub(crate) selected_request: Option<ApiRequestId>,
-    pub(crate) method: ApiMethod,
-    pub(crate) protocol: ApiProtocol,
-    pub(crate) environment_id: Option<ApiEnvironmentId>,
     pub(in crate::api_client) ui: &'a WorkspaceUiState,
     pub(in crate::api_client) exec: &'a ExecutionState,
     pub(in crate::api_client) editors: &'a ApiWorkspaceEditors,
     pub(in crate::api_client) splits: &'a WorkspaceSplits,
     pub(crate) rem: Pixels,
+}
+
+impl ApiWorkspaceParams<'_> {
+    /// 当前选中请求的 HTTP 方法；未选中时默认为 GET。
+    pub(in crate::api_client) fn method(&self) -> ApiMethod {
+        self.request
+            .map_or(ApiMethod::Get, |request| request.method)
+    }
+
+    /// 当前选中请求的协议；未选中时默认为 HTTP。
+    pub(in crate::api_client) fn protocol(&self) -> ApiProtocol {
+        self.request
+            .map_or(ApiProtocol::Http, |request| request.protocol)
+    }
+
+    /// 当前激活环境 ID。
+    pub(in crate::api_client) fn environment_id(&self) -> Option<ApiEnvironmentId> {
+        self.project
+            .active_environment_id
+            .or_else(|| self.project.environments.first().map(|env| env.id))
+    }
 }
 
 impl ApiWorkspace {
@@ -51,9 +69,6 @@ impl ApiWorkspace {
             project: &self.project,
             request: self.selected_request(),
             selected_request: self.selected_request,
-            method: self.method,
-            protocol: self.protocol,
-            environment_id: self.environment_id,
             ui: &self.ui,
             exec: &self.exec,
             editors: &self.editors,

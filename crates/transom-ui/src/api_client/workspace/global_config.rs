@@ -43,8 +43,7 @@ impl ApiWorkspace {
     /// 打开环境变量与全局配置弹窗。
     pub(crate) fn open_config_modal(&mut self, cx: &mut Context<Self>) {
         let initial = self
-            .environment_id
-            .or(self.project.active_environment_id)
+            .active_environment_id()
             .or_else(|| self.project.environments.first().map(|env| env.id))
             .map_or(
                 super::ApiConfigModalSection::GlobalParameters,
@@ -72,7 +71,6 @@ impl ApiWorkspace {
     pub(crate) fn create_modal_environment(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.create_environment(window, cx);
         if let Some(id) = self.project.active_environment_id {
-            self.environment_id = Some(id);
             self.ui.config_modal = Some(super::ApiConfigModalSection::Environment(id));
         }
         cx.notify();
@@ -96,10 +94,8 @@ impl ApiWorkspace {
             .environments
             .first()
             .map(|environment| environment.id);
-        if self.environment_id == Some(env_id) || self.project.active_environment_id == Some(env_id)
-        {
+        if self.project.active_environment_id == Some(env_id) {
             self.project.active_environment_id = next;
-            self.environment_id = next;
             self.load_environment(window, cx);
         }
         if self.ui.config_modal == Some(super::ApiConfigModalSection::Environment(env_id)) {
@@ -140,7 +136,7 @@ impl ApiWorkspace {
         if self.project.environments.len() <= 1 {
             return;
         }
-        let Some(current) = self.environment_id.or(self.project.active_environment_id) else {
+        let Some(current) = self.active_environment_id() else {
             return;
         };
         self.project
@@ -152,7 +148,6 @@ impl ApiWorkspace {
             .first()
             .map(|environment| environment.id);
         self.project.active_environment_id = next;
-        self.environment_id = next;
         self.project.touch();
         self.load_environment(window, cx);
         cx.notify();

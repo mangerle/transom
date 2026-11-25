@@ -17,7 +17,7 @@ pub(in crate::api_client) fn render_environment_manager(
     let delete_view = params.view.clone();
     let environment = dropdown(
         "api-environment-manager-selector",
-        params.environment_id,
+        params.environment_id(),
         params
             .project
             .environments

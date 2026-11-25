@@ -27,7 +27,7 @@ pub(super) fn render_response(params: &ApiWorkspaceParams<'_>, p: &Palette) -> A
         .items_center()
         .children(render_summary(params, p))
         .when(
-            params.exec.response.is_some() || params.protocol == ApiProtocol::WebSocket,
+            params.exec.response.is_some() || params.protocol() == ApiProtocol::WebSocket,
             |row| {
                 row.child(
                     IconButton::new(
@@ -179,7 +179,7 @@ fn render_body(
     p: &Palette,
     response: Option<&ApiResponseSnapshot>,
 ) -> AnyElement {
-    if params.protocol == ApiProtocol::WebSocket {
+    if params.protocol() == ApiProtocol::WebSocket {
         return text_content(
             "api-response-ws-log",
             params.editors.websocket_log.clone(),

@@ -10,8 +10,7 @@ use transom_api::{
 
 impl ApiWorkspace {
     pub(super) fn apply_environment_name(&mut self, cx: &mut Context<Self>) {
-        let Some(environment_id) = self.environment_id.or(self.project.active_environment_id)
-        else {
+        let Some(environment_id) = self.active_environment_id() else {
             return;
         };
         let name = self
@@ -83,7 +82,7 @@ impl ApiWorkspace {
         variables: Vec<ApiVariable>,
         cx: &mut Context<Self>,
     ) {
-        let environment_id = self.environment_id.or(self.project.active_environment_id);
+        let environment_id = self.active_environment_id();
         let Some(environment_id) = environment_id else {
             return;
         };

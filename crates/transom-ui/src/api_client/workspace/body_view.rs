@@ -17,7 +17,7 @@ use transom_api::{ApiBodyType, ApiProtocol, ApiRawLanguage};
 use transom_ui_icons::{AppIcon, AppIconElement, UiIcon};
 
 pub(super) fn render_body(params: &ApiWorkspaceParams<'_>, p: &Palette) -> AnyElement {
-    match params.protocol {
+    match params.protocol() {
         ApiProtocol::Http => render_http_body(params, p),
         ApiProtocol::GraphQl => render_graphql_body(params, p),
         ApiProtocol::Grpc => render_grpc_body(params, p),

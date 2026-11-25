@@ -41,9 +41,6 @@ pub(crate) use view::{ApiWorkspaceParams, render_api_workspace};
 pub(crate) struct ApiWorkspace {
     pub(crate) project: ApiProject,
     pub(in crate::api_client) selected_request: Option<ApiRequestId>,
-    pub(in crate::api_client) method: ApiMethod,
-    pub(in crate::api_client) protocol: ApiProtocol,
-    pub(in crate::api_client) environment_id: Option<ApiEnvironmentId>,
     pub(in crate::api_client) ui: WorkspaceUiState,
     pub(in crate::api_client) exec: ExecutionState,
     pub(in crate::api_client) editors: ApiWorkspaceEditors,
@@ -63,16 +60,9 @@ impl ApiWorkspace {
         cx: &mut Context<Self>,
     ) -> Self {
         let editors = editors::new_editors(window, cx);
-        let active_environment_id = project.active_environment_id;
         let mut workspace = Self {
             selected_request: project.requests.first().map(|request| request.id),
-            protocol: project
-                .requests
-                .first()
-                .map_or(ApiProtocol::Http, |request| request.protocol),
-            environment_id: active_environment_id,
             project,
-            method: ApiMethod::Get,
             ui: WorkspaceUiState::default(),
             exec: ExecutionState::default(),
             editors,
@@ -247,16 +237,38 @@ impl ApiWorkspace {
         true
     }
 
-    /// 同时切换协议和方法，避免一次选择触发两次草稿回写。
+    /// 当前选中请求的协议；未选中请求时默认为 HTTP。
+    pub(in crate::api_client) fn current_protocol(&self) -> ApiProtocol {
+        self.selected_request()
+            .map_or(ApiProtocol::Http, |request| request.protocol)
+    }
+
+    /// 当前激活环境 ID（以项目中的 `active_environment_id` 为唯一来源）。
+    pub(in crate::api_client) fn active_environment_id(&self) -> Option<ApiEnvironmentId> {
+        self.project
+            .active_environment_id
+            .or_else(|| self.project.environments.first().map(|env| env.id))
+    }
+
+    /// 同时切换协议和方法，直接写回当前请求并保持编辑器高亮同步。
     pub(crate) fn set_request_mode(
         &mut self,
         protocol: ApiProtocol,
         method: ApiMethod,
         cx: &mut Context<Self>,
     ) {
-        self.protocol = protocol;
-        self.method = method;
         self.capture_editor(cx);
+        if let Some(request_id) = self.selected_request
+            && let Some(request) = self
+                .project
+                .requests
+                .iter_mut()
+                .find(|request| request.id == request_id)
+        {
+            request.protocol = protocol;
+            request.method = method;
+            self.project.touch();
+        }
         cx.notify();
     }
 
@@ -280,7 +292,6 @@ impl ApiWorkspace {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.environment_id = Some(environment_id);
         self.project.active_environment_id = Some(environment_id);
         self.load_environment(window, cx);
         cx.notify();
@@ -302,7 +313,6 @@ impl ApiWorkspace {
     /// 外壳保存项目后回填工作区，保持标题与侧栏一致。
     pub(crate) fn apply_project_snapshot(&mut self, project: ApiProject, cx: &mut Context<Self>) {
         self.project = project;
-        self.environment_id = self.project.active_environment_id;
         self.selected_request = self
             .selected_request
             .filter(|request_id| self.project.request(*request_id).is_some())
@@ -322,7 +332,9 @@ impl ApiWorkspace {
 
     pub(super) fn load_environment(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let environment = self.project.active_environment();
-        self.environment_id = self.project.active_environment_id.or(Some(environment.id));
+        if self.project.active_environment_id.is_none() {
+            self.project.active_environment_id = Some(environment.id);
+        }
         self.editors.environment_name.update(cx, |input, cx| {
             input.set_value(environment.name.clone(), window, cx)
         });
@@ -338,16 +350,7 @@ impl ApiWorkspace {
     }
 
     pub(crate) fn environment(&self) -> transom_api::ApiEnvironment {
-        let environment = self
-            .environment_id
-            .and_then(|id| {
-                self.project
-                    .environments
-                    .iter()
-                    .find(|environment| environment.id == id)
-            })
-            .cloned()
-            .unwrap_or_else(|| self.project.active_environment());
-        self.project.merged_environment(&environment)
+        self.project
+            .merged_environment(&self.project.active_environment())
     }
 }
