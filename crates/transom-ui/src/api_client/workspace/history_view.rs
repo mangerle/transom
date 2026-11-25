@@ -1,10 +1,11 @@
 //! API 请求历史列表与单条响应摘要详情。
 
-use super::response_tables::{table_cell, table_header_cell, table_header_cell_flex};
+use super::response_tables::table_cell;
 use super::response_view::{centered_message, response_color};
 use super::view::ApiWorkspaceParams;
+use crate::api_client::editors::table::{ColumnWidth, table_header_row};
 use crate::palette::Palette;
-use crate::theme::tokens::{size, space, typography};
+use crate::theme::tokens::{size, space};
 use crate::widgets::{IconButton, IconButtonSize, action_button};
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::button::ButtonVariants;
@@ -75,48 +76,43 @@ pub(super) fn render_history(params: &ApiWorkspaceParams<'_>, p: &Palette) -> An
 }
 
 fn history_header(border: Hsla, p: &Palette) -> AnyElement {
-    h_flex()
-        .h(rems(size::LARGE_HEADER_HEIGHT))
-        .bg(p.list_head)
-        .text_size(rems(typography::CAPTION))
-        .text_color(p.muted_foreground)
-        .border_color(border)
-        .border_b_1()
-        .child(table_header_cell(
-            rust_i18n::t!("api.response.history_time").to_string(),
-            rems(8.5),
-            border,
-        ))
-        .child(table_header_cell(
-            rust_i18n::t!("api.response.history_status").to_string(),
-            rems(4.0),
-            border,
-        ))
-        .child(table_header_cell(
-            rust_i18n::t!("api.response.history_method").to_string(),
-            rems(5.0),
-            border,
-        ))
-        .child(table_header_cell_flex(
-            rust_i18n::t!("api.response.history_url").to_string(),
-            border,
-        ))
-        .child(table_header_cell(
-            rust_i18n::t!("api.response.history_elapsed").to_string(),
-            rems(5.0),
-            border,
-        ))
-        .child(table_header_cell(
-            rust_i18n::t!("api.response.history_assertions").to_string(),
-            rems(5.5),
-            border,
-        ))
-        .child(table_header_cell(
-            rust_i18n::t!("api.response.history_action").to_string(),
-            rems(6.0),
-            border,
-        ))
-        .into_any_element()
+    table_header_row(
+        border,
+        p.list_head,
+        p.muted_foreground,
+        false,
+        false,
+        vec![
+            (
+                rust_i18n::t!("api.response.history_time").to_string(),
+                ColumnWidth::Fixed(rems(8.5)),
+            ),
+            (
+                rust_i18n::t!("api.response.history_status").to_string(),
+                ColumnWidth::Fixed(rems(4.0)),
+            ),
+            (
+                rust_i18n::t!("api.response.history_method").to_string(),
+                ColumnWidth::Fixed(rems(5.0)),
+            ),
+            (
+                rust_i18n::t!("api.response.history_url").to_string(),
+                ColumnWidth::Flex,
+            ),
+            (
+                rust_i18n::t!("api.response.history_elapsed").to_string(),
+                ColumnWidth::Fixed(rems(5.0)),
+            ),
+            (
+                rust_i18n::t!("api.response.history_assertions").to_string(),
+                ColumnWidth::Fixed(rems(5.5)),
+            ),
+            (
+                rust_i18n::t!("api.response.history_action").to_string(),
+                ColumnWidth::Fixed(rems(6.0)),
+            ),
+        ],
+    )
 }
 
 fn history_row(

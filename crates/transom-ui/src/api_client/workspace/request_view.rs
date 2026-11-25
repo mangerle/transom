@@ -5,7 +5,7 @@ use super::view::ApiWorkspaceParams;
 use super::{ApiRequestTab, ApiWorkspace};
 use crate::palette::Palette;
 use crate::theme::tokens::{size, space};
-use crate::widgets::{action_button, action_button_with_icon_tint, dropdown};
+use crate::widgets::{NoticeKind, action_button, action_button_with_icon_tint, dropdown, notice};
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Disableable;
 use gpui_kit::component::button::ButtonVariants;
@@ -165,10 +165,18 @@ pub(super) fn render_request_editor(params: &ApiWorkspaceParams<'_>, p: &Palette
         );
 
     if let Some(error) = params.exec.error.as_deref() {
-        content = content.child(message_bar(error.to_string(), p.danger, p));
+        content = content.child(div().mx(rems(space::SM)).mt(rems(space::SM)).child(notice(
+            NoticeKind::Error,
+            error.to_string(),
+            p,
+        )));
     }
-    if let Some(notice) = params.exec.notice.as_deref() {
-        content = content.child(message_bar(notice.to_string(), p.success, p));
+    if let Some(notice_msg) = params.exec.notice.as_deref() {
+        content = content.child(div().mx(rems(space::SM)).mt(rems(space::SM)).child(notice(
+            NoticeKind::Success,
+            notice_msg.to_string(),
+            p,
+        )));
     }
 
     let editor = if params.ui.auxiliary_section.is_some() {
@@ -388,17 +396,5 @@ fn render_empty_request(p: &Palette) -> AnyElement {
         .child(AppIconElement::new(AppIcon::Custom(CustomIcon::API)).small())
         .child(rust_i18n::t!("api.request.empty_title").to_string())
         .child(rust_i18n::t!("api.request.empty_hint").to_string())
-        .into_any_element()
-}
-
-fn message_bar(message: String, color: Hsla, p: &Palette) -> AnyElement {
-    div()
-        .mx(rems(space::SM))
-        .mt(rems(space::SM))
-        .p(rems(space::SM))
-        .rounded(p.radius.md)
-        .bg(p.surface.control_selected)
-        .text_color(color)
-        .child(message)
         .into_any_element()
 }

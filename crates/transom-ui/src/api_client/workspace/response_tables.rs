@@ -2,6 +2,7 @@
 
 use super::response_view::centered_message;
 use super::view::ApiWorkspaceParams;
+use crate::api_client::editors::table::{ColumnWidth, table_header_row};
 use crate::palette::Palette;
 use crate::theme::tokens::{size, space, typography};
 use gpui_kit::base::{h_flex, v_flex};
@@ -20,36 +21,23 @@ pub(super) fn render_headers(params: &ApiWorkspaceParams<'_>, p: &Palette) -> An
         return centered_message(rust_i18n::t!("api.response.no_headers").to_string(), p);
     }
     let border = p.divider(p.border);
-    let header = h_flex()
-        .h(rems(size::LARGE_HEADER_HEIGHT))
-        .bg(p.list_head)
-        .text_size(rems(typography::CAPTION))
-        .text_color(p.muted_foreground)
-        .border_color(border)
-        .border_b_1()
-        .child(
-            div()
-                .w(relative(0.28))
-                .flex_none()
-                .min_w_0()
-                .h_full()
-                .px(rems(space::SM))
-                .flex()
-                .items_center()
-                .child(rust_i18n::t!("api.request.parameter_name").to_string()),
-        )
-        .child(
-            div()
-                .flex_1()
-                .min_w_0()
-                .h_full()
-                .px(rems(space::SM))
-                .flex()
-                .items_center()
-                .border_l_1()
-                .border_color(border)
-                .child(rust_i18n::t!("api.request.parameter_value").to_string()),
-        );
+    let header = table_header_row(
+        border,
+        p.list_head,
+        p.muted_foreground,
+        false,
+        false,
+        vec![
+            (
+                rust_i18n::t!("api.request.parameter_name").to_string(),
+                ColumnWidth::Relative(0.28),
+            ),
+            (
+                rust_i18n::t!("api.request.parameter_value").to_string(),
+                ColumnWidth::Flex,
+            ),
+        ],
+    );
     let rows = response
         .headers
         .iter()
@@ -217,35 +205,6 @@ pub(super) fn render_assertions(results: &[ApiAssertionResult], p: &Palette) -> 
                 )
                 .into_any_element()
         }))
-        .into_any_element()
-}
-
-pub(super) fn table_header_cell_flex(label: String, border: Hsla) -> AnyElement {
-    div()
-        .flex_1()
-        .min_w_0()
-        .h_full()
-        .px(rems(space::SM))
-        .flex()
-        .items_center()
-        .border_l_1()
-        .border_color(border)
-        .child(label)
-        .into_any_element()
-}
-
-pub(super) fn table_header_cell(label: String, width: Rems, border: Hsla) -> AnyElement {
-    div()
-        .w(width)
-        .flex_none()
-        .min_w_0()
-        .h_full()
-        .px(rems(space::SM))
-        .flex()
-        .items_center()
-        .border_l_1()
-        .border_color(border)
-        .child(label)
         .into_any_element()
 }
 

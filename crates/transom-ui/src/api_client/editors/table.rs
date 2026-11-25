@@ -18,7 +18,7 @@ use transom_ui_icons::{AppIcon, UiIcon};
 
 /// 表格列宽规格。
 #[derive(Clone, Copy)]
-pub(super) enum ColumnWidth {
+pub(in crate::api_client) enum ColumnWidth {
     Fixed(Rems),
     Relative(f32),
     Flex,
@@ -63,7 +63,7 @@ pub(super) fn table_scroll_frame(
 }
 
 /// 渲染统一风格的表格表头栏（含可选首尾操作列占位）。
-pub(super) fn table_header_row(
+pub(in crate::api_client) fn table_header_row(
     border: Hsla,
     bg: Hsla,
     muted_foreground: Hsla,
@@ -91,7 +91,11 @@ pub(super) fn table_header_row(
 }
 
 /// 渲染单个表头单元格。
-pub(super) fn table_header_cell(label: String, width: ColumnWidth, border: Hsla) -> AnyElement {
+pub(in crate::api_client) fn table_header_cell(
+    label: String,
+    width: ColumnWidth,
+    border: Hsla,
+) -> AnyElement {
     apply_column_width(div(), width)
         .min_w_0()
         .h_full()
