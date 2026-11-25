@@ -65,7 +65,6 @@ fn render_http_body(params: &ApiWorkspaceParams<'_>, p: &Palette) -> AnyElement 
                 )
             },
         )
-        .child(div().flex_1())
         .when(mode == ApiBodyMode::Raw, |row| {
             row.child(dropdown(
                 "api-raw-language",
@@ -130,7 +129,7 @@ fn raw_language_label(language: ApiRawLanguage) -> String {
         ApiRawLanguage::Json => "JSON".to_string(),
         ApiRawLanguage::Xml => "XML".to_string(),
         ApiRawLanguage::JavaScript => "JavaScript".to_string(),
-        ApiRawLanguage::Text => rust_i18n::t!("api.request.body_text").to_string(),
+        ApiRawLanguage::Text => "Text".to_string(),
         ApiRawLanguage::Html => "HTML".to_string(),
     }
 }
