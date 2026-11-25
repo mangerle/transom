@@ -60,7 +60,6 @@ pub(crate) enum ApiImportState {
 /// 全部属于各自 [`crate::api_client::ApiWorkspace`]。
 pub(crate) struct ApiSidebarState {
     pub(crate) registry: ApiRegistry,
-    pub(crate) search: Entity<InputState>,
     pub(crate) editor: Option<ApiProjectEditor>,
     pub(crate) pending_delete: Option<ApiProjectId>,
     pub(crate) pending_import: Option<ApiImportState>,
@@ -76,19 +75,10 @@ impl EventEmitter<ApiSidebarEvent> for ApiSidebarView {}
 
 impl ApiSidebarView {
     /// 创建侧栏实体并初始化项目搜索框。
-    pub(crate) fn new(
-        registry: ApiRegistry,
-        load_error: Option<String>,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Self {
-        let search = cx.new(|cx| {
-            InputState::new(window, cx).placeholder(rust_i18n::t!("api.sidebar.search").to_string())
-        });
+    pub(crate) fn new(registry: ApiRegistry, load_error: Option<String>) -> Self {
         Self {
             state: ApiSidebarState {
                 registry,
-                search,
                 editor: None,
                 pending_delete: None,
                 pending_import: None,
@@ -310,8 +300,16 @@ impl ApiSidebarView {
         }
     }
 
-    /// 当前搜索词。
-    pub(crate) fn query(&self, cx: &App) -> String {
-        self.state.search.read(cx).value().trim().to_string()
+    /// 导出指定项目；项目不存在时不派发事件。
+    pub(crate) fn export_project(
+        &self,
+        project_id: ApiProjectId,
+        format: ApiExportFormat,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(project) = self.state.registry.project(project_id).cloned() else {
+            return;
+        };
+        cx.emit(ApiSidebarEvent::ExportProject { project, format });
     }
 }

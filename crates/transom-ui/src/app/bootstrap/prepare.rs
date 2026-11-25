@@ -150,9 +150,8 @@ pub(super) fn assemble_state(
                     git_registry.folders,
                 ))
             }),
-            api_sidebar: cx.new(|cx| {
-                crate::api_client::ApiSidebarView::new(api_registry, api_load_error, window, cx)
-            }),
+            api_sidebar: cx
+                .new(|_| crate::api_client::ApiSidebarView::new(api_registry, api_load_error)),
             editors,
             diff_viewer: None,
             broadcast: BroadcastBarState {

@@ -18,6 +18,40 @@ use transom_ui_icons::{AppIcon, AppIconElement, UiIcon};
 pub(crate) fn render_tree(params: &ApiWorkspaceParams<'_>, p: &Palette) -> AnyElement {
     let view = params.view;
     let mut request_rows = v_flex().w_full().gap(rems(space::XXS));
+    if let Some(editor) = &params.api_sidebar_state.editor {
+        request_rows = request_rows.child(super::sidebar_view::render_editor(
+            params.api_sidebar,
+            editor,
+            p,
+        ));
+    }
+    if let Some(project_id) = params.api_sidebar_state.pending_delete
+        && let Some(project) = params.api_sidebar_state.registry.project(project_id)
+    {
+        request_rows = request_rows.child(super::sidebar_view::render_delete_confirm(
+            params.api_sidebar,
+            project.display_name(),
+            p,
+        ));
+    }
+    if let Some(import) = &params.api_sidebar_state.pending_import {
+        request_rows = request_rows.child(super::sidebar_view::render_import_state(
+            params.api_sidebar,
+            import,
+            p,
+        ));
+    }
+    if let Some(error) = &params.api_sidebar_state.load_error {
+        request_rows = request_rows.child(
+            div()
+                .mx(rems(space::XS))
+                .p(rems(space::SM))
+                .rounded(p.radius.md)
+                .bg(p.surface.control_selected)
+                .text_color(p.danger)
+                .child(error.clone()),
+        );
+    }
     if let Some(editor) = params.folder_editor {
         request_rows = request_rows.child(render_folder_editor(view, editor, p));
     }
@@ -106,12 +140,9 @@ pub(crate) fn render_tree(params: &ApiWorkspaceParams<'_>, p: &Palette) -> AnyEl
                 .gap(rems(space::XS))
                 .border_color(p.divider(p.border))
                 .border_b_1()
-                .child(
-                    div()
-                        .flex_1()
-                        .text_color(p.foreground)
-                        .child(rust_i18n::t!("api.request.tree_title").to_string()),
-                )
+                .child(div().flex_1().min_w_0().child(
+                    super::workspace_project_switcher::render_project_switcher(params, p),
+                ))
                 .child(
                     IconButton::new(
                         "api-folder-new",

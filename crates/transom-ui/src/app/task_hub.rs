@@ -70,7 +70,6 @@ pub(crate) struct PanelSubscriptions {
     /// API 项目侧栏发往外壳的意图事件：单例实体。
     pub(crate) api_sidebar: Option<Subscription>,
     /// API 项目搜索框变化：触发侧栏过滤结果重绘。
-    pub(crate) api_sidebar_search: Option<Subscription>,
     /// API 侧栏内联编辑器与删除确认状态变化时触发整窗重绘。
     pub(crate) api_sidebar_observer: Option<Subscription>,
     /// 会话侧栏发往外壳的意图事件：侧栏是单例实体。
@@ -126,7 +125,6 @@ impl PanelSubscriptions {
             container_sidebar: None,
             git_sidebar: None,
             api_sidebar: None,
-            api_sidebar_search: None,
             api_sidebar_observer: None,
             session_sidebar: None,
             cloud_sync: None,

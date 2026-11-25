@@ -16,7 +16,20 @@ pub(crate) struct ApiClientTab {
     pub(crate) workspace: Entity<ApiWorkspace>,
 }
 
+/// API 客户端首页；不绑定项目，只承载项目选择和新建/导入入口。
+pub(crate) struct ApiHomeTab;
+
 impl WorkspaceTab {
+    /// 构造 API 客户端无项目首页标签。
+    pub(crate) fn new_api_home(id: TabId) -> Self {
+        Self {
+            id,
+            title: rust_i18n::t!("api.home_title").to_string(),
+            status: super::TabStatus::Connected,
+            content: TabContent::ApiHome(ApiHomeTab),
+        }
+    }
+
     /// 构造 API 客户端项目标签。
     pub(crate) fn new_api_client(
         id: TabId,
@@ -49,5 +62,10 @@ impl WorkspaceTab {
             TabContent::ApiClient(api) => Some(api.project_id),
             _ => None,
         }
+    }
+
+    /// 是否为 API 客户端首页标签。
+    pub(crate) fn is_api_home(&self) -> bool {
+        matches!(&self.content, TabContent::ApiHome(_))
     }
 }

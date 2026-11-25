@@ -2,7 +2,10 @@
 
 use super::workspace_request_view::render_request_editor;
 use super::workspace_response_view::render_response;
-use super::{ApiAuxiliarySection, ApiRequestTab, ApiResponseTab, ApiWorkspace};
+use super::{
+    ApiAuxiliarySection, ApiRequestTab, ApiResponseTab, ApiSidebarState, ApiSidebarView,
+    ApiWorkspace,
+};
 use crate::divider::{h_resizable, v_resizable};
 use crate::palette::Palette;
 use crate::theme::tokens::rem_px;
@@ -18,6 +21,8 @@ use transom_api::{
 /// API 工作区渲染参数；所有跨实体数据由外壳在本帧读取后传入。
 pub(crate) struct ApiWorkspaceParams<'a> {
     pub(crate) view: &'a Entity<ApiWorkspace>,
+    pub(crate) api_sidebar: &'a Entity<ApiSidebarView>,
+    pub(crate) api_sidebar_state: &'a ApiSidebarState,
     pub(crate) project: &'a ApiProject,
     pub(crate) request: Option<&'a ApiRequest>,
     pub(crate) selected_request: Option<ApiRequestId>,

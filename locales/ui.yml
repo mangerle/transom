@@ -186,6 +186,9 @@ tab_subtitle:
     en: API project
     zh-CN: API 项目
 api:
+  home_title:
+    en: API Client
+    zh-CN: API 客户端
   protocol:
     grpc_raw:
       en: gRPC (raw Base64)

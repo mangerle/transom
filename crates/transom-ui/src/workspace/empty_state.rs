@@ -55,6 +55,15 @@ impl AppShell {
         cx: &mut Context<Self>,
         p: &Palette,
     ) -> AnyElement {
+        let section = self
+            .state
+            .session
+            .sidebar
+            .section()
+            .resolved_for_tab_position(app_settings(cx).window.tab_position);
+        if section == crate::sidebar::SidebarSection::ApiClient {
+            return self.render_api_project_launcher(window, cx, p);
+        }
         let empty_header = EmptyHeader::new()
             .media(EmptyMedia::new().child(brand::logo_mark(LOGO_SIZE, window, cx)))
             .title(

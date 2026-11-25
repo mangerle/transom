@@ -1,165 +1,21 @@
-//! API 项目侧栏视图：搜索、项目行、内联命名和删除确认。
+//! API 项目管理中的内联命名、删除确认和导入预览。
 
-use super::{ApiImportState, ApiSidebarState, ApiSidebarView};
+use super::{ApiImportState, ApiSidebarView};
 use crate::palette::Palette;
 use crate::theme::tokens::space;
-use crate::widgets::{
-    IconButton, IconButtonSize, SidebarRowState, action_button, empty_state, menu_item,
-    sidebar_list_frame, sidebar_row_band,
-};
+use crate::widgets::{IconButton, IconButtonSize, action_button};
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Disableable;
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::Button;
 use gpui_kit::component::button::ButtonVariants;
 use gpui_kit::component::input::Input;
-use gpui_kit::component::menu::ContextMenuExt;
-use gpui_kit::component::scroll::ScrollableElement;
 use gpui_kit::component::spinner::Spinner;
 use gpui_kit::*;
-use transom_api::{ApiExportFormat, ApiImportFormat, ApiProjectId};
+use transom_api::ApiImportFormat;
 use transom_ui_icons::{AppIcon, AppIconElement, UiIcon};
 
-/// 侧栏渲染参数。
-pub(crate) struct ApiSidebarParams<'a> {
-    pub(crate) view: &'a Entity<ApiSidebarView>,
-    pub(crate) state: &'a ApiSidebarState,
-    pub(crate) active_project: Option<ApiProjectId>,
-    pub(crate) query: &'a str,
-}
-
-/// 渲染 API 项目侧栏。
-pub(crate) fn render_api_sidebar(params: ApiSidebarParams<'_>, p: &Palette) -> AnyElement {
-    let view = params.view.clone();
-    let state = params.state;
-    let projects = filtered_projects(state, params.query);
-    let toolbar = h_flex()
-        .h(rems(crate::theme::tokens::size::PANE_HEADER_HEIGHT))
-        .flex_none()
-        .items_center()
-        .gap(rems(space::XS))
-        .px(rems(space::SM))
-        .border_color(p.divider(p.border))
-        .border_b_1()
-        .child(Input::new(&state.search).w_full().cleanable(false))
-        .child(
-            IconButton::new(
-                "api-project-new",
-                AppIcon::Ui(UiIcon::ADD),
-                rust_i18n::t!("api.sidebar.new_project").to_string(),
-            )
-            .size(IconButtonSize::Compact)
-            .render()
-            .on_click({
-                let view = view.clone();
-                move |_, window, cx| {
-                    view.update(cx, |this, cx| this.start_create(window, cx));
-                }
-            }),
-        )
-        .child(
-            IconButton::new(
-                "api-project-import",
-                AppIcon::Ui(UiIcon::DOWNLOAD),
-                rust_i18n::t!("api.sidebar.import_project").to_string(),
-            )
-            .size(IconButtonSize::Compact)
-            .render()
-            .on_click({
-                let view = view.clone();
-                move |_, _, cx| {
-                    view.update(cx, |_view, cx| {
-                        cx.emit(super::ApiSidebarEvent::ImportProject);
-                        cx.notify();
-                    });
-                }
-            }),
-        );
-
-    let mut body = v_flex()
-        .flex_1()
-        .min_h_0()
-        .w_full()
-        .overflow_y_scrollbar()
-        .child(sidebar_list_frame("api-project-list"));
-
-    if let Some(error) = &state.load_error {
-        body = body.child(
-            div()
-                .mx(rems(space::SM))
-                .mt(rems(space::XS))
-                .p(rems(space::SM))
-                .rounded(p.radius.md)
-                .bg(p.surface.control_selected)
-                .text_color(p.danger)
-                .child(error.clone()),
-        );
-    }
-
-    if let Some(editor) = &state.editor {
-        body = body.child(render_editor(&view, editor, p));
-    }
-
-    if let Some(project_id) = state.pending_delete
-        && let Some(project) = state.registry.project(project_id)
-    {
-        body = body.child(render_delete_confirm(&view, project.display_name(), p));
-    }
-
-    if let Some(import) = &state.pending_import {
-        body = body.child(render_import_state(&view, import, p));
-    }
-
-    if projects.is_empty() {
-        body = body.child(empty_state(
-            AppIcon::Ui(UiIcon::WEB_SERVER),
-            rust_i18n::t!("api.sidebar.empty_title").to_string(),
-            rust_i18n::t!("api.sidebar.empty_hint").to_string(),
-            p,
-        ));
-    } else {
-        for project in projects {
-            let project_state = if params.active_project == Some(project.id) {
-                SidebarRowState::Current
-            } else {
-                SidebarRowState::Normal
-            };
-            body = body.child(render_project_row(&view, project, project_state, p));
-        }
-    }
-
-    v_flex()
-        .size_full()
-        .min_w_0()
-        .overflow_hidden()
-        .bg(p.sidebar)
-        .child(toolbar)
-        .child(body)
-        .into_any_element()
-}
-
-fn filtered_projects<'a>(
-    state: &'a ApiSidebarState,
-    query: &str,
-) -> Vec<&'a transom_api::ApiProject> {
-    let query = query.to_lowercase();
-    state
-        .registry
-        .projects
-        .iter()
-        .filter(|project| {
-            query.is_empty()
-                || project.name.to_lowercase().contains(&query)
-                || project.base_url.to_lowercase().contains(&query)
-                || project
-                    .requests
-                    .iter()
-                    .any(|request| request.name.to_lowercase().contains(&query))
-        })
-        .collect()
-}
-
-fn render_editor(
+pub(super) fn render_editor(
     view: &Entity<ApiSidebarView>,
     editor: &super::sidebar::ApiProjectEditor,
     p: &Palette,
@@ -202,7 +58,7 @@ fn render_editor(
     row.into_any_element()
 }
 
-fn render_delete_confirm(
+pub(super) fn render_delete_confirm(
     view: &Entity<ApiSidebarView>,
     project_name: &str,
     p: &Palette,
@@ -238,7 +94,7 @@ fn render_delete_confirm(
         .into_any_element()
 }
 
-fn render_import_state(
+pub(super) fn render_import_state(
     view: &Entity<ApiSidebarView>,
     state: &ApiImportState,
     p: &Palette,
@@ -373,94 +229,4 @@ fn import_format_label(format: ApiImportFormat) -> String {
         ApiImportFormat::Postman => rust_i18n::t!("api.project.import_format_postman").to_string(),
         ApiImportFormat::OpenApi => rust_i18n::t!("api.project.import_format_openapi").to_string(),
     }
-}
-
-fn render_project_row(
-    view: &Entity<ApiSidebarView>,
-    project: &transom_api::ApiProject,
-    state: SidebarRowState,
-    p: &Palette,
-) -> AnyElement {
-    let project_id = project.id;
-    let title = project.display_name().to_string();
-    let subtitle =
-        rust_i18n::t!("api.project.request_count", count = project.request_count()).to_string();
-    let view_for_click = view.clone();
-    let view_for_menu = view.clone();
-    sidebar_row_band(
-        ElementId::Name(format!("api-project-{project_id}").into()),
-        state,
-        p,
-    )
-    .on_click(move |_, _, cx| {
-        view_for_click.update(cx, |this, cx| this.open_project(project_id, cx));
-    })
-    .context_menu(move |menu, _window, _cx| {
-        let rename_view = view_for_menu.clone();
-        let delete_view = view_for_menu.clone();
-        let curl_view = view_for_menu.clone();
-        let postman_view = view_for_menu.clone();
-        let openapi_view = view_for_menu.clone();
-        let transom_view = view_for_menu.clone();
-        menu.item(menu_item(
-            rust_i18n::t!("api.project.rename").to_string(),
-            AppIcon::Ui(UiIcon::EDIT),
-            move |_, window, cx| {
-                rename_view.update(cx, |this, cx| this.start_rename(project_id, window, cx));
-            },
-        ))
-        .item(menu_item(
-            rust_i18n::t!("api.project.delete").to_string(),
-            AppIcon::Ui(UiIcon::DELETE),
-            move |_, _, cx| {
-                delete_view.update(cx, |this, cx| this.request_delete(project_id, cx));
-            },
-        ))
-        .item(menu_item(
-            rust_i18n::t!("api.project.export_curl").to_string(),
-            AppIcon::Ui(UiIcon::DOWNLOAD),
-            move |_, _, cx| {
-                emit_project_export(&curl_view, project_id, ApiExportFormat::Curl, cx);
-            },
-        ))
-        .item(menu_item(
-            rust_i18n::t!("api.project.export_postman").to_string(),
-            AppIcon::Ui(UiIcon::DOWNLOAD),
-            move |_, _, cx| {
-                emit_project_export(&postman_view, project_id, ApiExportFormat::Postman, cx);
-            },
-        ))
-        .item(menu_item(
-            rust_i18n::t!("api.project.export_openapi").to_string(),
-            AppIcon::Ui(UiIcon::DOWNLOAD),
-            move |_, _, cx| {
-                emit_project_export(&openapi_view, project_id, ApiExportFormat::OpenApi, cx);
-            },
-        ))
-        .item(menu_item(
-            rust_i18n::t!("api.project.export_transom").to_string(),
-            AppIcon::Ui(UiIcon::DOWNLOAD),
-            move |_, _, cx| {
-                emit_project_export(&transom_view, project_id, ApiExportFormat::Transom, cx);
-            },
-        ))
-    })
-    .child(AppIconElement::new(AppIcon::Ui(UiIcon::WEB_SERVER)).small())
-    .child(div().flex_1().min_w_0().truncate().child(title))
-    .child(div().text_color(p.muted_foreground).child(subtitle))
-    .into_any_element()
-}
-
-fn emit_project_export(
-    view: &Entity<ApiSidebarView>,
-    project_id: ApiProjectId,
-    format: ApiExportFormat,
-    cx: &mut App,
-) {
-    view.update(cx, |view, cx| {
-        let Some(project) = view.state.registry.project(project_id).cloned() else {
-            return;
-        };
-        cx.emit(super::ApiSidebarEvent::ExportProject { project, format });
-    });
 }

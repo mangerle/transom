@@ -45,6 +45,22 @@ pub(crate) struct StatusBarLayoutInput<'a> {
 }
 
 impl AppShell {
+    /// 当前帧左侧槽位是否真正需要占位。
+    ///
+    /// API 项目切换与管理已收敛到主区域，API 入口不再占用左侧槽位。
+    pub(crate) fn effective_sidebar_visible(&self, cx: &App) -> bool {
+        if !self.state.session.sidebar.visible() {
+            return false;
+        }
+        let section = self
+            .state
+            .session
+            .sidebar
+            .section()
+            .resolved_for_tab_position(app_settings(cx).window.tab_position);
+        section != SidebarSection::ApiClient
+    }
+
     /// 同步侧栏在可拖拽分组里的槽位宽度，返回本帧侧栏应使用的宽度。
     ///
     /// 设计原理（Why）：`ResizableState` 按面板索引记录宽度，侧栏收起后
@@ -80,7 +96,7 @@ impl AppShell {
         } else {
             self.state.ui.workspace_panels.clone()
         };
-        let sidebar_visible = self.state.session.sidebar.visible();
+        let sidebar_visible = self.effective_sidebar_visible(cx);
         sync_sidebar_slot(
             &mut self.state.session.sidebar.slot,
             &panels,
@@ -135,7 +151,7 @@ impl AppShell {
             .map(SftpPanelState::all_collapsed_width)
             .unwrap_or(32.0);
         let show_forwards = active_panel.is_some_and(|tab| tab.forwards_view().is_some());
-        let sidebar_width = if self.state.session.sidebar.visible() {
+        let sidebar_width = if self.effective_sidebar_visible(cx) {
             sidebar_width
         } else {
             0.0
@@ -183,8 +199,8 @@ impl AppShell {
             .size(px(sidebar_width))
             .size_range(sidebar_min_width..sidebar_max_width)
             .fixed()
-            .visible(self.state.session.sidebar.visible());
-        if self.state.session.sidebar.visible() {
+            .visible(self.effective_sidebar_visible(cx));
+        if self.effective_sidebar_visible(cx) {
             // 左侧槽位一次只承载一种内容：容器连接、Git 仓库、云同步、纵向标签或会话树。
             let section = self
                 .state
@@ -239,20 +255,7 @@ impl AppShell {
                         p,
                     )
                 }
-                SidebarSection::ApiClient => {
-                    let sidebar = self.state.features.api_sidebar.clone();
-                    let state = sidebar.read(cx);
-                    let query = state.query(cx);
-                    crate::api_client::render_api_sidebar(
-                        crate::api_client::ApiSidebarParams {
-                            view: &sidebar,
-                            state: &state.state,
-                            active_project: self.state.active_api_project_id(),
-                            query: &query,
-                        },
-                        p,
-                    )
-                }
+                SidebarSection::ApiClient => div().into_any_element(),
                 SidebarSection::CloudSync => {
                     self.state.features.cloud_sync.clone().into_any_element()
                 }

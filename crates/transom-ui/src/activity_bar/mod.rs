@@ -89,9 +89,7 @@ fn activity_item_selected(
         ActivityItemId::Git => {
             app_state.session.sidebar.visible() && section == SidebarSection::Git
         }
-        ActivityItemId::ApiClient => {
-            app_state.session.sidebar.visible() && section == SidebarSection::ApiClient
-        }
+        ActivityItemId::ApiClient => section == SidebarSection::ApiClient,
         ActivityItemId::CloudSync => {
             app_state.session.sidebar.visible() && section == SidebarSection::CloudSync
         }
@@ -315,11 +313,7 @@ fn activate_activity_item(
             crate::git::actions::GitActions::new(app_state).toggle_git_sidebar(cx)
         }
         ActivityItemId::ApiClient => {
-            app_state
-                .session
-                .sidebar
-                .toggle_section(SidebarSection::ApiClient);
-            cx.notify();
+            crate::api_client::focus_api_client(app_state, cx);
         }
         ActivityItemId::CloudSync => crate::cloud_sync::toggle_cloud_sync_sidebar(app_state, cx),
         ActivityItemId::Unknown => {}

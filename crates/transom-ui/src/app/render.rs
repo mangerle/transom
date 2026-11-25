@@ -110,7 +110,7 @@ impl AppShell {
             StatusBarLayoutInput {
                 p,
                 rem,
-                sidebar_visible: self.state.session.sidebar.visible(),
+                sidebar_visible: self.effective_sidebar_visible(cx),
                 sidebar_width,
             },
             cx,

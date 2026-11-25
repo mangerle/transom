@@ -267,10 +267,14 @@ impl AppShell {
             return self.render_container_tab(tab_id, window, cx, p);
         }
         if let Some(workspace) = self.state.workspace.tabs[index].api_workspace() {
+            let api_sidebar = self.state.features.api_sidebar.clone();
+            let api_sidebar_state = api_sidebar.read(cx);
             let state = workspace.read(cx);
             return crate::api_client::render_api_workspace(
                 crate::api_client::ApiWorkspaceParams {
                     view: &workspace,
+                    api_sidebar: &api_sidebar,
+                    api_sidebar_state: &api_sidebar_state.state,
                     project: &state.project,
                     request: state.selected_request(),
                     selected_request: state.selected_request,
@@ -316,6 +320,9 @@ impl AppShell {
                 },
                 p,
             );
+        }
+        if self.state.workspace.tabs[index].is_api_home() {
+            return self.render_api_project_launcher(window, cx, p);
         }
         if let Some(target_id) = self.state.workspace.tabs[index]
             .monitor()

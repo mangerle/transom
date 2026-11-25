@@ -4,20 +4,10 @@ use super::{ApiSidebarEvent, ApiWorkspace, ApiWorkspaceEvent, ApiWorkspaceServic
 use crate::app::{AppShell, AppState, WorkspaceTab};
 use gpui_kit::*;
 use transom_api::{
-    ApiExportFormat, ApiImportFormat, ApiProject, ApiProjectId, ApiRegistry, MAX_IMPORT_BYTES,
-    export_project, import_projects,
+    ApiExportFormat, ApiImportFormat, ApiProject, ApiRegistry, MAX_IMPORT_BYTES, export_project,
+    import_projects,
 };
 use transom_core::TabId;
-
-impl AppState {
-    /// 当前活动标签对应的 API 项目 id。
-    pub(crate) fn active_api_project_id(&self) -> Option<ApiProjectId> {
-        self.workspace
-            .active_tab
-            .and_then(|tab_id| self.workspace.tab(tab_id))
-            .and_then(WorkspaceTab::api_project_id)
-    }
-}
 
 /// 侧栏事件订阅入口：只排队，所有窗口动作统一在渲染期执行。
 pub(crate) fn on_sidebar_event(
@@ -92,6 +82,49 @@ pub(crate) fn open_api_project(
         project.display_name(),
         tab_id
     );
+    cx.notify();
+}
+
+/// 聚焦 API 客户端：已有项目标签则激活，否则打开无项目启动首页。
+pub(crate) fn focus_api_client(state: &mut AppState, cx: &mut Context<AppShell>) {
+    state
+        .session
+        .sidebar
+        .show_section(crate::sidebar::SidebarSection::ApiClient);
+    if state
+        .workspace
+        .active_tab
+        .and_then(|tab_id| state.workspace.tab(tab_id))
+        .is_some_and(|tab| tab.api_project_id().is_some() || tab.is_api_home())
+    {
+        cx.notify();
+        return;
+    }
+    let target = state
+        .workspace
+        .tabs
+        .iter()
+        .find_map(|tab| tab.api_project_id().map(|_| tab.id))
+        .or_else(|| {
+            state
+                .workspace
+                .tabs
+                .iter()
+                .find(|tab| tab.is_api_home())
+                .map(|tab| tab.id)
+        });
+    if let Some(tab_id) = target {
+        state.workspace.active_tab = Some(tab_id);
+        state.present_active_group();
+        cx.notify();
+        return;
+    }
+    let tab_id = TabId::new();
+    let tab = WorkspaceTab::new_api_home(tab_id);
+    state.workspace.create_group_for_tab(&tab);
+    state.workspace.tabs.push(tab);
+    state.workspace.active_tab = Some(tab_id);
+    state.present_active_group();
     cx.notify();
 }
 

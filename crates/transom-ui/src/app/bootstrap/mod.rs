@@ -211,16 +211,6 @@ impl AppShell {
         ));
         self.state.runtime.tasks.subscriptions.api_sidebar_observer =
             Some(cx.observe(&self.state.features.api_sidebar, |_, _, cx| cx.notify()));
-        let api_sidebar = self.state.features.api_sidebar.clone();
-        let api_sidebar_search = api_sidebar.read(cx).state.search.clone();
-        self.state.runtime.tasks.subscriptions.api_sidebar_search = Some(cx.subscribe(
-            &api_sidebar_search,
-            |_, _, event: &InputEvent, cx| {
-                if matches!(event, InputEvent::Change) {
-                    cx.notify();
-                }
-            },
-        ));
         self.state.runtime.tasks.subscriptions.session_sidebar = Some(cx.subscribe(
             &self.state.session.session_sidebar,
             |shell, _view, event: &crate::sidebar::SessionSidebarEvent, cx| {
