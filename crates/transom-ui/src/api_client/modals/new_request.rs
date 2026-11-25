@@ -172,7 +172,7 @@ fn protocol_card(
         row = row.child(
             div()
                 .px(rems(space::XS))
-                .py(px(1.0))
+                .py(rems(space::XXS))
                 .rounded(p.radius.sm)
                 .bg(p.surface.control_selected)
                 .text_size(rems(typography::CAPTION))

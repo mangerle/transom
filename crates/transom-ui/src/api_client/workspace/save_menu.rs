@@ -4,7 +4,7 @@ use super::ApiWorkspace;
 use super::view::ApiWorkspaceParams;
 use crate::palette::Palette;
 use crate::search::contains_case_insensitive;
-use crate::theme::tokens::space;
+use crate::theme::tokens::{rem_px, space};
 use crate::widgets::{IconButton, IconButtonSize};
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Sizable;
@@ -33,7 +33,7 @@ pub(super) fn render_save_controls(params: &ApiWorkspaceParams<'_>, _p: &Palette
     .render();
     let popover = Popover::new("api-request-save-destination-popover")
         .anchor(Anchor::TopRight)
-        .offset(px(4.0))
+        .offset(rem_px(space::XS, params.rem))
         .open(open)
         .on_open_change(move |next, window, cx| {
             let next = *next;
