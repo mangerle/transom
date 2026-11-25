@@ -5,14 +5,16 @@ use super::view::ApiWorkspaceParams;
 use super::{ApiRequestTab, ApiWorkspace};
 use crate::palette::Palette;
 use crate::theme::tokens::{size, space};
-use crate::widgets::{NoticeKind, action_button, action_button_with_icon_tint, dropdown, notice};
+use crate::widgets::{
+    NoticeKind, action_button, action_button_with_icon_tint, dropdown, empty_state, notice,
+};
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Disableable;
 use gpui_kit::component::button::ButtonVariants;
 use gpui_kit::component::input::{Input, Textarea};
 use gpui_kit::*;
 use transom_api::{ApiAuth, ApiEnvironmentId, ApiMethod, ApiProtocol};
-use transom_ui_icons::{AppIcon, AppIconElement, CustomIcon, UiIcon};
+use transom_ui_icons::{AppIcon, CustomIcon, UiIcon};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum RequestMode {
@@ -391,10 +393,11 @@ fn render_empty_request(p: &Palette) -> AnyElement {
         .min_h_0()
         .items_center()
         .justify_center()
-        .gap(rems(space::SM))
-        .text_color(p.muted_foreground)
-        .child(AppIconElement::new(AppIcon::Custom(CustomIcon::API)).small())
-        .child(rust_i18n::t!("api.request.empty_title").to_string())
-        .child(rust_i18n::t!("api.request.empty_hint").to_string())
+        .child(empty_state(
+            AppIcon::Custom(CustomIcon::API),
+            rust_i18n::t!("api.request.empty_title").to_string(),
+            rust_i18n::t!("api.request.empty_hint").to_string(),
+            p,
+        ))
         .into_any_element()
 }

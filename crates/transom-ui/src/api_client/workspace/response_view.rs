@@ -4,13 +4,13 @@ use super::ApiResponseTab;
 use super::view::ApiWorkspaceParams;
 use crate::palette::Palette;
 use crate::theme::tokens::space;
-use crate::widgets::{IconButton, IconButtonSize};
+use crate::widgets::{IconButton, IconButtonSize, empty_state};
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::input::Textarea;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use transom_api::{ApiProtocol, ApiResponseSnapshot};
-use transom_ui_icons::{AppIcon, UiIcon};
+use transom_ui_icons::{AppIcon, CustomIcon, UiIcon};
 
 const RESPONSE_TABS: [ApiResponseTab; 5] = [
     ApiResponseTab::Body,
@@ -217,8 +217,12 @@ pub(super) fn centered_message(message: String, p: &Palette) -> AnyElement {
         .min_h_0()
         .items_center()
         .justify_center()
-        .text_color(p.muted_foreground)
-        .child(message)
+        .child(empty_state(
+            AppIcon::Custom(CustomIcon::API),
+            message,
+            "",
+            p,
+        ))
         .into_any_element()
 }
 

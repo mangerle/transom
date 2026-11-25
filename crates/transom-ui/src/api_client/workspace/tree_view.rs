@@ -4,7 +4,9 @@ use super::ApiWorkspace;
 use super::view::ApiWorkspaceParams;
 use crate::palette::Palette;
 use crate::theme::tokens::{size, space, typography};
-use crate::widgets::{IconButton, IconButtonSize, MenuItem, action_button, list_row, menu_item};
+use crate::widgets::{
+    IconButton, IconButtonSize, MenuItem, action_button, empty_state, list_row, menu_item,
+};
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::button::ButtonVariants;
 use gpui_kit::component::input::Input;
@@ -107,14 +109,14 @@ pub(crate) fn render_tree(params: &ApiWorkspaceParams<'_>, p: &Palette) -> AnyEl
     }
 
     let body = if params.project.requests.is_empty() && params.project.folders.is_empty() {
-        v_flex()
+        div()
             .p(rems(space::MD))
-            .gap(rems(space::SM))
-            .items_center()
-            .text_color(p.muted_foreground)
-            .child(AppIconElement::new(AppIcon::Custom(CustomIcon::API)).small())
-            .child(rust_i18n::t!("api.request.empty_title").to_string())
-            .child(rust_i18n::t!("api.request.empty_hint").to_string())
+            .child(empty_state(
+                AppIcon::Custom(CustomIcon::API),
+                rust_i18n::t!("api.request.empty_title").to_string(),
+                rust_i18n::t!("api.request.empty_hint").to_string(),
+                p,
+            ))
             .into_any_element()
     } else {
         div()
