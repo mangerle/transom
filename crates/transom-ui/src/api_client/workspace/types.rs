@@ -1,9 +1,12 @@
 //! API 工作区公开类型与编辑器集合。
 
+use super::folder::FolderEditor;
 use gpui_kit::component::input::{EditorState, InputState, TextareaState};
+use gpui_kit::component::resizable::ResizableState;
 use gpui_kit::*;
 use transom_api::{
-    ApiBodyType, ApiEnvironmentId, ApiHttpService, ApiProject, ApiRawLanguage, ApiWebSocketService,
+    ApiAssertionResult, ApiBodyType, ApiEnvironmentId, ApiFolderId, ApiHttpService, ApiProject,
+    ApiRawLanguage, ApiResponseSnapshot, ApiWebSocketHandle, ApiWebSocketService, CodeTarget,
 };
 
 /// API 工作区需要的外壳服务集合。
@@ -144,4 +147,69 @@ pub(crate) struct ApiWorkspaceEditors {
     pub(crate) response_body: Entity<TextareaState>,
     pub(crate) code_preview: Entity<TextareaState>,
     pub(crate) save_destination_search: Entity<InputState>,
+}
+
+/// 工作区交互与界面视图状态（页签、弹窗、辅助面板、目录编辑等）。
+pub(in crate::api_client) struct WorkspaceUiState {
+    pub(in crate::api_client) request_tab: ApiRequestTab,
+    pub(in crate::api_client) response_tab: ApiResponseTab,
+    pub(in crate::api_client) selected_history: Option<usize>,
+    pub(in crate::api_client) save_destination_open: bool,
+    pub(in crate::api_client) auxiliary_section: Option<ApiAuxiliarySection>,
+    pub(in crate::api_client) config_modal: Option<ApiConfigModalSection>,
+    pub(in crate::api_client) new_request_modal_open: bool,
+    pub(in crate::api_client) global_parameter_tab: ApiGlobalParameterTab,
+    pub(in crate::api_client) codegen_target: CodeTarget,
+    pub(in crate::api_client) folder_editor: Option<FolderEditor>,
+    pub(in crate::api_client) pending_folder_delete: Option<ApiFolderId>,
+}
+
+impl Default for WorkspaceUiState {
+    fn default() -> Self {
+        Self {
+            request_tab: ApiRequestTab::Query,
+            response_tab: ApiResponseTab::Body,
+            selected_history: None,
+            save_destination_open: false,
+            auxiliary_section: None,
+            config_modal: None,
+            new_request_modal_open: false,
+            global_parameter_tab: ApiGlobalParameterTab::Query,
+            codegen_target: CodeTarget::Curl,
+            folder_editor: None,
+            pending_folder_delete: None,
+        }
+    }
+}
+
+/// 请求执行、WebSocket 连接、响应快照与用户提示状态。
+#[derive(Default)]
+pub(in crate::api_client) struct ExecutionState {
+    pub(in crate::api_client) response: Option<ApiResponseSnapshot>,
+    pub(in crate::api_client) assertion_results: Vec<ApiAssertionResult>,
+    pub(in crate::api_client) sending: bool,
+    pub(in crate::api_client) ws_connected: bool,
+    pub(in crate::api_client) notice: Option<String>,
+    pub(in crate::api_client) error: Option<String>,
+    pub(in crate::api_client) send_task: Option<Task<()>>,
+    pub(in crate::api_client) ws_task: Option<Task<()>>,
+    pub(in crate::api_client) ws_event_task: Option<Task<()>>,
+    pub(in crate::api_client) ws_handle: Option<ApiWebSocketHandle>,
+    pub(in crate::api_client) binary_file_task: Option<Task<()>>,
+}
+
+/// 工作区可拖拽分栏状态。
+pub(in crate::api_client) struct WorkspaceSplits {
+    pub(in crate::api_client) tree_editor: Entity<ResizableState>,
+    pub(in crate::api_client) request_response: Entity<ResizableState>,
+}
+
+impl WorkspaceSplits {
+    /// 初始化工作区左右树栏与上下编辑/响应分栏。
+    pub(in crate::api_client) fn new<T: 'static>(cx: &mut Context<T>) -> Self {
+        Self {
+            tree_editor: cx.new(|_| ResizableState::default()),
+            request_response: cx.new(|_| ResizableState::default()),
+        }
+    }
 }

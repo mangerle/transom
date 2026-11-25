@@ -2,89 +2,74 @@
 
 use super::request_view::render_request_editor;
 use super::response_view::render_response;
-use super::{
-    ApiAuxiliarySection, ApiConfigModalSection, ApiGlobalParameterTab, ApiRequestTab,
-    ApiResponseTab, ApiSidebarState, ApiSidebarView, ApiWorkspace,
+use super::tree_view::render_tree;
+use super::types::{ApiWorkspaceEditors, ExecutionState, WorkspaceSplits, WorkspaceUiState};
+use super::{ApiSidebarState, ApiSidebarView, ApiWorkspace};
+use crate::api_client::modals::{
+    config::render_config_modal, new_request::render_new_request_modal,
 };
 use crate::divider::{h_resizable, v_resizable};
 use crate::palette::Palette;
 use crate::theme::tokens::rem_px;
 use gpui_kit::base::v_flex;
-use gpui_kit::component::input::{EditorState, InputState, TextareaState};
-use gpui_kit::component::resizable::{ResizableState, resizable_panel};
+use gpui_kit::component::resizable::resizable_panel;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
-use transom_api::{
-    ApiAssertionResult, ApiEnvironmentId, ApiFolderId, ApiMethod, ApiProject, ApiProtocol,
-    ApiRequest, ApiRequestId, ApiResponseSnapshot,
-};
+use transom_api::{ApiEnvironmentId, ApiMethod, ApiProject, ApiProtocol, ApiRequest, ApiRequestId};
 
 /// API 工作区渲染参数；所有跨实体数据由外壳在本帧读取后传入。
 pub(crate) struct ApiWorkspaceParams<'a> {
     pub(crate) view: &'a Entity<ApiWorkspace>,
     pub(crate) api_sidebar: &'a Entity<ApiSidebarView>,
-    pub(crate) api_sidebar_state: &'a ApiSidebarState,
+    pub(in crate::api_client) api_sidebar_state: &'a ApiSidebarState,
     pub(crate) project: &'a ApiProject,
     pub(crate) request: Option<&'a ApiRequest>,
     pub(crate) selected_request: Option<ApiRequestId>,
     pub(crate) method: ApiMethod,
     pub(crate) protocol: ApiProtocol,
     pub(crate) environment_id: Option<ApiEnvironmentId>,
-    pub(crate) request_tab: ApiRequestTab,
-    pub(crate) response_tab: ApiResponseTab,
-    pub(crate) selected_history: Option<usize>,
-    pub(crate) save_destination_open: bool,
-    pub(crate) auxiliary_section: Option<ApiAuxiliarySection>,
-    pub(crate) config_modal: Option<ApiConfigModalSection>,
-    pub(crate) new_request_modal_open: bool,
-    pub(crate) global_parameter_tab: ApiGlobalParameterTab,
-    pub(crate) folder_editor: Option<&'a super::folder::FolderEditor>,
-    pub(crate) pending_folder_delete: Option<ApiFolderId>,
-    pub(crate) codegen_target: transom_api::CodeTarget,
-    pub(crate) ws_connected: bool,
-    pub(crate) notice: Option<&'a str>,
-    pub(crate) response: Option<&'a ApiResponseSnapshot>,
-    pub(crate) sending: bool,
-    pub(crate) error: Option<&'a str>,
-    pub(crate) request_name: &'a Entity<InputState>,
-    pub(crate) request_url: &'a Entity<InputState>,
-    pub(crate) query_editor: &'a Entity<crate::api_client::editors::kv::KvEditor>,
-    pub(crate) header_editor: &'a Entity<crate::api_client::editors::kv::KvEditor>,
-    pub(crate) request_body: &'a Entity<EditorState>,
-    pub(crate) form_editor: &'a Entity<crate::api_client::editors::form::FormEditor>,
-    pub(crate) grpc_service: &'a Entity<InputState>,
-    pub(crate) grpc_method: &'a Entity<InputState>,
-    pub(crate) graphql_variables: &'a Entity<TextareaState>,
-    pub(crate) auth: &'a Entity<crate::api_client::editors::auth::AuthEditor>,
-    pub(crate) assertions: &'a Entity<crate::api_client::editors::assertion::AssertionEditor>,
-    pub(crate) timeout: &'a Entity<InputState>,
-    pub(crate) docs: &'a Entity<TextareaState>,
-    pub(crate) environment_editor:
-        &'a Entity<crate::api_client::editors::environment::EnvironmentEditor>,
-    pub(crate) global_variables_editor:
-        &'a Entity<crate::api_client::editors::environment::EnvironmentEditor>,
-    pub(crate) global_query_editor: &'a Entity<crate::api_client::editors::kv::KvEditor>,
-    pub(crate) global_headers_editor: &'a Entity<crate::api_client::editors::kv::KvEditor>,
-    pub(crate) environment_name: &'a Entity<InputState>,
-    pub(crate) cookies_editor: &'a Entity<crate::api_client::editors::cookie::CookieEditor>,
-    pub(crate) websocket_input: &'a Entity<TextareaState>,
-    pub(crate) websocket_log: &'a Entity<TextareaState>,
-    pub(crate) assertion_results: &'a [ApiAssertionResult],
-    pub(crate) response_body: &'a Entity<TextareaState>,
-    pub(crate) code_preview: &'a Entity<TextareaState>,
-    pub(crate) save_destination_search: &'a Entity<InputState>,
-    pub(crate) tree_editor_split: &'a Entity<ResizableState>,
-    pub(crate) request_response_split: &'a Entity<ResizableState>,
+    pub(in crate::api_client) ui: &'a WorkspaceUiState,
+    pub(in crate::api_client) exec: &'a ExecutionState,
+    pub(in crate::api_client) editors: &'a ApiWorkspaceEditors,
+    pub(in crate::api_client) splits: &'a WorkspaceSplits,
     pub(crate) rem: Pixels,
+}
+
+impl ApiWorkspace {
+    /// 组装本帧渲染所需的只读参数对象，避免外层窗格逐字段解构拷贝。
+    pub(crate) fn render_params<'a>(
+        &'a self,
+        view: &'a Entity<Self>,
+        api_sidebar: &'a Entity<ApiSidebarView>,
+        api_sidebar_state: &'a ApiSidebarState,
+        rem: Pixels,
+    ) -> ApiWorkspaceParams<'a> {
+        ApiWorkspaceParams {
+            view,
+            api_sidebar,
+            api_sidebar_state,
+            project: &self.project,
+            request: self.selected_request(),
+            selected_request: self.selected_request,
+            method: self.method,
+            protocol: self.protocol,
+            environment_id: self.environment_id,
+            ui: &self.ui,
+            exec: &self.exec,
+            editors: &self.editors,
+            splits: &self.splits,
+            rem,
+        }
+    }
 }
 
 /// 渲染 API 项目工作区。
 pub(crate) fn render_api_workspace(params: ApiWorkspaceParams<'_>, p: &Palette) -> AnyElement {
-    let tree = super::tree_view::render_tree(&params, p);
+    let tree = render_tree(&params, p);
     let editor = render_request_editor(&params, p);
     let response = render_response(&params, p);
     let editor_and_response = v_resizable("api-request-response-split")
-        .with_state(params.request_response_split)
+        .with_state(&params.splits.request_response)
         .child(
             resizable_panel()
                 .size(rem_px(28.0, params.rem))
@@ -92,7 +77,7 @@ pub(crate) fn render_api_workspace(params: ApiWorkspaceParams<'_>, p: &Palette) 
         )
         .child(resizable_panel().child(response));
     let body = h_resizable("api-tree-editor-split")
-        .with_state(params.tree_editor_split)
+        .with_state(&params.splits.tree_editor)
         .child(resizable_panel().size(rem_px(16.0, params.rem)).child(tree))
         .child(resizable_panel().child(editor_and_response));
 
@@ -103,13 +88,11 @@ pub(crate) fn render_api_workspace(params: ApiWorkspaceParams<'_>, p: &Palette) 
         .overflow_hidden()
         .bg(p.background)
         .child(body)
-        .when_some(params.config_modal, |root, section| {
-            root.child(crate::api_client::modals::config::render_config_modal(
-                &params, section, p,
-            ))
+        .when_some(params.ui.config_modal, |root, section| {
+            root.child(render_config_modal(&params, section, p))
         })
-        .when(params.new_request_modal_open, |root| {
-            root.child(crate::api_client::modals::new_request::render_new_request_modal(&params, p))
+        .when(params.ui.new_request_modal_open, |root| {
+            root.child(render_new_request_modal(&params, p))
         })
         .into_any_element()
 }

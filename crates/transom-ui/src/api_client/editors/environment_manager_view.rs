@@ -40,7 +40,11 @@ pub(in crate::api_client) fn render_environment_manager(
                 .gap(rems(space::XS))
                 .items_center()
                 .child(environment)
-                .child(Input::new(params.environment_name).flex_1().min_w_0())
+                .child(
+                    Input::new(&params.editors.environment_name)
+                        .flex_1()
+                        .min_w_0(),
+                )
                 .child(
                     IconButton::new(
                         "api-environment-add",
@@ -68,6 +72,6 @@ pub(in crate::api_client) fn render_environment_manager(
                     }),
                 ),
         )
-        .child(params.environment_editor.clone())
+        .child(params.editors.environment.clone())
         .into_any_element()
 }

@@ -20,13 +20,13 @@ pub(crate) struct FolderEditor {
 
 impl ApiWorkspace {
     pub(crate) fn start_create_folder(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.pending_folder_delete = None;
+        self.ui.pending_folder_delete = None;
         let input = cx.new(|cx| {
             InputState::new(window, cx)
                 .placeholder(rust_i18n::t!("api.request.folder_name_placeholder").to_string())
         });
         let focus = input.read(cx).focus_handle(cx);
-        self.folder_editor = Some(FolderEditor {
+        self.ui.folder_editor = Some(FolderEditor {
             mode: FolderEditorMode::Create,
             input,
             error: None,
@@ -50,14 +50,14 @@ impl ApiWorkspace {
         else {
             return;
         };
-        self.pending_folder_delete = None;
+        self.ui.pending_folder_delete = None;
         let input = cx.new(|cx| {
             InputState::new(window, cx)
                 .placeholder(rust_i18n::t!("api.request.folder_name_placeholder").to_string())
                 .default_value(name)
         });
         let focus = input.read(cx).focus_handle(cx);
-        self.folder_editor = Some(FolderEditor {
+        self.ui.folder_editor = Some(FolderEditor {
             mode: FolderEditorMode::Rename(folder_id),
             input,
             error: None,
@@ -67,12 +67,12 @@ impl ApiWorkspace {
     }
 
     pub(crate) fn submit_folder_editor(&mut self, cx: &mut Context<Self>) {
-        let Some(editor) = self.folder_editor.take() else {
+        let Some(editor) = self.ui.folder_editor.take() else {
             return;
         };
         let name = editor.input.read(cx).value().trim().to_string();
         if name.is_empty() {
-            self.folder_editor = Some(FolderEditor {
+            self.ui.folder_editor = Some(FolderEditor {
                 mode: editor.mode,
                 input: editor.input,
                 error: Some(rust_i18n::t!("api.request.folder_name_required").to_string()),
@@ -101,18 +101,18 @@ impl ApiWorkspace {
     }
 
     pub(crate) fn cancel_folder_editor(&mut self, cx: &mut Context<Self>) {
-        self.folder_editor = None;
+        self.ui.folder_editor = None;
         cx.notify();
     }
 
     pub(crate) fn request_delete_folder(&mut self, folder_id: ApiFolderId, cx: &mut Context<Self>) {
-        self.folder_editor = None;
-        self.pending_folder_delete = Some(folder_id);
+        self.ui.folder_editor = None;
+        self.ui.pending_folder_delete = Some(folder_id);
         cx.notify();
     }
 
     pub(crate) fn confirm_delete_folder(&mut self, cx: &mut Context<Self>) {
-        let Some(folder_id) = self.pending_folder_delete.take() else {
+        let Some(folder_id) = self.ui.pending_folder_delete.take() else {
             return;
         };
         if self.project.remove_folder(folder_id) {
@@ -121,7 +121,7 @@ impl ApiWorkspace {
     }
 
     pub(crate) fn cancel_delete_folder(&mut self, cx: &mut Context<Self>) {
-        self.pending_folder_delete = None;
+        self.ui.pending_folder_delete = None;
         cx.notify();
     }
 }

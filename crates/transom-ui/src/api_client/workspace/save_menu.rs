@@ -19,10 +19,10 @@ pub(super) fn render_save_controls(params: &ApiWorkspaceParams<'_>, _p: &Palette
     let save_view = params.view.clone();
     let open_view = params.view.clone();
     let menu_view = params.view.clone();
-    let search = params.save_destination_search.clone();
+    let search = params.editors.save_destination_search.clone();
     let menu_search = search.clone();
     let folders = params.project.folders.clone();
-    let open = params.save_destination_open;
+    let open = params.ui.save_destination_open;
     let trigger = IconButton::new(
         "api-request-save-destination",
         AppIcon::Ui(UiIcon::CHEVRON_DOWN),
@@ -38,7 +38,7 @@ pub(super) fn render_save_controls(params: &ApiWorkspaceParams<'_>, _p: &Palette
         .on_open_change(move |next, window, cx| {
             let next = *next;
             open_view.update(cx, |this, cx| {
-                this.save_destination_open = next;
+                this.ui.save_destination_open = next;
                 if next {
                     let focus = this
                         .editors
@@ -148,7 +148,7 @@ impl ApiWorkspace {
     ) {
         self.move_selected_to_folder(folder_id, cx);
         self.save_project(cx);
-        self.save_destination_open = false;
+        self.ui.save_destination_open = false;
         self.editors
             .save_destination_search
             .update(cx, |input, cx| input.set_value(String::new(), window, cx));

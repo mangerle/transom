@@ -36,7 +36,7 @@ impl ApiWorkspace {
         tab: ApiGlobalParameterTab,
         cx: &mut Context<Self>,
     ) {
-        self.global_parameter_tab = tab;
+        self.ui.global_parameter_tab = tab;
         cx.notify();
     }
 
@@ -50,7 +50,7 @@ impl ApiWorkspace {
                 super::ApiConfigModalSection::GlobalParameters,
                 super::ApiConfigModalSection::Environment,
             );
-        self.config_modal = Some(initial);
+        self.ui.config_modal = Some(initial);
         cx.notify();
     }
 
@@ -64,7 +64,7 @@ impl ApiWorkspace {
         if let super::ApiConfigModalSection::Environment(env_id) = section {
             self.set_environment(env_id, window, cx);
         }
-        self.config_modal = Some(section);
+        self.ui.config_modal = Some(section);
         cx.notify();
     }
 
@@ -73,7 +73,7 @@ impl ApiWorkspace {
         self.create_environment(window, cx);
         if let Some(id) = self.project.active_environment_id {
             self.environment_id = Some(id);
-            self.config_modal = Some(super::ApiConfigModalSection::Environment(id));
+            self.ui.config_modal = Some(super::ApiConfigModalSection::Environment(id));
         }
         cx.notify();
     }
@@ -102,8 +102,8 @@ impl ApiWorkspace {
             self.environment_id = next;
             self.load_environment(window, cx);
         }
-        if self.config_modal == Some(super::ApiConfigModalSection::Environment(env_id)) {
-            self.config_modal = next.map(super::ApiConfigModalSection::Environment);
+        if self.ui.config_modal == Some(super::ApiConfigModalSection::Environment(env_id)) {
+            self.ui.config_modal = next.map(super::ApiConfigModalSection::Environment);
         }
         self.project.touch();
         cx.notify();
@@ -111,7 +111,7 @@ impl ApiWorkspace {
 
     /// 关闭环境变量与全局配置弹窗。
     pub(crate) fn close_config_modal(&mut self, cx: &mut Context<Self>) {
-        self.config_modal = None;
+        self.ui.config_modal = None;
         cx.notify();
     }
 

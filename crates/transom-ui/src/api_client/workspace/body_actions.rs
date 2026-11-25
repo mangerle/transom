@@ -42,7 +42,7 @@ impl ApiWorkspace {
             multiple: false,
             prompt: None,
         });
-        self.binary_file_task = Some(cx.spawn_in(window, async move |this, cx| {
+        self.exec.binary_file_task = Some(cx.spawn_in(window, async move |this, cx| {
             let Ok(Ok(Some(paths))) = picked.await else {
                 return;
             };
@@ -134,12 +134,12 @@ impl ApiWorkspace {
                         state.set_value(formatted, window, cx);
                     });
                     self.capture_editor(cx);
-                    self.error = None;
+                    self.exec.error = None;
                     cx.notify();
                 }
             }
             Err(_) => {
-                self.error =
+                self.exec.error =
                     Some(rust_i18n::t!("api.request.format_body_invalid_json").to_string());
                 cx.notify();
             }

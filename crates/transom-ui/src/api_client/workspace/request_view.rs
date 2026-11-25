@@ -108,7 +108,7 @@ pub(super) fn render_request_editor(params: &ApiWorkspaceParams<'_>, p: &Palette
                         .text_color(p.muted_foreground)
                         .child(rust_i18n::t!("api.request.name").to_string()),
                 )
-                .child(Input::new(params.request_name).w(rems(18.0)))
+                .child(Input::new(&params.editors.request_name).w(rems(18.0)))
                 .child(div().flex_1())
                 .child(
                     action_button(
@@ -133,14 +133,17 @@ pub(super) fn render_request_editor(params: &ApiWorkspaceParams<'_>, p: &Palette
                 .border_color(p.divider(p.border))
                 .child(mode)
                 .child(environment)
-                .child(Input::new(params.request_url).flex_1().min_w_0().on_paste(
-                    move |clipboard, window, cx| {
-                        let Some(text) = clipboard.text() else {
-                            return false;
-                        };
-                        paste_view.update(cx, |this, cx| this.import_curl(&text, window, cx))
-                    },
-                ))
+                .child(
+                    Input::new(&params.editors.request_url)
+                        .flex_1()
+                        .min_w_0()
+                        .on_paste(move |clipboard, window, cx| {
+                            let Some(text) = clipboard.text() else {
+                                return false;
+                            };
+                            paste_view.update(cx, |this, cx| this.import_curl(&text, window, cx))
+                        }),
+                )
                 .child(
                     action_button_with_icon_tint(
                         "api-request-send",
@@ -153,7 +156,7 @@ pub(super) fn render_request_editor(params: &ApiWorkspaceParams<'_>, p: &Palette
                         Some(gpui::white()),
                     )
                     .primary()
-                    .disabled(params.selected_request.is_none() || params.sending)
+                    .disabled(params.selected_request.is_none() || params.exec.sending)
                     .on_click(move |_, window, cx| {
                         send_view.update(cx, |this, cx| this.send_request(window, cx));
                     }),
@@ -161,14 +164,14 @@ pub(super) fn render_request_editor(params: &ApiWorkspaceParams<'_>, p: &Palette
                 .child(super::save_menu::render_save_controls(params, p)),
         );
 
-    if let Some(error) = params.error {
+    if let Some(error) = params.exec.error.as_deref() {
         content = content.child(message_bar(error.to_string(), p.danger, p));
     }
-    if let Some(notice) = params.notice {
+    if let Some(notice) = params.exec.notice.as_deref() {
         content = content.child(message_bar(notice.to_string(), p.success, p));
     }
 
-    let editor = if params.auxiliary_section.is_some() {
+    let editor = if params.ui.auxiliary_section.is_some() {
         super::advanced_view::render_auxiliary_panel(params, p)
     } else if params.selected_request.is_some() {
         render_tabbed_request(params, p)
@@ -182,7 +185,7 @@ fn render_tabbed_request(params: &ApiWorkspaceParams<'_>, p: &Palette) -> AnyEle
     let tabs = visible_tabs(params);
     let selected = tabs
         .iter()
-        .position(|tab| *tab == params.request_tab)
+        .position(|tab| *tab == params.ui.request_tab)
         .unwrap_or(0);
     let items = tabs
         .iter()
@@ -192,7 +195,7 @@ fn render_tabbed_request(params: &ApiWorkspaceParams<'_>, p: &Palette) -> AnyEle
             super::tabs_bar::UnderlineTabItem {
                 id: request_tab_id(tab),
                 label: request_tab_label(tab, params),
-                selected: tab == params.request_tab,
+                selected: tab == params.ui.request_tab,
                 on_select: Box::new(move |_, cx| {
                     view.update(cx, |this, cx| this.set_request_tab(tab, cx));
                 }),
@@ -212,13 +215,15 @@ fn render_tabbed_request(params: &ApiWorkspaceParams<'_>, p: &Palette) -> AnyEle
         p,
     );
     let content = match tabs.get(selected).copied().unwrap_or(ApiRequestTab::Query) {
-        ApiRequestTab::Query => params.query_editor.clone().into_any_element(),
+        ApiRequestTab::Query => params.editors.query.clone().into_any_element(),
         ApiRequestTab::Body => render_body(params, p),
-        ApiRequestTab::Headers => params.header_editor.clone().into_any_element(),
-        ApiRequestTab::Auth => params.auth.clone().into_any_element(),
-        ApiRequestTab::Assertions => params.assertions.clone().into_any_element(),
+        ApiRequestTab::Headers => params.editors.headers.clone().into_any_element(),
+        ApiRequestTab::Auth => params.editors.auth.clone().into_any_element(),
+        ApiRequestTab::Assertions => params.editors.assertions.clone().into_any_element(),
         ApiRequestTab::Settings => render_settings(params, p),
-        ApiRequestTab::Docs => render_text_panel("api-request-docs", params.docs.clone(), p),
+        ApiRequestTab::Docs => {
+            render_text_panel("api-request-docs", params.editors.docs.clone(), p)
+        }
     };
     v_flex()
         .flex_1()
@@ -344,7 +349,7 @@ fn render_settings(params: &ApiWorkspaceParams<'_>, p: &Palette) -> AnyElement {
                         .text_color(p.muted_foreground)
                         .child(rust_i18n::t!("api.request.timeout").to_string()),
                 )
-                .child(Input::new(params.timeout).w(rems(10.0)))
+                .child(Input::new(&params.editors.timeout).w(rems(10.0)))
                 .child(
                     div()
                         .flex_1()

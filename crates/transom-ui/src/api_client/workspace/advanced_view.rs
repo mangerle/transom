@@ -70,7 +70,7 @@ pub(crate) fn render_project_actions_menu(params: &ApiWorkspaceParams<'_>) -> An
 
 /// 项目级配置面板；只渲染环境或 Cookie 中当前选中的一项。
 pub(crate) fn render_auxiliary_panel(params: &ApiWorkspaceParams<'_>, p: &Palette) -> AnyElement {
-    let Some(section) = params.auxiliary_section else {
+    let Some(section) = params.ui.auxiliary_section else {
         return div().into_any_element();
     };
     let (title, body) = match section {
@@ -86,18 +86,18 @@ pub(crate) fn render_auxiliary_panel(params: &ApiWorkspaceParams<'_>, p: &Palett
         ),
         ApiAuxiliarySection::GlobalVariables => (
             rust_i18n::t!("api.request.global_variables").to_string(),
-            params.global_variables_editor.clone().into_any_element(),
+            params.editors.global_variables.clone().into_any_element(),
         ),
         ApiAuxiliarySection::Cookies => (
             rust_i18n::t!("api.request.aux_cookies").to_string(),
-            params.cookies_editor.clone().into_any_element(),
+            params.editors.cookies.clone().into_any_element(),
         ),
         ApiAuxiliarySection::Code => {
             let view = params.view.clone();
             let copy_view = params.view.clone();
             let target = dropdown(
                 "api-codegen-target",
-                params.codegen_target,
+                params.ui.codegen_target,
                 vec![
                     (CodeTarget::Curl, CodeTarget::Curl.label().to_string()),
                     (
@@ -140,7 +140,7 @@ pub(crate) fn render_auxiliary_panel(params: &ApiWorkspaceParams<'_>, p: &Palett
                 )
                 .child(
                     div().flex_1().min_h_0().child(
-                        Textarea::new(params.code_preview)
+                        Textarea::new(&params.editors.code_preview)
                             .readonly(true)
                             .size_full(),
                     ),
@@ -172,7 +172,7 @@ pub(crate) fn render_auxiliary_panel(params: &ApiWorkspaceParams<'_>, p: &Palett
                     .render()
                     .on_click(move |_, _, cx| {
                         view.update(cx, |this, cx| {
-                            this.auxiliary_section = None;
+                            this.ui.auxiliary_section = None;
                             cx.notify();
                         });
                     }),

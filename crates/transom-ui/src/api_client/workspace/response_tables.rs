@@ -13,7 +13,7 @@ use transom_api::{ApiAssertionResult, ApiCookie, ApiResponseSnapshot};
 use transom_ui_icons::{AppIcon, AppIconElement, UiIcon};
 
 pub(super) fn render_headers(params: &ApiWorkspaceParams<'_>, p: &Palette) -> AnyElement {
-    let Some(response) = params.response else {
+    let Some(response) = params.exec.response.as_ref() else {
         return centered_message(rust_i18n::t!("api.response.no_headers").to_string(), p);
     };
     if response.headers.is_empty() {

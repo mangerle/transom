@@ -100,9 +100,11 @@ fn render_http_body(params: &ApiWorkspaceParams<'_>, p: &Palette) -> AnyElement 
         | ApiBodyType::Text
         | ApiBodyType::Xml
         | ApiBodyType::JavaScript
-        | ApiBodyType::Html => render_code_body("api-request-body", params.request_body, p),
+        | ApiBodyType::Html => {
+            render_code_body("api-request-body", &params.editors.request_body, p)
+        }
         ApiBodyType::FormUrlEncoded | ApiBodyType::Multipart => {
-            params.form_editor.clone().into_any_element()
+            params.editors.form.clone().into_any_element()
         }
         ApiBodyType::Binary => render_binary_body(params, p),
     };
@@ -211,7 +213,7 @@ fn render_graphql_body(params: &ApiWorkspaceParams<'_>, p: &Palette) -> AnyEleme
         ))
         .child(render_code_body(
             "api-graphql-body-editor",
-            params.request_body,
+            &params.editors.request_body,
             p,
         ))
         .child(field_label(
@@ -222,7 +224,7 @@ fn render_graphql_body(params: &ApiWorkspaceParams<'_>, p: &Palette) -> AnyEleme
             div()
                 .h(rem_px(8.0, params.rem))
                 .min_h_0()
-                .child(Textarea::new(params.graphql_variables).size_full()),
+                .child(Textarea::new(&params.editors.graphql_variables).size_full()),
         )
         .into_any_element()
 }
@@ -246,8 +248,8 @@ fn render_grpc_body(params: &ApiWorkspaceParams<'_>, p: &Palette) -> AnyElement 
                         .text_size(rems(typography::CAPTION))
                         .child(rust_i18n::t!("api.request.grpc_service").to_string()),
                 )
-                .child(Input::new(params.grpc_service).flex_1().min_w_0())
-                .child(Input::new(params.grpc_method).w(rems(12.0))),
+                .child(Input::new(&params.editors.grpc_service).flex_1().min_w_0())
+                .child(Input::new(&params.editors.grpc_method).w(rems(12.0))),
         )
         .child(field_label(
             rust_i18n::t!("api.request.grpc_message").to_string(),
@@ -255,7 +257,7 @@ fn render_grpc_body(params: &ApiWorkspaceParams<'_>, p: &Palette) -> AnyElement 
         ))
         .child(render_code_body(
             "api-graphql-body-editor",
-            params.request_body,
+            &params.editors.request_body,
             p,
         ))
         .into_any_element()
@@ -277,7 +279,7 @@ fn render_websocket_body(params: &ApiWorkspaceParams<'_>, p: &Palette) -> AnyEle
                 .gap(rems(space::XS))
                 .items_center()
                 .child(
-                    AppIconElement::new(AppIcon::Ui(if params.ws_connected {
+                    AppIconElement::new(AppIcon::Ui(if params.exec.ws_connected {
                         UiIcon::CHECK
                     } else {
                         UiIcon::WARNING
@@ -286,12 +288,12 @@ fn render_websocket_body(params: &ApiWorkspaceParams<'_>, p: &Palette) -> AnyEle
                 )
                 .child(
                     div()
-                        .text_color(if params.ws_connected {
+                        .text_color(if params.exec.ws_connected {
                             p.success
                         } else {
                             p.muted_foreground
                         })
-                        .child(if params.ws_connected {
+                        .child(if params.exec.ws_connected {
                             rust_i18n::t!("api.websocket.connected").to_string()
                         } else {
                             rust_i18n::t!("api.websocket.not_connected").to_string()
@@ -315,7 +317,7 @@ fn render_websocket_body(params: &ApiWorkspaceParams<'_>, p: &Palette) -> AnyEle
                         rust_i18n::t!("api.request.websocket_send").to_string(),
                     )
                     .primary()
-                    .disabled(!params.ws_connected)
+                    .disabled(!params.exec.ws_connected)
                     .on_click(move |_, window, cx| {
                         send_view.update(cx, |this, cx| this.send_websocket_text(window, cx));
                     }),
@@ -328,7 +330,7 @@ fn render_websocket_body(params: &ApiWorkspaceParams<'_>, p: &Palette) -> AnyEle
                     )
                     .size(IconButtonSize::Compact)
                     .render()
-                    .disabled(!params.ws_connected)
+                    .disabled(!params.exec.ws_connected)
                     .on_click(move |_, _, cx| {
                         close_view.update(cx, |this, cx| this.close_websocket(cx));
                     }),
@@ -342,7 +344,7 @@ fn render_websocket_body(params: &ApiWorkspaceParams<'_>, p: &Palette) -> AnyEle
             div()
                 .flex_1()
                 .min_h_0()
-                .child(Textarea::new(params.websocket_input).size_full()),
+                .child(Textarea::new(&params.editors.websocket_input).size_full()),
         )
         .into_any_element()
 }

@@ -30,7 +30,7 @@ pub(in crate::api_client) fn render_global_parameters(
             super::tabs_bar::UnderlineTabItem {
                 id,
                 label,
-                selected: tab == params.global_parameter_tab,
+                selected: tab == params.ui.global_parameter_tab,
                 on_select: Box::new(move |_, cx| {
                     view.update(cx, |this, cx| this.set_global_parameter_tab(tab, cx));
                 }),
@@ -38,9 +38,9 @@ pub(in crate::api_client) fn render_global_parameters(
         })
         .collect::<Vec<_>>();
     let tabs = super::tabs_bar::render_underline_tabs("api-global-parameter-tabs", items, None, p);
-    let editor = match params.global_parameter_tab {
-        ApiGlobalParameterTab::Query => params.global_query_editor.clone().into_any_element(),
-        ApiGlobalParameterTab::Header => params.global_headers_editor.clone().into_any_element(),
+    let editor = match params.ui.global_parameter_tab {
+        ApiGlobalParameterTab::Query => params.editors.global_query.clone().into_any_element(),
+        ApiGlobalParameterTab::Header => params.editors.global_headers.clone().into_any_element(),
     };
     v_flex()
         .size_full()

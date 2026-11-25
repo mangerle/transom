@@ -27,7 +27,7 @@ pub(super) fn render_response(params: &ApiWorkspaceParams<'_>, p: &Palette) -> A
         .items_center()
         .children(render_summary(params, p))
         .when(
-            params.response.is_some() || params.protocol == ApiProtocol::WebSocket,
+            params.exec.response.is_some() || params.protocol == ApiProtocol::WebSocket,
             |row| {
                 row.child(
                     IconButton::new(
@@ -50,7 +50,7 @@ pub(super) fn render_response(params: &ApiWorkspaceParams<'_>, p: &Palette) -> A
             super::tabs_bar::UnderlineTabItem {
                 id: response_tab_id(tab),
                 label: response_tab_label(tab, params),
-                selected: tab == params.response_tab,
+                selected: tab == params.ui.response_tab,
                 on_select: Box::new(move |_, cx| {
                     view.update(cx, |this, cx| this.set_response_tab(tab, cx));
                 }),
@@ -71,12 +71,14 @@ pub(super) fn render_response(params: &ApiWorkspaceParams<'_>, p: &Palette) -> A
         .bg(p.background)
         .child(tab_bar);
 
-    body = body.child(match params.response_tab {
-        ApiResponseTab::Body => render_body(params, p, params.response),
+    body = body.child(match params.ui.response_tab {
+        ApiResponseTab::Body => render_body(params, p, params.exec.response.as_ref()),
         ApiResponseTab::Headers => super::response_tables::render_headers(params, p),
-        ApiResponseTab::Cookies => super::response_tables::render_cookies(params.response, p),
+        ApiResponseTab::Cookies => {
+            super::response_tables::render_cookies(params.exec.response.as_ref(), p)
+        }
         ApiResponseTab::Assertions => {
-            super::response_tables::render_assertions(params.assertion_results, p)
+            super::response_tables::render_assertions(&params.exec.assertion_results, p)
         }
         ApiResponseTab::History => super::history_view::render_history(params, p),
     });
@@ -84,8 +86,8 @@ pub(super) fn render_response(params: &ApiWorkspaceParams<'_>, p: &Palette) -> A
 }
 
 fn render_summary(params: &ApiWorkspaceParams<'_>, p: &Palette) -> Vec<AnyElement> {
-    let Some(response) = params.response else {
-        if params.sending {
+    let Some(response) = params.exec.response.as_ref() else {
+        if params.exec.sending {
             return vec![
                 div()
                     .text_color(p.muted_foreground)
@@ -95,7 +97,7 @@ fn render_summary(params: &ApiWorkspaceParams<'_>, p: &Palette) -> Vec<AnyElemen
         }
         return Vec::new();
     };
-    let assertions = &params.assertion_results;
+    let assertions = &params.exec.assertion_results;
     vec![
         div()
             .text_color(response_color(response.status, p))
@@ -144,19 +146,25 @@ fn response_tab_label(tab: ApiResponseTab, params: &ApiWorkspaceParams<'_>) -> S
     match tab {
         ApiResponseTab::Body => rust_i18n::t!("api.response.body").to_string(),
         ApiResponseTab::Headers => {
-            let count = params.response.map_or(0, |response| response.headers.len());
+            let count = params
+                .exec
+                .response
+                .as_ref()
+                .map_or(0, |response| response.headers.len());
             format!("{} ({count})", rust_i18n::t!("api.response.headers"))
         }
         ApiResponseTab::Cookies => {
             let count = params
+                .exec
                 .response
+                .as_ref()
                 .map_or(0, |response| response.set_cookies.len());
             format!("{} ({count})", rust_i18n::t!("api.response.cookies"))
         }
         ApiResponseTab::Assertions => format!(
             "{} ({})",
             rust_i18n::t!("api.response.assertions_label"),
-            params.assertion_results.len()
+            params.exec.assertion_results.len()
         ),
         ApiResponseTab::History => format!(
             "{} ({})",
@@ -172,12 +180,16 @@ fn render_body(
     response: Option<&ApiResponseSnapshot>,
 ) -> AnyElement {
     if params.protocol == ApiProtocol::WebSocket {
-        return text_content("api-response-ws-log", params.websocket_log.clone(), p);
+        return text_content(
+            "api-response-ws-log",
+            params.editors.websocket_log.clone(),
+            p,
+        );
     }
     if let Some(_response) = response {
-        return text_content("api-response-body", params.response_body.clone(), p);
+        return text_content("api-response-body", params.editors.response_body.clone(), p);
     }
-    if params.sending {
+    if params.exec.sending {
         return centered_message(rust_i18n::t!("api.response.sending").to_string(), p);
     }
     centered_message(rust_i18n::t!("api.response.empty").to_string(), p)

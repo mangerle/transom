@@ -24,54 +24,32 @@ mod view;
 
 use super::editors::kv::KvEditorEvent;
 use super::sidebar::{ApiSidebarState, ApiSidebarView};
-use folder::FolderEditor;
 use gpui_kit::component::input::InputEvent;
-use gpui_kit::component::resizable::ResizableState;
 use gpui_kit::*;
 use transom_api::{
-    ApiAssertionResult, ApiEnvironmentId, ApiFolderId, ApiImportFormat, ApiMethod, ApiProject,
-    ApiProtocol, ApiRequestId, ApiResponseSnapshot, ApiWebSocketHandle, import_projects,
+    ApiEnvironmentId, ApiImportFormat, ApiMethod, ApiProject, ApiProtocol, ApiRequestId,
+    import_projects,
 };
 pub(crate) use types::{
     ApiAuxiliarySection, ApiBodyMode, ApiConfigModalSection, ApiGlobalParameterTab, ApiRequestTab,
     ApiResponseTab, ApiWorkspaceEditors, ApiWorkspaceEvent, ApiWorkspaceServices,
 };
+use types::{ExecutionState, WorkspaceSplits, WorkspaceUiState};
 pub(crate) use view::{ApiWorkspaceParams, render_api_workspace};
 
 /// 单个 API 项目标签的工作区实体。
 pub(crate) struct ApiWorkspace {
     pub(crate) project: ApiProject,
-    pub(crate) selected_request: Option<ApiRequestId>,
-    pub(crate) method: ApiMethod,
-    pub(crate) protocol: ApiProtocol,
-    pub(crate) environment_id: Option<ApiEnvironmentId>,
-    pub(crate) request_tab: ApiRequestTab,
-    pub(crate) response_tab: ApiResponseTab,
-    pub(crate) selected_history: Option<usize>,
-    pub(crate) save_destination_open: bool,
-    pub(crate) auxiliary_section: Option<ApiAuxiliarySection>,
-    pub(crate) config_modal: Option<ApiConfigModalSection>,
-    pub(crate) new_request_modal_open: bool,
-    pub(crate) global_parameter_tab: ApiGlobalParameterTab,
-    pub(crate) codegen_target: transom_api::CodeTarget,
-    pub(crate) editors: ApiWorkspaceEditors,
-    pub(crate) response: Option<ApiResponseSnapshot>,
-    pub(crate) assertion_results: Vec<ApiAssertionResult>,
-    pub(crate) sending: bool,
-    pub(crate) ws_connected: bool,
-    pub(crate) notice: Option<String>,
-    pub(crate) error: Option<String>,
-    pub(crate) tree_editor_split: Entity<ResizableState>,
-    pub(crate) request_response_split: Entity<ResizableState>,
-    pub(crate) services: ApiWorkspaceServices,
-    pub(crate) send_task: Option<Task<()>>,
-    pub(crate) ws_task: Option<Task<()>>,
-    pub(crate) ws_event_task: Option<Task<()>>,
-    pub(crate) ws_handle: Option<ApiWebSocketHandle>,
-    pub(crate) folder_editor: Option<FolderEditor>,
-    pub(crate) pending_folder_delete: Option<ApiFolderId>,
+    pub(in crate::api_client) selected_request: Option<ApiRequestId>,
+    pub(in crate::api_client) method: ApiMethod,
+    pub(in crate::api_client) protocol: ApiProtocol,
+    pub(in crate::api_client) environment_id: Option<ApiEnvironmentId>,
+    pub(in crate::api_client) ui: WorkspaceUiState,
+    pub(in crate::api_client) exec: ExecutionState,
+    pub(in crate::api_client) editors: ApiWorkspaceEditors,
+    pub(in crate::api_client) splits: WorkspaceSplits,
+    services: ApiWorkspaceServices,
     editor_subscriptions: Vec<Subscription>,
-    pub(super) binary_file_task: Option<Task<()>>,
 }
 
 impl EventEmitter<ApiWorkspaceEvent> for ApiWorkspace {}
@@ -95,33 +73,12 @@ impl ApiWorkspace {
             environment_id: active_environment_id,
             project,
             method: ApiMethod::Get,
-            request_tab: ApiRequestTab::Query,
-            response_tab: ApiResponseTab::Body,
-            selected_history: None,
-            save_destination_open: false,
-            auxiliary_section: None,
-            config_modal: None,
-            new_request_modal_open: false,
-            global_parameter_tab: ApiGlobalParameterTab::Query,
-            codegen_target: transom_api::CodeTarget::Curl,
+            ui: WorkspaceUiState::default(),
+            exec: ExecutionState::default(),
             editors,
-            response: None,
-            assertion_results: Vec::new(),
-            sending: false,
-            ws_connected: false,
-            notice: None,
-            error: None,
-            tree_editor_split: cx.new(|_| ResizableState::default()),
-            request_response_split: cx.new(|_| ResizableState::default()),
+            splits: WorkspaceSplits::new(cx),
             services,
-            send_task: None,
-            ws_task: None,
-            ws_event_task: None,
-            ws_handle: None,
-            folder_editor: None,
-            pending_folder_delete: None,
             editor_subscriptions: Vec::new(),
-            binary_file_task: None,
         };
         workspace.editor_subscriptions = vec![
             cx.subscribe_in(
@@ -261,7 +218,7 @@ impl ApiWorkspace {
                 .pop()
                 .and_then(|mut project| project.requests.pop()),
             Err(error) => {
-                self.error = error.detail;
+                self.exec.error = error.detail;
                 cx.notify();
                 return true;
             }
@@ -285,7 +242,7 @@ impl ApiWorkspace {
             .unwrap_or(request.raw_language);
         self.project.upsert_request(request);
         self.load_selected(window, cx);
-        self.error = None;
+        self.exec.error = None;
         cx.notify();
         true
     }
@@ -305,13 +262,13 @@ impl ApiWorkspace {
 
     /// 切换请求编辑页签；只改变当前工作区的视图状态。
     pub(crate) fn set_request_tab(&mut self, tab: ApiRequestTab, cx: &mut Context<Self>) {
-        self.request_tab = tab;
+        self.ui.request_tab = tab;
         cx.notify();
     }
 
     /// 切换响应面板页签；只改变当前工作区的视图状态。
     pub(crate) fn set_response_tab(&mut self, tab: ApiResponseTab, cx: &mut Context<Self>) {
-        self.response_tab = tab;
+        self.ui.response_tab = tab;
         cx.notify();
     }
 
@@ -359,7 +316,7 @@ impl ApiWorkspace {
         section: ApiAuxiliarySection,
         cx: &mut Context<Self>,
     ) {
-        self.auxiliary_section = (self.auxiliary_section != Some(section)).then_some(section);
+        self.ui.auxiliary_section = (self.ui.auxiliary_section != Some(section)).then_some(section);
         cx.notify();
     }
 

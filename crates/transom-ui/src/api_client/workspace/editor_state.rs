@@ -60,13 +60,14 @@ impl ApiWorkspace {
             match timeout.parse::<u64>() {
                 Ok(value) => value,
                 Err(_) => {
-                    self.error = Some(rust_i18n::t!("api.request.timeout_invalid").to_string());
+                    self.exec.error =
+                        Some(rust_i18n::t!("api.request.timeout_invalid").to_string());
                     return false;
                 }
             }
         };
         self.project.upsert_request(request);
-        self.error = None;
+        self.exec.error = None;
         true
     }
 

@@ -34,13 +34,13 @@ impl ApiWorkspace {
 
     /// 打开新建/导入请求弹窗。
     pub(crate) fn open_new_request_modal(&mut self, cx: &mut Context<Self>) {
-        self.new_request_modal_open = true;
+        self.ui.new_request_modal_open = true;
         cx.notify();
     }
 
     /// 关闭新建/导入请求弹窗。
     pub(crate) fn close_new_request_modal(&mut self, cx: &mut Context<Self>) {
-        self.new_request_modal_open = false;
+        self.ui.new_request_modal_open = false;
         cx.notify();
     }
 
@@ -68,7 +68,7 @@ impl ApiWorkspace {
         let request_id = request.id;
         self.project.upsert_request(request);
         self.selected_request = Some(request_id);
-        self.new_request_modal_open = false;
+        self.ui.new_request_modal_open = false;
         self.load_selected(window, cx);
         self.emit_project_sync(cx);
         cx.notify();
@@ -87,8 +87,8 @@ impl ApiWorkspace {
             .map(|text| text.trim().to_string())
             .filter(|text| !text.is_empty())
         else {
-            self.error = Some(rust_i18n::t!("api.request.clipboard_empty").to_string());
-            self.new_request_modal_open = false;
+            self.exec.error = Some(rust_i18n::t!("api.request.clipboard_empty").to_string());
+            self.ui.new_request_modal_open = false;
             cx.notify();
             return;
         };
@@ -123,13 +123,13 @@ impl ApiWorkspace {
                     self.load_selected(window, cx);
                     self.emit_project_sync(cx);
                 }
-                self.error = None;
+                self.exec.error = None;
             }
             Err(error) => {
-                self.error = Some(crate::palette::localized_error(&error));
+                self.exec.error = Some(crate::palette::localized_error(&error));
             }
         }
-        self.new_request_modal_open = false;
+        self.ui.new_request_modal_open = false;
         cx.notify();
     }
 

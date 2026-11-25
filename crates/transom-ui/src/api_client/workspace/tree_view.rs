@@ -52,10 +52,10 @@ pub(crate) fn render_tree(params: &ApiWorkspaceParams<'_>, p: &Palette) -> AnyEl
                 .child(error.clone()),
         );
     }
-    if let Some(editor) = params.folder_editor {
+    if let Some(editor) = params.ui.folder_editor.as_ref() {
         request_rows = request_rows.child(render_folder_editor(view, editor, p));
     }
-    if let Some(folder_id) = params.pending_folder_delete
+    if let Some(folder_id) = params.ui.pending_folder_delete
         && let Some(folder) = params
             .project
             .folders

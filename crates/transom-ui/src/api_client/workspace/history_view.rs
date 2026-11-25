@@ -65,6 +65,7 @@ pub(super) fn render_history(params: &ApiWorkspaceParams<'_>, p: &Palette) -> An
                 .children(rows),
         );
     if let Some(entry) = params
+        .ui
         .selected_history
         .and_then(|index| params.project.history.get(index))
     {
@@ -131,7 +132,7 @@ fn history_row(
         .len()
         .saturating_sub(1)
         .saturating_sub(reverse_index);
-    let selected = params.selected_history == Some(actual_index);
+    let selected = params.ui.selected_history == Some(actual_index);
     let view = params.view.clone();
     let replay_view = params.view.clone();
     let request_id = entry.request_id;

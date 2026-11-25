@@ -264,7 +264,7 @@ fn render_content(
     let (title, body) = match section {
         ApiConfigModalSection::Cookies => (
             rust_i18n::t!("api.request.cookie_manager").to_string(),
-            params.cookies_editor.clone().into_any_element(),
+            params.editors.cookies.clone().into_any_element(),
         ),
         ApiConfigModalSection::GlobalParameters => (
             rust_i18n::t!("api.request.global_parameters").to_string(),
@@ -272,7 +272,7 @@ fn render_content(
         ),
         ApiConfigModalSection::GlobalVariables => (
             rust_i18n::t!("api.request.global_variables").to_string(),
-            params.global_variables_editor.clone().into_any_element(),
+            params.editors.global_variables.clone().into_any_element(),
         ),
         ApiConfigModalSection::Environment(_) => {
             let env_body = v_flex()
@@ -288,7 +288,7 @@ fn render_content(
                                 .text_color(p.muted_foreground)
                                 .child(rust_i18n::t!("api.request.environment_name").to_string()),
                         )
-                        .child(Input::new(params.environment_name).w_full()),
+                        .child(Input::new(&params.editors.environment_name).w_full()),
                 )
                 .child(
                     v_flex()
@@ -311,7 +311,7 @@ fn render_content(
                                 .border_1()
                                 .border_color(p.divider(p.border))
                                 .overflow_hidden()
-                                .child(params.environment_editor.clone()),
+                                .child(params.editors.environment.clone()),
                         ),
                 )
                 .into_any_element();
