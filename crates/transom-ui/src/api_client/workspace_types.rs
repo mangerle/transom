@@ -118,4 +118,5 @@ pub(crate) struct ApiWorkspaceEditors {
     pub(crate) websocket_log: Entity<TextareaState>,
     pub(crate) response_body: Entity<TextareaState>,
     pub(crate) code_preview: Entity<TextareaState>,
+    pub(crate) save_destination_search: Entity<InputState>,
 }

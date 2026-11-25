@@ -9,7 +9,6 @@ use crate::widgets::{action_button, dropdown};
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Disableable;
 use gpui_kit::component::Sizable;
-use gpui_kit::component::button::Button;
 use gpui_kit::component::button::ButtonVariants;
 use gpui_kit::component::input::{Input, Textarea};
 use gpui_kit::component::tab::{Tab, TabBar};
@@ -88,7 +87,6 @@ pub(super) fn render_request_editor(params: &ApiWorkspaceParams<'_>, p: &Palette
         view.clone(),
     );
     let send_view = view.clone();
-    let save_send_view = view.clone();
     let paste_view = view.clone();
 
     let mut content = v_flex()
@@ -135,35 +133,22 @@ pub(super) fn render_request_editor(params: &ApiWorkspaceParams<'_>, p: &Palette
                     },
                 ))
                 .child(
-                    Button::new("api-request-send")
-                        .ghost()
-                        .small()
-                        .label(if params.protocol == ApiProtocol::WebSocket {
+                    action_button(
+                        "api-request-send",
+                        AppIcon::Ui(UiIcon::FETCH),
+                        if params.protocol == ApiProtocol::WebSocket {
                             rust_i18n::t!("api.request.websocket_connect").to_string()
                         } else {
                             rust_i18n::t!("api.request.send").to_string()
-                        })
-                        .disabled(params.selected_request.is_none() || params.sending)
-                        .on_click(move |_, window, cx| {
-                            send_view.update(cx, |this, cx| this.send_request(window, cx));
-                        }),
-                )
-                .child(
-                    action_button(
-                        "api-request-save-send",
-                        AppIcon::Ui(UiIcon::FETCH),
-                        if params.protocol == ApiProtocol::WebSocket {
-                            rust_i18n::t!("api.request.save_and_connect").to_string()
-                        } else {
-                            rust_i18n::t!("api.request.save_and_send").to_string()
                         },
                     )
                     .primary()
                     .disabled(params.selected_request.is_none() || params.sending)
                     .on_click(move |_, window, cx| {
-                        save_send_view.update(cx, |this, cx| this.save_and_send(window, cx));
+                        send_view.update(cx, |this, cx| this.send_request(window, cx));
                     }),
-                ),
+                )
+                .child(super::workspace_save_menu::render_save_controls(params, p)),
         );
 
     if let Some(error) = params.error {

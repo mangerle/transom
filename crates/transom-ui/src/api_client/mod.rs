@@ -32,6 +32,7 @@ mod workspace_request_actions;
 mod workspace_request_view;
 mod workspace_response_tables;
 mod workspace_response_view;
+mod workspace_save_menu;
 mod workspace_tree_view;
 mod workspace_types;
 mod workspace_view;

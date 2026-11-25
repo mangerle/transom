@@ -527,9 +527,6 @@ api:
     send:
       en: Send
       zh-CN: 发送
-    save_and_send:
-      en: Save and send
-      zh-CN: 保存并发送
     delete:
       en: Delete request
       zh-CN: 删除请求
@@ -774,9 +771,15 @@ api:
     websocket_connect:
       en: Connect WebSocket
       zh-CN: 连接 WebSocket
-    save_and_connect:
-      en: Save and connect
-      zh-CN: 保存并连接
+    save_destination:
+      en: Save destination
+      zh-CN: 保存位置
+    save_destination_placeholder:
+      en: Search folders
+      zh-CN: 请输入
+    save_root:
+      en: Root
+      zh-CN: 根目录
     websocket_send:
       en: Send message
       zh-CN: 发送消息

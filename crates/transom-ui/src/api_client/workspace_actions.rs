@@ -67,12 +67,6 @@ impl ApiWorkspace {
         self.send_task = Some(task);
     }
 
-    /// 先持久化当前项目，再发送或连接当前请求。
-    pub(crate) fn save_and_send(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.save_project(cx);
-        self.send_request(window, cx);
-    }
-
     /// 重放历史记录对应的当前请求；请求已被删除时给出明确错误。
     pub(crate) fn replay_history(
         &mut self,

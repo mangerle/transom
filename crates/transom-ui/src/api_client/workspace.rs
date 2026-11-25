@@ -24,6 +24,7 @@ pub(crate) struct ApiWorkspace {
     pub(crate) request_tab: ApiRequestTab,
     pub(crate) response_tab: ApiResponseTab,
     pub(crate) selected_history: Option<usize>,
+    pub(crate) save_destination_open: bool,
     pub(crate) auxiliary_section: Option<ApiAuxiliarySection>,
     pub(crate) codegen_target: transom_api::CodeTarget,
     pub(crate) editors: ApiWorkspaceEditors,
@@ -70,6 +71,7 @@ impl ApiWorkspace {
             request_tab: ApiRequestTab::Query,
             response_tab: ApiResponseTab::Body,
             selected_history: None,
+            save_destination_open: false,
             auxiliary_section: None,
             codegen_target: transom_api::CodeTarget::Curl,
             editors,
@@ -98,6 +100,15 @@ impl ApiWorkspace {
                 |this, _, event: &InputEvent, _, cx| {
                     if matches!(event, InputEvent::Change) {
                         this.apply_request_name(cx);
+                    }
+                },
+            ),
+            cx.subscribe_in(
+                &workspace.editors.save_destination_search,
+                window,
+                |_this, _, event: &InputEvent, _, cx| {
+                    if matches!(event, InputEvent::Change) {
+                        cx.notify();
                     }
                 },
             ),

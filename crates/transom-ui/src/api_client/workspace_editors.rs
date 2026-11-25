@@ -57,5 +57,9 @@ pub(super) fn new_editors(
         websocket_log: cx.new(|cx| TextareaState::new(window, cx)),
         response_body: cx.new(|cx| TextareaState::new(window, cx)),
         code_preview: cx.new(|cx| TextareaState::new(window, cx)),
+        save_destination_search: cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder(rust_i18n::t!("api.request.save_destination_placeholder").to_string())
+        }),
     }
 }
