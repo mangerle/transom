@@ -88,6 +88,8 @@ pub(crate) enum ApiResponseTab {
 /// API 工作区需要外壳处理的窗口级意图。
 #[derive(Clone)]
 pub(crate) enum ApiWorkspaceEvent {
+    /// 工作区结构已变化，只同步侧栏和标签内存状态，不立即落盘。
+    SyncProject { project: ApiProject },
     /// 项目快照已变化，请求由外壳更新登记表并异步落盘。
     PersistProject {
         project: ApiProject,

@@ -1,6 +1,6 @@
 //! API 接口树中的请求选择与生命周期动作。
 
-use super::ApiWorkspace;
+use super::{ApiWorkspace, ApiWorkspaceEvent};
 use gpui_kit::*;
 use transom_api::{ApiFolderId, ApiRequest, ApiRequestId};
 
@@ -44,6 +44,7 @@ impl ApiWorkspace {
         self.project.upsert_request(request);
         self.selected_request = Some(request_id);
         self.load_selected(window, cx);
+        self.emit_project_sync(cx);
         cx.notify();
     }
 
@@ -57,6 +58,7 @@ impl ApiWorkspace {
         }
         self.selected_request = self.project.requests.first().map(|request| request.id);
         self.load_selected(window, cx);
+        self.emit_project_sync(cx);
         cx.notify();
     }
 
@@ -74,6 +76,7 @@ impl ApiWorkspace {
         self.project.upsert_request(duplicate);
         self.selected_request = Some(request_id);
         self.load_selected(window, cx);
+        self.emit_project_sync(cx);
         cx.notify();
     }
 
@@ -103,6 +106,13 @@ impl ApiWorkspace {
         };
         request.folder_id = folder_id;
         self.project.touch();
+        self.emit_project_sync(cx);
         cx.notify();
+    }
+
+    fn emit_project_sync(&self, cx: &mut Context<Self>) {
+        cx.emit(ApiWorkspaceEvent::SyncProject {
+            project: self.project.clone(),
+        });
     }
 }

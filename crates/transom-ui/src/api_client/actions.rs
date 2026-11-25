@@ -4,8 +4,8 @@ use super::{ApiSidebarEvent, ApiWorkspace, ApiWorkspaceEvent, ApiWorkspaceServic
 use crate::app::{AppShell, AppState, WorkspaceTab};
 use gpui_kit::*;
 use transom_api::{
-    ApiExportFormat, ApiImportFormat, ApiProject, ApiProjectId, MAX_IMPORT_BYTES, export_project,
-    import_projects,
+    ApiExportFormat, ApiImportFormat, ApiProject, ApiProjectId, ApiRegistry, MAX_IMPORT_BYTES,
+    export_project, import_projects,
 };
 use transom_core::TabId;
 
@@ -141,16 +141,15 @@ pub(crate) fn on_workspace_request(
     cx: &mut Context<AppShell>,
 ) {
     match event {
+        ApiWorkspaceEvent::SyncProject { project } => {
+            sync_project_snapshot(state, project, cx);
+            cx.notify();
+        }
         ApiWorkspaceEvent::PersistProject { project, notice } => {
-            let sidebar = state.features.api_sidebar.clone();
-            let registry = sidebar.update(cx, |view, cx| {
-                view.apply_project_snapshot(project.clone(), cx);
-                view.state.registry.clone()
-            });
+            let registry = sync_project_snapshot(state, project, cx);
             if let Err(error) = state.runtime.persistence.save_api_registry(&registry) {
                 state.set_error(error.detail.unwrap_or_else(|| format!("{:?}", error.code)));
             }
-            update_open_project(state, &project, cx);
             if let Some(notice) = notice {
                 state.set_transient_status(notice, cx);
             }
@@ -159,6 +158,20 @@ pub(crate) fn on_workspace_request(
             }
         }
     }
+}
+
+fn sync_project_snapshot(
+    state: &mut AppState,
+    project: ApiProject,
+    cx: &mut Context<AppShell>,
+) -> ApiRegistry {
+    let sidebar = state.features.api_sidebar.clone();
+    let registry = sidebar.update(cx, |view, cx| {
+        view.apply_project_snapshot(project.clone(), cx);
+        view.state.registry.clone()
+    });
+    update_open_project(state, &project, cx);
+    registry
 }
 
 fn update_open_project(state: &mut AppState, project: &ApiProject, cx: &mut Context<AppShell>) {
