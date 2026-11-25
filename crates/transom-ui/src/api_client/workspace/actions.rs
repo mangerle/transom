@@ -155,12 +155,15 @@ impl ApiWorkspace {
         let resolved = self.project.resolved_request(&request, &environment);
         let url = resolved.url.clone();
         let headers = resolved.headers.clone();
+        // 建立新连接前先关闭并清理旧连接及事件监听任务，避免残留事件流交叉写入日志。
+        self.reset_websocket_connection();
         let service = self.services.websocket.clone();
         let start = service.start(url, headers, environment, resolved.auth.clone());
         let task = cx.spawn_in(window, async move |this, cx| {
             let result = start.into_handle().await;
             let _ = this.update_in(cx, |this, window, cx| match result {
                 Ok(mut handle) => {
+                    this.reset_websocket_connection();
                     let events = handle.take_events();
                     this.exec.ws_handle = Some(handle);
                     this.exec.ws_connected = true;
@@ -175,6 +178,17 @@ impl ApiWorkspace {
             });
         });
         self.exec.ws_task = Some(task);
+    }
+
+    fn reset_websocket_connection(&mut self) {
+        if let Some(handle) = self.exec.ws_handle.take()
+            && let Err(error) = handle.close()
+        {
+            log::warn!("关闭旧 WebSocket 连接失败，原因: {error}");
+        }
+        self.exec.ws_task = None;
+        self.exec.ws_event_task = None;
+        self.exec.ws_connected = false;
     }
 
     /// 发送一条 WebSocket 文本消息。
@@ -202,12 +216,15 @@ impl ApiWorkspace {
 
     /// 关闭 WebSocket。
     pub(crate) fn close_websocket(&mut self, cx: &mut Context<Self>) {
-        if let Some(handle) = &self.exec.ws_handle
+        if let Some(handle) = self.exec.ws_handle.take()
             && let Err(error) = handle.close()
         {
+            self.exec.ws_handle = Some(handle);
             self.set_error(error, cx);
             return;
         }
+        self.exec.ws_task = None;
+        self.exec.ws_event_task = None;
         self.exec.ws_connected = false;
         self.set_notice(rust_i18n::t!("api.websocket.closed").to_string(), cx);
     }
