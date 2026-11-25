@@ -7,6 +7,9 @@ use transom_api::{
     evaluate_assertions, generate_code, method_for_request, response_excerpt,
 };
 
+/// 响应正文预览上限（512 KiB），超出时截断展示以避免大响应拖垮文本排版。
+const MAX_RESPONSE_PREVIEW_BYTES: usize = 512 * 1024;
+
 impl ApiWorkspace {
     /// 发送当前请求；WebSocket 请求改为建立连接。
     pub(crate) fn send_request(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -128,6 +131,8 @@ impl ApiWorkspace {
     pub(crate) fn copy_response_body(&mut self, cx: &mut Context<Self>) {
         let text = if self.current_protocol() == ApiProtocol::WebSocket {
             self.editors.websocket_log.read(cx).value().to_string()
+        } else if let Some(response) = &self.exec.response {
+            response.body.clone()
         } else {
             self.editors.response_body.read(cx).value().to_string()
         };
@@ -312,9 +317,10 @@ impl ApiWorkspace {
             response_excerpt: response_excerpt(&response, 500),
         });
         self.ui.selected_history = Some(self.project.history.len().saturating_sub(1));
-        self.editors.response_body.update(cx, |state, cx| {
-            state.set_value(response.body.clone(), window, cx)
-        });
+        let preview = truncate_response_preview(&response.body, MAX_RESPONSE_PREVIEW_BYTES);
+        self.editors
+            .response_body
+            .update(cx, |state, cx| state.set_value(preview, window, cx));
         self.exec.response = Some(response);
         self.exec.error = None;
         cx.emit(super::ApiWorkspaceEvent::PersistProject {
@@ -385,8 +391,40 @@ impl ApiWorkspace {
     }
 }
 
+fn truncate_response_preview(body: &str, max_bytes: usize) -> String {
+    if body.len() <= max_bytes {
+        return body.to_string();
+    }
+    let mut end = max_bytes;
+    while end > 0 && !body.is_char_boundary(end) {
+        end -= 1;
+    }
+    format!(
+        "{}\n\n... [响应体过大（{}），预览已截断至 {}，点击复制可获取完整内容]",
+        &body[..end],
+        crate::format::format_compact_size(body.len() as u64),
+        crate::format::format_compact_size(max_bytes as u64),
+    )
+}
+
 fn unix_now() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |duration| duration.as_secs())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::truncate_response_preview;
+
+    #[test]
+    fn truncates_large_utf8_response_safely() {
+        let small = "hello";
+        assert_eq!(truncate_response_preview(small, 10), "hello");
+
+        let utf8 = "你好世界".repeat(10);
+        let preview = truncate_response_preview(&utf8, 7);
+        assert!(preview.starts_with("你好"));
+        assert!(preview.contains("预览已截断"));
+    }
 }
