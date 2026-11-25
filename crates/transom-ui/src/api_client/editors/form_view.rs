@@ -2,15 +2,17 @@
 
 use super::form::FormEditor;
 use super::form_file::{FormFileIssue, FormFileStatus, file_display_name};
+use super::table::{
+    ColumnWidth, table_action_slot, table_custom_cell, table_header_row, table_input_cell,
+    table_leading_toggle_slot, table_remove_button, table_row_container, table_scroll_frame,
+};
 use crate::format::format_compact_size;
-use crate::theme::tokens::{control, size, space, typography};
+use crate::theme::tokens::{control, space, typography};
 use crate::widgets::{IconButton, IconButtonSize, MenuItem, action_button};
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::button::ButtonVariants;
-use gpui_kit::component::checkbox::Checkbox;
 use gpui_kit::component::input::Input;
 use gpui_kit::component::menu::DropdownMenu;
-use gpui_kit::component::scroll::ScrollableElement;
 use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::component::{ActiveTheme, Sizable};
 use gpui_kit::prelude::FluentBuilder;
@@ -24,46 +26,37 @@ impl Render for FormEditor {
         let border = theme.border;
         let allow_files = self.allow_files;
         let last = self.rows.len().saturating_sub(1);
-        let header = h_flex()
-            .h(rems(size::LARGE_HEADER_HEIGHT))
-            .bg(theme.muted)
-            .text_size(rems(typography::CAPTION))
-            .text_color(theme.muted_foreground)
-            .border_color(border)
-            .border_b_1()
-            .child(div().w(rems(3.0)).flex_none())
-            .child(
-                h_flex()
-                    .flex_1()
-                    .min_w_0()
-                    .h_full()
-                    .child(header_cell(
-                        rust_i18n::t!("api.request.form_name").to_string(),
-                        relative(0.24),
-                        border,
-                    ))
-                    .when(allow_files, |row| {
-                        row.child(header_cell(
-                            rust_i18n::t!("api.request.form_type").to_string(),
-                            rems(7.0),
-                            border,
-                        ))
-                    })
-                    .child(flex_header_cell(
-                        rust_i18n::t!("api.request.form_value").to_string(),
-                        border,
-                    ))
-                    .child(header_cell(
-                        rust_i18n::t!("api.request.parameter_description").to_string(),
-                        relative(0.24),
-                        border,
-                    )),
-            )
-            .child(div().w(rems(3.0)).flex_none());
+        let mut columns = vec![(
+            rust_i18n::t!("api.request.form_name").to_string(),
+            ColumnWidth::Relative(0.24),
+        )];
+        if allow_files {
+            columns.push((
+                rust_i18n::t!("api.request.form_type").to_string(),
+                ColumnWidth::Fixed(rems(7.0)),
+            ));
+        }
+        columns.push((
+            rust_i18n::t!("api.request.form_value").to_string(),
+            ColumnWidth::Flex,
+        ));
+        columns.push((
+            rust_i18n::t!("api.request.parameter_description").to_string(),
+            ColumnWidth::Relative(0.24),
+        ));
+        let header = table_header_row(
+            border,
+            theme.muted,
+            theme.muted_foreground,
+            true,
+            true,
+            columns,
+        );
 
         let rows = self.rows.iter().enumerate().map(|(index, row)| {
             let blank = index == last;
             let id = row.id;
+            let add = cx.entity().downgrade();
             let toggle = cx.entity().downgrade();
             let remove = cx.entity().downgrade();
             let kind_entity = cx.entity().downgrade();
@@ -74,236 +67,116 @@ impl Render for FormEditor {
             } else {
                 ApiFormFieldKind::Text
             };
-            h_flex()
-                .id(("api-form-row", id))
-                .h(rems(size::LARGE_HEADER_HEIGHT))
-                .items_center()
-                .border_color(border)
-                .border_b_1()
-                .when(!blank && !row.enabled, |row| row.opacity(0.45))
-                .child(
-                    div()
-                        .w(rems(3.0))
-                        .flex_none()
-                        .h_full()
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .when(blank, |cell| {
-                            let add = cx.entity().downgrade();
-                            cell.child(
-                                IconButton::new(
-                                    ("api-form-add", id),
-                                    AppIcon::Ui(UiIcon::ADD),
-                                    rust_i18n::t!("api.request.add_field").to_string(),
-                                )
-                                .render()
-                                .on_click(move |_, window, cx| {
-                                    let _ = add.update(cx, |this, cx| this.add_row(window, cx));
-                                }),
-                            )
-                        })
-                        .when(!blank, |cell| {
-                            cell.child(
-                                Checkbox::new(("api-form-enabled", id))
-                                    .checked(row.enabled)
-                                    .on_click(move |_, _, cx| {
-                                        let _ = toggle.update(cx, |this, cx| this.toggle(id, cx));
+            let value_child = if kind == ApiFormFieldKind::File {
+                render_file_value(FormFileValueParams {
+                    id,
+                    path: row.file_path.as_deref(),
+                    status: &row.file_status,
+                    file_entity,
+                    clear_entity: clear_file,
+                    danger: theme.danger,
+                    muted: theme.muted_foreground,
+                })
+            } else {
+                Input::new(&row.value)
+                    .small()
+                    .appearance(false)
+                    .into_any_element()
+            };
+            table_row_container("api-form-row", id, !blank && !row.enabled, border)
+                .child(table_leading_toggle_slot(
+                    "api-form-add",
+                    "api-form-enabled",
+                    id,
+                    blank,
+                    row.enabled,
+                    rust_i18n::t!("api.request.add_field").to_string(),
+                    move |_, window, cx| {
+                        let _ = add.update(cx, |this, cx| this.add_row(window, cx));
+                    },
+                    move |_, _, cx| {
+                        let _ = toggle.update(cx, |this, cx| this.toggle(id, cx));
+                    },
+                ))
+                .child(table_input_cell(
+                    &row.name,
+                    ColumnWidth::Relative(0.24),
+                    border,
+                ))
+                .when(allow_files, |row_bar| {
+                    let kind = row.kind;
+                    let entity = kind_entity.clone();
+                    row_bar.child(table_custom_cell(
+                        ColumnWidth::Fixed(rems(7.0)),
+                        border,
+                        action_button(("api-form-kind", id), kind_icon(kind), kind_label(kind))
+                            .ghost()
+                            .dropdown_caret(true)
+                            .dropdown_menu_with_anchor(Anchor::TopRight, move |menu, _, _| {
+                                menu.item(
+                                    MenuItem::new(
+                                        rust_i18n::t!("api.request.value_text").to_string(),
+                                        AppIcon::FileType(FileTypeIcon::TEXT),
+                                    )
+                                    .checked(kind == ApiFormFieldKind::Text)
+                                    .render({
+                                        let entity = entity.clone();
+                                        move |_, window, cx| {
+                                            let _ = entity.update(cx, |this, cx| {
+                                                this.set_kind(
+                                                    id,
+                                                    ApiFormFieldKind::Text,
+                                                    window,
+                                                    cx,
+                                                )
+                                            });
+                                        }
                                     }),
-                            )
-                        }),
-                )
-                .child(
-                    h_flex()
-                        .flex_1()
-                        .min_w_0()
-                        .h_full()
-                        .child(
-                            div()
-                                .w(relative(0.24))
-                                .flex_none()
-                                .min_w_0()
-                                .h_full()
-                                .flex()
-                                .items_center()
-                                .px(rems(space::SM))
-                                .border_l_1()
-                                .border_color(border)
-                                .child(Input::new(&row.name).small().appearance(false)),
-                        )
-                        .when(allow_files, |row_bar| {
-                            let kind = row.kind;
-                            let entity = kind_entity.clone();
-                            row_bar.child(
-                                div()
-                                    .w(rems(7.0))
-                                    .flex_none()
-                                    .h_full()
-                                    .flex()
-                                    .items_center()
-                                    .px(rems(space::XS))
-                                    .border_l_1()
-                                    .border_color(border)
-                                    .child(
-                                        action_button(
-                                            ("api-form-kind", id),
-                                            kind_icon(kind),
-                                            kind_label(kind),
-                                        )
-                                        .ghost()
-                                        .dropdown_caret(true)
-                                        .dropdown_menu_with_anchor(
-                                            Anchor::TopRight,
-                                            move |menu, _, _| {
-                                                menu.item(
-                                                    MenuItem::new(
-                                                        rust_i18n::t!("api.request.value_text")
-                                                            .to_string(),
-                                                        AppIcon::FileType(FileTypeIcon::TEXT),
-                                                    )
-                                                    .checked(kind == ApiFormFieldKind::Text)
-                                                    .render({
-                                                        let entity = entity.clone();
-                                                        move |_, window, cx| {
-                                                            let _ =
-                                                                entity.update(cx, |this, cx| {
-                                                                    this.set_kind(
-                                                                        id,
-                                                                        ApiFormFieldKind::Text,
-                                                                        window,
-                                                                        cx,
-                                                                    )
-                                                                });
-                                                        }
-                                                    }),
-                                                )
-                                                .item(
-                                                    MenuItem::new(
-                                                        rust_i18n::t!("api.request.value_file")
-                                                            .to_string(),
-                                                        AppIcon::Ui(UiIcon::ADD_FILE),
-                                                    )
-                                                    .checked(kind == ApiFormFieldKind::File)
-                                                    .render({
-                                                        let entity = entity.clone();
-                                                        move |_, window, cx| {
-                                                            let _ =
-                                                                entity.update(cx, |this, cx| {
-                                                                    this.set_kind(
-                                                                        id,
-                                                                        ApiFormFieldKind::File,
-                                                                        window,
-                                                                        cx,
-                                                                    )
-                                                                });
-                                                        }
-                                                    }),
-                                                )
-                                            },
-                                        ),
-                                    ),
-                            )
-                        })
-                        .child(
-                            div()
-                                .flex_1()
-                                .min_w_0()
-                                .h_full()
-                                .flex()
-                                .items_center()
-                                .px(rems(space::SM))
-                                .border_l_1()
-                                .border_color(border)
-                                .when(kind == ApiFormFieldKind::File, |cell| {
-                                    cell.child(render_file_value(FormFileValueParams {
-                                        id,
-                                        path: row.file_path.as_deref(),
-                                        status: &row.file_status,
-                                        file_entity: file_entity.clone(),
-                                        clear_entity: clear_file.clone(),
-                                        danger: theme.danger,
-                                        muted: theme.muted_foreground,
-                                    }))
-                                })
-                                .when(kind == ApiFormFieldKind::Text, |cell| {
-                                    cell.child(Input::new(&row.value).small().appearance(false))
-                                }),
-                        )
-                        .child(
-                            div()
-                                .w(relative(0.24))
-                                .flex_none()
-                                .min_w_0()
-                                .h_full()
-                                .flex()
-                                .items_center()
-                                .px(rems(space::SM))
-                                .border_l_1()
-                                .border_color(border)
-                                .child(Input::new(&row.description).small().appearance(false)),
-                        ),
-                )
-                .child(
-                    div()
-                        .w(rems(3.0))
-                        .flex_none()
-                        .h_full()
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .when(!blank, |cell| {
-                            cell.child(
-                                IconButton::new(
-                                    ("api-form-remove", id),
-                                    AppIcon::Ui(UiIcon::DELETE),
-                                    rust_i18n::t!("api.request.remove_field").to_string(),
                                 )
-                                .render()
-                                .on_click(move |_, window, cx| {
-                                    let _ =
-                                        remove.update(cx, |this, cx| this.remove(id, window, cx));
-                                }),
-                            )
-                        }),
-                )
+                                .item(
+                                    MenuItem::new(
+                                        rust_i18n::t!("api.request.value_file").to_string(),
+                                        AppIcon::Ui(UiIcon::ADD_FILE),
+                                    )
+                                    .checked(kind == ApiFormFieldKind::File)
+                                    .render({
+                                        let entity = entity.clone();
+                                        move |_, window, cx| {
+                                            let _ = entity.update(cx, |this, cx| {
+                                                this.set_kind(
+                                                    id,
+                                                    ApiFormFieldKind::File,
+                                                    window,
+                                                    cx,
+                                                )
+                                            });
+                                        }
+                                    }),
+                                )
+                            }),
+                    ))
+                })
+                .child(table_custom_cell(ColumnWidth::Flex, border, value_child))
+                .child(table_input_cell(
+                    &row.description,
+                    ColumnWidth::Relative(0.24),
+                    border,
+                ))
+                .child(table_action_slot((!blank).then(|| {
+                    table_remove_button(
+                        "api-form-remove",
+                        id,
+                        rust_i18n::t!("api.request.remove_field").to_string(),
+                        move |_, window, cx| {
+                            let _ = remove.update(cx, |this, cx| this.remove(id, window, cx));
+                        },
+                    )
+                })))
                 .into_any_element()
         });
 
-        v_flex()
-            .id("api-form-editor")
-            .flex_1()
-            .min_h_0()
-            .w_full()
-            .p(rems(space::SM))
-            .child(
-                div()
-                    .flex_1()
-                    .min_h_0()
-                    .w_full()
-                    .overflow_y_scrollbar()
-                    .rounded(theme.radius)
-                    .border_1()
-                    .border_color(border)
-                    .overflow_hidden()
-                    .child(header)
-                    .children(rows),
-            )
-            .into_any_element()
+        table_scroll_frame("api-form-editor", border, header, rows)
     }
-}
-
-fn flex_header_cell(label: String, border: Hsla) -> AnyElement {
-    div()
-        .flex_1()
-        .min_w_0()
-        .h_full()
-        .px(rems(space::SM))
-        .flex()
-        .items_center()
-        .border_l_1()
-        .border_color(border)
-        .child(label)
-        .into_any_element()
 }
 
 fn kind_label(kind: ApiFormFieldKind) -> String {
@@ -452,23 +325,4 @@ fn file_status_text(status: &FormFileStatus) -> (String, bool) {
             ),
         },
     }
-}
-
-fn header_cell(
-    label: String,
-    width: impl Into<gpui_kit::Length> + Clone,
-    border: Hsla,
-) -> AnyElement {
-    div()
-        .w(width)
-        .flex_none()
-        .min_w_0()
-        .h_full()
-        .px(rems(space::SM))
-        .flex()
-        .items_center()
-        .border_l_1()
-        .border_color(border)
-        .child(label)
-        .into_any_element()
 }

@@ -1,16 +1,13 @@
 //! 请求断言逐行编辑器。
 
-use crate::theme::tokens::{size, space, typography};
-use crate::widgets::IconButton;
-use gpui_kit::base::{h_flex, v_flex};
-use gpui_kit::component::checkbox::Checkbox;
-use gpui_kit::component::input::{Input, InputEvent, InputState};
-use gpui_kit::component::scroll::ScrollableElement;
-use gpui_kit::component::{ActiveTheme, Sizable};
-use gpui_kit::prelude::FluentBuilder;
+use super::table::{
+    ColumnWidth, table_action_slot, table_header_row, table_input_cell, table_leading_toggle_slot,
+    table_remove_button, table_row_container, table_scroll_frame,
+};
+use gpui_kit::component::ActiveTheme;
+use gpui_kit::component::input::{InputEvent, InputState};
 use gpui_kit::*;
 use transom_api::ApiAssertion;
-use transom_ui_icons::{AppIcon, UiIcon};
 
 pub(crate) enum AssertionEditorEvent {
     Changed(Vec<ApiAssertion>),
@@ -140,127 +137,51 @@ impl Render for AssertionEditor {
         let theme = cx.theme();
         let border = theme.border;
         let last = self.rows.len().saturating_sub(1);
-        let header = h_flex()
-            .h(rems(size::LARGE_HEADER_HEIGHT))
-            .bg(theme.muted)
-            .text_size(rems(typography::CAPTION))
-            .text_color(theme.muted_foreground)
-            .border_color(border)
-            .border_b_1()
-            .child(div().w(rems(3.0)).flex_none())
-            .child(
-                div()
-                    .flex_1()
-                    .min_w_0()
-                    .h_full()
-                    .px(rems(space::SM))
-                    .flex()
-                    .items_center()
-                    .border_l_1()
-                    .border_color(border)
-                    .child(rust_i18n::t!("api.request.assertion_expression").to_string()),
-            )
-            .child(div().w(rems(3.0)).flex_none());
+        let header = table_header_row(
+            border,
+            theme.muted,
+            theme.muted_foreground,
+            true,
+            true,
+            vec![(
+                rust_i18n::t!("api.request.assertion_expression").to_string(),
+                ColumnWidth::Flex,
+            )],
+        );
         let rows = self.rows.iter().enumerate().map(|(index, row)| {
             let blank = index == last;
             let id = row.id;
+            let add = cx.entity().downgrade();
             let toggle = cx.entity().downgrade();
             let remove = cx.entity().downgrade();
-            h_flex()
-                .id(("api-assertion-row", id))
-                .h(rems(size::LARGE_HEADER_HEIGHT))
-                .items_center()
-                .border_color(border)
-                .border_b_1()
-                .when(!blank && !row.enabled, |row| row.opacity(0.45))
-                .child(
-                    div()
-                        .w(rems(3.0))
-                        .flex_none()
-                        .h_full()
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .when(blank, |cell| {
-                            let add = cx.entity().downgrade();
-                            cell.child(
-                                IconButton::new(
-                                    ("api-assertion-add", id),
-                                    AppIcon::Ui(UiIcon::ADD),
-                                    rust_i18n::t!("api.request.add_assertion").to_string(),
-                                )
-                                .render()
-                                .on_click(move |_, window, cx| {
-                                    let _ = add.update(cx, |this, cx| this.add_row(window, cx));
-                                }),
-                            )
-                        })
-                        .when(!blank, |cell| {
-                            cell.child(
-                                Checkbox::new(("api-assertion-enabled", id))
-                                    .checked(row.enabled)
-                                    .on_click(move |_, _, cx| {
-                                        let _ = toggle.update(cx, |this, cx| this.toggle(id, cx));
-                                    }),
-                            )
-                        }),
-                )
-                .child(
-                    div()
-                        .flex_1()
-                        .min_w_0()
-                        .h_full()
-                        .flex()
-                        .items_center()
-                        .px(rems(space::SM))
-                        .border_l_1()
-                        .border_color(border)
-                        .child(Input::new(&row.expression).small().appearance(false)),
-                )
-                .child(
-                    div()
-                        .w(rems(3.0))
-                        .flex_none()
-                        .h_full()
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .when(!blank, |cell| {
-                            cell.child(
-                                IconButton::new(
-                                    ("api-assertion-remove", id),
-                                    AppIcon::Ui(UiIcon::DELETE),
-                                    rust_i18n::t!("api.request.remove_assertion").to_string(),
-                                )
-                                .render()
-                                .on_click(move |_, window, cx| {
-                                    let _ =
-                                        remove.update(cx, |this, cx| this.remove(id, window, cx));
-                                }),
-                            )
-                        }),
-                )
+            table_row_container("api-assertion-row", id, !blank && !row.enabled, border)
+                .child(table_leading_toggle_slot(
+                    "api-assertion-add",
+                    "api-assertion-enabled",
+                    id,
+                    blank,
+                    row.enabled,
+                    rust_i18n::t!("api.request.add_assertion").to_string(),
+                    move |_, window, cx| {
+                        let _ = add.update(cx, |this, cx| this.add_row(window, cx));
+                    },
+                    move |_, _, cx| {
+                        let _ = toggle.update(cx, |this, cx| this.toggle(id, cx));
+                    },
+                ))
+                .child(table_input_cell(&row.expression, ColumnWidth::Flex, border))
+                .child(table_action_slot((!blank).then(|| {
+                    table_remove_button(
+                        "api-assertion-remove",
+                        id,
+                        rust_i18n::t!("api.request.remove_assertion").to_string(),
+                        move |_, window, cx| {
+                            let _ = remove.update(cx, |this, cx| this.remove(id, window, cx));
+                        },
+                    )
+                })))
                 .into_any_element()
         });
-        v_flex()
-            .id("api-assertion-editor")
-            .flex_1()
-            .min_h_0()
-            .w_full()
-            .p(rems(space::SM))
-            .child(
-                div()
-                    .flex_1()
-                    .min_h_0()
-                    .w_full()
-                    .overflow_y_scrollbar()
-                    .rounded(rems(space::XS))
-                    .border_1()
-                    .border_color(border)
-                    .overflow_hidden()
-                    .child(header)
-                    .children(rows),
-            )
-            .into_any_element()
+        table_scroll_frame("api-assertion-editor", border, header, rows)
     }
 }
