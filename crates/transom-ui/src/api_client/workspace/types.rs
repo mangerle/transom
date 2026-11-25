@@ -159,6 +159,7 @@ pub(in crate::api_client) struct WorkspaceUiState {
     pub(in crate::api_client) codegen_target: CodeTarget,
     pub(in crate::api_client) folder_editor: Option<FolderEditor>,
     pub(in crate::api_client) pending_folder_delete: Option<ApiFolderId>,
+    pub(in crate::api_client) collapsed_folders: std::collections::HashSet<ApiFolderId>,
 }
 
 impl Default for WorkspaceUiState {
@@ -175,6 +176,7 @@ impl Default for WorkspaceUiState {
             codegen_target: CodeTarget::Curl,
             folder_editor: None,
             pending_folder_delete: None,
+            collapsed_folders: std::collections::HashSet::new(),
         }
     }
 }

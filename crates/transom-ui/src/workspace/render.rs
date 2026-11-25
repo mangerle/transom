@@ -52,6 +52,15 @@ impl AppShell {
         if !self.state.session.sidebar.visible() {
             return false;
         }
+        if self
+            .state
+            .workspace
+            .active_tab
+            .and_then(|tab_id| self.state.workspace.tab(tab_id))
+            .is_some_and(|tab| tab.api_project_id().is_some())
+        {
+            return false;
+        }
         let section = self
             .state
             .session

@@ -110,7 +110,11 @@ pub(super) fn render_request_editor(params: &ApiWorkspaceParams<'_>, p: &Palette
                         .text_color(p.muted_foreground)
                         .child(rust_i18n::t!("api.request.name").to_string()),
                 )
-                .child(Input::new(&params.editors.request_name).w(rems(18.0)))
+                .child(
+                    Input::new(&params.editors.request_name)
+                        .focus_bordered(false)
+                        .w(rems(18.0)),
+                )
                 .child(div().flex_1())
                 .child(
                     action_button(
@@ -137,6 +141,7 @@ pub(super) fn render_request_editor(params: &ApiWorkspaceParams<'_>, p: &Palette
                 .child(environment)
                 .child(
                     Input::new(&params.editors.request_url)
+                        .focus_bordered(false)
                         .flex_1()
                         .min_w_0()
                         .on_paste(move |clipboard, window, cx| {

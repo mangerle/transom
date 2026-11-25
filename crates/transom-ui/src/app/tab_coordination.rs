@@ -92,6 +92,23 @@ impl AppShell {
         tab.title.clear();
         tab.set_cwd(None);
         self.state.workspace.active_tab = Some(tab_id);
+        if self
+            .state
+            .workspace
+            .tab(tab_id)
+            .is_some_and(|tab| tab.api_project_id().is_some())
+        {
+            self.state
+                .session
+                .sidebar
+                .show_section(crate::sidebar::SidebarSection::ApiClient);
+        } else if self.state.session.sidebar.section() == crate::sidebar::SidebarSection::ApiClient
+        {
+            self.state
+                .session
+                .sidebar
+                .show_section(crate::sidebar::SidebarSection::Sessions);
+        }
         if let Some(group_index) = self.state.workspace.group_index_for_tab(tab_id) {
             self.state.workspace.groups[group_index].active_pane = tab_id;
         }
@@ -129,6 +146,23 @@ impl AppShell {
             tiled.focused = slot;
         }
         self.state.workspace.active_tab = Some(tab_id);
+        if self
+            .state
+            .workspace
+            .tab(tab_id)
+            .is_some_and(|tab| tab.api_project_id().is_some())
+        {
+            self.state
+                .session
+                .sidebar
+                .show_section(crate::sidebar::SidebarSection::ApiClient);
+        } else if self.state.session.sidebar.section() == crate::sidebar::SidebarSection::ApiClient
+        {
+            self.state
+                .session
+                .sidebar
+                .show_section(crate::sidebar::SidebarSection::Sessions);
+        }
         if let Some(group_index) = self.state.workspace.group_index_for_tab(tab_id) {
             self.state.workspace.groups[group_index].active_pane = tab_id;
         }

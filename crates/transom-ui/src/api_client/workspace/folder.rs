@@ -1,9 +1,15 @@
 //! API 接口树目录的新建、重命名与删除动作。
 
 use super::ApiWorkspace;
-use gpui_kit::component::input::InputState;
+use crate::palette::Palette;
+use crate::theme::tokens::space;
+use crate::widgets::{IconButton, IconButtonSize, action_button};
+use gpui_kit::base::{h_flex, v_flex};
+use gpui_kit::component::button::ButtonVariants;
+use gpui_kit::component::input::{Input, InputState};
 use gpui_kit::*;
-use transom_api::ApiFolderId;
+use transom_api::{ApiFolder, ApiFolderId};
+use transom_ui_icons::{AppIcon, UiIcon};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum FolderEditorMode {
@@ -19,6 +25,18 @@ pub(crate) struct FolderEditor {
 }
 
 impl ApiWorkspace {
+    /// 切换接口树目录的折叠状态。
+    pub(crate) fn toggle_folder_collapsed(
+        &mut self,
+        folder_id: ApiFolderId,
+        cx: &mut Context<Self>,
+    ) {
+        if !self.ui.collapsed_folders.remove(&folder_id) {
+            self.ui.collapsed_folders.insert(folder_id);
+        }
+        cx.notify();
+    }
+
     pub(crate) fn start_create_folder(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.ui.pending_folder_delete = None;
         let input = cx.new(|cx| {
@@ -124,4 +142,111 @@ impl ApiWorkspace {
         self.ui.pending_folder_delete = None;
         cx.notify();
     }
+}
+
+pub(super) fn render_folder_editor(
+    view: &Entity<ApiWorkspace>,
+    editor: &FolderEditor,
+    p: &Palette,
+) -> AnyElement {
+    let submit_view = view.clone();
+    let cancel_view = view.clone();
+    let row = h_flex()
+        .mx(rems(space::XS))
+        .my(rems(space::XXS))
+        .gap(rems(space::XS))
+        .items_center()
+        .child(Input::new(&editor.input).flex_1().min_w_0())
+        .child(
+            IconButton::new(
+                "api-folder-editor-submit",
+                AppIcon::Ui(UiIcon::CHECK),
+                rust_i18n::t!("api.request.save_folder").to_string(),
+            )
+            .size(IconButtonSize::Compact)
+            .render()
+            .on_click(move |_, _, cx| {
+                submit_view.update(cx, |this, cx| this.submit_folder_editor(cx));
+            }),
+        )
+        .child(
+            IconButton::new(
+                "api-folder-editor-cancel",
+                AppIcon::Ui(UiIcon::CLOSE),
+                rust_i18n::t!("api.project.cancel").to_string(),
+            )
+            .size(IconButtonSize::Compact)
+            .render()
+            .on_click(move |_, _, cx| {
+                cancel_view.update(cx, |this, cx| this.cancel_folder_editor(cx));
+            }),
+        );
+    let mut content = v_flex().child(row);
+    if let Some(error) = &editor.error {
+        content = content.child(
+            div()
+                .px(rems(space::SM))
+                .text_color(p.danger)
+                .child(error.clone()),
+        );
+    }
+    content.into_any_element()
+}
+
+pub(super) fn render_folder_delete_confirm(
+    view: &Entity<ApiWorkspace>,
+    folder: &ApiFolder,
+    request_count: usize,
+    p: &Palette,
+) -> AnyElement {
+    let confirm_view = view.clone();
+    let cancel_view = view.clone();
+    v_flex()
+        .mx(rems(space::XS))
+        .my(rems(space::XXS))
+        .p(rems(space::SM))
+        .gap(rems(space::XS))
+        .rounded(p.radius.md)
+        .border_1()
+        .border_color(p.danger)
+        .child(
+            div().text_color(p.foreground).child(
+                rust_i18n::t!(
+                    "api.request.delete_folder_confirm",
+                    name = folder.name.as_str()
+                )
+                .to_string(),
+            ),
+        )
+        .child(div().text_color(p.muted_foreground).child(
+            rust_i18n::t!("api.request.delete_folder_hint", count = request_count).to_string(),
+        ))
+        .child(
+            h_flex()
+                .gap(rems(space::XS))
+                .child(
+                    action_button(
+                        "api-folder-delete-confirm",
+                        AppIcon::Ui(UiIcon::DELETE),
+                        rust_i18n::t!("api.project.delete").to_string(),
+                    )
+                    .danger()
+                    .on_click(move |_, _, cx| {
+                        confirm_view.update(cx, |this, cx| this.confirm_delete_folder(cx));
+                    }),
+                )
+                .child(
+                    IconButton::new(
+                        "api-folder-delete-cancel",
+                        AppIcon::Ui(UiIcon::CLOSE),
+                        rust_i18n::t!("api.project.cancel").to_string(),
+                    )
+                    .size(IconButtonSize::Compact)
+                    .render()
+                    .on_click(move |_, _, cx| {
+                        cancel_view.update(cx, |this, cx| this.cancel_delete_folder(cx));
+                    }),
+                ),
+        )
+        .into_any_element()
 }

@@ -18,6 +18,7 @@ mod response_tables;
 mod response_view;
 mod save_menu;
 mod tabs_bar;
+mod tree_drag;
 mod tree_view;
 mod types;
 mod view;

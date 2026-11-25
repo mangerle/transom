@@ -258,11 +258,32 @@ fn activate_activity_item(
 ) {
     match id {
         ActivityItemId::Sessions => {
-            // 左侧槽位一次只展示一个视图：点击当前视图收起，点击其他视图直接切换。
-            app_state
-                .session
-                .sidebar
-                .toggle_section(SidebarSection::Sessions);
+            if app_state
+                .workspace
+                .active_tab
+                .and_then(|tab_id| app_state.workspace.tab(tab_id))
+                .is_some_and(|tab| tab.api_project_id().is_some())
+            {
+                if let Some(non_api) = app_state
+                    .workspace
+                    .tabs
+                    .iter()
+                    .find(|tab| tab.api_project_id().is_none())
+                    .map(|tab| tab.id)
+                {
+                    app_state.ui.window_requests.push_activate_tab(non_api);
+                }
+                app_state
+                    .session
+                    .sidebar
+                    .show_section(SidebarSection::Sessions);
+            } else {
+                // 左侧槽位一次只展示一个视图：点击当前视图收起，点击其他视图直接切换。
+                app_state
+                    .session
+                    .sidebar
+                    .toggle_section(SidebarSection::Sessions);
+            }
             cx.notify();
         }
         ActivityItemId::Tabs => {
