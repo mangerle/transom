@@ -182,7 +182,6 @@ fn render_tabbed_request(params: &ApiWorkspaceParams<'_>, p: &Palette) -> AnyEle
         .collect::<Vec<_>>();
     let click_tabs = tabs.clone();
     let bar = TabBar::new("api-request-tabs")
-        .underline()
         .small()
         .w_full()
         .selected_index(selected)

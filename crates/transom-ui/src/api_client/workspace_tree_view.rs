@@ -130,8 +130,6 @@ pub(crate) fn render_tree(params: &ApiWorkspaceParams<'_>, p: &Palette) -> AnyEl
         .min_w_0()
         .overflow_hidden()
         .bg(p.sidebar)
-        .border_color(p.divider(p.border))
-        .border_r_1()
         .child(
             h_flex()
                 .h(rems(size::PANE_HEADER_HEIGHT))

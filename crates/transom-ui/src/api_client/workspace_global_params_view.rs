@@ -17,7 +17,6 @@ pub(super) fn render_global_parameters(params: &ApiWorkspaceParams<'_>) -> AnyEl
         .position(|tab| *tab == params.global_parameter_tab)
         .unwrap_or(0);
     let tabs = TabBar::new("api-global-parameter-tabs")
-        .underline()
         .small()
         .w_full()
         .selected_index(selected)

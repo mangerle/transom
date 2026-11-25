@@ -30,7 +30,6 @@ pub(super) fn render_response(params: &ApiWorkspaceParams<'_>, p: &Palette) -> A
         .position(|tab| *tab == params.response_tab)
         .unwrap_or(0);
     let tab_bar = TabBar::new("api-response-tabs")
-        .underline()
         .small()
         .w_full()
         .selected_index(selected)
