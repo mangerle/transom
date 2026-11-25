@@ -5,10 +5,11 @@ use super::workspace_view::ApiWorkspaceParams;
 use super::{ApiRequestTab, ApiWorkspace};
 use crate::palette::Palette;
 use crate::theme::tokens::{size, space};
-use crate::widgets::{IconButton, IconButtonSize, action_button, dropdown};
+use crate::widgets::{action_button, dropdown};
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Disableable;
 use gpui_kit::component::Sizable;
+use gpui_kit::component::button::Button;
 use gpui_kit::component::button::ButtonVariants;
 use gpui_kit::component::input::{Input, Textarea};
 use gpui_kit::component::tab::{Tab, TabBar};
@@ -87,6 +88,7 @@ pub(super) fn render_request_editor(params: &ApiWorkspaceParams<'_>, p: &Palette
         view.clone(),
     );
     let send_view = view.clone();
+    let save_send_view = view.clone();
     let paste_view = view.clone();
 
     let mut content = v_flex()
@@ -133,19 +135,33 @@ pub(super) fn render_request_editor(params: &ApiWorkspaceParams<'_>, p: &Palette
                     },
                 ))
                 .child(
-                    action_button(
-                        "api-request-send",
-                        AppIcon::Ui(UiIcon::FETCH),
-                        if params.protocol == ApiProtocol::WebSocket {
+                    Button::new("api-request-send")
+                        .ghost()
+                        .small()
+                        .label(if params.protocol == ApiProtocol::WebSocket {
                             rust_i18n::t!("api.request.websocket_connect").to_string()
                         } else {
                             rust_i18n::t!("api.request.send").to_string()
+                        })
+                        .disabled(params.selected_request.is_none() || params.sending)
+                        .on_click(move |_, window, cx| {
+                            send_view.update(cx, |this, cx| this.send_request(window, cx));
+                        }),
+                )
+                .child(
+                    action_button(
+                        "api-request-save-send",
+                        AppIcon::Ui(UiIcon::FETCH),
+                        if params.protocol == ApiProtocol::WebSocket {
+                            rust_i18n::t!("api.request.save_and_connect").to_string()
+                        } else {
+                            rust_i18n::t!("api.request.save_and_send").to_string()
                         },
                     )
                     .primary()
                     .disabled(params.selected_request.is_none() || params.sending)
                     .on_click(move |_, window, cx| {
-                        send_view.update(cx, |this, cx| this.send_request(window, cx));
+                        save_send_view.update(cx, |this, cx| this.save_and_send(window, cx));
                     }),
                 ),
         );
@@ -169,7 +185,6 @@ pub(super) fn render_request_editor(params: &ApiWorkspaceParams<'_>, p: &Palette
 
 fn render_tabbed_request(params: &ApiWorkspaceParams<'_>, p: &Palette) -> AnyElement {
     let view = params.view.clone();
-    let save_view = params.view.clone();
     let tabs = visible_tabs(params);
     let selected = tabs
         .iter()
@@ -187,26 +202,9 @@ fn render_tabbed_request(params: &ApiWorkspaceParams<'_>, p: &Palette) -> AnyEle
         .w_full()
         .selected_index(selected)
         .children(labels)
-        .suffix(
-            h_flex()
-                .gap(rems(space::XXS))
-                .items_center()
-                .child(
-                    IconButton::new(
-                        "api-request-save",
-                        AppIcon::Ui(UiIcon::SAVE),
-                        rust_i18n::t!("api.request.save").to_string(),
-                    )
-                    .size(IconButtonSize::Compact)
-                    .render()
-                    .on_click(move |_, _, cx| {
-                        save_view.update(cx, |this, cx| this.save_project(cx));
-                    }),
-                )
-                .child(super::workspace_advanced_view::render_project_actions_menu(
-                    params,
-                )),
-        )
+        .suffix(h_flex().gap(rems(space::XXS)).items_center().child(
+            super::workspace_advanced_view::render_project_actions_menu(params),
+        ))
         .on_click(move |index, _, cx| {
             if let Some(tab) = click_tabs.get(*index).copied() {
                 view.update(cx, |this, cx| this.set_request_tab(tab, cx));
