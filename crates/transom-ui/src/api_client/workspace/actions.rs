@@ -366,11 +366,7 @@ impl ApiWorkspace {
     }
 
     fn append_ws_log(&mut self, text: String, window: &mut Window, cx: &mut Context<Self>) {
-        let mut log = self.editors.websocket_log.read(cx).value().to_string();
-        if !log.is_empty() {
-            log.push('\n');
-        }
-        log.push_str(&text);
+        let log = self.exec.ws_log_buffer.push(text);
         self.editors
             .websocket_log
             .update(cx, |state, cx| state.set_value(log, window, cx));

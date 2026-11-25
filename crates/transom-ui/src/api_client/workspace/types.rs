@@ -4,6 +4,7 @@ use super::folder::FolderEditor;
 use gpui_kit::component::input::{EditorState, InputState, TextareaState};
 use gpui_kit::component::resizable::ResizableState;
 use gpui_kit::*;
+use std::collections::VecDeque;
 use transom_api::{
     ApiAssertionResult, ApiBodyType, ApiEnvironmentId, ApiFolderId, ApiHttpService, ApiProject,
     ApiRawLanguage, ApiResponseSnapshot, ApiWebSocketHandle, ApiWebSocketService, CodeTarget,
@@ -182,6 +183,40 @@ impl Default for WorkspaceUiState {
     }
 }
 
+/// WebSocket 日志有界环形缓冲区上限。
+const MAX_WS_LOG_LINES: usize = 1_000;
+const MAX_WS_LOG_BYTES: usize = 256 * 1024;
+
+/// 有界 WebSocket 消息日志缓冲区，避免全量回读与无上限内存增长。
+#[derive(Default)]
+pub(in crate::api_client) struct WsLogBuffer {
+    lines: VecDeque<String>,
+    total_bytes: usize,
+}
+
+impl WsLogBuffer {
+    /// 追加一行日志，超过行数或字节上限时从头部淘汰旧记录，并返回最新完整文本。
+    pub(in crate::api_client) fn push(&mut self, line: String) -> String {
+        self.total_bytes = self.total_bytes.saturating_add(line.len());
+        self.lines.push_back(line);
+        while (self.lines.len() > MAX_WS_LOG_LINES || self.total_bytes > MAX_WS_LOG_BYTES)
+            && self.lines.len() > 1
+        {
+            if let Some(oldest) = self.lines.pop_front() {
+                self.total_bytes = self.total_bytes.saturating_sub(oldest.len());
+            }
+        }
+        let mut out = String::with_capacity(self.total_bytes + self.lines.len());
+        for (index, item) in self.lines.iter().enumerate() {
+            if index > 0 {
+                out.push('\n');
+            }
+            out.push_str(item);
+        }
+        out
+    }
+}
+
 /// 请求执行、WebSocket 连接、响应快照与用户提示状态。
 #[derive(Default)]
 pub(in crate::api_client) struct ExecutionState {
@@ -195,6 +230,7 @@ pub(in crate::api_client) struct ExecutionState {
     pub(in crate::api_client) ws_task: Option<Task<()>>,
     pub(in crate::api_client) ws_event_task: Option<Task<()>>,
     pub(in crate::api_client) ws_handle: Option<ApiWebSocketHandle>,
+    pub(in crate::api_client) ws_log_buffer: WsLogBuffer,
     pub(in crate::api_client) binary_file_task: Option<Task<()>>,
 }
 
@@ -211,5 +247,24 @@ impl WorkspaceSplits {
             tree_editor: cx.new(|_| ResizableState::default()),
             request_response: cx.new(|_| ResizableState::default()),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{MAX_WS_LOG_BYTES, MAX_WS_LOG_LINES, WsLogBuffer};
+
+    #[test]
+    fn ws_log_buffer_evicts_oldest_when_exceeding_limits() {
+        let mut buffer = WsLogBuffer::default();
+        for index in 0..(MAX_WS_LOG_LINES + 5) {
+            let _ = buffer.push(format!("line-{index}"));
+        }
+        assert_eq!(buffer.lines.len(), MAX_WS_LOG_LINES);
+        assert_eq!(buffer.lines.front().map(String::as_str), Some("line-5"));
+        let oversized = "x".repeat(MAX_WS_LOG_BYTES);
+        let text = buffer.push(oversized);
+        assert_eq!(buffer.lines.len(), 1);
+        assert_eq!(text.len(), MAX_WS_LOG_BYTES);
     }
 }
