@@ -5,10 +5,34 @@ use crate::api_client::editors::kv::KvEntry;
 use gpui_kit::*;
 use transom_api::{
     ApiAssertion, ApiAuth, ApiCookie, ApiFormField, ApiGlobalParameter, ApiGlobalParameterTarget,
-    ApiHeader, ApiQueryParam, ApiVariable,
+    ApiHeader, ApiQueryParam, ApiRequest, ApiVariable,
 };
 
 impl ApiWorkspace {
+    /// 就地更新当前选中请求并刷新项目时间戳；仅在回调返回 `true` 时通知外层重绘。
+    fn update_selected_request(
+        &mut self,
+        cx: &mut Context<Self>,
+        update: impl FnOnce(&mut ApiRequest) -> bool,
+    ) {
+        let Some(request_id) = self.selected_request else {
+            return;
+        };
+        let Some(request) = self
+            .project
+            .requests
+            .iter_mut()
+            .find(|request| request.id == request_id)
+        else {
+            return;
+        };
+        let should_notify = update(request);
+        self.project.touch();
+        if should_notify {
+            cx.notify();
+        }
+    }
+
     pub(super) fn apply_environment_name(&mut self, cx: &mut Context<Self>) {
         let Some(environment_id) = self.active_environment_id() else {
             return;
@@ -37,53 +61,33 @@ impl ApiWorkspace {
     }
 
     pub(super) fn apply_request_name(&mut self, cx: &mut Context<Self>) {
-        let Some(request_id) = self.selected_request else {
-            return;
-        };
         let name = self.editors.request_name.read(cx).value().to_string();
-        let Some(request) = self
-            .project
-            .requests
-            .iter_mut()
-            .find(|request| request.id == request_id)
-        else {
-            return;
-        };
-        request.name = name;
-        self.project.touch();
-        cx.notify();
+        self.update_selected_request(cx, |request| {
+            let changed = request.name != name;
+            request.name = name;
+            changed
+        });
     }
 
     pub(super) fn apply_query_entries(&mut self, entries: &[KvEntry], cx: &mut Context<Self>) {
-        let Some(request_id) = self.selected_request else {
-            return;
-        };
-        let Some(request) = self
-            .project
-            .requests
-            .iter_mut()
-            .find(|request| request.id == request_id)
-        else {
-            return;
-        };
-        request.query = entries.iter().cloned().map(query_from_entry).collect();
-        self.project.touch();
-        cx.notify();
+        self.update_selected_request(cx, |request| {
+            let prev_len = request.query.len();
+            request.query = entries.iter().cloned().map(query_from_entry).collect();
+            request.query.len() != prev_len
+        });
     }
 
-    pub(super) fn apply_cookies(&mut self, cookies: Vec<ApiCookie>, cx: &mut Context<Self>) {
+    pub(super) fn apply_cookies(&mut self, cookies: Vec<ApiCookie>, _cx: &mut Context<Self>) {
         self.project.cookies = cookies;
         self.project.touch();
-        cx.notify();
     }
 
     pub(super) fn apply_environment_variables(
         &mut self,
         variables: Vec<ApiVariable>,
-        cx: &mut Context<Self>,
+        _cx: &mut Context<Self>,
     ) {
-        let environment_id = self.active_environment_id();
-        let Some(environment_id) = environment_id else {
+        let Some(environment_id) = self.active_environment_id() else {
             return;
         };
         let Some(environment) = self
@@ -97,24 +101,22 @@ impl ApiWorkspace {
         environment.variables = variables;
         self.project.active_environment_id = Some(environment_id);
         self.project.touch();
-        cx.notify();
     }
 
     pub(super) fn apply_global_variables(
         &mut self,
         variables: Vec<ApiVariable>,
-        cx: &mut Context<Self>,
+        _cx: &mut Context<Self>,
     ) {
         self.project.global_variables = variables;
         self.project.touch();
-        cx.notify();
     }
 
     pub(super) fn apply_global_parameters(
         &mut self,
         target: ApiGlobalParameterTarget,
         entries: &[KvEntry],
-        cx: &mut Context<Self>,
+        _cx: &mut Context<Self>,
     ) {
         let mut parameters = Vec::with_capacity(
             self.project
@@ -137,7 +139,6 @@ impl ApiWorkspace {
         );
         self.project.global_parameters = parameters;
         self.project.touch();
-        cx.notify();
     }
 
     pub(super) fn apply_assertions(
@@ -145,71 +146,34 @@ impl ApiWorkspace {
         assertions: Vec<ApiAssertion>,
         cx: &mut Context<Self>,
     ) {
-        let Some(request_id) = self.selected_request else {
-            return;
-        };
-        let Some(request) = self
-            .project
-            .requests
-            .iter_mut()
-            .find(|request| request.id == request_id)
-        else {
-            return;
-        };
-        request.assertions = assertions;
-        self.project.touch();
-        cx.notify();
+        self.update_selected_request(cx, |request| {
+            let prev_len = request.assertions.len();
+            request.assertions = assertions;
+            request.assertions.len() != prev_len
+        });
     }
 
-    pub(super) fn apply_auth(&mut self, auth: ApiAuth, cx: &mut Context<Self>) {
-        let Some(request_id) = self.selected_request else {
-            return;
-        };
-        let Some(request) = self
-            .project
-            .requests
-            .iter_mut()
-            .find(|request| request.id == request_id)
-        else {
-            return;
-        };
-        request.auth = auth;
-        self.project.touch();
-        cx.notify();
+    pub(super) fn apply_auth(&mut self, auth: ApiAuth, _cx: &mut Context<Self>) {
+        self.update_selected_request(_cx, |request| {
+            request.auth = auth;
+            false
+        });
     }
 
     pub(super) fn apply_form_fields(&mut self, fields: &[ApiFormField], cx: &mut Context<Self>) {
-        let Some(request_id) = self.selected_request else {
-            return;
-        };
-        let Some(request) = self
-            .project
-            .requests
-            .iter_mut()
-            .find(|request| request.id == request_id)
-        else {
-            return;
-        };
-        request.form_fields = fields.to_vec();
-        self.project.touch();
-        cx.notify();
+        self.update_selected_request(cx, |request| {
+            let prev_len = request.form_fields.len();
+            request.form_fields = fields.to_vec();
+            request.form_fields.len() != prev_len
+        });
     }
 
     pub(super) fn apply_header_entries(&mut self, entries: &[KvEntry], cx: &mut Context<Self>) {
-        let Some(request_id) = self.selected_request else {
-            return;
-        };
-        let Some(request) = self
-            .project
-            .requests
-            .iter_mut()
-            .find(|request| request.id == request_id)
-        else {
-            return;
-        };
-        request.headers = entries.iter().cloned().map(header_from_entry).collect();
-        self.project.touch();
-        cx.notify();
+        self.update_selected_request(cx, |request| {
+            let prev_len = request.headers.len();
+            request.headers = entries.iter().cloned().map(header_from_entry).collect();
+            request.headers.len() != prev_len
+        });
     }
 }
 
