@@ -159,7 +159,26 @@ impl ApiWorkspace {
         });
         self.editors
             .request_body
-            .update(cx, |state, cx| state.set_value(body, window, cx));
+            .update(cx, |state, cx| {
+                let lang = match self.protocol {
+                    ApiProtocol::Http => {
+                        let raw_lang = self
+                            .selected_request()
+                            .map(|request| {
+                                request
+                                    .body_type
+                                    .raw_language()
+                                    .unwrap_or(request.raw_language)
+                            })
+                            .unwrap_or_default();
+                        super::workspace_body_actions::raw_language_token(raw_lang)
+                    }
+                    ApiProtocol::GraphQl => "graphql",
+                    ApiProtocol::Grpc | ApiProtocol::WebSocket => "json",
+                };
+                state.set_highlighter(lang, cx);
+                state.set_value(body, window, cx);
+            });
         self.editors
             .grpc_service
             .update(cx, |state, cx| state.set_value(grpc_service, window, cx));

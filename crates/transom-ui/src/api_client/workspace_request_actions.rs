@@ -2,7 +2,9 @@
 
 use super::{ApiWorkspace, ApiWorkspaceEvent};
 use gpui_kit::*;
-use transom_api::{ApiFolderId, ApiRequest, ApiRequestId};
+use transom_api::{
+    ApiFolderId, ApiImportFormat, ApiProtocol, ApiRequest, ApiRequestId, import_projects,
+};
 
 impl ApiWorkspace {
     /// 当前选中请求的 clone；没有选中请求时返回 `None`。
@@ -30,21 +32,104 @@ impl ApiWorkspace {
         cx.notify();
     }
 
+    /// 打开新建/导入请求弹窗。
+    pub(crate) fn open_new_request_modal(&mut self, cx: &mut Context<Self>) {
+        self.new_request_modal_open = true;
+        cx.notify();
+    }
+
+    /// 关闭新建/导入请求弹窗。
+    pub(crate) fn close_new_request_modal(&mut self, cx: &mut Context<Self>) {
+        self.new_request_modal_open = false;
+        cx.notify();
+    }
+
     /// 新建请求并立即选中；保存动作仍由用户显式触发。
     pub(crate) fn new_request(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.new_request_with_protocol(ApiProtocol::Http, window, cx);
+    }
+
+    /// 按指定协议新建请求并立即选中。
+    pub(crate) fn new_request_with_protocol(
+        &mut self,
+        protocol: ApiProtocol,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         self.capture_editor(cx);
         let folder_id = self
             .selected_request()
             .and_then(|request| request.folder_id);
-        let request = ApiRequest::new(
+        let mut request = ApiRequest::new(
             rust_i18n::t!("api.request.default_name").to_string(),
             folder_id,
         );
+        request.protocol = protocol;
         let request_id = request.id;
         self.project.upsert_request(request);
         self.selected_request = Some(request_id);
+        self.new_request_modal_open = false;
         self.load_selected(window, cx);
         self.emit_project_sync(cx);
+        cx.notify();
+    }
+
+    /// 从剪贴板导入 cURL 或通用接口文本到当前项目。
+    pub(crate) fn import_from_clipboard(
+        &mut self,
+        curl_only: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(text) = cx
+            .read_from_clipboard()
+            .and_then(|item| item.text())
+            .map(|text| text.trim().to_string())
+            .filter(|text| !text.is_empty())
+        else {
+            self.error = Some(rust_i18n::t!("api.request.clipboard_empty").to_string());
+            self.new_request_modal_open = false;
+            cx.notify();
+            return;
+        };
+        let format = if curl_only {
+            ApiImportFormat::Curl
+        } else if text.starts_with("curl ") {
+            ApiImportFormat::Curl
+        } else if let Ok(value) = serde_json::from_str::<serde_json::Value>(&text) {
+            if value.get("openapi").is_some() || value.get("swagger").is_some() {
+                ApiImportFormat::OpenApi
+            } else if value.pointer("/info/name").is_some() && value.get("item").is_some() {
+                ApiImportFormat::Postman
+            } else {
+                ApiImportFormat::Transom
+            }
+        } else {
+            ApiImportFormat::OpenApi
+        };
+        match import_projects(&text, format) {
+            Ok(projects) => {
+                let mut first_id = None;
+                for project in projects {
+                    for request in project.requests {
+                        if first_id.is_none() {
+                            first_id = Some(request.id);
+                        }
+                        self.project.upsert_request(request);
+                    }
+                }
+                if let Some(request_id) = first_id {
+                    self.selected_request = Some(request_id);
+                    self.load_selected(window, cx);
+                    self.emit_project_sync(cx);
+                }
+                self.error = None;
+            }
+            Err(error) => {
+                self.error = Some(crate::palette::localized_error(&error));
+            }
+        }
+        self.new_request_modal_open = false;
         cx.notify();
     }
 

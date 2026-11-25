@@ -10,9 +10,6 @@ impl AppShell {
         cx: &mut Context<Self>,
         p: &Palette,
     ) -> Option<AnyElement> {
-        if self.state.workspace.tabs[index].is_api_home() {
-            return Some(self.render_api_project_launcher(window, cx, p));
-        }
         let workspace = self.state.workspace.tabs[index].api_workspace()?;
         let api_sidebar = self.state.features.api_sidebar.clone();
         let api_sidebar_state = api_sidebar.read(cx);
@@ -33,6 +30,8 @@ impl AppShell {
                 selected_history: state.selected_history,
                 save_destination_open: state.save_destination_open,
                 auxiliary_section: state.auxiliary_section,
+                config_modal: state.config_modal,
+                new_request_modal_open: state.new_request_modal_open,
                 global_parameter_tab: state.global_parameter_tab,
                 folder_editor: state.folder_editor.as_ref(),
                 pending_folder_delete: state.pending_folder_delete,

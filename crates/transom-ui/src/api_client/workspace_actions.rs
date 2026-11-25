@@ -115,6 +115,15 @@ impl ApiWorkspace {
         cx.notify();
     }
 
+    /// 清空当前项目的请求历史并持久化。
+    pub(crate) fn clear_history(&mut self, cx: &mut Context<Self>) {
+        self.project.history.clear();
+        self.selected_history = None;
+        self.project.touch();
+        self.save_project(cx);
+        cx.notify();
+    }
+
     /// 复制当前响应正文；WebSocket 请求复制消息日志。
     pub(crate) fn copy_response_body(&mut self, cx: &mut Context<Self>) {
         let text = if self.protocol == ApiProtocol::WebSocket {

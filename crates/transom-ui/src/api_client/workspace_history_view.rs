@@ -1,12 +1,13 @@
 //! API 请求历史列表与单条响应摘要详情。
 
-use super::workspace_response_tables::{table_cell, table_header_cell};
+use super::workspace_response_tables::{table_cell, table_header_cell, table_header_cell_flex};
 use super::workspace_response_view::{centered_message, response_color};
 use super::workspace_view::ApiWorkspaceParams;
 use crate::palette::Palette;
 use crate::theme::tokens::{size, space, typography};
-use crate::widgets::{IconButton, IconButtonSize};
+use crate::widgets::{IconButton, IconButtonSize, action_button};
 use gpui_kit::base::{h_flex, v_flex};
+use gpui_kit::component::button::ButtonVariants;
 use gpui_kit::component::scroll::ScrollableElement;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
@@ -26,12 +27,30 @@ pub(super) fn render_history(params: &ApiWorkspaceParams<'_>, p: &Palette) -> An
         .rev()
         .enumerate()
         .map(|(index, entry)| history_row(params, entry, index, border, p));
+    let clear_view = params.view.clone();
+    let toolbar = h_flex()
+        .w_full()
+        .pb(rems(space::XS))
+        .items_center()
+        .child(div().flex_1())
+        .child(
+            action_button(
+                "api-history-clear",
+                AppIcon::Ui(UiIcon::DELETE),
+                rust_i18n::t!("api.response.clear_history").to_string(),
+            )
+            .ghost()
+            .on_click(move |_, _, cx| {
+                clear_view.update(cx, |this, cx| this.clear_history(cx));
+            }),
+        );
     let mut content = v_flex()
         .id("api-response-history")
         .flex_1()
         .min_h_0()
         .w_full()
         .p(rems(space::SM))
+        .child(toolbar)
         .child(
             div()
                 .flex_1()
@@ -64,7 +83,7 @@ fn history_header(border: Hsla, p: &Palette) -> AnyElement {
         .border_b_1()
         .child(table_header_cell(
             rust_i18n::t!("api.response.history_time").to_string(),
-            rems(5.5),
+            rems(8.5),
             border,
         ))
         .child(table_header_cell(
@@ -77,9 +96,8 @@ fn history_header(border: Hsla, p: &Palette) -> AnyElement {
             rems(5.0),
             border,
         ))
-        .child(table_header_cell(
+        .child(table_header_cell_flex(
             rust_i18n::t!("api.response.history_url").to_string(),
-            rems(0.0),
             border,
         ))
         .child(table_header_cell(
@@ -94,7 +112,7 @@ fn history_header(border: Hsla, p: &Palette) -> AnyElement {
         ))
         .child(table_header_cell(
             rust_i18n::t!("api.response.history_action").to_string(),
-            rems(4.5),
+            rems(6.0),
             border,
         ))
         .into_any_element()
@@ -133,7 +151,7 @@ fn history_row(
         })
         .child(table_cell(
             history_time(entry.at),
-            rems(5.5),
+            rems(8.5),
             p.muted_foreground,
             border,
             false,
@@ -179,7 +197,7 @@ fn history_row(
         ))
         .child(
             div()
-                .w(rems(4.5))
+                .w(rems(6.0))
                 .flex_none()
                 .h_full()
                 .px(rems(space::XS))
@@ -189,13 +207,12 @@ fn history_row(
                 .border_l_1()
                 .border_color(border)
                 .child(
-                    IconButton::new(
+                    action_button(
                         ("api-history-replay", reverse_index),
                         AppIcon::Ui(UiIcon::FETCH),
-                        rust_i18n::t!("api.response.history_replay").to_string(),
+                        rust_i18n::t!("api.response.history_replay_short").to_string(),
                     )
-                    .size(IconButtonSize::RowAction)
-                    .render()
+                    .ghost()
                     .on_click(move |_, window, cx| {
                         cx.stop_propagation();
                         replay_view.update(cx, |this, cx| {

@@ -313,7 +313,7 @@ fn activate_activity_item(
             crate::git::actions::GitActions::new(app_state).toggle_git_sidebar(cx)
         }
         ActivityItemId::ApiClient => {
-            crate::api_client::focus_api_client(app_state, cx);
+            crate::api_client::focus_api_client(app_state, window, cx);
         }
         ActivityItemId::CloudSync => crate::cloud_sync::toggle_cloud_sync_sidebar(app_state, cx),
         ActivityItemId::Unknown => {}

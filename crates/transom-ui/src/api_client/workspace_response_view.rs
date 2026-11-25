@@ -3,16 +3,14 @@
 use super::ApiResponseTab;
 use super::workspace_view::ApiWorkspaceParams;
 use crate::palette::Palette;
-use crate::theme::tokens::{size, space};
+use crate::theme::tokens::space;
 use crate::widgets::{IconButton, IconButtonSize};
 use gpui_kit::base::{h_flex, v_flex};
-use gpui_kit::component::Sizable;
 use gpui_kit::component::input::Textarea;
-use gpui_kit::component::tab::{Tab, TabBar};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use transom_api::{ApiProtocol, ApiResponseSnapshot};
-use transom_ui_icons::{AppIcon, AppIconElement, CustomIcon, UiIcon};
+use transom_ui_icons::{AppIcon, UiIcon};
 
 const RESPONSE_TABS: [ApiResponseTab; 5] = [
     ApiResponseTab::Body,
@@ -23,71 +21,55 @@ const RESPONSE_TABS: [ApiResponseTab; 5] = [
 ];
 
 pub(super) fn render_response(params: &ApiWorkspaceParams<'_>, p: &Palette) -> AnyElement {
-    let view = params.view.clone();
     let copy_view = params.view.clone();
-    let selected = RESPONSE_TABS
-        .iter()
-        .position(|tab| *tab == params.response_tab)
-        .unwrap_or(0);
-    let tab_bar = TabBar::new("api-response-tabs")
-        .small()
-        .w_full()
-        .selected_index(selected)
-        .children(
-            RESPONSE_TABS
-                .into_iter()
-                .map(|tab| response_tab(tab, params)),
-        )
-        .on_click(move |index, _, cx| {
-            if let Some(tab) = RESPONSE_TABS.get(*index).copied() {
-                view.update(cx, |this, cx| this.set_response_tab(tab, cx));
+    let suffix = h_flex()
+        .gap(rems(space::SM))
+        .items_center()
+        .children(render_summary(params, p))
+        .when(
+            params.response.is_some() || params.protocol == ApiProtocol::WebSocket,
+            |row| {
+                row.child(
+                    IconButton::new(
+                        "api-response-copy-body",
+                        AppIcon::Ui(UiIcon::COPY),
+                        rust_i18n::t!("api.response.copy_body").to_string(),
+                    )
+                    .size(IconButtonSize::Compact)
+                    .render()
+                    .on_click(move |_, _, cx| {
+                        copy_view.update(cx, |this, cx| this.copy_response_body(cx));
+                    }),
+                )
+            },
+        );
+    let items = RESPONSE_TABS
+        .into_iter()
+        .map(|tab| {
+            let view = params.view.clone();
+            super::workspace_tabs_bar::UnderlineTabItem {
+                id: response_tab_id(tab),
+                label: response_tab_label(tab, params),
+                selected: tab == params.response_tab,
+                on_select: Box::new(move |_, cx| {
+                    view.update(cx, |this, cx| this.set_response_tab(tab, cx));
+                }),
             }
-        });
+        })
+        .collect::<Vec<_>>();
+    let tab_bar = super::workspace_tabs_bar::render_underline_tabs(
+        "api-response-tabs",
+        items,
+        Some(suffix.into_any_element()),
+        p,
+    );
 
     let mut body = v_flex()
         .size_full()
         .min_h_0()
         .overflow_hidden()
         .bg(p.background)
-        .child(
-            h_flex()
-                .h(rems(size::PANE_HEADER_HEIGHT))
-                .px(rems(space::SM))
-                .gap(rems(space::SM))
-                .items_center()
-                .border_color(p.divider(p.border))
-                .border_b_1()
-                .child(
-                    div()
-                        .flex_1()
-                        .child(rust_i18n::t!("api.response.title").to_string()),
-                )
-                .children(render_summary(params, p))
-                .when(
-                    params.response.is_some() || params.protocol == ApiProtocol::WebSocket,
-                    |row| {
-                        row.child(
-                            IconButton::new(
-                                "api-response-copy-body",
-                                AppIcon::Ui(UiIcon::COPY),
-                                rust_i18n::t!("api.response.copy_body").to_string(),
-                            )
-                            .size(IconButtonSize::Compact)
-                            .render()
-                            .on_click(move |_, _, cx| {
-                                copy_view.update(cx, |this, cx| this.copy_response_body(cx));
-                            }),
-                        )
-                    },
-                ),
-        )
-        .child(
-            div()
-                .px(rems(space::SM))
-                .border_color(p.divider(p.border))
-                .border_b_1()
-                .child(tab_bar),
-        );
+        .child(tab_bar);
 
     body = body.child(match params.response_tab {
         ApiResponseTab::Body => render_body(params, p, params.response),
@@ -150,48 +132,40 @@ fn render_summary(params: &ApiWorkspaceParams<'_>, p: &Palette) -> Vec<AnyElemen
     ]
 }
 
-fn response_tab(tab: ApiResponseTab, params: &ApiWorkspaceParams<'_>) -> Tab {
-    let (label, icon) = match tab {
-        ApiResponseTab::Body => (
-            rust_i18n::t!("api.response.body").to_string(),
-            AppIcon::Ui(UiIcon::EDITOR_PREVIEW),
-        ),
+fn response_tab_id(tab: ApiResponseTab) -> &'static str {
+    match tab {
+        ApiResponseTab::Body => "api-resp-tab-body",
+        ApiResponseTab::Headers => "api-resp-tab-headers",
+        ApiResponseTab::Cookies => "api-resp-tab-cookies",
+        ApiResponseTab::Assertions => "api-resp-tab-assertions",
+        ApiResponseTab::History => "api-resp-tab-history",
+    }
+}
+
+fn response_tab_label(tab: ApiResponseTab, params: &ApiWorkspaceParams<'_>) -> String {
+    match tab {
+        ApiResponseTab::Body => rust_i18n::t!("api.response.body").to_string(),
         ApiResponseTab::Headers => {
             let count = params.response.map_or(0, |response| response.headers.len());
-            (
-                format!("{} ({count})", rust_i18n::t!("api.response.headers")),
-                AppIcon::Ui(UiIcon::LIST_FILES),
-            )
+            format!("{} ({count})", rust_i18n::t!("api.response.headers"))
         }
         ApiResponseTab::Cookies => {
             let count = params
                 .response
                 .map_or(0, |response| response.set_cookies.len());
-            (
-                format!("{} ({count})", rust_i18n::t!("api.response.cookies")),
-                AppIcon::Custom(CustomIcon::COOKIE),
-            )
+            format!("{} ({count})", rust_i18n::t!("api.response.cookies"))
         }
-        ApiResponseTab::Assertions => (
-            format!(
-                "{} ({})",
-                rust_i18n::t!("api.response.assertions_label"),
-                params.assertion_results.len()
-            ),
-            AppIcon::Ui(UiIcon::GREEN_CHECKMARK),
+        ApiResponseTab::Assertions => format!(
+            "{} ({})",
+            rust_i18n::t!("api.response.assertions_label"),
+            params.assertion_results.len()
         ),
-        ApiResponseTab::History => (
-            format!(
-                "{} ({})",
-                rust_i18n::t!("api.response.history"),
-                params.project.history.len()
-            ),
-            AppIcon::Ui(UiIcon::HISTORY),
+        ApiResponseTab::History => format!(
+            "{} ({})",
+            rust_i18n::t!("api.response.history"),
+            params.project.history.len()
         ),
-    };
-    Tab::new()
-        .label(label)
-        .prefix(AppIconElement::new(icon).xsmall())
+    }
 }
 
 fn render_body(

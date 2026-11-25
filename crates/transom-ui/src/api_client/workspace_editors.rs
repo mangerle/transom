@@ -11,7 +11,7 @@ use super::form_editor::FormEditor;
 use super::kv_editor::{KvEditor, KvEditorKind};
 use super::workspace::ApiWorkspace;
 use super::workspace::ApiWorkspaceEditors;
-use gpui_kit::component::input::{InputState, TextareaState};
+use gpui_kit::component::input::{EditorState, InputState, TextareaState};
 use gpui_kit::*;
 
 /// 为单个 API 项目工作区创建全部文本编辑器实体。
@@ -33,7 +33,12 @@ pub(super) fn new_editors(
         }),
         query: cx.new(|cx| KvEditor::new(KvEditorKind::Query, window, cx)),
         headers: cx.new(|cx| KvEditor::new(KvEditorKind::Header, window, cx)),
-        request_body: placeholder(window, cx, "api.request.body_placeholder"),
+        request_body: cx.new(|cx| {
+            EditorState::new(window, cx)
+                .language("json")
+                .line_number(true)
+                .soft_wrap(true)
+        }),
         grpc_service: cx.new(|cx| {
             InputState::new(window, cx)
                 .placeholder(rust_i18n::t!("api.request.grpc_service_placeholder").to_string())

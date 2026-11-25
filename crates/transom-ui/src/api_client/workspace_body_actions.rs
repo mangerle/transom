@@ -113,6 +113,46 @@ impl ApiWorkspace {
         self.editors.form.update(cx, |editor, cx| {
             editor.set_allow_files(false, window, cx);
         });
+        let token = raw_language_token(language);
+        self.editors.request_body.update(cx, |state, cx| {
+            state.set_highlighter(token, cx);
+        });
         cx.notify();
+    }
+
+    /// 格式化当前请求体内容（当前支持 JSON 美化缩进）。
+    pub(crate) fn format_request_body(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let raw = self.editors.request_body.read(cx).value().to_string();
+        let trimmed = raw.trim();
+        if trimmed.is_empty() {
+            return;
+        }
+        match serde_json::from_str::<serde_json::Value>(trimmed) {
+            Ok(value) => {
+                if let Ok(formatted) = serde_json::to_string_pretty(&value) {
+                    self.editors.request_body.update(cx, |state, cx| {
+                        state.set_value(formatted, window, cx);
+                    });
+                    self.capture_editor(cx);
+                    self.error = None;
+                    cx.notify();
+                }
+            }
+            Err(_) => {
+                self.error = Some(rust_i18n::t!("api.request.format_body_invalid_json").to_string());
+                cx.notify();
+            }
+        }
+    }
+}
+
+/// 将 raw 语言枚举映射为 syntect 语法名称。
+pub(super) fn raw_language_token(language: ApiRawLanguage) -> &'static str {
+    match language {
+        ApiRawLanguage::Json => "json",
+        ApiRawLanguage::Xml => "xml",
+        ApiRawLanguage::JavaScript => "javascript",
+        ApiRawLanguage::Html => "html",
+        ApiRawLanguage::Text => "text",
     }
 }

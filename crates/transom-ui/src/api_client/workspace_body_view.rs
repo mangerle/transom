@@ -1,7 +1,6 @@
 //! HTTP、GraphQL、gRPC 与 WebSocket 的请求主体视图。
 
 use super::ApiBodyMode;
-use super::workspace_request_view::render_text_panel;
 use super::workspace_view::ApiWorkspaceParams;
 use crate::palette::Palette;
 use crate::theme::tokens::{rem_px, space, typography};
@@ -10,7 +9,7 @@ use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Disableable;
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::ButtonVariants;
-use gpui_kit::component::input::{Input, Textarea};
+use gpui_kit::component::input::{Editor, Input, Textarea};
 use gpui_kit::component::radio::Radio;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
@@ -66,6 +65,7 @@ fn render_http_body(params: &ApiWorkspaceParams<'_>, p: &Palette) -> AnyElement 
             },
         )
         .when(mode == ApiBodyMode::Raw, |row| {
+            let format_view = params.view.clone();
             row.child(dropdown(
                 "api-raw-language",
                 raw_language,
@@ -78,6 +78,18 @@ fn render_http_body(params: &ApiWorkspaceParams<'_>, p: &Palette) -> AnyElement 
                 },
                 raw_view,
             ))
+            .child(div().flex_1())
+            .child(
+                action_button(
+                    "api-body-format",
+                    AppIcon::Ui(UiIcon::EDIT),
+                    rust_i18n::t!("api.request.format_body").to_string(),
+                )
+                .ghost()
+                .on_click(move |_, window, cx| {
+                    format_view.update(cx, |this, cx| this.format_request_body(window, cx));
+                }),
+            )
         });
 
     let content = match body_type {
@@ -88,9 +100,7 @@ fn render_http_body(params: &ApiWorkspaceParams<'_>, p: &Palette) -> AnyElement 
         | ApiBodyType::Text
         | ApiBodyType::Xml
         | ApiBodyType::JavaScript
-        | ApiBodyType::Html => {
-            render_text_panel("api-request-body", params.request_body.clone(), p)
-        }
+        | ApiBodyType::Html => render_code_body("api-request-body", params.request_body, p),
         ApiBodyType::FormUrlEncoded | ApiBodyType::Multipart => {
             params.form_editor.clone().into_any_element()
         }
@@ -199,12 +209,11 @@ fn render_graphql_body(params: &ApiWorkspaceParams<'_>, p: &Palette) -> AnyEleme
             rust_i18n::t!("api.request.graphql_query").to_string(),
             p,
         ))
-        .child(
-            div()
-                .flex_1()
-                .min_h_0()
-                .child(Textarea::new(params.request_body).size_full()),
-        )
+        .child(render_code_body(
+            "api-graphql-body-editor",
+            params.request_body,
+            p,
+        ))
         .child(field_label(
             rust_i18n::t!("api.request.graphql_variables").to_string(),
             p,
@@ -244,12 +253,11 @@ fn render_grpc_body(params: &ApiWorkspaceParams<'_>, p: &Palette) -> AnyElement 
             rust_i18n::t!("api.request.grpc_message").to_string(),
             p,
         ))
-        .child(
-            div()
-                .flex_1()
-                .min_h_0()
-                .child(Textarea::new(params.request_body).size_full()),
-        )
+        .child(render_code_body(
+            "api-graphql-body-editor",
+            params.request_body,
+            p,
+        ))
         .into_any_element()
 }
 
@@ -335,6 +343,34 @@ fn render_websocket_body(params: &ApiWorkspaceParams<'_>, p: &Palette) -> AnyEle
                 .flex_1()
                 .min_h_0()
                 .child(Textarea::new(params.websocket_input).size_full()),
+        )
+        .into_any_element()
+}
+
+fn render_code_body(
+    id: &'static str,
+    state: &Entity<gpui_kit::component::input::EditorState>,
+    p: &Palette,
+) -> AnyElement {
+    div()
+        .id(id)
+        .flex_1()
+        .min_h_0()
+        .w_full()
+        .p(rems(space::SM))
+        .child(
+            div()
+                .size_full()
+                .rounded(p.radius.md)
+                .border_1()
+                .border_color(p.divider(p.border))
+                .overflow_hidden()
+                .child(
+                    Editor::new(state)
+                        .appearance(false)
+                        .bordered(false)
+                        .size_full(),
+                ),
         )
         .into_any_element()
 }

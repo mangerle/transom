@@ -87,6 +87,24 @@ impl ApiSidebarView {
         }
     }
 
+    /// 返回当前第一个可用项目；若登记表为空则自动创建并持久化默认项目。
+    pub(crate) fn ensure_default_project(&mut self, cx: &mut Context<Self>) -> ApiProject {
+        if let Some(existing) = self.state.registry.projects.first().cloned() {
+            return existing;
+        }
+        let project = ApiProject::new(rust_i18n::t!("api.default_project_name").to_string());
+        self.state.registry.upsert(project.clone());
+        self.state.load_error = None;
+        cx.emit(ApiSidebarEvent::PersistRegistry {
+            registry: self.state.registry.clone(),
+            changed_project: Some(project.clone()),
+            removed_project: None,
+            notice: None,
+        });
+        cx.notify();
+        project
+    }
+
     /// 打开新建项目内联编辑器。
     pub(crate) fn start_create(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.state.pending_delete = None;

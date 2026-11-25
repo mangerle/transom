@@ -13,7 +13,7 @@ use gpui_kit::component::input::Textarea;
 use gpui_kit::component::menu::DropdownMenu;
 use gpui_kit::*;
 use transom_api::CodeTarget;
-use transom_ui_icons::{AppIcon, CustomIcon, FileTypeIcon, UiIcon};
+use transom_ui_icons::{AppIcon, FileTypeIcon, UiIcon};
 
 /// 页签栏右侧的项目动作菜单。
 pub(crate) fn render_project_actions_menu(params: &ApiWorkspaceParams<'_>) -> AnyElement {
@@ -24,51 +24,11 @@ pub(crate) fn render_project_actions_menu(params: &ApiWorkspaceParams<'_>) -> An
         .label(rust_i18n::t!("common.more").to_string())
         .dropdown_caret(true)
         .dropdown_menu_with_anchor(Anchor::TopRight, move |menu, _, _| {
-            let environment = view.clone();
-            let global_parameters = view.clone();
-            let global_variables = view.clone();
-            let cookies = view.clone();
             let code_cur = view.clone();
             let code_js = view.clone();
             let code_py = view.clone();
             let code_rs = view.clone();
             menu.item(menu_item(
-                rust_i18n::t!("api.project.environment").to_string(),
-                AppIcon::Ui(UiIcon::DEPENDENCIES),
-                move |_, _, cx| {
-                    environment.update(cx, |this, cx| {
-                        this.toggle_auxiliary(ApiAuxiliarySection::Environment, cx)
-                    });
-                },
-            ))
-            .item(menu_item(
-                rust_i18n::t!("api.project.global_parameters").to_string(),
-                AppIcon::Ui(UiIcon::DATAFLOW),
-                move |_, _, cx| {
-                    global_parameters.update(cx, |this, cx| {
-                        this.toggle_auxiliary(ApiAuxiliarySection::GlobalParameters, cx)
-                    });
-                },
-            ))
-            .item(menu_item(
-                rust_i18n::t!("api.project.global_variables").to_string(),
-                AppIcon::Ui(UiIcon::LANGUAGE),
-                move |_, _, cx| {
-                    global_variables.update(cx, |this, cx| {
-                        this.toggle_auxiliary(ApiAuxiliarySection::GlobalVariables, cx)
-                    });
-                },
-            ))
-            .item(menu_item(
-                rust_i18n::t!("api.project.cookies").to_string(),
-                AppIcon::Custom(CustomIcon::COOKIE),
-                move |_, _, cx| {
-                    cookies.update(cx, |this, cx| {
-                        this.toggle_auxiliary(ApiAuxiliarySection::Cookies, cx)
-                    });
-                },
-            ))
-            .item(menu_item(
                 "cURL",
                 AppIcon::FileType(FileTypeIcon::SHELL),
                 move |_, window, cx| {
@@ -120,7 +80,7 @@ pub(crate) fn render_auxiliary_panel(params: &ApiWorkspaceParams<'_>, p: &Palett
         ),
         ApiAuxiliarySection::GlobalParameters => (
             rust_i18n::t!("api.request.global_parameters").to_string(),
-            super::workspace_global_params_view::render_global_parameters(params),
+            super::workspace_global_params_view::render_global_parameters(params, p),
         ),
         ApiAuxiliarySection::GlobalVariables => (
             rust_i18n::t!("api.request.global_variables").to_string(),

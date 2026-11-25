@@ -3,15 +3,16 @@
 use super::workspace_request_view::render_request_editor;
 use super::workspace_response_view::render_response;
 use super::{
-    ApiAuxiliarySection, ApiGlobalParameterTab, ApiRequestTab, ApiResponseTab, ApiSidebarState,
-    ApiSidebarView, ApiWorkspace,
+    ApiAuxiliarySection, ApiConfigModalSection, ApiGlobalParameterTab, ApiRequestTab,
+    ApiResponseTab, ApiSidebarState, ApiSidebarView, ApiWorkspace,
 };
 use crate::divider::{h_resizable, v_resizable};
 use crate::palette::Palette;
 use crate::theme::tokens::rem_px;
 use gpui_kit::base::v_flex;
-use gpui_kit::component::input::{InputState, TextareaState};
+use gpui_kit::component::input::{EditorState, InputState, TextareaState};
 use gpui_kit::component::resizable::{ResizableState, resizable_panel};
+use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use transom_api::{
     ApiAssertionResult, ApiEnvironmentId, ApiFolderId, ApiMethod, ApiProject, ApiProtocol,
@@ -34,6 +35,8 @@ pub(crate) struct ApiWorkspaceParams<'a> {
     pub(crate) selected_history: Option<usize>,
     pub(crate) save_destination_open: bool,
     pub(crate) auxiliary_section: Option<ApiAuxiliarySection>,
+    pub(crate) config_modal: Option<ApiConfigModalSection>,
+    pub(crate) new_request_modal_open: bool,
     pub(crate) global_parameter_tab: ApiGlobalParameterTab,
     pub(crate) folder_editor: Option<&'a super::workspace_folder::FolderEditor>,
     pub(crate) pending_folder_delete: Option<ApiFolderId>,
@@ -47,7 +50,7 @@ pub(crate) struct ApiWorkspaceParams<'a> {
     pub(crate) request_url: &'a Entity<InputState>,
     pub(crate) query_editor: &'a Entity<super::kv_editor::KvEditor>,
     pub(crate) header_editor: &'a Entity<super::kv_editor::KvEditor>,
-    pub(crate) request_body: &'a Entity<TextareaState>,
+    pub(crate) request_body: &'a Entity<EditorState>,
     pub(crate) form_editor: &'a Entity<super::form_editor::FormEditor>,
     pub(crate) grpc_service: &'a Entity<InputState>,
     pub(crate) grpc_method: &'a Entity<InputState>,
@@ -92,10 +95,21 @@ pub(crate) fn render_api_workspace(params: ApiWorkspaceParams<'_>, p: &Palette) 
         .child(resizable_panel().child(editor_and_response));
 
     v_flex()
+        .relative()
         .size_full()
         .min_h_0()
         .overflow_hidden()
         .bg(p.background)
         .child(body)
+        .when_some(params.config_modal, |root, section| {
+            root.child(super::workspace_config_modal::render_config_modal(
+                &params, section, p,
+            ))
+        })
+        .when(params.new_request_modal_open, |root| {
+            root.child(super::workspace_new_modal::render_new_request_modal(
+                &params, p,
+            ))
+        })
         .into_any_element()
 }

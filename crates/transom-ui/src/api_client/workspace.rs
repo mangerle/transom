@@ -3,8 +3,8 @@
 use super::kv_editor::KvEditorEvent;
 use super::workspace_folder::FolderEditor;
 pub(crate) use super::workspace_types::{
-    ApiAuxiliarySection, ApiBodyMode, ApiGlobalParameterTab, ApiRequestTab, ApiResponseTab,
-    ApiWorkspaceEditors, ApiWorkspaceEvent, ApiWorkspaceServices,
+    ApiAuxiliarySection, ApiBodyMode, ApiConfigModalSection, ApiGlobalParameterTab, ApiRequestTab,
+    ApiResponseTab, ApiWorkspaceEditors, ApiWorkspaceEvent, ApiWorkspaceServices,
 };
 use gpui_kit::component::input::InputEvent;
 use gpui_kit::component::resizable::ResizableState;
@@ -26,6 +26,8 @@ pub(crate) struct ApiWorkspace {
     pub(crate) selected_history: Option<usize>,
     pub(crate) save_destination_open: bool,
     pub(crate) auxiliary_section: Option<ApiAuxiliarySection>,
+    pub(crate) config_modal: Option<ApiConfigModalSection>,
+    pub(crate) new_request_modal_open: bool,
     pub(crate) global_parameter_tab: ApiGlobalParameterTab,
     pub(crate) codegen_target: transom_api::CodeTarget,
     pub(crate) editors: ApiWorkspaceEditors,
@@ -74,6 +76,8 @@ impl ApiWorkspace {
             selected_history: None,
             save_destination_open: false,
             auxiliary_section: None,
+            config_modal: None,
+            new_request_modal_open: false,
             global_parameter_tab: ApiGlobalParameterTab::Query,
             codegen_target: transom_api::CodeTarget::Curl,
             editors,

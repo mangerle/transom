@@ -162,8 +162,8 @@ pub(crate) fn render_tree(params: &ApiWorkspaceParams<'_>, p: &Palette) -> AnyEl
                     )
                     .size(IconButtonSize::Compact)
                     .render()
-                    .on_click(move |_, window, cx| {
-                        view_for_new.update(cx, |this, cx| this.new_request(window, cx));
+                    .on_click(move |_, _, cx| {
+                        view_for_new.update(cx, |this, cx| this.open_new_request_modal(cx));
                     }),
                 ),
         )

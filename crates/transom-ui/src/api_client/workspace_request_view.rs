@@ -5,13 +5,11 @@ use super::workspace_view::ApiWorkspaceParams;
 use super::{ApiRequestTab, ApiWorkspace};
 use crate::palette::Palette;
 use crate::theme::tokens::{size, space};
-use crate::widgets::{action_button, dropdown};
+use crate::widgets::{action_button, action_button_with_icon_tint, dropdown};
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Disableable;
-use gpui_kit::component::Sizable;
 use gpui_kit::component::button::ButtonVariants;
 use gpui_kit::component::input::{Input, Textarea};
-use gpui_kit::component::tab::{Tab, TabBar};
 use gpui_kit::*;
 use transom_api::{ApiAuth, ApiEnvironmentId, ApiMethod, ApiProtocol};
 use transom_ui_icons::{AppIcon, AppIconElement, CustomIcon, UiIcon};
@@ -88,41 +86,52 @@ pub(super) fn render_request_editor(params: &ApiWorkspaceParams<'_>, p: &Palette
     );
     let send_view = view.clone();
     let paste_view = view.clone();
+    let env_modal_view = view.clone();
 
     let mut content = v_flex()
         .size_full()
         .min_h_0()
         .overflow_hidden()
         .bg(p.background)
-        .px(rems(space::SM))
-        .pt(rems(space::SM))
         .child(
             h_flex()
                 .h(rems(size::PANE_HEADER_HEIGHT))
                 .w_full()
-                .px(rems(space::XS))
+                .px(rems(space::SM))
                 .gap(rems(space::SM))
                 .items_center()
+                .border_b_1()
+                .border_color(p.divider(p.border))
                 .child(
                     div()
                         .flex_none()
                         .text_color(p.muted_foreground)
                         .child(rust_i18n::t!("api.request.name").to_string()),
                 )
-                .child(Input::new(params.request_name).w(rems(18.0))),
+                .child(Input::new(params.request_name).w(rems(18.0)))
+                .child(div().flex_1())
+                .child(
+                    action_button(
+                        "api-request-env-modal",
+                        AppIcon::Ui(UiIcon::DEPENDENCIES),
+                        rust_i18n::t!("api.project.environment").to_string(),
+                    )
+                    .ghost()
+                    .on_click(move |_, _, cx| {
+                        env_modal_view.update(cx, |this, cx| this.open_config_modal(cx));
+                    }),
+                ),
         )
         .child(
             h_flex()
                 .h(rems(size::LARGE_HEADER_HEIGHT))
                 .w_full()
-                .px(rems(space::XS))
+                .px(rems(space::SM))
                 .gap(rems(space::XS))
                 .items_center()
-                .rounded(p.radius.lg)
-                .border_1()
+                .border_b_1()
                 .border_color(p.divider(p.border))
                 .child(mode)
-                .child(divider(p))
                 .child(environment)
                 .child(Input::new(params.request_url).flex_1().min_w_0().on_paste(
                     move |clipboard, window, cx| {
@@ -133,7 +142,7 @@ pub(super) fn render_request_editor(params: &ApiWorkspaceParams<'_>, p: &Palette
                     },
                 ))
                 .child(
-                    action_button(
+                    action_button_with_icon_tint(
                         "api-request-send",
                         AppIcon::Ui(UiIcon::FETCH),
                         if params.protocol == ApiProtocol::WebSocket {
@@ -141,6 +150,7 @@ pub(super) fn render_request_editor(params: &ApiWorkspaceParams<'_>, p: &Palette
                         } else {
                             rust_i18n::t!("api.request.send").to_string()
                         },
+                        Some(gpui::white()),
                     )
                     .primary()
                     .disabled(params.selected_request.is_none() || params.sending)
@@ -169,31 +179,40 @@ pub(super) fn render_request_editor(params: &ApiWorkspaceParams<'_>, p: &Palette
 }
 
 fn render_tabbed_request(params: &ApiWorkspaceParams<'_>, p: &Palette) -> AnyElement {
-    let view = params.view.clone();
     let tabs = visible_tabs(params);
     let selected = tabs
         .iter()
         .position(|tab| *tab == params.request_tab)
         .unwrap_or(0);
-    let labels = tabs
+    let items = tabs
         .iter()
         .copied()
-        .map(|tab| request_tab(tab, params))
-        .collect::<Vec<_>>();
-    let click_tabs = tabs.clone();
-    let bar = TabBar::new("api-request-tabs")
-        .small()
-        .w_full()
-        .selected_index(selected)
-        .children(labels)
-        .suffix(h_flex().gap(rems(space::XXS)).items_center().child(
-            super::workspace_advanced_view::render_project_actions_menu(params),
-        ))
-        .on_click(move |index, _, cx| {
-            if let Some(tab) = click_tabs.get(*index).copied() {
-                view.update(cx, |this, cx| this.set_request_tab(tab, cx));
+        .map(|tab| {
+            let view = params.view.clone();
+            super::workspace_tabs_bar::UnderlineTabItem {
+                id: request_tab_id(tab),
+                label: request_tab_label(tab, params),
+                selected: tab == params.request_tab,
+                on_select: Box::new(move |_, cx| {
+                    view.update(cx, |this, cx| this.set_request_tab(tab, cx));
+                }),
             }
-        });
+        })
+        .collect::<Vec<_>>();
+    let bar = super::workspace_tabs_bar::render_underline_tabs(
+        "api-request-tabs",
+        items,
+        Some(
+            h_flex()
+                .gap(rems(space::XXS))
+                .items_center()
+                .child(super::workspace_advanced_view::render_project_actions_menu(
+                    params,
+                ))
+                .into_any_element(),
+        ),
+        p,
+    );
     let content = match tabs.get(selected).copied().unwrap_or(ApiRequestTab::Query) {
         ApiRequestTab::Query => params.query_editor.clone().into_any_element(),
         ApiRequestTab::Body => render_body(params, p),
@@ -207,13 +226,7 @@ fn render_tabbed_request(params: &ApiWorkspaceParams<'_>, p: &Palette) -> AnyEle
         .flex_1()
         .min_h_0()
         .w_full()
-        .child(
-            div()
-                .px(rems(space::SM))
-                .border_color(p.divider(p.border))
-                .border_b_1()
-                .child(bar),
-        )
+        .child(bar)
         .child(content)
         .into_any_element()
 }
@@ -234,9 +247,21 @@ fn visible_tabs(params: &ApiWorkspaceParams<'_>) -> Vec<ApiRequestTab> {
     tabs
 }
 
-fn request_tab(tab: ApiRequestTab, params: &ApiWorkspaceParams<'_>) -> Tab {
+fn request_tab_id(tab: ApiRequestTab) -> &'static str {
+    match tab {
+        ApiRequestTab::Query => "api-req-tab-query",
+        ApiRequestTab::Body => "api-req-tab-body",
+        ApiRequestTab::Headers => "api-req-tab-headers",
+        ApiRequestTab::Auth => "api-req-tab-auth",
+        ApiRequestTab::Assertions => "api-req-tab-assertions",
+        ApiRequestTab::Settings => "api-req-tab-settings",
+        ApiRequestTab::Docs => "api-req-tab-docs",
+    }
+}
+
+fn request_tab_label(tab: ApiRequestTab, params: &ApiWorkspaceParams<'_>) -> String {
     let request = params.request;
-    let label = match tab {
+    match tab {
         ApiRequestTab::Query => {
             let count = request.map_or(0, |request| {
                 request
@@ -292,8 +317,7 @@ fn request_tab(tab: ApiRequestTab, params: &ApiWorkspaceParams<'_>) -> Tab {
         }
         ApiRequestTab::Settings => rust_i18n::t!("api.request.settings").to_string(),
         ApiRequestTab::Docs => rust_i18n::t!("api.request.docs").to_string(),
-    };
-    Tab::new().label(label)
+    }
 }
 
 fn labeled(name: String, count: usize) -> String {
@@ -373,13 +397,5 @@ fn message_bar(message: String, color: Hsla, p: &Palette) -> AnyElement {
         .bg(p.surface.control_selected)
         .text_color(color)
         .child(message)
-        .into_any_element()
-}
-
-fn divider(p: &Palette) -> AnyElement {
-    div()
-        .w(px(1.0))
-        .h(rems(1.5))
-        .bg(p.divider(p.border))
         .into_any_element()
 }

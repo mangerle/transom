@@ -189,6 +189,9 @@ api:
   home_title:
     en: API Client
     zh-CN: API 客户端
+  default_project_name:
+    en: Default Project
+    zh-CN: 默认项目
   protocol:
     grpc_raw:
       en: gRPC (raw Base64)
@@ -732,6 +735,45 @@ api:
     delete_environment:
       en: Delete environment
       zh-CN: 删除环境
+    global_section:
+      en: Global
+      zh-CN: 全局
+    cookie_manager:
+      en: Cookie Manager
+      zh-CN: Cookie 管理器
+    environment_variables:
+      en: Environment Variables
+      zh-CN: 环境变量
+    new_environment:
+      en: New Environment
+      zh-CN: 新建环境
+    save_and_close:
+      en: Save & Close
+      zh-CN: 保存并关闭
+    new_section:
+      en: New
+      zh-CN: 新建
+    import_section:
+      en: Import
+      zh-CN: 导入
+    curl_import:
+      en: Import cURL
+      zh-CN: cURL 导入
+    paste_import:
+      en: Paste Endpoint / Text
+      zh-CN: 粘贴接口/文本
+    other_file_import:
+      en: Import Other File
+      zh-CN: 其他文件导入
+    clipboard_empty:
+      en: Clipboard is empty
+      zh-CN: 剪贴板为空
+    format_body:
+      en: Format
+      zh-CN: 格式化
+    format_body_invalid_json:
+      en: Invalid JSON format
+      zh-CN: JSON 格式无效，无法格式化
     global_parameters:
       en: Global parameters
       zh-CN: 全局参数
@@ -853,6 +895,12 @@ api:
     no_history:
       en: No request history yet.
       zh-CN: 暂无请求历史。
+    clear_history:
+      en: Clear History
+      zh-CN: 清空历史
+    history_replay_short:
+      en: Resend
+      zh-CN: 重发
     history_time:
       en: Time
       zh-CN: 时间

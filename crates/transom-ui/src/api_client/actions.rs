@@ -33,30 +33,65 @@ pub(crate) fn on_workspace_event(
     cx.notify();
 }
 
-/// 打开或聚焦一个 API 项目标签。
+/// 打开或聚焦唯一的 API 项目标签；若已存在 API 标签则在标签内直接切换项目。
 pub(crate) fn open_api_project(
     state: &mut AppState,
     project: ApiProject,
     window: &mut Window,
     cx: &mut Context<AppShell>,
 ) {
-    let home_tabs = state
+    if let Some(existing) = state.workspace.api_tab_for_project(project.id) {
+        state.workspace.active_tab = Some(existing);
+        state.present_active_group();
+        cx.notify();
+        return;
+    }
+
+    if let Some(existing_tab_id) = state
         .workspace
         .tabs
         .iter()
-        .filter(|tab| tab.is_api_home())
+        .find(|tab| tab.api_workspace().is_some())
         .map(|tab| tab.id)
-        .collect::<Vec<_>>();
-    for tab_id in home_tabs {
-        state.ui.window_requests.push_close_tab(tab_id);
-    }
-    if let Some(existing) = state.workspace.api_tab_for_project(project.id) {
-        state.ui.window_requests.push_activate_tab(existing);
+    {
+        let workspace = attach_api_workspace(state, existing_tab_id, &project, window, cx);
+        if let Some(tab) = state.workspace.tab_mut(existing_tab_id) {
+            tab.replace_api_client(project.display_name().to_string(), project.id, workspace);
+        }
+        state.workspace.active_tab = Some(existing_tab_id);
+        state.present_active_group();
+        log::info!(
+            "已在 API 标签内切换项目，项目: {}，标签: {}",
+            project.display_name(),
+            existing_tab_id
+        );
+        cx.notify();
         return;
     }
 
     let tab_id = TabId::new();
     let title = project.display_name().to_string();
+    let workspace = attach_api_workspace(state, tab_id, &project, window, cx);
+    let tab = WorkspaceTab::new_api_client(tab_id, title, project.id, workspace);
+    state.workspace.create_group_for_tab(&tab);
+    state.workspace.tabs.push(tab);
+    state.workspace.active_tab = Some(tab_id);
+    state.present_active_group();
+    log::info!(
+        "已打开 API 项目，项目: {}，标签: {}",
+        project.display_name(),
+        tab_id
+    );
+    cx.notify();
+}
+
+fn attach_api_workspace(
+    state: &mut AppState,
+    tab_id: TabId,
+    project: &ApiProject,
+    window: &mut Window,
+    cx: &mut Context<AppShell>,
+) -> Entity<ApiWorkspace> {
     let services = ApiWorkspaceServices {
         http: state.runtime.services.api_http.clone(),
         websocket: state.runtime.services.api_ws.clone(),
@@ -81,22 +116,15 @@ pub(crate) fn open_api_project(
         .subscriptions
         .api_workspace_observers
         .insert(tab_id, observer);
-
-    let tab = WorkspaceTab::new_api_client(tab_id, title, project.id, workspace);
-    state.workspace.create_group_for_tab(&tab);
-    state.workspace.tabs.push(tab);
-    state.workspace.active_tab = Some(tab_id);
-    state.present_active_group();
-    log::info!(
-        "已打开 API 项目，项目: {}，标签: {}",
-        project.display_name(),
-        tab_id
-    );
-    cx.notify();
+    workspace
 }
 
-/// 聚焦 API 客户端：已有项目标签则激活，否则打开无项目启动首页。
-pub(crate) fn focus_api_client(state: &mut AppState, cx: &mut Context<AppShell>) {
+/// 聚焦 API 客户端：已有项目标签则激活，否则直接载入已有或自动创建的默认项目。
+pub(crate) fn focus_api_client(
+    state: &mut AppState,
+    window: &mut Window,
+    cx: &mut Context<AppShell>,
+) {
     state
         .session
         .sidebar
@@ -105,37 +133,27 @@ pub(crate) fn focus_api_client(state: &mut AppState, cx: &mut Context<AppShell>)
         .workspace
         .active_tab
         .and_then(|tab_id| state.workspace.tab(tab_id))
-        .is_some_and(|tab| tab.api_project_id().is_some() || tab.is_api_home())
+        .is_some_and(|tab| tab.api_project_id().is_some())
     {
         cx.notify();
         return;
     }
-    let target = state
+    if let Some(tab_id) = state
         .workspace
         .tabs
         .iter()
         .find_map(|tab| tab.api_project_id().map(|_| tab.id))
-        .or_else(|| {
-            state
-                .workspace
-                .tabs
-                .iter()
-                .find(|tab| tab.is_api_home())
-                .map(|tab| tab.id)
-        });
-    if let Some(tab_id) = target {
+    {
         state.workspace.active_tab = Some(tab_id);
         state.present_active_group();
         cx.notify();
         return;
     }
-    let tab_id = TabId::new();
-    let tab = WorkspaceTab::new_api_home(tab_id);
-    state.workspace.create_group_for_tab(&tab);
-    state.workspace.tabs.push(tab);
-    state.workspace.active_tab = Some(tab_id);
-    state.present_active_group();
-    cx.notify();
+    let project = state
+        .features
+        .api_sidebar
+        .update(cx, |view, cx| view.ensure_default_project(cx));
+    open_api_project(state, project, window, cx);
 }
 
 /// 处理侧栏事件队列中的窗口动作。
@@ -160,9 +178,13 @@ pub(crate) fn on_sidebar_request(
                 update_open_project(state, &project, cx);
             }
             if let Some(project_id) = removed_project
-                && let Some(tab_id) = state.workspace.api_tab_for_project(project_id)
+                && state.workspace.api_tab_for_project(project_id).is_some()
             {
-                state.ui.window_requests.push_close_tab(tab_id);
+                let next_project = state
+                    .features
+                    .api_sidebar
+                    .update(cx, |view, cx| view.ensure_default_project(cx));
+                open_api_project(state, next_project, window, cx);
             }
             if let Some(notice) = notice {
                 state.set_transient_status(notice, cx);

@@ -220,6 +220,20 @@ pub(super) fn render_assertions(results: &[ApiAssertionResult], p: &Palette) -> 
         .into_any_element()
 }
 
+pub(super) fn table_header_cell_flex(label: String, border: Hsla) -> AnyElement {
+    div()
+        .flex_1()
+        .min_w_0()
+        .h_full()
+        .px(rems(space::SM))
+        .flex()
+        .items_center()
+        .border_l_1()
+        .border_color(border)
+        .child(label)
+        .into_any_element()
+}
+
 pub(super) fn table_header_cell(label: String, width: Rems, border: Hsla) -> AnyElement {
     div()
         .w(width)

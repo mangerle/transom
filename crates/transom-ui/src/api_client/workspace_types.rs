@@ -1,8 +1,10 @@
 //! API 工作区公开类型与编辑器集合。
 
-use gpui_kit::component::input::{InputState, TextareaState};
+use gpui_kit::component::input::{EditorState, InputState, TextareaState};
 use gpui_kit::*;
-use transom_api::{ApiBodyType, ApiHttpService, ApiProject, ApiRawLanguage, ApiWebSocketService};
+use transom_api::{
+    ApiBodyType, ApiEnvironmentId, ApiHttpService, ApiProject, ApiRawLanguage, ApiWebSocketService,
+};
 
 /// API 工作区需要的外壳服务集合。
 #[derive(Clone)]
@@ -19,6 +21,15 @@ pub(crate) enum ApiAuxiliarySection {
     GlobalVariables,
     Cookies,
     Code,
+}
+
+/// 环境变量与全局配置弹窗的左侧导航项。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ApiConfigModalSection {
+    Cookies,
+    GlobalParameters,
+    GlobalVariables,
+    Environment(ApiEnvironmentId),
 }
 
 /// 全局参数编辑页签。
@@ -113,7 +124,7 @@ pub(crate) struct ApiWorkspaceEditors {
     pub(crate) request_url: Entity<InputState>,
     pub(crate) query: Entity<super::kv_editor::KvEditor>,
     pub(crate) headers: Entity<super::kv_editor::KvEditor>,
-    pub(crate) request_body: Entity<TextareaState>,
+    pub(crate) request_body: Entity<EditorState>,
     pub(crate) grpc_service: Entity<InputState>,
     pub(crate) grpc_method: Entity<InputState>,
     pub(crate) graphql_variables: Entity<TextareaState>,

@@ -174,7 +174,6 @@ pub(crate) fn tab_subtitle(tab: &WorkspaceTab) -> String {
         TabContent::Containers(_) => rust_i18n::t!("tab_subtitle.containers").to_string(),
         TabContent::Git(_) => rust_i18n::t!("tab_subtitle.git").to_string(),
         TabContent::Rdp(_) => rust_i18n::t!("rdp.desktop").to_string(),
-        TabContent::ApiHome(_) => rust_i18n::t!("tab_subtitle.api").to_string(),
         TabContent::ApiClient(_) => rust_i18n::t!("tab_subtitle.api").to_string(),
     }
 }
@@ -197,7 +196,6 @@ pub(crate) fn compact_tab_icon(tab: &WorkspaceTab) -> AppIcon {
             }
         }
         TabContent::Git(_) => AppIcon::Ui(UiIcon::VCS),
-        TabContent::ApiHome(_) => AppIcon::Custom(CustomIcon::API),
         TabContent::ApiClient(_) => AppIcon::Custom(CustomIcon::API),
     }
 }

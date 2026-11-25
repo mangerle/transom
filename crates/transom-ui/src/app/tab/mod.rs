@@ -23,7 +23,7 @@ mod session;
 #[cfg(test)]
 mod tests;
 
-pub(crate) use api_client::{ApiClientTab, ApiHomeTab};
+pub(crate) use api_client::ApiClientTab;
 pub(crate) use container::ContainerTab;
 pub(crate) use git::GitTab;
 pub(crate) use group::{TabGroup, TabGroupOwner};
