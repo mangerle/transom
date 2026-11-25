@@ -18,3 +18,23 @@ use gpui_kit::App;
 pub(super) fn no_values(_: &DialogCheckState, _: &App) -> Vec<String> {
     Vec::new()
 }
+
+/// 当前激活标签页为 API 工作区且新建/导入请求弹窗已打开时返回 `true`。
+pub(super) fn api_new_request_open(state: &DialogCheckState, cx: &App) -> bool {
+    state
+        .workspace
+        .active_tab
+        .and_then(|tab_id| state.workspace.tab(tab_id))
+        .and_then(|tab| tab.api_workspace())
+        .is_some_and(|workspace| workspace.read(cx).is_new_request_modal_open())
+}
+
+/// 当前激活标签页为 API 工作区且环境与全局配置弹窗已打开时返回 `true`。
+pub(super) fn api_config_open(state: &DialogCheckState, cx: &App) -> bool {
+    state
+        .workspace
+        .active_tab
+        .and_then(|tab_id| state.workspace.tab(tab_id))
+        .and_then(|tab| tab.api_workspace())
+        .is_some_and(|workspace| workspace.read(cx).is_config_modal_open())
+}

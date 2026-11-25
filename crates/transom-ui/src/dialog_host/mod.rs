@@ -141,6 +141,10 @@ pub(crate) enum ModalKind {
     GitPush,
     /// Git 冲突解决器。
     GitConflict,
+    /// API 新建与导入请求弹窗。
+    ApiNewRequest,
+    /// API 环境与全局配置弹窗。
+    ApiConfig,
 }
 
 /// 单个弹窗的渲染元数据；宽度与 slug 同一处定义，新增弹窗不再漏改列表。
@@ -469,6 +473,40 @@ impl ModalKind {
                 cx,
                 p,
             ),
+            ModalKind::ApiNewRequest => {
+                let Some(workspace) = app_state
+                    .workspace
+                    .active_tab
+                    .and_then(|tab_id| app_state.workspace.tab(tab_id))
+                    .and_then(|tab| tab.api_workspace())
+                else {
+                    return div().into_any_element();
+                };
+                crate::api_client::render_api_new_request_dialog_body(
+                    &workspace,
+                    &app_state.features.api_sidebar,
+                    window,
+                    cx,
+                    p,
+                )
+            }
+            ModalKind::ApiConfig => {
+                let Some(workspace) = app_state
+                    .workspace
+                    .active_tab
+                    .and_then(|tab_id| app_state.workspace.tab(tab_id))
+                    .and_then(|tab| tab.api_workspace())
+                else {
+                    return div().into_any_element();
+                };
+                crate::api_client::render_api_config_dialog_body(
+                    &workspace,
+                    &app_state.features.api_sidebar,
+                    window,
+                    cx,
+                    p,
+                )
+            }
             _ => div().into_any_element(),
         }
     }

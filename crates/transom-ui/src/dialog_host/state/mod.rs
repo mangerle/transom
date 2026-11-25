@@ -68,6 +68,21 @@ impl ModalKind {
         if let Some(handled) = self.git_cancel(app_state, cx) {
             return handled;
         }
+        if matches!(self, ModalKind::ApiNewRequest | ModalKind::ApiConfig) {
+            if let Some(workspace) = app_state
+                .workspace
+                .active_tab
+                .and_then(|tab_id| app_state.workspace.tab(tab_id))
+                .and_then(|tab| tab.api_workspace())
+            {
+                workspace.update(cx, |ws, cx| match self {
+                    ModalKind::ApiNewRequest => ws.close_new_request_modal(cx),
+                    ModalKind::ApiConfig => ws.close_config_modal(cx),
+                    _ => {}
+                });
+            }
+            return true;
+        }
         match self {
             ModalKind::SftpConfirm
             | ModalKind::HostKeyConfirm

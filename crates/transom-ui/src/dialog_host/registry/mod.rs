@@ -453,6 +453,20 @@ pub(super) static MODALS: &[ModalEntry] = &[
         is_open: checks::git_conflict_open,
         field_values: checks::no_values,
     },
+    ModalEntry {
+        kind: ModalKind::ApiNewRequest,
+        slug: "api-new-request",
+        width: ModalWidth::Token(crate::theme::tokens::dialog::API_NEW_REQUEST),
+        is_open: checks::api_new_request_open,
+        field_values: checks::no_values,
+    },
+    ModalEntry {
+        kind: ModalKind::ApiConfig,
+        slug: "api-config",
+        width: ModalWidth::Token(crate::theme::tokens::dialog::API_CONFIG),
+        is_open: checks::api_config_open,
+        field_values: checks::no_values,
+    },
 ];
 
 /// 取指定种类的注册信息。

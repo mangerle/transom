@@ -18,5 +18,6 @@ pub(crate) use actions::{
 pub(crate) use sidebar::{ApiSidebarEvent, ApiSidebarView};
 pub(crate) use workspace::{
     ApiConfigModalSection, ApiWorkspace, ApiWorkspaceEvent, ApiWorkspaceParams,
-    ApiWorkspaceServices, render_api_workspace,
+    ApiWorkspaceServices, render_api_config_dialog_body, render_api_new_request_dialog_body,
+    render_api_workspace,
 };

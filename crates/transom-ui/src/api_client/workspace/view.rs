@@ -13,7 +13,6 @@ use crate::palette::Palette;
 use crate::theme::tokens::rem_px;
 use gpui_kit::base::v_flex;
 use gpui_kit::component::resizable::resizable_panel;
-use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use transom_api::{ApiEnvironmentId, ApiMethod, ApiProject, ApiProtocol, ApiRequest, ApiRequestId};
 
@@ -103,11 +102,46 @@ pub(crate) fn render_api_workspace(params: ApiWorkspaceParams<'_>, p: &Palette) 
         .overflow_hidden()
         .bg(p.background)
         .child(body)
-        .when_some(params.ui.config_modal, |root, section| {
-            root.child(render_config_modal(&params, section, p))
-        })
-        .when(params.ui.new_request_modal_open, |root| {
-            root.child(render_new_request_modal(&params, p))
-        })
         .into_any_element()
+}
+
+/// 供 `dialog_host` 渲染当前激活 API 工作区的环境与全局配置弹窗内容。
+pub(crate) fn render_api_config_dialog_body(
+    workspace: &Entity<ApiWorkspace>,
+    api_sidebar: &Entity<ApiSidebarView>,
+    window: &Window,
+    cx: &App,
+    p: &Palette,
+) -> AnyElement {
+    let sidebar_state = api_sidebar.read(cx);
+    let state = workspace.read(cx);
+    let Some(section) = state.ui.config_modal else {
+        return div().into_any_element();
+    };
+    let params = state.render_params(
+        workspace,
+        api_sidebar,
+        &sidebar_state.state,
+        window.rem_size(),
+    );
+    render_config_modal(&params, section, p)
+}
+
+/// 供 `dialog_host` 渲染当前激活 API 工作区的新建/导入请求弹窗内容。
+pub(crate) fn render_api_new_request_dialog_body(
+    workspace: &Entity<ApiWorkspace>,
+    api_sidebar: &Entity<ApiSidebarView>,
+    window: &Window,
+    cx: &App,
+    p: &Palette,
+) -> AnyElement {
+    let sidebar_state = api_sidebar.read(cx);
+    let state = workspace.read(cx);
+    let params = state.render_params(
+        workspace,
+        api_sidebar,
+        &sidebar_state.state,
+        window.rem_size(),
+    );
+    render_new_request_modal(&params, p)
 }

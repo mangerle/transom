@@ -35,7 +35,10 @@ pub(crate) use types::{
     ApiResponseTab, ApiWorkspaceEditors, ApiWorkspaceEvent, ApiWorkspaceServices,
 };
 use types::{ExecutionState, WorkspaceSplits, WorkspaceUiState};
-pub(crate) use view::{ApiWorkspaceParams, render_api_workspace};
+pub(crate) use view::{
+    ApiWorkspaceParams, render_api_config_dialog_body, render_api_new_request_dialog_body,
+    render_api_workspace,
+};
 
 /// 单个 API 项目标签的工作区实体。
 pub(crate) struct ApiWorkspace {
@@ -235,6 +238,16 @@ impl ApiWorkspace {
         self.exec.error = None;
         cx.notify();
         true
+    }
+
+    /// 环境与全局配置弹窗是否打开。
+    pub(crate) fn is_config_modal_open(&self) -> bool {
+        self.ui.config_modal.is_some()
+    }
+
+    /// 新建/导入请求弹窗是否打开。
+    pub(crate) fn is_new_request_modal_open(&self) -> bool {
+        self.ui.new_request_modal_open
     }
 
     /// 当前选中请求的协议；未选中请求时默认为 HTTP。

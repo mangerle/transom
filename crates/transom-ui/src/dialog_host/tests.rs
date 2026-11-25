@@ -56,6 +56,8 @@ const ALL: &[ModalKind] = &[
     ModalKind::GitRebase,
     ModalKind::GitPush,
     ModalKind::GitConflict,
+    ModalKind::ApiNewRequest,
+    ModalKind::ApiConfig,
 ];
 
 /// 危险或授权决策必须走 AlertDialog，不能退化成带关闭件的普通表单弹窗。

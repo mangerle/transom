@@ -14,43 +14,20 @@ use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use transom_ui_icons::{AppIcon, AppIconElement, CustomIcon, UiIcon};
 
-/// 渲染环境变量、全局变量、全局参数与 Cookie 管理器弹窗。
+/// 渲染环境变量、全局变量、全局参数与 Cookie 管理器弹窗主体。
 pub(in crate::api_client) fn render_config_modal(
     params: &ApiWorkspaceParams<'_>,
     section: ApiConfigModalSection,
     p: &Palette,
 ) -> AnyElement {
-    let backdrop_view = params.view.clone();
-    let card = h_flex()
+    h_flex()
         .id("api-config-modal-card")
-        .w(rems(58.0))
-        .h(rems(38.0))
-        .max_w(relative(0.9))
-        .max_h(relative(0.88))
-        .bg(p.background)
-        .rounded(p.radius.lg)
-        .border_1()
-        .border_color(p.divider(p.border))
-        .shadow_lg()
+        .w_full()
+        .h(rems(36.0))
+        .max_h(relative(0.82))
         .overflow_hidden()
-        .on_mouse_down(MouseButton::Left, |_, _, cx| {
-            cx.stop_propagation();
-        })
         .child(render_sidebar(params, section, p))
-        .child(render_content(params, section, p));
-
-    div()
-        .id("api-config-modal-backdrop")
-        .absolute()
-        .inset_0()
-        .bg(gpui::black().opacity(0.45))
-        .flex()
-        .items_center()
-        .justify_center()
-        .on_mouse_down(MouseButton::Left, move |_, _, cx| {
-            backdrop_view.update(cx, |this, cx| this.close_config_modal(cx));
-        })
-        .child(card)
+        .child(render_content(params, section, p))
         .into_any_element()
 }
 

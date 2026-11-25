@@ -4,60 +4,30 @@ use crate::api_client::ApiSidebarEvent;
 use crate::api_client::ApiWorkspaceParams;
 use crate::palette::Palette;
 use crate::theme::tokens::{size, space, typography};
-use crate::widgets::{IconButton, IconButtonSize};
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::*;
 use transom_api::ApiProtocol;
 use transom_ui_icons::{AppIcon, AppIconElement, CustomIcon, UiIcon};
 
-/// 渲染新建协议与导入方式弹窗。
+/// 渲染新建协议与导入方式弹窗主体。
 pub(in crate::api_client) fn render_new_request_modal(
     params: &ApiWorkspaceParams<'_>,
     p: &Palette,
 ) -> AnyElement {
-    let backdrop_view = params.view.clone();
-    let close_view = params.view.clone();
     let curl_view = params.view.clone();
     let paste_view = params.view.clone();
     let file_view = params.view.clone();
     let sidebar = params.api_sidebar.clone();
 
-    let card = v_flex()
+    v_flex()
         .id("api-new-request-modal-card")
-        .w(rems(36.0))
-        .max_w(relative(0.9))
-        .bg(p.background)
-        .rounded(p.radius.lg)
-        .border_1()
-        .border_color(p.divider(p.border))
-        .shadow_lg()
-        .p(rems(space::MD))
+        .w_full()
         .gap(rems(space::SM))
-        .on_mouse_down(MouseButton::Left, |_, _, cx| {
-            cx.stop_propagation();
-        })
         .child(
-            h_flex()
-                .items_center()
-                .child(
-                    div()
-                        .flex_1()
-                        .text_size(rems(typography::CAPTION))
-                        .text_color(p.muted_foreground)
-                        .child(rust_i18n::t!("api.request.new_section").to_string()),
-                )
-                .child(
-                    IconButton::new(
-                        "api-new-request-modal-close",
-                        AppIcon::Ui(UiIcon::CLOSE),
-                        rust_i18n::t!("common.close").to_string(),
-                    )
-                    .size(IconButtonSize::Compact)
-                    .render()
-                    .on_click(move |_, _, cx| {
-                        close_view.update(cx, |this, cx| this.close_new_request_modal(cx));
-                    }),
-                ),
+            div()
+                .text_size(rems(typography::CAPTION))
+                .text_color(p.muted_foreground)
+                .child(rust_i18n::t!("api.request.new_section").to_string()),
         )
         .child(
             h_flex()
@@ -154,20 +124,7 @@ pub(in crate::api_client) fn render_new_request_modal(
                     cx.notify();
                 });
             },
-        ));
-
-    div()
-        .id("api-new-request-modal-backdrop")
-        .absolute()
-        .inset_0()
-        .bg(gpui::black().opacity(0.45))
-        .flex()
-        .items_center()
-        .justify_center()
-        .on_mouse_down(MouseButton::Left, move |_, _, cx| {
-            backdrop_view.update(cx, |this, cx| this.close_new_request_modal(cx));
-        })
-        .child(card)
+        ))
         .into_any_element()
 }
 

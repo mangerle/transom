@@ -157,4 +157,6 @@ pub mod dialog {
     pub const GIT_CLONE: f32 = 45.0;
     pub const GIT_PUSH: f32 = 48.0;
     pub const GIT_CONFLICT: f32 = 62.0;
+    pub const API_NEW_REQUEST: f32 = 36.0;
+    pub const API_CONFIG: f32 = 58.0;
 }
