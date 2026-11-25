@@ -51,6 +51,13 @@ pub(super) fn new_editors(
         }),
         docs: placeholder(window, cx, "api.request.docs_placeholder"),
         environment: cx.new(|cx| EnvironmentEditor::new(window, cx)),
+        global_variables: cx.new(|cx| EnvironmentEditor::new(window, cx)),
+        global_query: cx.new(|cx| KvEditor::new(KvEditorKind::Query, window, cx)),
+        global_headers: cx.new(|cx| KvEditor::new(KvEditorKind::Header, window, cx)),
+        environment_name: cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder(rust_i18n::t!("api.request.environment_name").to_string())
+        }),
         cookies: cx.new(|cx| CookieEditor::new(window, cx)),
         form: cx.new(|cx| FormEditor::new(window, cx)),
         websocket_input: placeholder(window, cx, "api.request.websocket_input_placeholder"),

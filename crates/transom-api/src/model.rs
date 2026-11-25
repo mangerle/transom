@@ -1,13 +1,18 @@
 //! API 项目、目录、环境、Cookie、历史和请求数据。
 
-use super::ApiRequest;
 use super::{ApiEnvironmentId, ApiFolderId, ApiProjectId, ApiRequestId};
+use super::{ApiHeader, ApiQueryParam, ApiRequest};
 use serde::{Deserialize, Serialize};
-use std::time::{SystemTime, UNIX_EPOCH};
 use transom_core::AppError;
 
+mod global;
+mod util;
+
+pub use self::global::{ApiGlobalParameter, ApiGlobalParameterTarget};
+use self::util::{normalize_name, unix_now};
+
 /// 当前项目文件结构版本；版本高于程序支持值时拒绝加载，避免静默丢失新字段。
-pub const API_SCHEMA_VERSION: u32 = 2;
+pub const API_SCHEMA_VERSION: u32 = 3;
 /// 单次项目导入文件上限，防止误选超大文件后在 UI 线程前产生无界内存增长。
 pub const MAX_IMPORT_BYTES: u64 = 4 * 1024 * 1024;
 const MAX_NAME_CHARS: usize = 120;
@@ -81,6 +86,10 @@ pub struct ApiProject {
     #[serde(default)]
     pub active_environment_id: Option<ApiEnvironmentId>,
     #[serde(default)]
+    pub global_variables: Vec<ApiVariable>,
+    #[serde(default)]
+    pub global_parameters: Vec<ApiGlobalParameter>,
+    #[serde(default)]
     pub cookies: Vec<ApiCookie>,
     #[serde(default)]
     pub history: Vec<ApiHistoryEntry>,
@@ -104,6 +113,8 @@ impl ApiProject {
             requests: Vec::new(),
             environments: vec![environment],
             active_environment_id,
+            global_variables: Vec::new(),
+            global_parameters: Vec::new(),
             cookies: Vec::new(),
             history: Vec::new(),
             created_at: now,
@@ -475,20 +486,6 @@ pub struct ApiHistoryEntry {
     pub response_excerpt: String,
 }
 
-fn normalize_name(name: String, fallback: &str) -> String {
-    let trimmed = name.trim();
-    if trimmed.is_empty() {
-        return fallback.to_string();
-    }
-    trimmed.chars().take(MAX_NAME_CHARS).collect()
-}
-
-fn unix_now() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_or(0, |duration| duration.as_secs())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -527,6 +524,91 @@ mod tests {
             .set_variables_text("HOST=example.com\nBROKEN")
             .expect_err("缺少等号");
         assert!(error.detail.expect("错误详情").contains("第 2 行"));
+    }
+
+    #[test]
+    fn environment_variables_override_global_variables() {
+        let mut project = ApiProject::new("变量优先级");
+        project.global_variables = vec![
+            ApiVariable {
+                name: "HOST".to_string(),
+                value: "global.example.com".to_string(),
+                enabled: true,
+                secret: false,
+            },
+            ApiVariable {
+                name: "GLOBAL_ONLY".to_string(),
+                value: "global".to_string(),
+                enabled: true,
+                secret: false,
+            },
+        ];
+        let mut environment = ApiEnvironment::new("开发");
+        environment.variables.push(ApiVariable {
+            name: "HOST".to_string(),
+            value: "env.example.com".to_string(),
+            enabled: true,
+            secret: false,
+        });
+        let merged = project.merged_environment(&environment);
+        assert_eq!(merged.resolve("{{HOST}}"), "env.example.com");
+        assert_eq!(merged.resolve("{{GLOBAL_ONLY}}"), "global");
+    }
+
+    #[test]
+    fn request_values_override_global_query_and_header_parameters() {
+        let mut project = ApiProject::new("全局参数");
+        project.global_parameters = vec![
+            ApiGlobalParameter {
+                target: ApiGlobalParameterTarget::Query,
+                name: "token".to_string(),
+                value: "global".to_string(),
+                description: String::new(),
+                enabled: true,
+            },
+            ApiGlobalParameter {
+                target: ApiGlobalParameterTarget::Query,
+                name: "global_only".to_string(),
+                value: "1".to_string(),
+                description: String::new(),
+                enabled: true,
+            },
+            ApiGlobalParameter {
+                target: ApiGlobalParameterTarget::Header,
+                name: "X-Scope".to_string(),
+                value: "global".to_string(),
+                description: String::new(),
+                enabled: true,
+            },
+        ];
+        let mut request = ApiRequest::new("全局参数", None);
+        request.url = "https://example.com".to_string();
+        request.query.push(ApiQueryParam::new("token", "request"));
+        request.headers.push(ApiHeader::new("x-scope", "request"));
+        let resolved = project.resolved_request(&request, &ApiEnvironment::empty());
+        assert_eq!(
+            resolved
+                .query
+                .iter()
+                .find(|parameter| parameter.name == "token")
+                .map(|parameter| parameter.value.as_str()),
+            Some("request")
+        );
+        assert!(
+            resolved
+                .query
+                .iter()
+                .any(|parameter| parameter.name == "global_only")
+        );
+        assert!(resolved.url.contains("global_only=1"));
+        assert_eq!(
+            resolved
+                .headers
+                .iter()
+                .find(|header| header.name.eq_ignore_ascii_case("x-scope"))
+                .map(|header| header.value.as_str()),
+            Some("request")
+        );
     }
 
     #[test]

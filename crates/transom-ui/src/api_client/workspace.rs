@@ -3,8 +3,8 @@
 use super::kv_editor::KvEditorEvent;
 use super::workspace_folder::FolderEditor;
 pub(crate) use super::workspace_types::{
-    ApiAuxiliarySection, ApiBodyMode, ApiRequestTab, ApiResponseTab, ApiWorkspaceEditors,
-    ApiWorkspaceEvent, ApiWorkspaceServices,
+    ApiAuxiliarySection, ApiBodyMode, ApiGlobalParameterTab, ApiRequestTab, ApiResponseTab,
+    ApiWorkspaceEditors, ApiWorkspaceEvent, ApiWorkspaceServices,
 };
 use gpui_kit::component::input::InputEvent;
 use gpui_kit::component::resizable::ResizableState;
@@ -26,6 +26,7 @@ pub(crate) struct ApiWorkspace {
     pub(crate) selected_history: Option<usize>,
     pub(crate) save_destination_open: bool,
     pub(crate) auxiliary_section: Option<ApiAuxiliarySection>,
+    pub(crate) global_parameter_tab: ApiGlobalParameterTab,
     pub(crate) codegen_target: transom_api::CodeTarget,
     pub(crate) editors: ApiWorkspaceEditors,
     pub(crate) response: Option<ApiResponseSnapshot>,
@@ -73,6 +74,7 @@ impl ApiWorkspace {
             selected_history: None,
             save_destination_open: false,
             auxiliary_section: None,
+            global_parameter_tab: ApiGlobalParameterTab::Query,
             codegen_target: transom_api::CodeTarget::Curl,
             editors,
             response: None,
@@ -109,6 +111,15 @@ impl ApiWorkspace {
                 |_this, _, event: &InputEvent, _, cx| {
                     if matches!(event, InputEvent::Change) {
                         cx.notify();
+                    }
+                },
+            ),
+            cx.subscribe_in(
+                &workspace.editors.environment_name,
+                window,
+                |this, _, event: &InputEvent, _, cx| {
+                    if matches!(event, InputEvent::Change) {
+                        this.apply_environment_name(cx);
                     }
                 },
             ),
@@ -157,9 +168,43 @@ impl ApiWorkspace {
                     this.apply_cookies(cookies.clone(), cx);
                 },
             ),
+            cx.subscribe_in(
+                &workspace.editors.global_variables,
+                window,
+                |this, _, event, _, cx| {
+                    let super::environment_editor::EnvironmentEditorEvent::Changed(variables) =
+                        event;
+                    this.apply_global_variables(variables.clone(), cx);
+                },
+            ),
+            cx.subscribe_in(
+                &workspace.editors.global_query,
+                window,
+                |this, _, event, _, cx| {
+                    let KvEditorEvent::Changed(entries) = event;
+                    this.apply_global_parameters(
+                        transom_api::ApiGlobalParameterTarget::Query,
+                        entries,
+                        cx,
+                    );
+                },
+            ),
+            cx.subscribe_in(
+                &workspace.editors.global_headers,
+                window,
+                |this, _, event, _, cx| {
+                    let KvEditorEvent::Changed(entries) = event;
+                    this.apply_global_parameters(
+                        transom_api::ApiGlobalParameterTarget::Header,
+                        entries,
+                        cx,
+                    );
+                },
+            ),
         ];
         workspace.load_selected(window, cx);
         workspace.load_environment(window, cx);
+        workspace.load_global_config(window, cx);
         workspace.load_cookies(window, cx);
         workspace
     }
@@ -285,9 +330,12 @@ impl ApiWorkspace {
         cx.notify();
     }
 
-    fn load_environment(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    pub(super) fn load_environment(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let environment = self.project.active_environment();
         self.environment_id = self.project.active_environment_id.or(Some(environment.id));
+        self.editors.environment_name.update(cx, |input, cx| {
+            input.set_value(environment.name.clone(), window, cx)
+        });
         self.editors.environment.update(cx, |editor, cx| {
             editor.set_variables(&environment.variables, window, cx)
         });
@@ -300,7 +348,8 @@ impl ApiWorkspace {
     }
 
     pub(crate) fn environment(&self) -> transom_api::ApiEnvironment {
-        self.environment_id
+        let environment = self
+            .environment_id
             .and_then(|id| {
                 self.project
                     .environments
@@ -308,6 +357,7 @@ impl ApiWorkspace {
                     .find(|environment| environment.id == id)
             })
             .cloned()
-            .unwrap_or_else(|| self.project.active_environment())
+            .unwrap_or_else(|| self.project.active_environment());
+        self.project.merged_environment(&environment)
     }
 }

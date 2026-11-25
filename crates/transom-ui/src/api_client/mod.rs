@@ -10,6 +10,7 @@ mod assertion_editor;
 mod auth_editor;
 mod cookie_editor;
 mod environment_editor;
+mod environment_manager_view;
 mod form_editor;
 mod form_editor_view;
 mod form_file;
@@ -25,6 +26,8 @@ mod workspace_body_view;
 mod workspace_editor_state;
 mod workspace_editors;
 mod workspace_folder;
+mod workspace_global_config;
+mod workspace_global_params_view;
 mod workspace_history_view;
 mod workspace_kv;
 mod workspace_project_switcher;
@@ -43,7 +46,7 @@ pub(crate) use actions::{
 };
 pub(crate) use sidebar::{ApiImportState, ApiSidebarEvent, ApiSidebarState, ApiSidebarView};
 pub(crate) use workspace::{
-    ApiAuxiliarySection, ApiBodyMode, ApiRequestTab, ApiResponseTab, ApiWorkspace,
-    ApiWorkspaceEvent, ApiWorkspaceServices,
+    ApiAuxiliarySection, ApiBodyMode, ApiGlobalParameterTab, ApiRequestTab, ApiResponseTab,
+    ApiWorkspace, ApiWorkspaceEvent, ApiWorkspaceServices,
 };
 pub(crate) use workspace_view::{ApiWorkspaceParams, render_api_workspace};

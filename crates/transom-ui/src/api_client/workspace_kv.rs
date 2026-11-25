@@ -4,10 +4,39 @@ use super::kv_editor::KvEntry;
 use super::workspace::ApiWorkspace;
 use gpui_kit::*;
 use transom_api::{
-    ApiAssertion, ApiAuth, ApiCookie, ApiFormField, ApiHeader, ApiQueryParam, ApiVariable,
+    ApiAssertion, ApiAuth, ApiCookie, ApiFormField, ApiGlobalParameter, ApiGlobalParameterTarget,
+    ApiHeader, ApiQueryParam, ApiVariable,
 };
 
 impl ApiWorkspace {
+    pub(super) fn apply_environment_name(&mut self, cx: &mut Context<Self>) {
+        let Some(environment_id) = self.environment_id.or(self.project.active_environment_id)
+        else {
+            return;
+        };
+        let name = self
+            .editors
+            .environment_name
+            .read(cx)
+            .value()
+            .trim()
+            .to_string();
+        if name.is_empty() {
+            return;
+        }
+        let Some(environment) = self
+            .project
+            .environments
+            .iter_mut()
+            .find(|environment| environment.id == environment_id)
+        else {
+            return;
+        };
+        environment.name = name;
+        self.project.touch();
+        cx.notify();
+    }
+
     pub(super) fn apply_request_name(&mut self, cx: &mut Context<Self>) {
         let Some(request_id) = self.selected_request else {
             return;
@@ -68,6 +97,46 @@ impl ApiWorkspace {
         };
         environment.variables = variables;
         self.project.active_environment_id = Some(environment_id);
+        self.project.touch();
+        cx.notify();
+    }
+
+    pub(super) fn apply_global_variables(
+        &mut self,
+        variables: Vec<ApiVariable>,
+        cx: &mut Context<Self>,
+    ) {
+        self.project.global_variables = variables;
+        self.project.touch();
+        cx.notify();
+    }
+
+    pub(super) fn apply_global_parameters(
+        &mut self,
+        target: ApiGlobalParameterTarget,
+        entries: &[KvEntry],
+        cx: &mut Context<Self>,
+    ) {
+        let mut parameters = Vec::with_capacity(
+            self.project
+                .global_parameters
+                .len()
+                .saturating_add(entries.len()),
+        );
+        parameters.extend(
+            self.project
+                .global_parameters
+                .iter()
+                .filter(|parameter| parameter.target != target)
+                .cloned(),
+        );
+        parameters.extend(
+            entries
+                .iter()
+                .cloned()
+                .map(|entry| global_parameter_from_entry(target, entry)),
+        );
+        self.project.global_parameters = parameters;
         self.project.touch();
         cx.notify();
     }
@@ -174,6 +243,19 @@ pub(super) fn query_from_entry(entry: KvEntry) -> ApiQueryParam {
 
 pub(super) fn header_from_entry(entry: KvEntry) -> ApiHeader {
     ApiHeader {
+        name: entry.name,
+        value: entry.value,
+        description: entry.description,
+        enabled: entry.enabled,
+    }
+}
+
+fn global_parameter_from_entry(
+    target: ApiGlobalParameterTarget,
+    entry: KvEntry,
+) -> ApiGlobalParameter {
+    ApiGlobalParameter {
+        target,
         name: entry.name,
         value: entry.value,
         description: entry.description,

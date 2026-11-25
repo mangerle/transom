@@ -25,6 +25,8 @@ pub(crate) fn render_project_actions_menu(params: &ApiWorkspaceParams<'_>) -> An
         .dropdown_caret(true)
         .dropdown_menu_with_anchor(Anchor::TopRight, move |menu, _, _| {
             let environment = view.clone();
+            let global_parameters = view.clone();
+            let global_variables = view.clone();
             let cookies = view.clone();
             let code_cur = view.clone();
             let code_js = view.clone();
@@ -36,6 +38,24 @@ pub(crate) fn render_project_actions_menu(params: &ApiWorkspaceParams<'_>) -> An
                 move |_, _, cx| {
                     environment.update(cx, |this, cx| {
                         this.toggle_auxiliary(ApiAuxiliarySection::Environment, cx)
+                    });
+                },
+            ))
+            .item(menu_item(
+                rust_i18n::t!("api.project.global_parameters").to_string(),
+                AppIcon::Ui(UiIcon::DATAFLOW),
+                move |_, _, cx| {
+                    global_parameters.update(cx, |this, cx| {
+                        this.toggle_auxiliary(ApiAuxiliarySection::GlobalParameters, cx)
+                    });
+                },
+            ))
+            .item(menu_item(
+                rust_i18n::t!("api.project.global_variables").to_string(),
+                AppIcon::Ui(UiIcon::LANGUAGE),
+                move |_, _, cx| {
+                    global_variables.update(cx, |this, cx| {
+                        this.toggle_auxiliary(ApiAuxiliarySection::GlobalVariables, cx)
                     });
                 },
             ))
@@ -95,8 +115,16 @@ pub(crate) fn render_auxiliary_panel(params: &ApiWorkspaceParams<'_>, p: &Palett
     };
     let (title, body) = match section {
         ApiAuxiliarySection::Environment => (
-            rust_i18n::t!("api.request.aux_environment").to_string(),
-            params.environment_editor.clone().into_any_element(),
+            rust_i18n::t!("api.request.environment_management").to_string(),
+            super::environment_manager_view::render_environment_manager(params),
+        ),
+        ApiAuxiliarySection::GlobalParameters => (
+            rust_i18n::t!("api.request.global_parameters").to_string(),
+            super::workspace_global_params_view::render_global_parameters(params),
+        ),
+        ApiAuxiliarySection::GlobalVariables => (
+            rust_i18n::t!("api.request.global_variables").to_string(),
+            params.global_variables_editor.clone().into_any_element(),
         ),
         ApiAuxiliarySection::Cookies => (
             rust_i18n::t!("api.request.aux_cookies").to_string(),

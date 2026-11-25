@@ -27,7 +27,7 @@ impl ApiWorkspace {
             return;
         }
         let environment = self.environment();
-        let resolved = request.resolved(&self.project.base_url, &environment);
+        let resolved = self.project.resolved_request(&request, &environment);
         if let Err(error) = resolved.validate() {
             self.set_error(error.to_string(), cx);
             return;
@@ -143,10 +143,11 @@ impl ApiWorkspace {
             return;
         }
         let environment = self.environment();
-        let url = request.resolved_url(&self.project.base_url, &environment);
-        let headers = request.headers.clone();
+        let resolved = self.project.resolved_request(&request, &environment);
+        let url = resolved.url.clone();
+        let headers = resolved.headers.clone();
         let service = self.services.websocket.clone();
-        let start = service.start(url, headers, environment, request.auth.clone());
+        let start = service.start(url, headers, environment, resolved.auth.clone());
         let task = cx.spawn_in(window, async move |this, cx| {
             let result = start.into_handle().await;
             let _ = this.update_in(cx, |this, window, cx| match result {
@@ -244,7 +245,7 @@ impl ApiWorkspace {
         let Some(request) = self.selected_request().cloned() else {
             return;
         };
-        let request = request.resolved(&self.project.base_url, &self.environment());
+        let request = self.project.resolved_request(&request, &self.environment());
         let code = generate_code(self.codegen_target, &request);
         self.editors
             .code_preview

@@ -91,10 +91,11 @@ API 项目标签
 
 存储使用原子写路径：临时文件、`fsync`、原子替换和损坏文件隔离。UI 通过 `Persistence` 的单槽异步写入器保存项目，避免在渲染和点击回调中同步写盘。
 
-当前项目 schema 为 v2，登记表包含：
+当前项目 schema 为 v3，登记表包含：
 
 - 项目、目录、请求和请求头；
 - 环境、活动环境标识与 `{{变量}}`；
+- 全局变量与全局 Query/Header 参数；
 - Cookie 及域名、路径、Secure、HttpOnly、过期时间；
 - 最近 100 条请求历史与响应摘要；
 
@@ -143,7 +144,10 @@ API 项目标签
 - OAuth 2.0 支持 client credentials，从令牌端点获取 `access_token` 后设置 Bearer 头。
 - AWS SigV4 支持 canonical query、canonical headers、HMAC 派生密钥和会话令牌。
 - GraphQL 和 gRPC 的签名使用实际发送方法，不使用界面上残留的旧方法字段。
-- 环境变量使用名称、值、启用和密钥标记表格编辑，可在 URL、请求头、请求体、GraphQL 查询与变量中替换。
+- 环境支持切换、重命名、新增和删除；环境变量使用名称、值、启用和密钥标记表格编辑。
+- 全局变量作为基础变量参与 `{{变量}}` 替换，同名环境变量优先。
+- 全局参数支持 Query 和 Header；请求自身同名项优先，全局参数只补缺。
+- URL、请求头、请求体、GraphQL 查询与变量统一使用合并后的有效环境解析。
 - Cookie 使用名称、值、Domain、Path、Secure、HttpOnly 表格编辑；响应 `Set-Cookie` 会自动更新项目 Cookie。
 - 发送时按域名、路径、Secure 和过期时间筛选 Cookie，再与手工 Cookie 合并。
 

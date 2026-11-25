@@ -30,8 +30,9 @@ pub use http::{
 pub use id::{ApiEnvironmentId, ApiFolderId, ApiProjectId, ApiRequestId};
 pub use import_export::{ApiExportFormat, ApiImportFormat, export_project, import_projects};
 pub use model::{
-    API_SCHEMA_VERSION, ApiCookie, ApiEnvironment, ApiFolder, ApiHistoryEntry, ApiProject,
-    ApiRegistry, ApiVariable, MAX_IMPORT_BYTES, cookies_text, parse_cookies_text,
+    API_SCHEMA_VERSION, ApiCookie, ApiEnvironment, ApiFolder, ApiGlobalParameter,
+    ApiGlobalParameterTarget, ApiHistoryEntry, ApiProject, ApiRegistry, ApiVariable,
+    MAX_IMPORT_BYTES, cookies_text, parse_cookies_text,
 };
 pub use request::{
     ApiAssertion, ApiAssertionResult, ApiAuth, ApiBodyType, ApiFormField, ApiFormFieldKind,

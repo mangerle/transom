@@ -241,6 +241,12 @@ api:
     environment:
       en: Environment variables
       zh-CN: 环境变量
+    global_parameters:
+      en: Global parameters
+      zh-CN: 全局参数
+    global_variables:
+      en: Global variables
+      zh-CN: 全局变量
     cookies:
       en: Cookies
       zh-CN: Cookie
@@ -717,6 +723,27 @@ api:
     environment_placeholder:
       en: One variable per line, NAME=value
       zh-CN: 每行一个环境变量，NAME=value
+    environment_management:
+      en: Environment management
+      zh-CN: 环境管理
+    environment_default_name:
+      en: 'Environment %{count}'
+      zh-CN: 环境 %{count}
+    delete_environment:
+      en: Delete environment
+      zh-CN: 删除环境
+    global_parameters:
+      en: Global parameters
+      zh-CN: 全局参数
+    global_variables:
+      en: Global variables
+      zh-CN: 全局变量
+    global_query_parameters:
+      en: Global query parameters
+      zh-CN: 全局 Query 参数
+    global_header_parameters:
+      en: Global headers
+      zh-CN: 全局 Header 参数
     cookie_name:
       en: Name
       zh-CN: 名称

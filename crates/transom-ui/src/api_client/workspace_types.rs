@@ -15,8 +15,18 @@ pub(crate) struct ApiWorkspaceServices {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ApiAuxiliarySection {
     Environment,
+    GlobalParameters,
+    GlobalVariables,
     Cookies,
     Code,
+}
+
+/// 全局参数编辑页签。
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) enum ApiGlobalParameterTab {
+    #[default]
+    Query,
+    Header,
 }
 
 /// 请求编辑器的信息架构页签。
@@ -112,6 +122,10 @@ pub(crate) struct ApiWorkspaceEditors {
     pub(crate) timeout: Entity<InputState>,
     pub(crate) docs: Entity<TextareaState>,
     pub(crate) environment: Entity<super::environment_editor::EnvironmentEditor>,
+    pub(crate) global_variables: Entity<super::environment_editor::EnvironmentEditor>,
+    pub(crate) global_query: Entity<super::kv_editor::KvEditor>,
+    pub(crate) global_headers: Entity<super::kv_editor::KvEditor>,
+    pub(crate) environment_name: Entity<InputState>,
     pub(crate) cookies: Entity<super::cookie_editor::CookieEditor>,
     pub(crate) form: Entity<super::form_editor::FormEditor>,
     pub(crate) websocket_input: Entity<TextareaState>,

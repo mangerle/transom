@@ -3,8 +3,8 @@
 use super::workspace_request_view::render_request_editor;
 use super::workspace_response_view::render_response;
 use super::{
-    ApiAuxiliarySection, ApiRequestTab, ApiResponseTab, ApiSidebarState, ApiSidebarView,
-    ApiWorkspace,
+    ApiAuxiliarySection, ApiGlobalParameterTab, ApiRequestTab, ApiResponseTab, ApiSidebarState,
+    ApiSidebarView, ApiWorkspace,
 };
 use crate::divider::{h_resizable, v_resizable};
 use crate::palette::Palette;
@@ -34,6 +34,7 @@ pub(crate) struct ApiWorkspaceParams<'a> {
     pub(crate) selected_history: Option<usize>,
     pub(crate) save_destination_open: bool,
     pub(crate) auxiliary_section: Option<ApiAuxiliarySection>,
+    pub(crate) global_parameter_tab: ApiGlobalParameterTab,
     pub(crate) folder_editor: Option<&'a super::workspace_folder::FolderEditor>,
     pub(crate) pending_folder_delete: Option<ApiFolderId>,
     pub(crate) codegen_target: transom_api::CodeTarget,
@@ -56,6 +57,10 @@ pub(crate) struct ApiWorkspaceParams<'a> {
     pub(crate) timeout: &'a Entity<InputState>,
     pub(crate) docs: &'a Entity<TextareaState>,
     pub(crate) environment_editor: &'a Entity<super::environment_editor::EnvironmentEditor>,
+    pub(crate) global_variables_editor: &'a Entity<super::environment_editor::EnvironmentEditor>,
+    pub(crate) global_query_editor: &'a Entity<super::kv_editor::KvEditor>,
+    pub(crate) global_headers_editor: &'a Entity<super::kv_editor::KvEditor>,
+    pub(crate) environment_name: &'a Entity<InputState>,
     pub(crate) cookies_editor: &'a Entity<super::cookie_editor::CookieEditor>,
     pub(crate) websocket_input: &'a Entity<TextareaState>,
     pub(crate) websocket_log: &'a Entity<TextareaState>,
