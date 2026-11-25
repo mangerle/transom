@@ -38,44 +38,53 @@ pub(super) fn render_headers(params: &ApiWorkspaceParams<'_>, p: &Palette) -> An
             ),
         ],
     );
-    let rows = response
-        .headers
-        .iter()
-        .enumerate()
-        .map(|(index, (name, value))| {
-            h_flex()
-                .id(("api-response-header", index))
-                .h(rems(size::LARGE_HEADER_HEIGHT))
-                .items_center()
-                .border_color(border)
-                .border_b_1()
-                .child(
-                    div()
-                        .w(relative(0.28))
-                        .flex_none()
-                        .min_w_0()
-                        .h_full()
-                        .px(rems(space::SM))
-                        .flex()
+    let headers = response.headers.clone();
+    let list = gpui::uniform_list(
+        "api-response-headers-list",
+        headers.len(),
+        move |range, _window, _cx| {
+            range
+                .map(|index| {
+                    let (name, value) = &headers[index];
+                    h_flex()
+                        .id(("api-response-header", index))
+                        .h(rems(size::LARGE_HEADER_HEIGHT))
                         .items_center()
-                        .truncate()
-                        .child(name.clone()),
-                )
-                .child(
-                    div()
-                        .flex_1()
-                        .min_w_0()
-                        .h_full()
-                        .px(rems(space::SM))
-                        .flex()
-                        .items_center()
-                        .border_l_1()
                         .border_color(border)
-                        .truncate()
-                        .child(value.clone()),
-                )
-                .into_any_element()
-        });
+                        .border_b_1()
+                        .child(
+                            div()
+                                .w(relative(0.28))
+                                .flex_none()
+                                .min_w_0()
+                                .h_full()
+                                .px(rems(space::SM))
+                                .flex()
+                                .items_center()
+                                .truncate()
+                                .child(name.clone()),
+                        )
+                        .child(
+                            div()
+                                .flex_1()
+                                .min_w_0()
+                                .h_full()
+                                .px(rems(space::SM))
+                                .flex()
+                                .items_center()
+                                .border_l_1()
+                                .border_color(border)
+                                .truncate()
+                                .child(value.clone()),
+                        )
+                        .into_any_element()
+                })
+                .collect()
+        },
+    )
+    .flex_1()
+    .w_full()
+    .min_h_0();
     v_flex()
         .id("api-response-headers")
         .flex_1()
@@ -83,17 +92,16 @@ pub(super) fn render_headers(params: &ApiWorkspaceParams<'_>, p: &Palette) -> An
         .w_full()
         .p(rems(space::SM))
         .child(
-            div()
+            v_flex()
                 .flex_1()
                 .min_h_0()
                 .w_full()
-                .overflow_y_scrollbar()
                 .rounded(p.radius.md)
                 .border_1()
                 .border_color(border)
                 .overflow_hidden()
                 .child(header)
-                .children(rows),
+                .child(list),
         )
         .into_any_element()
 }

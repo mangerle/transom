@@ -21,13 +21,31 @@ pub(super) fn render_history(params: &ApiWorkspaceParams<'_>, p: &Palette) -> An
     }
     let border = p.divider(p.border);
     let header = history_header(border, p);
-    let rows = params
-        .project
-        .history
-        .iter()
-        .rev()
-        .enumerate()
-        .map(|(index, entry)| history_row(params, entry, index, border, p));
+    let history = params.project.history.clone();
+    let total = history.len();
+    let view = params.view.clone();
+    let selected_history = params.ui.selected_history;
+    let palette = p.clone();
+    let list = gpui::uniform_list("api-response-history-list", total, move |range, _, _| {
+        range
+            .map(|display_index| {
+                let actual_index = total.saturating_sub(1).saturating_sub(display_index);
+                let entry = &history[actual_index];
+                history_row(HistoryRowParams {
+                    view: &view,
+                    selected_history,
+                    entry,
+                    reverse_index: display_index,
+                    total,
+                    border,
+                    p: &palette,
+                })
+            })
+            .collect()
+    })
+    .flex_1()
+    .w_full()
+    .min_h_0();
     let clear_view = params.view.clone();
     let toolbar = h_flex()
         .w_full()
@@ -53,17 +71,16 @@ pub(super) fn render_history(params: &ApiWorkspaceParams<'_>, p: &Palette) -> An
         .p(rems(space::SM))
         .child(toolbar)
         .child(
-            div()
+            v_flex()
                 .flex_1()
                 .min_h_0()
                 .w_full()
-                .overflow_y_scrollbar()
                 .rounded(p.radius.md)
                 .border_1()
                 .border_color(border)
                 .overflow_hidden()
                 .child(header)
-                .children(rows),
+                .child(list),
         );
     if let Some(entry) = params
         .ui
@@ -115,22 +132,30 @@ fn history_header(border: Hsla, p: &Palette) -> AnyElement {
     )
 }
 
-fn history_row(
-    params: &ApiWorkspaceParams<'_>,
-    entry: &ApiHistoryEntry,
+struct HistoryRowParams<'a> {
+    view: &'a Entity<super::ApiWorkspace>,
+    selected_history: Option<usize>,
+    entry: &'a ApiHistoryEntry,
     reverse_index: usize,
+    total: usize,
     border: Hsla,
-    p: &Palette,
-) -> AnyElement {
-    let actual_index = params
-        .project
-        .history
-        .len()
-        .saturating_sub(1)
-        .saturating_sub(reverse_index);
-    let selected = params.ui.selected_history == Some(actual_index);
-    let view = params.view.clone();
-    let replay_view = params.view.clone();
+    p: &'a Palette,
+}
+
+fn history_row(params: HistoryRowParams<'_>) -> AnyElement {
+    let HistoryRowParams {
+        view,
+        selected_history,
+        entry,
+        reverse_index,
+        total,
+        border,
+        p,
+    } = params;
+    let actual_index = total.saturating_sub(1).saturating_sub(reverse_index);
+    let selected = selected_history == Some(actual_index);
+    let view = view.clone();
+    let replay_view = view.clone();
     let request_id = entry.request_id;
     let status_color = response_color(entry.status, p);
     h_flex()
