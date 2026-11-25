@@ -39,7 +39,22 @@ fn postman_body(request: &ApiRequest) -> Value {
             "raw": request.body,
             "options": {"raw": {"language": "xml"}}
         }),
-        ApiBodyType::Text | ApiBodyType::None => json!({"mode": "raw", "raw": request.body}),
+        ApiBodyType::JavaScript => json!({
+            "mode": "raw",
+            "raw": request.body,
+            "options": {"raw": {"language": "javascript"}}
+        }),
+        ApiBodyType::Html => json!({
+            "mode": "raw",
+            "raw": request.body,
+            "options": {"raw": {"language": "html"}}
+        }),
+        ApiBodyType::Text => json!({
+            "mode": "raw",
+            "raw": request.body,
+            "options": {"raw": {"language": "text"}}
+        }),
+        ApiBodyType::None => json!({"mode": "raw", "raw": request.body}),
     }
 }
 
@@ -95,7 +110,11 @@ pub(super) fn export_curl(project: &ApiProject) -> Result<String, String> {
                         .replace('\'', "'\\''")
                 ));
             }
-            ApiBodyType::Json | ApiBodyType::Text | ApiBodyType::Xml => {
+            ApiBodyType::Json
+            | ApiBodyType::Text
+            | ApiBodyType::Xml
+            | ApiBodyType::JavaScript
+            | ApiBodyType::Html => {
                 if !request.body.is_empty() {
                     line.push_str(&format!(" -d '{}'", request.body.replace('\'', "'\\''")));
                 }

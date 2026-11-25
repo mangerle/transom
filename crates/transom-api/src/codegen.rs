@@ -78,7 +78,11 @@ fn curl(request: &ApiRequest) -> String {
                 shell_quote(request.body_file.trim_start_matches("file://"))
             ));
         }
-        ApiBodyType::Json | ApiBodyType::Text | ApiBodyType::Xml => {
+        ApiBodyType::Json
+        | ApiBodyType::Text
+        | ApiBodyType::Xml
+        | ApiBodyType::JavaScript
+        | ApiBodyType::Html => {
             if !request.body.is_empty() {
                 line.push_str(&format!(" -d '{}'", shell_quote(&request.body)));
             }

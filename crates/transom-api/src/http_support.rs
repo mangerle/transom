@@ -115,6 +115,19 @@ pub(super) fn ensure_header(headers: &mut Vec<(String, String)>, name: &str, val
     }
 }
 
+pub(super) fn ensure_header_if_absent(
+    headers: &mut Vec<(String, String)>,
+    name: &str,
+    value: &str,
+) {
+    if !headers
+        .iter()
+        .any(|(header, _)| header.eq_ignore_ascii_case(name))
+    {
+        headers.push((name.to_string(), value.to_string()));
+    }
+}
+
 pub(super) fn method_for(method: super::ApiMethod) -> Method {
     match method {
         super::ApiMethod::Get => Method::GET,

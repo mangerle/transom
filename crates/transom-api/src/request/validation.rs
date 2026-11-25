@@ -44,7 +44,12 @@ impl ApiRequest {
                     });
                 }
             }
-            ApiBodyType::None | ApiBodyType::Json | ApiBodyType::Text | ApiBodyType::Xml => {}
+            ApiBodyType::None
+            | ApiBodyType::Json
+            | ApiBodyType::Text
+            | ApiBodyType::Xml
+            | ApiBodyType::JavaScript
+            | ApiBodyType::Html => {}
         }
         Ok(())
     }

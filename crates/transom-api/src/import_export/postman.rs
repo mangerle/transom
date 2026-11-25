@@ -1,7 +1,8 @@
 //! Postman 2.1 集合导入。
 
 use super::super::{
-    ApiBodyType, ApiFolderId, ApiFormField, ApiFormFieldKind, ApiHeader, ApiProject, ApiRequest,
+    ApiBodyType, ApiFolderId, ApiFormField, ApiFormFieldKind, ApiHeader, ApiProject,
+    ApiRawLanguage, ApiRequest,
 };
 use super::common::{file_url, import_error, parse_method};
 use serde_json::Value;
@@ -104,8 +105,14 @@ fn parse_postman_body(body: &Value, request: &mut ApiRequest) -> Result<(), AppE
             {
                 Some("json") => ApiBodyType::Json,
                 Some("xml") => ApiBodyType::Xml,
+                Some("javascript") => ApiBodyType::JavaScript,
+                Some("html") => ApiBodyType::Html,
                 _ => ApiBodyType::Text,
             };
+            request.raw_language = request
+                .body_type
+                .raw_language()
+                .unwrap_or(ApiRawLanguage::Text);
             request.body = body
                 .get("raw")
                 .and_then(Value::as_str)

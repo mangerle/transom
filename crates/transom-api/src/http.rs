@@ -383,6 +383,7 @@ mod tests {
             query: Vec::new(),
             headers: Vec::new(),
             body_type: super::super::ApiBodyType::Text,
+            raw_language: super::super::ApiRawLanguage::Text,
             body: String::new(),
             form_fields: Vec::new(),
             body_file: String::new(),

@@ -19,6 +19,7 @@ mod sidebar_view;
 mod workspace;
 mod workspace_actions;
 mod workspace_advanced_view;
+mod workspace_body_actions;
 mod workspace_body_view;
 mod workspace_editor_state;
 mod workspace_editors;
@@ -40,7 +41,7 @@ pub(crate) use actions::{
 pub(crate) use sidebar::{ApiImportState, ApiSidebarEvent, ApiSidebarState, ApiSidebarView};
 pub(crate) use sidebar_view::{ApiSidebarParams, render_api_sidebar};
 pub(crate) use workspace::{
-    ApiAuxiliarySection, ApiRequestTab, ApiResponseTab, ApiWorkspace, ApiWorkspaceEvent,
-    ApiWorkspaceServices,
+    ApiAuxiliarySection, ApiBodyMode, ApiRequestTab, ApiResponseTab, ApiWorkspace,
+    ApiWorkspaceEvent, ApiWorkspaceServices,
 };
 pub(crate) use workspace_view::{ApiWorkspaceParams, render_api_workspace};

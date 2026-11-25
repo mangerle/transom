@@ -5,9 +5,11 @@ use super::{ApiEnvironment, ApiError, ApiRequestId};
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
+mod body;
 mod request_text;
 mod validation;
 
+pub use self::body::{ApiBodyType, ApiFormField, ApiFormFieldKind, ApiRawLanguage};
 pub use self::request_text::method_for_request;
 
 /// HTTP 方法；与常用 API 客户端保持同一集合。
@@ -136,94 +138,6 @@ fn default_true() -> bool {
     true
 }
 
-/// HTTP 请求体的编辑与发送类型。
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum ApiBodyType {
-    /// 不发送请求体。
-    None,
-    /// JSON 文本，保留用户原始格式。
-    Json,
-    /// 普通文本。
-    #[default]
-    Text,
-    /// XML 文本。
-    Xml,
-    /// `application/x-www-form-urlencoded` 键值表单。
-    FormUrlEncoded,
-    /// `multipart/form-data` 键值表单，支持文件。
-    Multipart,
-    /// 单个二进制文件。
-    Binary,
-}
-
-impl ApiBodyType {
-    /// 稳定的下拉顺序。
-    pub const ALL: [Self; 7] = [
-        Self::None,
-        Self::Json,
-        Self::Text,
-        Self::Xml,
-        Self::FormUrlEncoded,
-        Self::Multipart,
-        Self::Binary,
-    ];
-
-    /// 配置文本使用的稳定值。
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::None => "none",
-            Self::Json => "json",
-            Self::Text => "text",
-            Self::Xml => "xml",
-            Self::FormUrlEncoded => "form_urlencoded",
-            Self::Multipart => "multipart",
-            Self::Binary => "binary",
-        }
-    }
-
-    /// 是否使用表单字段列表发送。
-    pub const fn is_form(self) -> bool {
-        matches!(self, Self::FormUrlEncoded | Self::Multipart)
-    }
-}
-
-/// 表单字段的值类型；文件只允许用于 multipart。
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum ApiFormFieldKind {
-    #[default]
-    Text,
-    File,
-}
-
-/// 一条表单字段。
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub struct ApiFormField {
-    pub name: String,
-    pub value: String,
-    #[serde(default)]
-    pub description: String,
-    #[serde(default = "default_true")]
-    pub enabled: bool,
-    #[serde(default)]
-    pub kind: ApiFormFieldKind,
-}
-
-impl ApiFormField {
-    /// 创建启用的文本表单字段。
-    pub fn new(name: impl Into<String>, value: impl Into<String>) -> Self {
-        Self {
-            name: name.into(),
-            value: value.into(),
-            description: String::new(),
-            enabled: true,
-            kind: ApiFormFieldKind::Text,
-        }
-    }
-}
-
 /// API 请求的认证配置。
 ///
 /// 设计原理（Why）：认证配置只保存环境变量名，不把令牌、客户端密钥或 AWS
@@ -303,6 +217,8 @@ pub struct ApiRequest {
     #[serde(default)]
     pub body_type: ApiBodyType,
     #[serde(default)]
+    pub raw_language: ApiRawLanguage,
+    #[serde(default)]
     pub body: String,
     #[serde(default)]
     pub form_fields: Vec<ApiFormField>,
@@ -335,6 +251,7 @@ impl ApiRequest {
             query: Vec::new(),
             headers: Vec::new(),
             body_type: ApiBodyType::Text,
+            raw_language: ApiRawLanguage::Json,
             body: String::new(),
             form_fields: Vec::new(),
             body_file: String::new(),
@@ -578,6 +495,18 @@ mod tests {
         assert_eq!(duplicate.name, "用户列表 副本");
         assert_eq!(duplicate.url, request.url);
         assert_eq!(duplicate.headers, request.headers);
+    }
+
+    #[test]
+    fn legacy_request_without_raw_language_defaults_to_json() {
+        let mut value =
+            serde_json::to_value(ApiRequest::new("旧请求", None)).expect("请求应可序列化");
+        value
+            .as_object_mut()
+            .expect("请求应为对象")
+            .remove("raw_language");
+        let request: ApiRequest = serde_json::from_value(value).expect("旧请求应可反序列化");
+        assert_eq!(request.raw_language, ApiRawLanguage::Json);
     }
 
     #[test]

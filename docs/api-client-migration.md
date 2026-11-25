@@ -103,7 +103,7 @@ API 项目标签
 
 ### HTTP 与 GraphQL
 
-- HTTP Body 支持无请求体、JSON、Text、XML、`x-www-form-urlencoded`、`multipart/form-data` 和 Binary 文件。
+- HTTP Body 使用与 APIPOST 类似的“模式 + raw 语言”结构：None、form-data、urlencoded、binary 和 raw；raw 支持 JSON、XML、JavaScript、Text、HTML。
 - `form-data` 字段可逐行选择 Text 或 File；文件值与文本值分开保存，选择后在后台检查文件是否存在、是否为普通文件以及是否超过 64 MiB，并支持替换和清除。
 - Binary Body 通过系统文件选择器选择，发送时使用文件扩展名推测 MIME，缺失时回退为 `application/octet-stream`。
 - Query 与 Header 的值始终是文本；文件上传不属于 Query 或 Header。

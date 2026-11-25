@@ -2,7 +2,7 @@
 
 use gpui_kit::component::input::{InputState, TextareaState};
 use gpui_kit::*;
-use transom_api::{ApiHttpService, ApiProject, ApiWebSocketService};
+use transom_api::{ApiBodyType, ApiHttpService, ApiProject, ApiRawLanguage, ApiWebSocketService};
 
 /// API 工作区需要的外壳服务集合。
 #[derive(Clone)]
@@ -29,6 +29,50 @@ pub(crate) enum ApiRequestTab {
     Assertions,
     Settings,
     Docs,
+}
+
+/// HTTP 请求体的顶层编辑模式；raw 的具体语言单独选择。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ApiBodyMode {
+    None,
+    FormData,
+    UrlEncoded,
+    Binary,
+    Raw,
+}
+
+impl ApiBodyMode {
+    pub(crate) const ALL: [Self; 5] = [
+        Self::None,
+        Self::FormData,
+        Self::UrlEncoded,
+        Self::Binary,
+        Self::Raw,
+    ];
+
+    pub(crate) fn from_body_type(body_type: ApiBodyType) -> Self {
+        match body_type {
+            ApiBodyType::None => Self::None,
+            ApiBodyType::Multipart => Self::FormData,
+            ApiBodyType::FormUrlEncoded => Self::UrlEncoded,
+            ApiBodyType::Binary => Self::Binary,
+            ApiBodyType::Json
+            | ApiBodyType::Text
+            | ApiBodyType::Xml
+            | ApiBodyType::JavaScript
+            | ApiBodyType::Html => Self::Raw,
+        }
+    }
+
+    pub(crate) fn body_type(self, raw_language: ApiRawLanguage) -> ApiBodyType {
+        match self {
+            Self::None => ApiBodyType::None,
+            Self::FormData => ApiBodyType::Multipart,
+            Self::UrlEncoded => ApiBodyType::FormUrlEncoded,
+            Self::Binary => ApiBodyType::Binary,
+            Self::Raw => raw_language.body_type(),
+        }
+    }
 }
 
 /// 响应面板的信息架构页签。

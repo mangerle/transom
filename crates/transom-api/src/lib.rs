@@ -35,7 +35,8 @@ pub use model::{
 };
 pub use request::{
     ApiAssertion, ApiAssertionResult, ApiAuth, ApiBodyType, ApiFormField, ApiFormFieldKind,
-    ApiHeader, ApiMethod, ApiProtocol, ApiQueryParam, ApiRequest, method_for_request,
+    ApiHeader, ApiMethod, ApiProtocol, ApiQueryParam, ApiRawLanguage, ApiRequest,
+    method_for_request,
 };
 pub use store::{ApiProjectStore, parse_project_import};
 pub use websocket::{

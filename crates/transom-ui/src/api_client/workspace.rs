@@ -3,8 +3,8 @@
 use super::kv_editor::KvEditorEvent;
 use super::workspace_folder::FolderEditor;
 pub(crate) use super::workspace_types::{
-    ApiAuxiliarySection, ApiRequestTab, ApiResponseTab, ApiWorkspaceEditors, ApiWorkspaceEvent,
-    ApiWorkspaceServices,
+    ApiAuxiliarySection, ApiBodyMode, ApiRequestTab, ApiResponseTab, ApiWorkspaceEditors,
+    ApiWorkspaceEvent, ApiWorkspaceServices,
 };
 use gpui_kit::component::input::InputEvent;
 use gpui_kit::component::resizable::ResizableState;
@@ -44,7 +44,7 @@ pub(crate) struct ApiWorkspace {
     pub(crate) folder_editor: Option<FolderEditor>,
     pub(crate) pending_folder_delete: Option<ApiFolderId>,
     editor_subscriptions: Vec<Subscription>,
-    binary_file_task: Option<Task<()>>,
+    pub(super) binary_file_task: Option<Task<()>>,
 }
 
 impl EventEmitter<ApiWorkspaceEvent> for ApiWorkspace {}
@@ -192,74 +192,15 @@ impl ApiWorkspace {
         request.id = existing.id;
         request.folder_id = existing.folder_id;
         request.name = existing.name;
+        request.raw_language = request
+            .body_type
+            .raw_language()
+            .unwrap_or(request.raw_language);
         self.project.upsert_request(request);
         self.load_selected(window, cx);
         self.error = None;
         cx.notify();
         true
-    }
-
-    /// 切换 HTTP Body 类型，并同步表单编辑器的文件能力。
-    pub(crate) fn set_body_type(
-        &mut self,
-        body_type: transom_api::ApiBodyType,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        self.capture_editor(cx);
-        let Some(request_id) = self.selected_request else {
-            return;
-        };
-        if let Some(request) = self
-            .project
-            .requests
-            .iter_mut()
-            .find(|request| request.id == request_id)
-        {
-            request.body_type = body_type;
-            self.project.touch();
-        }
-        self.editors.form.update(cx, |editor, cx| {
-            editor.set_allow_files(body_type == transom_api::ApiBodyType::Multipart, window, cx);
-        });
-        cx.notify();
-    }
-
-    /// 选择 Binary 请求体文件，路径只在发送时读取。
-    pub(crate) fn pick_binary_file(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let picked = cx.prompt_for_paths(PathPromptOptions {
-            files: true,
-            directories: false,
-            multiple: false,
-            prompt: None,
-        });
-        self.binary_file_task = Some(cx.spawn_in(window, async move |this, cx| {
-            let Ok(Ok(Some(paths))) = picked.await else {
-                return;
-            };
-            let Some(path) = paths.into_iter().next() else {
-                return;
-            };
-            let _ = this.update_in(cx, |this, window, cx| {
-                let Some(request_id) = this.selected_request else {
-                    return;
-                };
-                if let Some(request) = this
-                    .project
-                    .requests
-                    .iter_mut()
-                    .find(|request| request.id == request_id)
-                {
-                    request.body_type = transom_api::ApiBodyType::Binary;
-                    request.body_file = format!("file://{}", path.display());
-                    this.project.touch();
-                    this.editors.form.update(cx, |editor, cx| {
-                        editor.set_allow_files(false, window, cx);
-                    });
-                    cx.notify();
-                }
-            });
-        }));
     }
 
     /// 同时切换协议和方法，避免一次选择触发两次草稿回写。

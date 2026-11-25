@@ -3,8 +3,8 @@
 use super::http::http_auth::{AuthRequest, apply_auth};
 use super::http::{MAX_REQUEST_TIMEOUT_SECONDS, MAX_UPLOAD_BYTES, apply_cookies};
 use super::http_support::{
-    ensure_header, header_name, header_value, method_for, read_response, request_host,
-    safe_url_label,
+    ensure_header, ensure_header_if_absent, header_name, header_value, method_for, read_response,
+    request_host, safe_url_label,
 };
 use super::{
     ApiAuth, ApiBodyType, ApiCookie, ApiEnvironment, ApiError, ApiFormFieldKind, ApiRequest,
@@ -55,10 +55,8 @@ pub(super) async fn prepared_http_parts(
             })?,
         });
     }
-    if request.body_type == ApiBodyType::Json {
-        ensure_header(&mut headers, "content-type", "application/json");
-    } else if request.body_type == ApiBodyType::Xml {
-        ensure_header(&mut headers, "content-type", "application/xml");
+    if let Some(content_type) = raw_content_type(request.body_type) {
+        ensure_header_if_absent(&mut headers, "content-type", content_type);
     }
     let body = match request.body_type {
         ApiBodyType::None => Vec::new(),
@@ -75,12 +73,28 @@ pub(super) async fn prepared_http_parts(
             }
             bytes
         }
-        ApiBodyType::Json | ApiBodyType::Text | ApiBodyType::Xml => {
-            request.body.as_bytes().to_vec()
-        }
+        ApiBodyType::Json
+        | ApiBodyType::Text
+        | ApiBodyType::Xml
+        | ApiBodyType::JavaScript
+        | ApiBodyType::Html => request.body.as_bytes().to_vec(),
         ApiBodyType::FormUrlEncoded | ApiBodyType::Multipart => unreachable_marked_as_error()?,
     };
     Ok(PreparedRequestParts { headers, body })
+}
+
+fn raw_content_type(body_type: ApiBodyType) -> Option<&'static str> {
+    match body_type {
+        ApiBodyType::Json => Some("application/json"),
+        ApiBodyType::Xml => Some("application/xml"),
+        ApiBodyType::JavaScript => Some("application/javascript"),
+        ApiBodyType::Html => Some("text/html"),
+        ApiBodyType::Text => Some("text/plain; charset=utf-8"),
+        ApiBodyType::None
+        | ApiBodyType::FormUrlEncoded
+        | ApiBodyType::Multipart
+        | ApiBodyType::Binary => None,
+    }
 }
 
 fn unreachable_marked_as_error() -> Result<Vec<u8>, ApiError> {
@@ -240,4 +254,46 @@ async fn read_upload_file(path: &str) -> Result<Vec<u8>, ApiError> {
             path: path.to_string(),
             reason: error.to_string(),
         })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn raw_language_sets_default_content_type_without_overriding_user_header() {
+        let mut request = ApiRequest::new("脚本", None);
+        request.body_type = ApiBodyType::JavaScript;
+        let prepared = prepared_http_parts(&request, &ApiEnvironment::empty(), false)
+            .await
+            .expect("请求体应可构建");
+        assert!(
+            prepared
+                .headers
+                .iter()
+                .any(|(name, value)| name.eq_ignore_ascii_case("content-type")
+                    && value == "application/javascript")
+        );
+
+        request.headers.push(super::super::ApiHeader::new(
+            "Content-Type",
+            "application/x-custom",
+        ));
+        let prepared = prepared_http_parts(&request, &ApiEnvironment::empty(), false)
+            .await
+            .expect("请求体应可构建");
+        assert!(
+            prepared
+                .headers
+                .iter()
+                .any(|(name, value)| name.eq_ignore_ascii_case("content-type")
+                    && value == "application/x-custom")
+        );
+        assert!(
+            !prepared
+                .headers
+                .iter()
+                .any(|(_, value)| value == "application/javascript")
+        );
+    }
 }

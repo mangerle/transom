@@ -434,6 +434,9 @@ api:
     body_binary:
       en: Binary
       zh-CN: 二进制
+    body_raw:
+      en: raw
+      zh-CN: raw
     form_name:
       en: Name
       zh-CN: 名称

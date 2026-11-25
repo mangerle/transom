@@ -170,6 +170,36 @@ paths:
     }
 
     #[test]
+    fn postman_raw_language_round_trips_javascript() {
+        let text = r#"{
+  "info": {"name": "脚本"},
+  "item": [{
+    "name": "脚本请求",
+    "request": {
+      "method": "POST",
+      "url": {"raw": "https://example.com/run"},
+      "body": {
+        "mode": "raw",
+        "raw": "console.log('ok')",
+        "options": {"raw": {"language": "javascript"}}
+      }
+    }
+  }]
+}"#;
+        let projects =
+            import_projects(text, ApiImportFormat::Postman).expect("Postman raw 应可导入");
+        let request = &projects[0].requests[0];
+        assert_eq!(request.body_type, ApiBodyType::JavaScript);
+        assert_eq!(
+            request.raw_language,
+            super::super::ApiRawLanguage::JavaScript
+        );
+        let exported =
+            export_project(&projects[0], ApiExportFormat::Postman).expect("Postman 应可导出");
+        assert!(exported.contains("\"language\": \"javascript\""));
+    }
+
+    #[test]
     fn postman_import_reads_nested_items() {
         let text = r#"{
   "info": {"name": "Postman 示例"},

@@ -252,13 +252,13 @@ fn render_tabbed_request(params: &ApiWorkspaceParams<'_>, p: &Palette) -> AnyEle
 
 fn visible_tabs(params: &ApiWorkspaceParams<'_>) -> Vec<ApiRequestTab> {
     let mut tabs = Vec::with_capacity(5);
+    tabs.push(ApiRequestTab::Headers);
     if params.protocol == ApiProtocol::Http || params.protocol == ApiProtocol::GraphQl {
         tabs.push(ApiRequestTab::Query);
     }
     if params.protocol != ApiProtocol::Http || params.method.has_body() {
         tabs.push(ApiRequestTab::Body);
     }
-    tabs.push(ApiRequestTab::Headers);
     tabs.push(ApiRequestTab::Auth);
     tabs.push(ApiRequestTab::Assertions);
     tabs.push(ApiRequestTab::Settings);
@@ -279,12 +279,23 @@ fn request_tab(tab: ApiRequestTab, params: &ApiWorkspaceParams<'_>) -> Tab {
             });
             labeled(rust_i18n::t!("api.request.query").to_string(), count)
         }
-        ApiRequestTab::Body => match params.protocol {
-            ApiProtocol::Http => rust_i18n::t!("api.request.body").to_string(),
-            ApiProtocol::GraphQl => rust_i18n::t!("api.request.graphql_query").to_string(),
-            ApiProtocol::Grpc => rust_i18n::t!("api.request.grpc_message").to_string(),
-            ApiProtocol::WebSocket => rust_i18n::t!("api.request.websocket_messages").to_string(),
-        },
+        ApiRequestTab::Body => {
+            let name = match params.protocol {
+                ApiProtocol::Http => rust_i18n::t!("api.request.body").to_string(),
+                ApiProtocol::GraphQl => rust_i18n::t!("api.request.graphql_query").to_string(),
+                ApiProtocol::Grpc => rust_i18n::t!("api.request.grpc_message").to_string(),
+                ApiProtocol::WebSocket => {
+                    rust_i18n::t!("api.request.websocket_messages").to_string()
+                }
+            };
+            let count = request.map_or(0, |request| {
+                usize::from(
+                    request.body_type != transom_api::ApiBodyType::None
+                        || !request.form_fields.is_empty(),
+                )
+            });
+            labeled(name, count)
+        }
         ApiRequestTab::Headers => {
             let count = request.map_or(0, |request| {
                 request

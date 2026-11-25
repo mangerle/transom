@@ -1,5 +1,6 @@
 //! HTTP、GraphQL、gRPC 与 WebSocket 的请求主体视图。
 
+use super::ApiBodyMode;
 use super::workspace_request_view::render_text_panel;
 use super::workspace_view::ApiWorkspaceParams;
 use crate::palette::Palette;
@@ -7,10 +8,13 @@ use crate::theme::tokens::{rem_px, space, typography};
 use crate::widgets::{IconButton, IconButtonSize, action_button, dropdown};
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Disableable;
+use gpui_kit::component::Sizable;
 use gpui_kit::component::button::ButtonVariants;
 use gpui_kit::component::input::{Input, Textarea};
+use gpui_kit::component::radio::Radio;
+use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
-use transom_api::{ApiBodyType, ApiProtocol};
+use transom_api::{ApiBodyType, ApiProtocol, ApiRawLanguage};
 use transom_ui_icons::{AppIcon, AppIconElement, UiIcon};
 
 pub(super) fn render_body(params: &ApiWorkspaceParams<'_>, p: &Palette) -> AnyElement {
@@ -23,27 +27,69 @@ pub(super) fn render_body(params: &ApiWorkspaceParams<'_>, p: &Palette) -> AnyEl
 }
 
 fn render_http_body(params: &ApiWorkspaceParams<'_>, p: &Palette) -> AnyElement {
-    let body_type = params
-        .request
-        .map_or(ApiBodyType::Text, |request| request.body_type);
-    let view = params.view.clone();
-    let body_type_control = dropdown(
-        "api-request-body-type",
-        body_type,
-        ApiBodyType::ALL
-            .into_iter()
-            .map(|kind| (kind, body_type_label(kind)))
-            .collect(),
-        |this: &mut super::ApiWorkspace, kind, window, cx| {
-            this.set_body_type(kind, window, cx);
-        },
-        view,
-    );
+    let request = params.request;
+    let body_type = request.map_or(ApiBodyType::Text, |request| request.body_type);
+    let raw_language = request
+        .map(|request| {
+            request
+                .body_type
+                .raw_language()
+                .unwrap_or(request.raw_language)
+        })
+        .unwrap_or_default();
+    let mode = ApiBodyMode::from_body_type(body_type);
+    let raw_view = params.view.clone();
+    let controls = ApiBodyMode::ALL
+        .into_iter()
+        .fold(
+            h_flex()
+                .h(rems(crate::theme::tokens::size::LARGE_HEADER_HEIGHT))
+                .w_full()
+                .px(rems(space::SM))
+                .gap(rems(space::MD))
+                .items_center()
+                .border_color(p.divider(p.border))
+                .border_b_1(),
+            |row, candidate| {
+                let view = params.view.clone();
+                row.child(
+                    Radio::new(ElementId::Name(
+                        format!("api-body-mode-{}", body_mode_id(candidate)).into(),
+                    ))
+                    .small()
+                    .label(body_mode_label(candidate))
+                    .checked(candidate == mode)
+                    .on_click(move |_, window, cx| {
+                        view.update(cx, |this, cx| this.set_body_mode(candidate, window, cx));
+                    }),
+                )
+            },
+        )
+        .child(div().flex_1())
+        .when(mode == ApiBodyMode::Raw, |row| {
+            row.child(dropdown(
+                "api-raw-language",
+                raw_language,
+                ApiRawLanguage::ALL
+                    .into_iter()
+                    .map(|language| (language, raw_language_label(language)))
+                    .collect(),
+                |this: &mut super::ApiWorkspace, language, window, cx| {
+                    this.set_raw_language(language, window, cx);
+                },
+                raw_view,
+            ))
+        });
+
     let content = match body_type {
         ApiBodyType::None => {
             centered_body_message(rust_i18n::t!("api.request.no_body").to_string(), p)
         }
-        ApiBodyType::Json | ApiBodyType::Text | ApiBodyType::Xml => {
+        ApiBodyType::Json
+        | ApiBodyType::Text
+        | ApiBodyType::Xml
+        | ApiBodyType::JavaScript
+        | ApiBodyType::Html => {
             render_text_panel("api-request-body", params.request_body.clone(), p)
         }
         ApiBodyType::FormUrlEncoded | ApiBodyType::Multipart => {
@@ -54,35 +100,38 @@ fn render_http_body(params: &ApiWorkspaceParams<'_>, p: &Palette) -> AnyElement 
     v_flex()
         .size_full()
         .min_h_0()
-        .child(
-            h_flex()
-                .h(rems(crate::theme::tokens::size::PANE_HEADER_HEIGHT))
-                .px(rems(space::SM))
-                .gap(rems(space::SM))
-                .items_center()
-                .child(
-                    div()
-                        .text_size(rems(typography::CAPTION))
-                        .text_color(p.muted_foreground)
-                        .child(rust_i18n::t!("api.request.body_type").to_string()),
-                )
-                .child(body_type_control),
-        )
+        .child(controls)
         .child(content)
         .into_any_element()
 }
 
-fn body_type_label(body_type: ApiBodyType) -> String {
-    match body_type {
-        ApiBodyType::None => rust_i18n::t!("api.request.body_none").to_string(),
-        ApiBodyType::Json => "JSON".to_string(),
-        ApiBodyType::Text => rust_i18n::t!("api.request.body_text").to_string(),
-        ApiBodyType::Xml => "XML".to_string(),
-        ApiBodyType::FormUrlEncoded => {
-            rust_i18n::t!("api.request.body_form_urlencoded").to_string()
-        }
-        ApiBodyType::Multipart => rust_i18n::t!("api.request.body_multipart").to_string(),
-        ApiBodyType::Binary => rust_i18n::t!("api.request.body_binary").to_string(),
+fn body_mode_label(mode: ApiBodyMode) -> String {
+    match mode {
+        ApiBodyMode::None => rust_i18n::t!("api.request.body_none").to_string(),
+        ApiBodyMode::FormData => rust_i18n::t!("api.request.body_multipart").to_string(),
+        ApiBodyMode::UrlEncoded => rust_i18n::t!("api.request.body_form_urlencoded").to_string(),
+        ApiBodyMode::Binary => rust_i18n::t!("api.request.body_binary").to_string(),
+        ApiBodyMode::Raw => rust_i18n::t!("api.request.body_raw").to_string(),
+    }
+}
+
+fn body_mode_id(mode: ApiBodyMode) -> &'static str {
+    match mode {
+        ApiBodyMode::None => "none",
+        ApiBodyMode::FormData => "form-data",
+        ApiBodyMode::UrlEncoded => "urlencoded",
+        ApiBodyMode::Binary => "binary",
+        ApiBodyMode::Raw => "raw",
+    }
+}
+
+fn raw_language_label(language: ApiRawLanguage) -> String {
+    match language {
+        ApiRawLanguage::Json => "JSON".to_string(),
+        ApiRawLanguage::Xml => "XML".to_string(),
+        ApiRawLanguage::JavaScript => "JavaScript".to_string(),
+        ApiRawLanguage::Text => rust_i18n::t!("api.request.body_text").to_string(),
+        ApiRawLanguage::Html => "HTML".to_string(),
     }
 }
 
