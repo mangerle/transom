@@ -514,10 +514,10 @@ api:
       zh-CN: 请求体
     query:
       en: Query
-      zh-CN: Query
+      zh-CN: 查询参数
     headers:
       en: Header
-      zh-CN: Header
+      zh-CN: 请求头
     body:
       en: Body
       zh-CN: 请求体
