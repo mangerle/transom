@@ -357,7 +357,11 @@ impl TerminalView {
             if engine.is_alt_screen() {
                 engine.process(b"\x1b[?1049l");
             }
-            engine.process("\r\n\x1b[90m--- 已重新连接 ---\x1b[0m\r\n".as_bytes());
+            let reconnect_notice = format!(
+                "\r\n\x1b[90m{}\x1b[0m\r\n",
+                rust_i18n::t!("terminal.reconnected")
+            );
+            engine.process(reconnect_notice.as_bytes());
         }
 
         let (input_tx, output_rx, reader_task) = Self::spawn_io_tasks(

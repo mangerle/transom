@@ -6525,6 +6525,9 @@ diff:
     en: 'Failed to read the local file (%{path}): %{error}'
     zh-CN: '读取本地文件失败（%{path}）: %{error}'
 terminal:
+  reconnected:
+    en: --- Reconnected ---
+    zh-CN: --- 已重新连接 ---
   search:
     placeholder:
       en: Search terminal output
@@ -6606,6 +6609,12 @@ terminal:
       en: 'Trigger matched: %{name}'
       zh-CN: '命中触发器: %{name}'
 connection:
+  disconnected_reason:
+    en: Connection disconnected
+    zh-CN: 连接已断开
+  auto_reconnect_delay:
+    en: '%{reason}, reconnecting in %{delay_secs} seconds (attempt %{attempt}/%{total_attempts})'
+    zh-CN: '%{reason}，%{delay_secs} 秒后自动重连（第 %{attempt}/%{total_attempts} 次）'
   local_terminal:
     en: Local terminal %{shell}
     zh-CN: 本地终端 %{shell}

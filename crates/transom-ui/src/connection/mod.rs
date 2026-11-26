@@ -194,12 +194,19 @@ pub(crate) fn schedule_auto_reconnect(
     let total_attempts = BACKOFF_SECS.len();
     let (code, reason) = match &tab.status {
         TabStatus::Failed(error) => (error.code, error.to_string()),
-        _ => (ErrorCode::ConnectionFailed, "连接已断开".to_string()),
+        _ => (
+            ErrorCode::ConnectionFailed,
+            rust_i18n::t!("connection.disconnected_reason").to_string(),
+        ),
     };
-    let detail = format!(
-        "{reason}，{delay_secs} 秒后自动重连（第 {}/{total_attempts} 次）",
-        attempt + 1
-    );
+    let detail = rust_i18n::t!(
+        "connection.auto_reconnect_delay",
+        reason = reason,
+        delay_secs = delay_secs,
+        attempt = attempt + 1,
+        total_attempts = total_attempts
+    )
+    .to_string();
     tab.status = TabStatus::Failed(AppError::with_detail(code, detail.clone()));
     let session_name = session.name.clone();
     log::warn!(
