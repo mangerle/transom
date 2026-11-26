@@ -15,7 +15,7 @@ use alacritty_terminal::term::cell::Flags;
 /// 还不够；用户可能已经输入了半条命令。用单一枚举表达未知、空提示符、已编辑与
 /// 命令运行四种状态，避免多个布尔字段组合出“正在运行但输入行为空”这类非法状态。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum PromptInputState {
+pub enum PromptInputState {
     /// 尚未收到足够的 Shell 集成标记，不能安全判断。
     Unknown,
     /// 已到达提示符，且本提示符下没有用户输入。
@@ -113,7 +113,7 @@ impl TerminalEngine {
     ///
     /// 除命令采集外，补全浮层的采纳校验也用它核对网格内容：
     /// 网格与本地按键跟踪一致（或只差回显尾部）时，替换词才是安全的。
-    pub(crate) fn grid_command_text(&self) -> Option<String> {
+    pub fn grid_command_text(&self) -> Option<String> {
         let start = self.command_input_point?;
         let grid = self.term.grid();
         let cursor = grid.cursor.point;
@@ -159,7 +159,7 @@ impl TerminalEngine {
     }
 
     /// 当前提示符输入状态；目录快捷动作据此决定能否注入命令。
-    pub(crate) fn prompt_input_state(&self) -> PromptInputState {
+    pub fn prompt_input_state(&self) -> PromptInputState {
         self.prompt_input_state
     }
 
@@ -167,7 +167,7 @@ impl TerminalEngine {
     ///
     /// 输入一旦被编辑过，就不尝试猜测用户是否已经删空；保持 [`PromptInputState::Edited`]
     /// 直到下一条提示符标记到达，以保守策略避免把代执行命令拼到半条命令后面。
-    pub(crate) fn note_prompt_input_edited(&mut self) {
+    pub fn note_prompt_input_edited(&mut self) {
         if self.prompt_input_state == PromptInputState::Empty {
             self.prompt_input_state = PromptInputState::Edited;
         }
@@ -177,7 +177,7 @@ impl TerminalEngine {
     ///
     /// 这会立即关闭后续目录快捷动作的入口，直到 Shell 再次上报提示符；
     /// 即使远端没有及时发送 `C` 标记，也不会把第二条 `cd` 连续写入同一输入行。
-    pub(crate) fn mark_programmatic_command_submitted(&mut self) {
+    pub fn mark_programmatic_command_submitted(&mut self) {
         self.prompt_input_state = PromptInputState::Running;
     }
 }

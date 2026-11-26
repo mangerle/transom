@@ -7,9 +7,9 @@ use std::time::Instant;
 /// 取 128 KiB 是为了承载 OSC 52 剪贴板写入：base64 会膨胀约三分之一，实际
 /// 可传文本约 96 KiB，覆盖 tmux 等常见的剪贴板转发用量级。上限仍必须存在：
 /// 未终止的序列会持续占用缓冲，不设界就是一条内存耗尽通道。
-pub(crate) const MAX_PAYLOAD_BYTES: usize = 128 * 1024;
+pub const MAX_PAYLOAD_BYTES: usize = 128 * 1024;
 
-pub(crate) const OSC_INTRO: u8 = 0x5d;
+pub const OSC_INTRO: u8 = 0x5d;
 
 /// OSC 9;4 进度上报的状态子码（ConEmu/Windows Terminal 约定）。
 ///
@@ -29,7 +29,7 @@ pub enum ProgressState {
 
 impl ProgressState {
     /// 解析子码数字；超出约定范围返回 `None`，调用方整条丢弃。
-    pub(crate) fn from_subcode(code: u8) -> Option<Self> {
+    pub fn from_subcode(code: u8) -> Option<Self> {
         match code {
             0 => Some(Self::Remove),
             1 => Some(Self::Set),
@@ -42,7 +42,7 @@ impl ProgressState {
 
 /// 一条 OSC 序列携带的、上层关心的语义。
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum OscEvent {
+pub enum OscEvent {
     /// Shell 提示符开始（上一条命令已结束，等待输入）。
     PromptStart,
     /// 命令开始执行（用户已提交输入）。
@@ -84,14 +84,14 @@ pub(crate) enum OscEvent {
 
 /// 一条已完成命令的归并结果。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct TrackedCommand {
-    pub(crate) exit_code: Option<i32>,
-    pub(crate) duration_ms: u64,
+pub struct TrackedCommand {
+    pub exit_code: Option<i32>,
+    pub duration_ms: u64,
 }
 
 /// 运行期标题门控的判定结果。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum TitleAction {
+pub enum TitleAction {
     /// 这是程序在命令运行期间设置的标题，可以更新标签。
     Publish,
     /// 运行期标题应清除，标签回落到会话名。
@@ -114,14 +114,14 @@ pub(crate) enum TitleAction {
 /// 代价与局限：嵌套 Shell 或 TUI 内部的提示符仍处于外层命令边界内，其标题
 /// 会被视为程序标题；命令在下一帧前就结束时，标题不会发布。
 #[derive(Debug, Default)]
-pub(crate) struct TitleGate {
+pub struct TitleGate {
     command_running: bool,
     published: bool,
 }
 
 impl TitleGate {
     /// 处理一条 OSC 133 边界，返回是否需要清除已发布的运行期标题。
-    pub(crate) fn on_boundary(&mut self, event: &OscEvent) -> TitleAction {
+    pub fn on_boundary(&mut self, event: &OscEvent) -> TitleAction {
         match event {
             OscEvent::CommandStart | OscEvent::PreExec { .. } => {
                 self.command_running = true;
@@ -141,7 +141,7 @@ impl TitleGate {
     /// 在外层命令运行期间到达，`用户@主机[: 目录]` 这种典型提示符标题也不能覆盖
     /// 标签。它只认带 `@` 的最常见形态，正常的 TUI 标题（文件名、会话名、任务名）
     /// 不受影响。
-    pub(crate) fn on_title(&mut self, title: &str) -> TitleAction {
+    pub fn on_title(&mut self, title: &str) -> TitleAction {
         if !self.command_running || looks_like_shell_prompt_title(title) {
             return TitleAction::Ignore;
         }
@@ -150,7 +150,7 @@ impl TitleGate {
     }
 
     /// 处理标题栈重置或恢复默认标题。
-    pub(crate) fn on_reset(&mut self) -> TitleAction {
+    pub fn on_reset(&mut self) -> TitleAction {
         self.clear()
     }
 
@@ -199,13 +199,13 @@ fn looks_like_shell_prompt_title(title: &str) -> bool {
 
 /// 把零散的 OSC 133 标记归并成"一条命令跑了多久"。
 #[derive(Debug, Default)]
-pub(crate) struct CommandTracker {
+pub struct CommandTracker {
     started_at: Option<Instant>,
 }
 
 impl CommandTracker {
     /// 处理一个 OSC 事件；`now` 由调用方注入，便于测试。
-    pub(crate) fn on_event(&mut self, event: &OscEvent, now: Instant) -> Option<TrackedCommand> {
+    pub fn on_event(&mut self, event: &OscEvent, now: Instant) -> Option<TrackedCommand> {
         match event {
             // `B` 是提示符区里的命令开始标记，部分集成会给；我们的 bash/zsh/fish
             // 钩子只发 `C`（PreExec）。两者都作为计时起点，但 `C` 才是命令真正

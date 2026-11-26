@@ -2,11 +2,11 @@
 
 mod parser;
 mod store;
-mod types;
+pub mod types;
 
 #[cfg(test)]
 mod tests;
 
 pub(crate) use parser::KittyParser;
 pub(crate) use store::GraphicsStore;
-pub(crate) use types::{GraphicsPlacement, KittyEvent, PlaceRequest};
+pub use types::{GraphicsPlacement, KittyEvent, PlaceRequest, TerminalImage};

@@ -1,6 +1,6 @@
 [package]
 name = "transom-terminal"
-description = "Terminal grid, cell renderer, buffer search and OSC handling for Transom, built on alacritty_terminal and GPUI."
+description = "Transom GPUI 终端视图、绘制管线与交互适配。"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -13,19 +13,15 @@ publish.workspace = true
 
 [dependencies]
 transom-platform.workspace = true
-transom-core.workspace = true
+transom-terminal-core.workspace = true
 alacritty_terminal.workspace = true
+flume.workspace = true
+transom-core.workspace = true
 gpui-kit.workspace = true
 transom-ui-icons.workspace = true
-flume.workspace = true
 parking_lot.workspace = true
 log.workspace = true
-serde.workspace = true
-serde_json.workspace = true
-regex.workspace = true
 rust-i18n.workspace = true
-# Kitty 图形协议：base64 载荷解码与 PNG/RGB 像素解码。
-base64.workspace = true
 image.workspace = true
 thiserror.workspace = true
 

@@ -232,6 +232,39 @@ fn git_sidebar_render_uses_cached_badges() {
     );
 }
 
+/// 终端核心必须独立于 GPUI，视图 crate 只通过重导出使用核心能力。
+#[test]
+fn terminal_core_stays_gpui_free() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let core_manifest =
+        std::fs::read_to_string(root.join("crates/transom-terminal-core/Cargo.toml"))
+            .expect("读取终端核心清单失败");
+    assert!(
+        !core_manifest.contains("gpui"),
+        "transom-terminal-core 不得依赖 GPUI，渲染适配应留在 transom-terminal"
+    );
+    for relative in [
+        "crates/transom-terminal-core/src/engine/mod.rs",
+        "crates/transom-terminal-core/src/input.rs",
+        "crates/transom-terminal-core/src/osc/mod.rs",
+        "crates/transom-terminal-core/src/record.rs",
+        "crates/transom-terminal-core/src/search/mod.rs",
+        "crates/transom-terminal-core/src/kitty_graphics/mod.rs",
+    ] {
+        assert!(
+            root.join(relative).is_file(),
+            "终端核心模块缺失: {relative}"
+        );
+    }
+    let view_lib = std::fs::read_to_string(root.join("crates/transom-terminal/src/lib.rs"))
+        .expect("读取终端视图入口失败");
+    assert!(
+        view_lib.contains("transom_terminal_core"),
+        "终端视图必须通过 transom-terminal-core 复用核心逻辑"
+    );
+}
+
+/// 领域错误必须使用 thiserror 枚举，并在跨层边界集中转换为 `AppError`。
 /// 领域错误必须使用 thiserror 枚举，并在跨层边界集中转换为 `AppError`。
 #[test]
 fn domain_errors_are_typed_and_mapped() {

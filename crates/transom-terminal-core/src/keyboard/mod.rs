@@ -12,15 +12,15 @@
 //!   开启 "all keys as escape codes" 后才改走 CSI u。
 //!
 //! 代价与局限：
-//! - GPUI 的 [`Keystroke`] 不暴露键盘布局的物理键位，无法填写 base-layout 备用键；
+//! - 平台按键值不暴露键盘布局的物理键位，无法填写 base-layout 备用键；
 //!   备用键只上报 shifted 码（协议允许省略 base-layout）；
 //! - 左右修饰键无法区分，修饰键自身统一按左侧码值上报；
 //! - 上游 `alacritty_terminal` 的 `CSI ? u` 查询回复读取的是压栈栈顶而非当前
 //!   生效标志：标准握手（push → query）结果正确，但"先 set 再 query"可能拿到
 //!   上一次栈顶值。该行为在上游修复前不在本项目重复维护第二份标志状态。
 
+use crate::input::{TerminalKeystroke, TerminalModifiers};
 use alacritty_terminal::term::TermMode;
-use gpui_kit::Keystroke;
 
 /// 一次按键在事件流中的类型。
 ///
@@ -35,7 +35,7 @@ pub enum KeyEventKind {
 
 /// 编码一次按键；返回 `None` 表示"保持传统编码/文本输入路径"。
 pub(crate) fn encode_kitty(
-    keystroke: &Keystroke,
+    keystroke: &TerminalKeystroke,
     mode: TermMode,
     kind: KeyEventKind,
 ) -> Option<Vec<u8>> {
@@ -100,7 +100,7 @@ pub(crate) fn encode_kitty(
 }
 
 /// 修饰键位图：协议规定 `1 + bitfield`。
-fn modifier_bits(modifiers: gpui_kit::Modifiers) -> u8 {
+fn modifier_bits(modifiers: TerminalModifiers) -> u8 {
     // 协议值是 `1 + 位图`：shift=1、alt=2、ctrl=4、super=8。位图从 0 开始，
     // 最后统一加 1，避免把 shift 的 0b1 与基准 1 混成同一个值。
     let mut bits = 0u8;
@@ -219,7 +219,7 @@ fn single_char(text: &str) -> Option<char> {
 ///
 /// GPUI 的 `key` 恒定是未上档字符，`key_char` 才是实际输入字符；两者不同才说明
 /// 该键在当前布局下有独立的上档形态。
-fn shifted_code(keystroke: &Keystroke, base: char) -> Option<u32> {
+fn shifted_code(keystroke: &TerminalKeystroke, base: char) -> Option<u32> {
     if !keystroke.modifiers.shift {
         return None;
     }
@@ -235,9 +235,9 @@ fn shifted_code(keystroke: &Keystroke, base: char) -> Option<u32> {
 ///
 /// 只有不带 Ctrl/Alt/Super 的按键才会产生可打印文本；释放事件不再重复携带文本。
 fn associated_text(
-    keystroke: &Keystroke,
+    keystroke: &TerminalKeystroke,
     mode: TermMode,
-    modifiers: gpui_kit::Modifiers,
+    modifiers: TerminalModifiers,
     kind: KeyEventKind,
 ) -> Vec<u32> {
     if !mode.contains(TermMode::REPORT_ASSOCIATED_TEXT)

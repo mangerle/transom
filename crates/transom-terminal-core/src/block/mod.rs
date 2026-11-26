@@ -20,7 +20,7 @@ use std::collections::VecDeque;
 use transom_core::BlockViewStyle;
 
 /// 内存中保留的命令块上限：只为交互服务，不承担历史归档。
-pub(crate) const BLOCK_HISTORY_LIMIT: usize = 200;
+pub const BLOCK_HISTORY_LIMIT: usize = 200;
 
 /// 一条已完成（或仍在执行）的命令块。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -69,7 +69,7 @@ struct OpenBlock {
 /// `D` 结束 → 下一条 `A`。任何标记缺失都按"能确定多少记多少"降级，
 /// 不猜测未知的边界。
 #[derive(Debug, Default)]
-pub(crate) struct BlockStore {
+pub struct BlockStore {
     blocks: VecDeque<CommandBlock>,
     next_id: u64,
     pending_prompt_line: Option<i64>,
@@ -80,24 +80,24 @@ pub(crate) struct BlockStore {
 
 impl BlockStore {
     /// 设置自动折叠阈值；`0` 表示从不自动折叠。
-    pub(crate) fn set_auto_collapse_rows(&mut self, rows: usize) {
+    pub fn set_auto_collapse_rows(&mut self, rows: usize) {
         self.auto_collapse_rows = rows;
     }
 
     /// 提示符开始（`A`）：结算上一条命令，并记下新提示符所在行。
-    pub(crate) fn on_prompt(&mut self, abs_line: i64) {
+    pub fn on_prompt(&mut self, abs_line: i64) {
         self.finalize(abs_line.saturating_sub(1));
         self.pending_prompt_line = Some(abs_line);
         self.pending_command_line = None;
     }
 
     /// 命令输入开始（`B`）。
-    pub(crate) fn on_command_start(&mut self, abs_line: i64) {
+    pub fn on_command_start(&mut self, abs_line: i64) {
         self.pending_command_line = Some(abs_line);
     }
 
     /// 命令即将执行（`C`/`E`）：开启新的命令块。
-    pub(crate) fn on_preexec(&mut self, abs_line: i64, command: String) {
+    pub fn on_preexec(&mut self, abs_line: i64, command: String) {
         // 上一条没有收到结束标记时，用本次输出起点作为它的终点，避免块重叠。
         self.finalize(abs_line.saturating_sub(1));
         let prompt_line = self.pending_prompt_line.take().unwrap_or(abs_line);
@@ -119,7 +119,7 @@ impl BlockStore {
     ///
     /// `prompt_follows` 表示同一批字节里紧跟一个 `A`：此时真正的输出末行
     /// 要等提示符落位后才能确定，先不结算，交给 [`Self::on_prompt`]。
-    pub(crate) fn on_finish(
+    pub fn on_finish(
         &mut self,
         exit_code: Option<i32>,
         duration_ms: Option<u64>,
@@ -164,23 +164,23 @@ impl BlockStore {
     }
 
     /// 会话尺寸变化或滚动缓冲写满时清空：绝对行号已不可靠。
-    pub(crate) fn clear(&mut self) {
+    pub fn clear(&mut self) {
         self.blocks.clear();
         self.open = None;
         self.pending_prompt_line = None;
         self.pending_command_line = None;
     }
 
-    pub(crate) fn blocks(&self) -> impl Iterator<Item = &CommandBlock> {
+    pub fn blocks(&self) -> impl Iterator<Item = &CommandBlock> {
         self.blocks.iter()
     }
 
-    pub(crate) fn block(&self, id: u64) -> Option<&CommandBlock> {
+    pub fn block(&self, id: u64) -> Option<&CommandBlock> {
         self.blocks.iter().find(|block| block.id == id)
     }
 
     /// 查找位于指定绝对行之前的最近一条命令提示符绝对行号。
-    pub(crate) fn previous_prompt_line(&self, current_abs_line: i64) -> Option<i64> {
+    pub fn previous_prompt_line(&self, current_abs_line: i64) -> Option<i64> {
         self.blocks
             .iter()
             .rev()
@@ -189,7 +189,7 @@ impl BlockStore {
     }
 
     /// 查找位于指定绝对行之后的最近一条命令提示符绝对行号。
-    pub(crate) fn next_prompt_line(&self, current_abs_line: i64) -> Option<i64> {
+    pub fn next_prompt_line(&self, current_abs_line: i64) -> Option<i64> {
         self.blocks
             .iter()
             .map(|b| b.prompt_line)
@@ -200,7 +200,7 @@ impl BlockStore {
     ///
     /// 空输出块的 `output_end_line` 位于输出起点之前，区间下界必须取
     /// `command_line`，否则悬浮命中会漏掉整条空输出命令。
-    pub(crate) fn block_at(&self, abs_line: i64) -> Option<&CommandBlock> {
+    pub fn block_at(&self, abs_line: i64) -> Option<&CommandBlock> {
         self.blocks.iter().rev().find(|block| {
             let bottom = block.output_end_line.max(block.command_line);
             (block.prompt_line..=bottom).contains(&abs_line)
@@ -208,7 +208,7 @@ impl BlockStore {
     }
 
     /// 覆盖某绝对行的已折叠块（只有输出区间需要隐藏）。
-    pub(crate) fn collapsed_at(&self, abs_line: i64) -> Option<&CommandBlock> {
+    pub fn collapsed_at(&self, abs_line: i64) -> Option<&CommandBlock> {
         self.blocks.iter().rev().find(|block| {
             block.collapsed
                 && block.output_end_line >= block.output_start_line
@@ -217,7 +217,7 @@ impl BlockStore {
     }
 
     /// 切换指定块的折叠状态，返回是否命中。
-    pub(crate) fn toggle(&mut self, id: u64) -> bool {
+    pub fn toggle(&mut self, id: u64) -> bool {
         let Some(block) = self.blocks.iter_mut().find(|block| block.id == id) else {
             return false;
         };
@@ -228,7 +228,7 @@ impl BlockStore {
         true
     }
 
-    pub(crate) fn set_collapsed(&mut self, id: u64, collapsed: bool) {
+    pub fn set_collapsed(&mut self, id: u64, collapsed: bool) {
         if let Some(block) = self.blocks.iter_mut().find(|block| block.id == id)
             && block.output_end_line >= block.output_start_line
         {
@@ -239,7 +239,7 @@ impl BlockStore {
 
 /// 可见行布局中的一个位置。
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum VisualSlot {
+pub enum VisualSlot {
     /// 正常的网格行。
     Line(Line),
     /// 被折叠块的横幅；点击可展开。
@@ -254,18 +254,18 @@ pub(crate) enum VisualSlot {
 
 /// 折叠后的可见行映射。
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct BlockLayout {
+pub struct BlockLayout {
     slots: Vec<VisualSlot>,
     history_size: i64,
 }
 
 impl BlockLayout {
-    pub(crate) fn slots(&self) -> &[VisualSlot] {
+    pub fn slots(&self) -> &[VisualSlot] {
         &self.slots
     }
 
     /// 指定可见行对应的网格行；横幅或留白返回 `None`。
-    pub(crate) fn line_at(&self, row: usize) -> Option<Line> {
+    pub fn line_at(&self, row: usize) -> Option<Line> {
         match self.slots.get(row)? {
             VisualSlot::Line(line) => Some(*line),
             _ => None,
@@ -273,7 +273,7 @@ impl BlockLayout {
     }
 
     /// 指定可见行是否为折叠横幅，返回块 ID。
-    pub(crate) fn banner_at(&self, row: usize) -> Option<u64> {
+    pub fn banner_at(&self, row: usize) -> Option<u64> {
         match self.slots.get(row)? {
             VisualSlot::Banner { block_id, .. } => Some(*block_id),
             _ => None,
@@ -281,7 +281,7 @@ impl BlockLayout {
     }
 
     /// 网格行在可见区中的行号；被折叠或不在视口内返回 `None`。
-    pub(crate) fn row_of_line(&self, line: Line) -> Option<usize> {
+    pub fn row_of_line(&self, line: Line) -> Option<usize> {
         self.slots
             .iter()
             .position(|slot| matches!(slot, VisualSlot::Line(candidate) if *candidate == line))
@@ -293,7 +293,7 @@ impl BlockLayout {
 /// 从视口底部向上填充 `rows` 个位置：遇到已折叠块的输出区间时压缩为一条
 /// 横幅，省出的空间继续向上取更早的历史行；历史不足时顶部留白。
 /// 这样光标与最新输出始终贴底，折叠不会把正在输入的提示符推出屏幕。
-pub(crate) fn build_layout(
+pub fn build_layout(
     history_size: usize,
     screen_lines: usize,
     display_offset: usize,
@@ -332,7 +332,7 @@ pub(crate) fn build_layout(
 }
 
 /// 折叠横幅文案：行数、退出状态与耗时。
-pub(crate) fn banner_label(block: &CommandBlock) -> String {
+pub fn banner_label(block: &CommandBlock) -> String {
     let rows = block.output_rows();
     let status = match block.exit_code {
         Some(0) => rust_i18n::t!("terminal.block.status_success").to_string(),
@@ -353,7 +353,7 @@ pub(crate) fn banner_label(block: &CommandBlock) -> String {
     .to_string()
 }
 
-pub(crate) fn format_duration(millis: u64) -> String {
+pub fn format_duration(millis: u64) -> String {
     if millis < 1_000 {
         format!("{millis}ms")
     } else if millis < 60_000 {

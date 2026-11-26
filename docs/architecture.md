@@ -15,8 +15,9 @@
 apps/transom (组合根 + 控制平面)
   ├─ transom-ui (GPUI 界面与全部应用状态)
   │    ├─ transom-ui-kit (无状态表现层组件 / 设计令牌 / Palette / 格式化)
-  │    ├─ transom-terminal (VTE 网格 / 渲染 / 高亮引擎 / 检索 / OSC / Kitty)
-  │    │    └─ alacritty_terminal
+  │    ├─ transom-terminal (GPUI 渲染 / 交互 / 终端视图)
+  │    │    └─ transom-terminal-core (VTE 引擎 / 输入编码 / 检索 / OSC / Kitty)
+  │    │         └─ alacritty_terminal
   │    ├─ transom-store (JSON 存储 / 钥匙串 / 备份文件读写)
   │    │    ├─ transom-crypto
   │    │    └─ transom-core
@@ -42,7 +43,11 @@ apps/transom (组合根 + 控制平面)
   │    ├─ transom-platform
   │    └─ transom-core
   ├─ transom-terminal
+  │    ├─ transom-terminal-core
   │    └─ transom-platform
+  ├─ transom-terminal-core
+  │    ├─ transom-platform
+  │    └─ transom-core
   └─ transom-crypto (TSYN 二进制信封与 JSON/YAML 加密信封)
        └─ transom-core
 
@@ -362,8 +367,18 @@ crates/transom-desktop/src/
   windows.rs    注册 `ssh://` 默认应用候选；默认终端交给 Console Handoff
   unsupported.rs 非 Linux/Windows/macOS 平台的明确错误入口
 
+crates/transom-terminal-core/src/
+  engine/        VTE 引擎、损伤跟踪、语义块与检索状态
+  input.rs       平台无关按键编码契约
+  osc/           OSC 扫描、命令追踪与标题门控
+  record.rs      asciinema 录制与回放解析
+  trigger.rs     输出触发器与正则匹配
+  kitty_graphics 纯字节图像协议与有界图像仓库
+
 crates/transom-terminal/src/
-  highlight/ 关键词高亮扫描与编译规则引擎
+  renderer/      GPUI 绘制、字体测量与核心图像纹理适配
+  view/          终端交互、剪贴板、菜单、历史弹窗与任务生命周期
+  input.rs       GPUI Keystroke 到核心按键契约的适配层
 
 crates/transom-ui/src/
   app/        AppShell、AppState、持久化、事件分发与各功能模块
@@ -421,6 +436,7 @@ crates/transom-rdp/src/session/loop_runner.rs + loop_runner/{cycle,pdu}.rs
 | 决策 | 理由 | 代价 |
 | :--- | :--- | :--- |
 | 终端字节绕开事件总线 | 高频字节流与低频控制事件隔离 | 终端视图自己管读取任务与背压 |
+| 终端核心与 GPUI 视图拆 crate | 引擎、协议与检索可在无窗口环境独立测试，依赖图强制阻止 UI 反向污染 | 核心公开契约略增；图像绘制需一次字节到纹理适配 |
 | 可覆盖样本 try_send、迁移事件反压 | 样本丢了下一轮补，迁移事件不能丢 | UI 停滞时采样频率下降（可自愈） |
 | 加密信封独立为专用 crate（transom-crypto） | net/sync 不再反向依赖 store，同时 core 不再背负加解密重依赖 | 多维护一个轻量 crate |
 | 平台约定独立为 transom-platform | 路径与权限被存储/终端/同步/界面共同使用，留在 core 会把它变成 IO 实现层 | 多维护一个轻量 crate |

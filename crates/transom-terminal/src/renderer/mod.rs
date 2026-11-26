@@ -30,7 +30,9 @@ use gpui_kit::component::ActiveTheme;
 use gpui_kit::*;
 pub(crate) use palette::PaletteColors;
 use scan::{CJK_PROBE_CHAR, fit_cjk_size};
+use std::collections::HashMap;
 use std::ops::Range;
+use std::sync::Arc;
 use transom_core::{Rgb as PaletteColor, TerminalHighlight, TerminalPalette, TerminalProfile};
 
 pub(crate) struct TerminalRenderer {
@@ -60,6 +62,8 @@ pub(crate) struct TerminalRenderer {
     minimum_contrast_ratio: f32,
     /// 对比度修正的颜色组合缓存，只在渲染线程访问。
     contrast_cache: parking_lot::Mutex<contrast::TerminalContrastCache>,
+    /// 核心 BGRA 像素到 GPUI 纹理的缓存；按核心图像 id 复用，避免每帧上传。
+    graphics_cache: parking_lot::Mutex<HashMap<u64, Arc<RenderImage>>>,
 }
 
 /// 背景透明度（百分比）折算成不透明度系数。
@@ -96,6 +100,7 @@ impl TerminalRenderer {
             bold_is_bright: profile.bold_is_bright,
             minimum_contrast_ratio: contrast::normalize_ratio(profile.minimum_contrast_ratio),
             contrast_cache: parking_lot::Mutex::new(Default::default()),
+            graphics_cache: parking_lot::Mutex::new(HashMap::new()),
         };
         renderer.measure(window);
         renderer

@@ -11,12 +11,13 @@ use super::runs::RowScanInput;
 use super::scan::{RowScratch, selection_segment};
 use super::types::{DamageInfo, ImePaintInput, PaintRequest, RowVisual, SELECTION_ALPHA};
 use crate::block::VisualSlot;
-use crate::kitty_graphics::GraphicsPlacement;
+use crate::kitty_graphics::{GraphicsPlacement, TerminalImage};
 use alacritty_terminal::index::Line;
 use alacritty_terminal::selection::SelectionRange;
 use alacritty_terminal::term::cell::{Cell, Flags};
 use alacritty_terminal::vte::ansi::CursorShape;
 use gpui_kit::*;
+use std::sync::Arc;
 
 /// 光标覆盖的网格列区间。
 ///
@@ -153,6 +154,26 @@ impl TerminalRenderer {
         ));
     }
 
+    /// 把核心图像缓冲转换为 GPUI 纹理，并复用同一图像的转换结果。
+    fn render_image(&self, image: &TerminalImage) -> Option<Arc<RenderImage>> {
+        let mut cache = self.graphics_cache.lock();
+        if let Some(cached) = cache.get(&image.id()) {
+            return Some(Arc::clone(cached));
+        }
+        let expected = usize::try_from(image.width())
+            .ok()?
+            .saturating_mul(usize::try_from(image.height()).ok()?)
+            .saturating_mul(4);
+        if image.pixels().len() != expected {
+            return None;
+        }
+        let mut rgba = image::RgbaImage::new(image.width(), image.height());
+        rgba.copy_from_slice(image.pixels());
+        let texture = Arc::new(RenderImage::new([image::Frame::new(rgba)]));
+        cache.insert(image.id(), Arc::clone(&texture));
+        Some(texture)
+    }
+
     /// 第二阶段：绘制 Kitty 协议图形（画在默认底色之上、文本之下）。
     pub(super) fn paint_graphics_pass(
         &self,
@@ -190,11 +211,14 @@ impl TerminalRenderer {
                     height: self.cell_height * image_rows as f32,
                 },
             };
+            let Some(texture) = self.render_image(&graphic.image) else {
+                continue;
+            };
             let _ = window.paint_image(
                 ctx.bounds,
                 image_bounds,
                 Corners::default(),
-                graphic.image.clone(),
+                texture,
                 0,
                 false,
             );

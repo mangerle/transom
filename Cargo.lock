@@ -10358,21 +10358,36 @@ name = "transom-terminal"
 version = "1.9.0"
 dependencies = [
  "alacritty_terminal",
- "base64 0.23.1",
  "flume",
  "gpui-kit",
  "image",
  "log",
  "parking_lot 0.13.0",
  "portable-pty",
+ "rust-i18n",
+ "thiserror 2.0.21",
+ "transom-core",
+ "transom-platform",
+ "transom-terminal-core",
+ "transom-ui-icons",
+]
+
+[[package]]
+name = "transom-terminal-core"
+version = "1.9.0"
+dependencies = [
+ "alacritty_terminal",
+ "base64 0.23.1",
+ "flume",
+ "image",
+ "log",
+ "parking_lot 0.13.0",
  "regex",
  "rust-i18n",
  "serde",
  "serde_json",
- "thiserror 2.0.21",
  "transom-core",
  "transom-platform",
- "transom-ui-icons",
 ]
 
 [[package]]

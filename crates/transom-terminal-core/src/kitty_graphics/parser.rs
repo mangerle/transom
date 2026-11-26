@@ -1,10 +1,11 @@
 //! Kitty APC 序列扫描与图像解码。
 
-use super::types::{APC_INTRO, KittyEvent, MAX_APC_PAYLOAD, MAX_IMAGE_PIXELS, PendingImage};
+use super::types::{
+    APC_INTRO, KittyEvent, MAX_APC_PAYLOAD, MAX_IMAGE_PIXELS, PendingImage, TerminalImage,
+};
 use crate::sequence_scanner::SequenceScanner;
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
-use gpui_kit::RenderImage;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -170,13 +171,13 @@ fn parse_kitty_event(
     }
 }
 
-/// 解码图片载荷为 GPUI 纹理（BGRA）。
+/// 解码图片载荷为核心 BGRA 像素缓冲。
 fn decode_image(
     format: u32,
     width: u32,
     height: u32,
     data: &[u8],
-) -> Option<(Arc<RenderImage>, u32, u32)> {
+) -> Option<(Arc<TerminalImage>, u32, u32)> {
     let rgba = match format {
         100 => {
             let pixels = u64::from(width).saturating_mul(u64::from(height));
@@ -233,7 +234,7 @@ fn decode_image(
         pixel.swap(0, 2);
     }
     Some((
-        Arc::new(RenderImage::new([image::Frame::new(rgba)])),
+        TerminalImage::new(width, height, rgba.into_raw()),
         width,
         height,
     ))

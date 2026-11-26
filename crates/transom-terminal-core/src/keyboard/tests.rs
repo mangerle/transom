@@ -1,9 +1,9 @@
 use super::{KeyEventKind, encode_kitty};
+use crate::input::{TerminalKeystroke, TerminalModifiers};
 use alacritty_terminal::term::TermMode;
-use gpui_kit::{Keystroke, Modifiers};
 
-fn keystroke(key: &str, key_char: Option<&str>, modifiers: Modifiers) -> Keystroke {
-    Keystroke {
+fn keystroke(key: &str, key_char: Option<&str>, modifiers: TerminalModifiers) -> TerminalKeystroke {
+    TerminalKeystroke {
         modifiers,
         key: key.to_string(),
         key_char: key_char.map(str::to_string),
@@ -18,28 +18,33 @@ fn all_keys() -> TermMode {
     TermMode::DISAMBIGUATE_ESC_CODES | TermMode::REPORT_ALL_KEYS_AS_ESC
 }
 
-fn ctrl() -> Modifiers {
-    Modifiers {
+fn ctrl() -> TerminalModifiers {
+    TerminalModifiers {
         control: true,
-        ..Modifiers::default()
+        ..TerminalModifiers::default()
     }
 }
 
-fn shift() -> Modifiers {
-    Modifiers {
+fn shift() -> TerminalModifiers {
+    TerminalModifiers {
         shift: true,
-        ..Modifiers::default()
+        ..TerminalModifiers::default()
     }
 }
 
-fn alt() -> Modifiers {
-    Modifiers {
+fn alt() -> TerminalModifiers {
+    TerminalModifiers {
         alt: true,
-        ..Modifiers::default()
+        ..TerminalModifiers::default()
     }
 }
 
-fn encode(key: &str, key_char: Option<&str>, modifiers: Modifiers, mode: TermMode) -> String {
+fn encode(
+    key: &str,
+    key_char: Option<&str>,
+    modifiers: TerminalModifiers,
+    mode: TermMode,
+) -> String {
     let bytes = encode_kitty(
         &keystroke(key, key_char, modifiers),
         mode,
@@ -60,10 +65,10 @@ fn disambiguates_modified_enter_and_tab() {
         encode(
             "tab",
             None,
-            Modifiers {
+            TerminalModifiers {
                 control: true,
                 shift: true,
-                ..Modifiers::default()
+                ..TerminalModifiers::default()
             },
             disambiguate()
         ),
@@ -82,10 +87,10 @@ fn ctrl_i_is_letter_not_tab() {
         encode(
             "i",
             Some("I"),
-            Modifiers {
+            TerminalModifiers {
                 control: true,
                 shift: true,
-                ..Modifiers::default()
+                ..TerminalModifiers::default()
             },
             disambiguate()
         ),
@@ -99,7 +104,7 @@ fn ctrl_i_is_letter_not_tab() {
 fn unmodified_enter_tab_backspace_stay_legacy() {
     assert!(
         encode_kitty(
-            &keystroke("enter", None, Modifiers::default()),
+            &keystroke("enter", None, TerminalModifiers::default()),
             disambiguate(),
             KeyEventKind::Press
         )
@@ -107,7 +112,7 @@ fn unmodified_enter_tab_backspace_stay_legacy() {
     );
     assert!(
         encode_kitty(
-            &keystroke("tab", None, Modifiers::default()),
+            &keystroke("tab", None, TerminalModifiers::default()),
             disambiguate(),
             KeyEventKind::Press
         )
@@ -115,7 +120,7 @@ fn unmodified_enter_tab_backspace_stay_legacy() {
     );
     assert!(
         encode_kitty(
-            &keystroke("a", Some("a"), Modifiers::default()),
+            &keystroke("a", Some("a"), TerminalModifiers::default()),
             disambiguate(),
             KeyEventKind::Press
         )
@@ -135,7 +140,7 @@ fn modified_arrows_use_canonical_functional_form() {
 #[test]
 fn all_keys_reports_plain_text_and_associated_text() {
     assert_eq!(
-        encode("a", Some("a"), Modifiers::default(), all_keys()),
+        encode("a", Some("a"), TerminalModifiers::default(), all_keys()),
         "\x1b[97u"
     );
     let with_text = TermMode::DISAMBIGUATE_ESC_CODES
@@ -169,7 +174,7 @@ fn reports_repeat_and_release_events() {
     .expect("开启事件上报后 Escape 必须有释放事件");
     assert_eq!(String::from_utf8(release).unwrap(), "\x1b[27;5:3u");
     let repeat = encode_kitty(
-        &keystroke("up", None, Modifiers::default()),
+        &keystroke("up", None, TerminalModifiers::default()),
         mode,
         KeyEventKind::Repeat,
     )
@@ -177,7 +182,7 @@ fn reports_repeat_and_release_events() {
     assert_eq!(String::from_utf8(repeat).unwrap(), "\x1b[1;1:2A");
     assert!(
         encode_kitty(
-            &keystroke("enter", None, Modifiers::default()),
+            &keystroke("enter", None, TerminalModifiers::default()),
             mode,
             KeyEventKind::Release
         )

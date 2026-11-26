@@ -12,6 +12,7 @@ members = [
     "crates/transom-container",
     "crates/transom-sync",
     "crates/transom-terminal",
+    "crates/transom-terminal-core",
     "crates/transom-zmodem",
     "crates/transom-updater",
     "crates/transom-ui",
@@ -159,6 +160,7 @@ transom-net = { path = "crates/transom-net" }
 transom-container = { path = "crates/transom-container" }
 transom-sync = { path = "crates/transom-sync" }
 transom-terminal = { path = "crates/transom-terminal" }
+transom-terminal-core = { path = "crates/transom-terminal-core" }
 transom-zmodem = { path = "crates/transom-zmodem" }
 transom-updater = { path = "crates/transom-updater" }
 transom-ui = { path = "crates/transom-ui" }

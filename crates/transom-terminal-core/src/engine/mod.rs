@@ -2,14 +2,17 @@ use crate::block::BlockStore;
 use crate::event::TerminalEventProxy;
 use crate::kitty_graphics::{GraphicsPlacement, GraphicsStore, KittyEvent, KittyParser};
 use crate::osc::{OscEvent, OscScanner};
-use crate::renderer::DamageInfo;
 use crate::search::SearchState;
+
+mod damage;
+
+pub use damage::DamageInfo;
 
 mod blocks;
 mod prompt;
 mod selection;
 
-pub(crate) use prompt::PromptInputState;
+pub use prompt::PromptInputState;
 
 #[cfg(test)]
 mod tests;
@@ -56,7 +59,7 @@ impl Dimensions for TermDimensions {
 }
 
 pub struct TerminalEngine {
-    pub(crate) term: Term<TerminalEventProxy>,
+    pub term: Term<TerminalEventProxy>,
     parser: Processor,
     size: TerminalSize,
     /// 旁路 OSC 扫描器，用于识别 shell 集成的命令边界（见 [`crate::osc`]）。
@@ -67,7 +70,7 @@ pub struct TerminalEngine {
     /// 供 `C` 到达时按网格补采命令文本。
     command_input_point: Option<Point>,
     /// 全文检索状态（查询、命中快照与游标），行为见 [`crate::search`]。
-    pub(crate) search: SearchState,
+    pub search: SearchState,
     /// OSC 133 命令块：采集、折叠状态与自动折叠阈值。
     blocks: BlockStore,
     /// 滚动缓冲容量；达到上限后旧行开始淘汰，块行号随之失去意义。
@@ -86,17 +89,17 @@ pub struct TerminalEngine {
     kitty: KittyParser,
     graphics: GraphicsStore,
     /// 最近一次收到字节流的时刻，用于把重扫推迟到输出停歇之后。
-    pub(crate) last_write: Option<Instant>,
+    pub last_write: Option<Instant>,
     /// 是否收到过至少一条 OSC 133 命令边界标记。
     ///
     /// 这是"远端 Shell 已有自带集成"的唯一证据：引擎据此决定要不要注入脚本，
     /// 装了重复钩子会让同一条命令产生两套块，宁可少做也不能做错。
-    pub(crate) shell_markers_seen: bool,
+    pub shell_markers_seen: bool,
     /// 缓冲区纪元：任何新写入或网格重建都会推进，用于判定命中快照是否失效。
     ///
     /// 之所以只记"变过"而不做行号平移：`Line` 是相对视口底部的编号，新行滚入时全部
     /// 命中行号同步 -1，而库外部拿不到绝对行数，平移无从校准（见 `search` 模块说明）。
-    pub(crate) epoch: u64,
+    pub epoch: u64,
     /// Shell 提示符与输入行状态；只由 OSC 133 边界和用户输入共同推进。
     prompt_input_state: PromptInputState,
 }
@@ -268,7 +271,7 @@ impl TerminalEngine {
     }
 
     /// 当前应绘制的图像放置列表；渲染器按行映射换算可见位置。
-    pub(crate) fn graphics_placements(&self) -> Vec<GraphicsPlacement> {
+    pub fn graphics_placements(&self) -> Vec<GraphicsPlacement> {
         self.graphics.placements(self.term.grid().history_size())
     }
 
@@ -281,7 +284,7 @@ impl TerminalEngine {
     }
 
     /// 取走并清空待处理的 OSC 事件。
-    pub(crate) fn take_osc_events(&mut self) -> Vec<OscEvent> {
+    pub fn take_osc_events(&mut self) -> Vec<OscEvent> {
         std::mem::take(&mut self.osc_events)
     }
 
@@ -318,7 +321,7 @@ impl TerminalEngine {
     /// 变化自动全量）、INSERT 模式与光标新旧位置；选区等用户态不包含在内，
     /// 而本渲染器把选区画成独立覆盖层、不进行缓存，因此恰好不需要它参与。
     /// 必须在持有引擎锁的渲染准备阶段调用，保证"上次取走之后"的窗口完整。
-    pub(crate) fn take_damage(&mut self) -> DamageInfo {
+    pub fn take_damage(&mut self) -> DamageInfo {
         // 折叠/展开与块视图开关不改变网格内容，内核 damage 不会报告；若不
         // 在此提升为全量，行缓存会沿用旧布局映射而画错行。复制光标同理：
         // 它的位置不在内核损伤范围内。
@@ -340,7 +343,7 @@ impl TerminalEngine {
     }
 
     /// 标记块布局已变化：下一帧取损伤时提升为全量重建。
-    pub(crate) fn mark_block_layout_dirty(&mut self) {
+    pub fn mark_block_layout_dirty(&mut self) {
         self.block_layout_dirty = true;
     }
 

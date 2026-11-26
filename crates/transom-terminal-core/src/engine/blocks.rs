@@ -11,10 +11,7 @@ use transom_core::BlockViewSettings;
 
 impl TerminalEngine {
     /// 当前设置下构建折叠行映射；`None` 表示走经典连续流。
-    pub(crate) fn build_block_layout(
-        &self,
-        settings: Option<&BlockViewSettings>,
-    ) -> Option<BlockLayout> {
+    pub fn build_block_layout(&self, settings: Option<&BlockViewSettings>) -> Option<BlockLayout> {
         let settings = settings?;
         if !settings.enabled || self.blocks_saturated {
             return None;

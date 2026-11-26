@@ -1,7 +1,8 @@
-//! 终端绘制模型定义：PaintRequest、DamageInfo 与视觉缓存类型。
+//! 终端绘制模型定义：PaintRequest 与视觉缓存类型。
 
 use super::scan::RunStyle;
 use crate::block::BlockLayout;
+pub(crate) use crate::engine::DamageInfo;
 use crate::event::TerminalEventProxy;
 use crate::kitty_graphics::GraphicsPlacement;
 use crate::search::SearchPaint;
@@ -33,15 +34,6 @@ pub(crate) struct PaintRequest<'a> {
     pub(crate) graphics: &'a [GraphicsPlacement],
     /// 终端是否持有键盘焦点；只有聚焦时才绘制当前行底色。
     pub(crate) highlight_current_line: bool,
-}
-
-/// 本帧需要重建绘制缓存的行集合。
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum DamageInfo {
-    /// 全量重建：resize 折行、滚动、INSERT 模式或外观变更导致行号/度量整体失效。
-    Full,
-    /// 仅重建给出的视口行号（已含 display_offset 换算）。
-    Rows(Vec<usize>),
 }
 
 /// 一行文本的绘制产物：由 [`TerminalRenderer`] 在脏行上重建，帧间按行复用。

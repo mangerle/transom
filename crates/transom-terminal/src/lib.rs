@@ -7,44 +7,30 @@
 rust_i18n::i18n!("../../locales", fallback = "en");
 
 mod audit;
-pub mod block;
-mod engine;
-mod event;
-pub mod highlight;
 mod history_popup;
 mod hyperlink;
 mod input;
-mod keyboard;
-mod kitty_graphics;
-mod osc;
-pub mod record;
 mod renderer;
-mod search;
 mod search_bar;
-mod search_ticks;
-mod sequence_scanner;
-mod shell_integration;
-pub mod trigger;
 mod view;
 mod view_ime;
 
-pub use engine::TerminalEngine;
-pub use event::{CompletionProvider, TerminalEvent, TerminalEventProxy};
-pub use highlight::{CompiledHighlight, HighlightKind, HighlightSpan};
+// 视图层通过同一组名称访问核心类型，迁移不影响既有模块路径。
 pub use input::{
     KeyEventKind, MouseButtonCode, encode_mouse, focus_bytes, keystroke_event_to_bytes,
     keystroke_to_bytes, paste_bytes, tab_bytes,
 };
-pub use osc::ProgressState;
-pub use record::{
-    CastEvent, CastEventType, CastHeader, RecorderHandle, ReplayInputStep, SessionRecorder,
-    extract_replay_inputs, parse_cast_file,
+pub use transom_terminal_core::{
+    CastEvent, CastEventType, CastHeader, CommandBlock, CompiledHighlight, CompiledTrigger,
+    CompletionProvider, GraphicsPlacement, HANDSHAKE_TOKEN, HighlightKind, HighlightSpan,
+    IntegrationAction, IntegrationContext, IntegrationHalt, IntegrationSignal, ProgressState,
+    RecorderHandle, ReplayInputStep, SessionRecorder, ShellIntegration, ShellKind, TerminalEngine,
+    TerminalEvent, TerminalEventProxy, TriggerEngine, TriggerMatchResult, detect_shell,
+    extract_replay_inputs, get_integration_script, parse_cast_file, probe_command, record, trigger,
 };
-pub use shell_integration::{
-    HANDSHAKE_TOKEN, IntegrationAction, IntegrationContext, IntegrationHalt, IntegrationSignal,
-    ShellIntegration, ShellKind, detect_shell, get_integration_script, probe_command,
+pub(crate) use transom_terminal_core::{
+    block, engine, event, highlight, kitty_graphics, osc, search, shell_integration,
 };
-pub use trigger::{CompiledTrigger, TriggerEngine, TriggerMatchResult};
 pub use view::{
     CONTEXT as TERMINAL_CONTEXT, KeyFilter, SendBacktab, SendTab, TerminalCopy,
     TerminalDirectoryError, TerminalPaste, TerminalReattachParams, TerminalView,

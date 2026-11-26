@@ -14,7 +14,7 @@ use std::time::Instant;
 ///
 /// 逐次调用 `Term::search_next` 而不是自己拼行文本再匹配：前者已正确处理宽字符、
 /// 属性与边界折叠，且内部维护了 DFA 状态缓存。
-pub(crate) fn scan(
+pub fn scan(
     term: &Term<TerminalEventProxy>,
     regex: &mut RegexSearch,
     limit: usize,
@@ -60,12 +60,12 @@ pub(crate) fn scan(
 /// 引擎上的检索方法挂载。
 impl TerminalEngine {
     /// 更新查询词与正则开关；内容未变时是空操作，避免无谓作废快照。
-    pub(crate) fn set_search_query(&mut self, query: &str, use_regex: bool) {
+    pub fn set_search_query(&mut self, query: &str, use_regex: bool) {
         self.search.set_query(query, use_regex);
     }
 
     /// 关闭检索并清空全部命中。
-    pub(crate) fn clear_search(&mut self) {
+    pub fn clear_search(&mut self) {
         self.search.clear();
     }
 
@@ -73,14 +73,14 @@ impl TerminalEngine {
     ///
     /// 由渲染帧调用而不是在 `process` 里同步扫描：重扫代价随 scrollback 规模增长，
     /// 放进数据流路径会把高频输出直接转成渲染卡顿。
-    pub(crate) fn refresh_search(&mut self, now: Instant) {
+    pub fn refresh_search(&mut self, now: Instant) {
         self.do_scan(now, false);
     }
 
     /// 显式导航前的强制重扫：用户按下回车就是明确意图，不再等输出停歇或冷却到期。
     ///
     /// 不这么做的话，回车会拿着一份已过期的命中列表跳位——那比"还没更新"更糟。
-    pub(crate) fn refresh_search_now(&mut self, now: Instant) {
+    pub fn refresh_search_now(&mut self, now: Instant) {
         self.do_scan(now, true);
     }
 
@@ -101,7 +101,7 @@ impl TerminalEngine {
     }
 
     /// 前进/后退一个命中并把视线移到该处。
-    pub(crate) fn search_select(&mut self, forward: bool) -> Option<Hit> {
+    pub fn search_select(&mut self, forward: bool) -> Option<Hit> {
         self.refresh_search_now(Instant::now());
         let hit = if forward {
             self.search.select_next()
@@ -115,7 +115,7 @@ impl TerminalEngine {
     }
 
     /// 按刻度带上的纵向比例跳到最近的命中。
-    pub(crate) fn search_select_by_fraction(&mut self, fraction: f32) -> Option<Hit> {
+    pub fn search_select_by_fraction(&mut self, fraction: f32) -> Option<Hit> {
         self.refresh_search_now(Instant::now());
         let top = self.term.grid().topmost_line();
         let bottom = Line(self.term.screen_lines() as i32 - 1);
@@ -125,12 +125,12 @@ impl TerminalEngine {
     }
 
     /// 检索栏状态摘要（含快照是否过期）。
-    pub(crate) fn search_status(&self) -> SearchStatus {
+    pub fn search_status(&self) -> SearchStatus {
         self.search.status(self.epoch)
     }
 
     /// 生成当前帧的检索绘制数据；快照失效或无查询时返回 `None`（不画任何高亮）。
-    pub(crate) fn search_paint(&self, tick_rows: usize) -> Option<SearchPaint> {
+    pub fn search_paint(&self, tick_rows: usize) -> Option<SearchPaint> {
         if !self.search.is_active() || self.search.is_stale(self.epoch) {
             return None;
         }

@@ -2,8 +2,8 @@
 
 use super::types::{
     GraphicsPlacement, MAX_GRAPHICS_BYTES, MAX_IMAGES, PlaceRequest, PlacedImage, StoredImage,
+    TerminalImage,
 };
-use gpui_kit::RenderImage;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -16,7 +16,7 @@ pub(crate) struct GraphicsStore {
 }
 
 impl GraphicsStore {
-    pub(crate) fn store(&mut self, id: u32, image: Arc<RenderImage>, width: u32, height: u32) {
+    pub(crate) fn store(&mut self, id: u32, image: Arc<TerminalImage>, width: u32, height: u32) {
         let bytes = (u64::from(width) * u64::from(height) * 4) as usize;
         self.images.insert(
             id,
