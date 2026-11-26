@@ -35,23 +35,60 @@ pub(crate) fn render_files(
     params: ContainerFilesView<'_>,
     p: &Palette,
 ) -> AnyElement {
-    let ContainerFilesView {
-        path,
-        entries,
-        preview,
-        preview_editor,
-        preview_saving,
-        preview_binary,
-        loading,
-        scroll,
-        readonly,
-    } = params;
-    let current_path = if path.is_empty() { "/" } else { path };
-    let parent = parent_path(current_path);
-    let crumbs = toolbar::render_toolbar(view, current_path, readonly, p);
+    let current_path = if params.path.is_empty() {
+        "/"
+    } else {
+        params.path
+    };
+    let list = render_file_list(view, &params, current_path, p);
+    let header = render_files_header(view, current_path, params.readonly, p);
+    let scroll = render_files_scroll(view, params.readonly, params.scroll, list, p);
+    let mut body = v_flex()
+        .size_full()
+        .overflow_hidden()
+        .child(header)
+        .child(scroll);
+    if let Some(preview) = params.preview {
+        body = body.child(super::file_preview::render_file_preview(
+            view,
+            super::file_preview::FilePreviewView {
+                preview,
+                preview_editor: params.preview_editor,
+                preview_saving: params.preview_saving,
+                binary: params.preview_binary,
+                readonly: params.readonly,
+            },
+            p,
+        ));
+    }
+    body.into_any_element()
+}
 
-    // 目录优先、再按名称：归档接口按 tar 顺序返回，用户习惯是先看目录。
-    let mut ordered: Vec<&ContainerFileEntry> = entries.iter().collect();
+fn render_files_header(
+    view: &Entity<ContainerWorkspace>,
+    current_path: &str,
+    readonly: bool,
+    p: &Palette,
+) -> AnyElement {
+    v_flex()
+        .gap_1()
+        .px_2()
+        .pt_2()
+        .pb_1p5()
+        .flex_none()
+        .border_color(p.divider(p.border))
+        .divider_edge(DividerEdge::Bottom, p.divider_width)
+        .child(toolbar::render_toolbar(view, current_path, readonly, p))
+        .into_any_element()
+}
+
+fn render_file_list(
+    view: &Entity<ContainerWorkspace>,
+    params: &ContainerFilesView<'_>,
+    current_path: &str,
+    p: &Palette,
+) -> AnyElement {
+    let mut ordered: Vec<&ContainerFileEntry> = params.entries.iter().collect();
     ordered.sort_by(|left, right| {
         let left_dir = left.kind == ContainerFileKind::Directory;
         let right_dir = right.kind == ContainerFileKind::Directory;
@@ -59,20 +96,41 @@ pub(crate) fn render_files(
             .cmp(&left_dir)
             .then_with(|| left.name.cmp(&right.name))
     });
-
     let mut list = v_flex().gap_0p5();
-    if loading && entries.is_empty() {
-        list = list.child(
-            div()
-                .text_xs()
-                .text_color(p.muted_foreground)
-                .child(rust_i18n::t!("container.loading").to_string()),
-        );
+    if params.loading && params.entries.is_empty() {
+        list = list.child(file_list_hint(
+            rust_i18n::t!("container.loading").to_string(),
+            p,
+        ));
     }
-    // 目录列表顶部的 `..`：根目录也占同一行（置灰不可点），否则进出根目录时
-    // 整张列表会上下跳一行，看起来就是闪烁。
+    list = list.child(render_parent_row(view, current_path, p));
+    for entry in ordered {
+        list = list.child(row::render_entry_row(view, entry, params.readonly, p));
+    }
+    if params.entries.is_empty() && !params.loading {
+        list = list.child(file_list_hint(
+            rust_i18n::t!("container.files.empty").to_string(),
+            p,
+        ));
+    }
+    list.into_any_element()
+}
+
+fn file_list_hint(text: String, p: &Palette) -> AnyElement {
+    div()
+        .text_xs()
+        .text_color(p.muted_foreground)
+        .child(text)
+        .into_any_element()
+}
+
+fn render_parent_row(
+    view: &Entity<ContainerWorkspace>,
+    current_path: &str,
+    p: &Palette,
+) -> AnyElement {
     let at_root = current_path == "/";
-    let mut parent_row = h_flex()
+    let mut row = h_flex()
         .id("container-file-parent-row")
         .h(rems(size::FILE_ROW_HEIGHT))
         .gap_2()
@@ -98,8 +156,8 @@ pub(crate) fn render_files(
         );
     if !at_root {
         let parent_view = view.clone();
-        let parent = parent.clone();
-        parent_row = parent_row
+        let parent = parent_path(current_path);
+        row = row
             .hover(|style| style.bg(p.muted.opacity(0.5)))
             .on_click(move |_, _, cx| {
                 parent_view.update(cx, |workspace, cx| {
@@ -107,48 +165,29 @@ pub(crate) fn render_files(
                 });
             });
     }
-    list = list.child(parent_row);
-    for entry in ordered {
-        list = list.child(row::render_entry_row(view, entry, readonly, p));
-    }
-    if entries.is_empty() && !loading {
-        list = list.child(
-            div()
-                .text_xs()
-                .text_color(p.muted_foreground)
-                .child(rust_i18n::t!("container.files.empty").to_string()),
-        );
-    }
+    row.into_any_element()
+}
 
-    // 头部固定、列表撑满剩余高度：原先把滚动区写死 280px，下面留一大块空白，
-    // 滚到底时最后一行还贴着硬边界被截断。
-    let header = v_flex()
-        .gap_1()
-        .px_2()
-        .pt_2()
-        .pb_1p5()
-        .flex_none()
-        .border_color(p.divider(p.border))
-        .divider_edge(DividerEdge::Bottom, p.divider_width)
-        .child(crumbs);
-
-    let drop_bg = p.sidebar_accent.opacity(0.3);
-    let drop_border = p.primary;
-    let drop_view = view.clone();
-    let sftp_drop_view = view.clone();
-
-    let mut scroll_container = div()
-        // 滚动容器用稳定 id，切目录只复位偏移不重建整块列表；换 id 会让
-        // GPUI 丢弃该元素并在同一帧重新挂载，肉眼就是一次闪烁。
+fn render_files_scroll(
+    view: &Entity<ContainerWorkspace>,
+    readonly: bool,
+    scroll: &ScrollHandle,
+    list: AnyElement,
+    p: &Palette,
+) -> AnyElement {
+    let mut container = div()
         .id("container-files-scroll")
         .flex_1()
         .min_h_0()
         .overflow_y_scroll()
         .track_scroll(scroll)
         .p_2();
-
     if !readonly {
-        scroll_container = scroll_container
+        let drop_bg = p.sidebar_accent.opacity(0.3);
+        let drop_border = p.primary;
+        let drop_view = view.clone();
+        let sftp_drop_view = view.clone();
+        container = container
             .drag_over::<ExternalPaths>(move |style, _, _, _| {
                 style.bg(drop_bg).border_2().border_color(drop_border)
             })
@@ -178,24 +217,9 @@ pub(crate) fn render_files(
                 });
             });
     }
-
-    let mut body = v_flex()
-        .size_full()
-        .overflow_hidden()
-        .child(header)
-        .child(scroll_container.child(list));
-    if let Some(preview) = preview {
-        body = body.child(super::file_preview::render_file_preview(
-            view,
-            super::file_preview::FilePreviewView {
-                preview,
-                preview_editor,
-                preview_saving,
-                binary: preview_binary,
-                readonly,
-            },
-            p,
-        ));
-    }
-    body.into_any_element()
+    div()
+        .flex_1()
+        .min_h_0()
+        .child(container.child(list))
+        .into_any_element()
 }

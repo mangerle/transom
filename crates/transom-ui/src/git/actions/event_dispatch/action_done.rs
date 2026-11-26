@@ -15,7 +15,42 @@ pub(super) fn handle_git_action_done(
     cx: &mut Context<AppShell>,
 ) {
     let message = error.as_ref().map(localized_error);
-    match &message {
+    report_git_action_result(app_state, project_id, action, &message, cx);
+    if matches!(action, GitAction::AddWorktree) && message.is_none() {
+        register_pending_worktree(app_state, project_id, cx);
+    }
+    if is_worktree_mutation(action) && message.is_none() {
+        refresh_worktrees_after_action(app_state, project_id, cx);
+    }
+    refresh_active_git_project(app_state, project_id, cx);
+    if is_rebase_action(action) && message.is_none() {
+        finish_rebase_action(app_state, project_id, action, cx);
+    }
+    if matches!(action, GitAction::Push) {
+        crate::git::actions::modal_bridges::GitModalActions::new(app_state).handle_git_push_result(
+            project_id,
+            message.clone(),
+            cx,
+        );
+    }
+    if is_conflict_resolution(action) {
+        crate::git::actions::modal_bridges::GitModalActions::new(app_state)
+            .handle_git_conflict_resolve_done(message.clone(), cx);
+    }
+    if matches!(action, GitAction::Commit) {
+        finish_commit_action(app_state, project_id, message.as_deref(), cx);
+    }
+    cx.notify();
+}
+
+fn report_git_action_result(
+    app_state: &mut AppState,
+    project_id: GitProjectId,
+    action: GitAction,
+    message: &Option<String>,
+    cx: &mut Context<AppShell>,
+) {
+    match message {
         Some(text) => {
             log::error!("Git 动作失败，动作: {action:?}，项目: {project_id}，原因: {text}");
             if let Some(workspace) = app_state.git_workspace_of_project(project_id, cx) {
@@ -26,7 +61,6 @@ pub(super) fn handle_git_action_done(
             app_state.set_error(text.clone());
         }
         None => {
-            // 补丁动作要报出落盘路径，其余动作沿用动作名文案。
             let saved = app_state
                 .git_workspace_of_project(project_id, cx)
                 .and_then(|workspace| workspace.update(cx, |ws, _| ws.take_patch_done_status()));
@@ -36,128 +70,161 @@ pub(super) fn handle_git_action_done(
             );
         }
     }
-    if matches!(action, GitAction::AddWorktree) && message.is_none() {
-        // 新建成功才把目录登记成项目：失败时留下一个打不开的条目只会碍事。
-        let pending = app_state
-            .git_workspace_of_project(project_id, cx)
-            .and_then(|workspace| {
-                workspace.update(cx, |workspace, _| workspace.take_pending_worktree())
-            });
-        if let Some((path, _checkout)) = pending {
-            crate::git::actions::GitActions::new(app_state).add_git_project(
-                crate::git::GitProjectDraft::new(std::path::PathBuf::from(&path)),
-                cx,
-            );
-        }
+}
+
+fn register_pending_worktree(
+    app_state: &mut AppState,
+    project_id: GitProjectId,
+    cx: &mut Context<AppShell>,
+) {
+    let pending = app_state
+        .git_workspace_of_project(project_id, cx)
+        .and_then(|workspace| {
+            workspace.update(cx, |workspace, _| workspace.take_pending_worktree())
+        });
+    if let Some((path, _checkout)) = pending {
+        crate::git::actions::GitActions::new(app_state).add_git_project(
+            crate::git::GitProjectDraft::new(std::path::PathBuf::from(&path)),
+            cx,
+        );
     }
-    // 工作树的新建/删除/锁定都会改动 `git worktree list` 的结果：
-    // 不重取就会把已删掉的目录继续摆在列表里，点它只会报错。
-    if matches!(
+}
+
+fn is_worktree_mutation(action: GitAction) -> bool {
+    matches!(
         action,
         GitAction::AddWorktree
             | GitAction::RemoveWorktree
             | GitAction::LockWorktree
             | GitAction::UnlockWorktree
-    ) && message.is_none()
-    {
-        let worktree_project = app_state
-            .git_registry(cx)
-            .projects
-            .iter()
-            .find(|item| item.id == project_id)
-            .cloned();
-        if let Some(project) = worktree_project {
-            if let Some(workspace) = app_state.git_workspace_of_project(project.id, cx) {
-                workspace.update(cx, |ws, cx| ws.reload_worktrees(cx));
-            } else {
-                app_state.send_command(GitCommand::ListWorktrees {
-                    project,
-                    request_id: transom_core::GitRequestId::new(),
-                });
-            }
-        }
-    }
-    // 写动作后一律刷新：索引与工作区都可能被 git 顺带改写（如提交后
-    // ahead 变化、worktree add 后分支增加）。
-    if let Some(project) = app_state
+    )
+}
+
+fn refresh_worktrees_after_action(
+    app_state: &mut AppState,
+    project_id: GitProjectId,
+    cx: &mut Context<AppShell>,
+) {
+    let project = app_state
         .git_registry(cx)
         .projects
         .iter()
         .find(|item| item.id == project_id)
-        .cloned()
-    {
+        .cloned();
+    let Some(project) = project else {
+        return;
+    };
+    if let Some(workspace) = app_state.git_workspace_of_project(project.id, cx) {
+        workspace.update(cx, |ws, cx| ws.reload_worktrees(cx));
+    } else {
+        app_state.send_command(GitCommand::ListWorktrees {
+            project,
+            request_id: transom_core::GitRequestId::new(),
+        });
+    }
+}
+
+fn refresh_active_git_project(
+    app_state: &mut AppState,
+    project_id: GitProjectId,
+    cx: &mut Context<AppShell>,
+) {
+    let project = app_state
+        .git_registry(cx)
+        .projects
+        .iter()
+        .find(|item| item.id == project_id)
+        .cloned();
+    if let Some(project) = project {
         crate::git::actions::GitActions::new(app_state).git_refresh(&project, cx);
     }
-    if matches!(
+}
+
+fn is_rebase_action(action: GitAction) -> bool {
+    matches!(
         action,
         GitAction::RebaseRun | GitAction::Rebase | GitAction::RebaseAbort
-    ) && message.is_none()
-    {
-        // 变基改写了整段历史：日志必须重取，否则界面还停在旧提交上。
-        // 失败时不关对话框，用户要看到原因并可以改清单重试。
-        if matches!(action, GitAction::RebaseRun) {
-            crate::git::actions::modal_bridges::GitModalActions::new(app_state)
-                .close_git_rebase_modal(cx);
-        }
-        if let Some(workspace) = app_state.git_workspace_of_project(project_id, cx) {
-            workspace.update(cx, |ws, cx| ws.load_log_notified(0, cx));
-        }
+    )
+}
+
+fn finish_rebase_action(
+    app_state: &mut AppState,
+    project_id: GitProjectId,
+    action: GitAction,
+    cx: &mut Context<AppShell>,
+) {
+    if matches!(action, GitAction::RebaseRun) {
+        crate::git::actions::modal_bridges::GitModalActions::new(app_state)
+            .close_git_rebase_modal(cx);
     }
-    if matches!(action, GitAction::Push) {
-        crate::git::actions::modal_bridges::GitModalActions::new(app_state).handle_git_push_result(
-            project_id,
-            message.clone(),
-            cx,
-        );
+    if let Some(workspace) = app_state.git_workspace_of_project(project_id, cx) {
+        workspace.update(cx, |ws, cx| ws.load_log_notified(0, cx));
     }
-    if matches!(
+}
+
+fn is_conflict_resolution(action: GitAction) -> bool {
+    matches!(
         action,
         GitAction::ResolveConflictOurs
             | GitAction::ResolveConflictTheirs
             | GitAction::ResolveConflictMark
-    ) {
-        crate::git::actions::modal_bridges::GitModalActions::new(app_state)
-            .handle_git_conflict_resolve_done(message.clone(), cx);
-    }
-    if matches!(action, GitAction::Commit)
-        && let Some(tab_id) =
-            crate::git::actions::GitActions::new(app_state).git_tab_for_project(project_id, cx)
-    {
-        let clear_message_on_commit = crate::app::app_settings(cx).git.clear_message_on_commit;
-        let should_push = app_state
-            .git_workspace(tab_id)
-            .map(|workspace| {
-                workspace.update(cx, |workspace, _| {
-                    workspace.apply_commit_done(message.is_none(), clear_message_on_commit)
-                })
+    )
+}
+
+fn finish_commit_action(
+    app_state: &mut AppState,
+    project_id: GitProjectId,
+    error: Option<&str>,
+    cx: &mut Context<AppShell>,
+) {
+    let Some(tab_id) =
+        crate::git::actions::GitActions::new(app_state).git_tab_for_project(project_id, cx)
+    else {
+        return;
+    };
+    let clear_message_on_commit = crate::app::app_settings(cx).git.clear_message_on_commit;
+    let should_push = app_state
+        .git_workspace(tab_id)
+        .map(|workspace| {
+            workspace.update(cx, |workspace, _| {
+                workspace.apply_commit_done(error.is_none(), clear_message_on_commit)
             })
-            .unwrap_or(false);
-        if message.is_none() {
-            if let Some(workspace) = app_state.git_workspace(tab_id) {
-                workspace.update(cx, |ws, cx| ws.load_log_notified(0, cx));
-            }
-            if should_push
-                && let Some(project) = app_state
-                    .git_registry(cx)
-                    .projects
-                    .iter()
-                    .find(|item| item.id == project_id)
-                    .cloned()
-            {
-                let show_dialog = crate::app::app_settings(cx).git.push_dialog;
-                if show_dialog {
-                    crate::git::actions::modal_bridges::GitModalActions::new(app_state)
-                        .open_git_push_modal(&project, None, cx);
-                } else {
-                    app_state.send_command(GitCommand::Push {
-                        project,
-                        options: transom_core::GitPushOptions::default(),
-                    });
-                }
-            }
-        }
+        })
+        .unwrap_or(false);
+    if error.is_some() {
+        return;
     }
-    cx.notify();
+    if let Some(workspace) = app_state.git_workspace(tab_id) {
+        workspace.update(cx, |ws, cx| ws.load_log_notified(0, cx));
+    }
+    if should_push {
+        open_or_send_push(app_state, project_id, cx);
+    }
+}
+
+fn open_or_send_push(
+    app_state: &mut AppState,
+    project_id: GitProjectId,
+    cx: &mut Context<AppShell>,
+) {
+    let project = app_state
+        .git_registry(cx)
+        .projects
+        .iter()
+        .find(|item| item.id == project_id)
+        .cloned();
+    let Some(project) = project else {
+        return;
+    };
+    if crate::app::app_settings(cx).git.push_dialog {
+        crate::git::actions::modal_bridges::GitModalActions::new(app_state)
+            .open_git_push_modal(&project, None, cx);
+    } else {
+        app_state.send_command(GitCommand::Push {
+            project,
+            options: transom_core::GitPushOptions::default(),
+        });
+    }
 }
 
 /// 把状态快照同时写进侧栏徽标与标签页。

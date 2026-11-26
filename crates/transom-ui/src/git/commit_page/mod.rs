@@ -24,9 +24,11 @@ use crate::widgets::{underline_tab_active_line, underline_tab_bar_line};
 use gpui_kit::base::{Tab, Tabs, h_flex, v_flex};
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
-use gpui_kit::component::resizable::resizable_panel;
+use gpui_kit::component::input::TextareaState;
+use gpui_kit::component::resizable::{ResizableState, resizable_panel};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
+use transom_core::CommitFile;
 use transom_ui_icons::AppIconElement;
 use transom_ui_icons::UiIcon;
 
@@ -34,161 +36,121 @@ use transom_ui_icons::UiIcon;
 const COMMIT_PANEL_WIDTH: f32 = 440.0;
 const COMMIT_PANEL_RANGE: (f32, f32) = (320.0, 720.0);
 
+/// 提交页从实体读取的只读快照。
+struct GitCommitPageSnapshot {
+    tab_id: transom_core::TabId,
+    display: GroupDisplay,
+    amend: bool,
+    submitting: bool,
+    message: Entity<TextareaState>,
+    count: usize,
+    commit_tab: GitCommitTab,
+    shelf_count: usize,
+    stash_count: usize,
+    split: Entity<ResizableState>,
+    amend_files: Vec<CommitFile>,
+    amend_files_loading: bool,
+    amend_head: Option<(String, String)>,
+}
+
 /// 渲染标签页的提交页。
 pub(super) fn render_git_commit_page(
     workspace: Entity<GitWorkspace>,
     p: &Palette,
     cx: &App,
 ) -> AnyElement {
-    let (
-        tab_id,
-        display,
-        amend,
-        submitting,
-        message,
-        count,
-        commit_tab,
-        shelf_count,
-        stash_count,
-        split,
-        amend_files,
-        amend_files_loading,
-        amend_head,
-    ) = {
-        let ws = workspace.read(cx);
-        let state = &ws.state;
-        if state.not_repo {
-            let error = state
-                .log
-                .error
-                .clone()
-                .or_else(|| state.status_error.clone())
-                .unwrap_or_else(|| rust_i18n::t!("git.repo.not_repo").to_string());
-            return super::workspace::render_git_not_repo_state(
-                error,
-                state.init_running,
-                workspace.clone(),
-                p,
-            );
-        }
-        if state.status_loading {
-            return super::workspace::hint(rust_i18n::t!("git.overview.loading").to_string(), p);
-        }
-        if let Some(error) = state.status_error.clone() {
-            return super::workspace::hint_colored(error, p.danger);
-        }
-        let display = GroupDisplay {
-            checked: state.checked.clone(),
-            collapsed_groups: state.collapsed_groups.clone(),
-            by_directory: state.group_by_directory,
-            collapsed_dirs: state.collapsed_dirs.clone(),
-        };
-        let count = state
+    let snapshot = match read_commit_page_snapshot(&workspace, p, cx) {
+        Ok(snapshot) => snapshot,
+        Err(element) => return element,
+    };
+    let tabs = render_commit_tabs(
+        &workspace,
+        snapshot.commit_tab,
+        snapshot.shelf_count,
+        snapshot.stash_count,
+        p,
+    );
+    let content = render_commit_page_content(&workspace, &snapshot, p, cx);
+    layout::render_commit_page_split(
+        workspace,
+        snapshot.tab_id,
+        tabs,
+        content,
+        snapshot.split,
+        p,
+        cx,
+    )
+}
+
+fn read_commit_page_snapshot(
+    workspace: &Entity<GitWorkspace>,
+    p: &Palette,
+    cx: &App,
+) -> Result<GitCommitPageSnapshot, AnyElement> {
+    let ws = workspace.read(cx);
+    let state = &ws.state;
+    if state.not_repo {
+        let error = state
+            .log
+            .error
+            .clone()
+            .or_else(|| state.status_error.clone())
+            .unwrap_or_else(|| rust_i18n::t!("git.repo.not_repo").to_string());
+        return Err(super::workspace::render_git_not_repo_state(
+            error,
+            state.init_running,
+            workspace.clone(),
+            p,
+        ));
+    }
+    if state.status_loading {
+        return Err(super::workspace::hint(
+            rust_i18n::t!("git.overview.loading").to_string(),
+            p,
+        ));
+    }
+    if let Some(error) = state.status_error.clone() {
+        return Err(super::workspace::hint_colored(error, p.danger));
+    }
+    let display = GroupDisplay {
+        checked: state.checked.clone(),
+        collapsed_groups: state.collapsed_groups.clone(),
+        by_directory: state.group_by_directory,
+        collapsed_dirs: state.collapsed_dirs.clone(),
+    };
+    Ok(GitCommitPageSnapshot {
+        tab_id: ws.tab_id,
+        count: state
             .status
             .as_ref()
             .map(|status| status.entries.len())
-            .unwrap_or(0);
-        (
-            ws.tab_id,
-            display,
-            state.commit_amend,
-            state.commit_submitting,
-            state.commit_message.clone(),
-            count,
-            state.commit_tab,
-            state.shelves.len(),
-            state.stashes.len(),
-            state.commit_split.clone(),
-            state.amend_files.clone(),
-            state.amend_files_loading,
-            state
-                .log
-                .entries
-                .first()
-                .map(|entry| (entry.short_oid().to_string(), entry.subject.clone())),
-        )
-    };
+            .unwrap_or(0),
+        amend: state.commit_amend,
+        submitting: state.commit_submitting,
+        message: state.commit_message.clone(),
+        commit_tab: state.commit_tab,
+        shelf_count: state.shelves.len(),
+        stash_count: state.stashes.len(),
+        split: state.commit_split.clone(),
+        amend_files: state.amend_files.clone(),
+        amend_files_loading: state.amend_files_loading,
+        amend_head: state
+            .log
+            .entries
+            .first()
+            .map(|entry| (entry.short_oid().to_string(), entry.subject.clone())),
+        display,
+    })
+}
 
-    let tabs = render_commit_tabs(&workspace, commit_tab, shelf_count, stash_count, p);
-    let content = match commit_tab {
-        GitCommitTab::Commit => {
-            let checked_count = display.checked.len();
-            let toolbar_actions = render_commit_toolbar(&workspace, display.by_directory, p);
-            let files = super::commit_modal::change_tree::render_git_group_list(
-                workspace.clone(),
-                &display,
-                p,
-                cx,
-            );
-            let amend_target =
-                super::commit_modal::git_amend_target_button(workspace.clone(), p, cx);
-            let amend_ws = workspace.clone();
-            let amend_toggle = super::commit_modal::git_check_toggle(
-                "git-commit-amend",
-                rust_i18n::t!("git.commit.amend").to_string(),
-                amend,
-                p,
-                move |_, window, cx| {
-                    amend_ws.update(cx, |ws, cx| ws.toggle_commit_amend(window, cx));
-                },
-            );
-            let commit_box = super::commit_box::render_commit_box(
-                CommitBoxProps {
-                    workspace: workspace.clone(),
-                    amend_toggle,
-                    amend_target,
-                    checked_count,
-                    message: &message,
-                    submitting,
-                },
-                p,
-                cx,
-            );
-            let upper_tree = render_upper_change_tree(UpperChangeTree {
-                count,
-                amend,
-                amend_files_loading,
-                amend_files: &amend_files,
-                amend_head: amend_head.as_ref(),
-                files,
-                palette: p,
-            });
-            let tree_panel = resizable_panel()
-                .size(px(280.0))
-                .size_range(px(100.0)..px(800.0))
-                .child(upper_tree);
-            let box_panel = resizable_panel()
-                .size(px(220.0))
-                .size_range(px(120.0)..px(600.0))
-                .child(commit_box);
-
-            v_flex()
-                .w_full()
-                .flex_1()
-                .min_h_0()
-                .child(
-                    h_flex()
-                        .w_full()
-                        .h(rems(size::PANE_HEADER_HEIGHT))
-                        .flex_none()
-                        .px_2()
-                        .gap_2()
-                        .items_center()
-                        .border_color(p.divider(p.border))
-                        .divider_edge(DividerEdge::Bottom, p.divider_width)
-                        .child(toolbar_actions),
-                )
-                .child(
-                    div().w_full().flex_1().min_h_0().child(
-                        v_resizable(ElementId::Name(
-                            format!("git-commit-inner-split-{tab_id}").into(),
-                        ))
-                        .child(tree_panel)
-                        .child(box_panel),
-                    ),
-                )
-                .into_any_element()
-        }
+fn render_commit_page_content(
+    workspace: &Entity<GitWorkspace>,
+    snapshot: &GitCommitPageSnapshot,
+    p: &Palette,
+    cx: &App,
+) -> AnyElement {
+    match snapshot.commit_tab {
+        GitCommitTab::Commit => render_commit_tab(workspace, snapshot, p, cx),
         GitCommitTab::Shelf => div()
             .flex_1()
             .min_h_0()
@@ -207,9 +169,88 @@ pub(super) fn render_git_commit_page(
                 cx,
             ))
             .into_any_element(),
-    };
+    }
+}
 
-    layout::render_commit_page_split(workspace, tab_id, tabs, content, split, p, cx)
+fn render_commit_tab(
+    workspace: &Entity<GitWorkspace>,
+    snapshot: &GitCommitPageSnapshot,
+    p: &Palette,
+    cx: &App,
+) -> AnyElement {
+    let display = &snapshot.display;
+    let toolbar = render_commit_toolbar(workspace, display.by_directory, p);
+    let files =
+        super::commit_modal::change_tree::render_git_group_list(workspace.clone(), display, p, cx);
+    let amend_target = super::commit_modal::git_amend_target_button(workspace.clone(), p, cx);
+    let amend_ws = workspace.clone();
+    let amend_toggle = super::commit_modal::git_check_toggle(
+        "git-commit-amend",
+        rust_i18n::t!("git.commit.amend").to_string(),
+        snapshot.amend,
+        p,
+        move |_, window, cx| {
+            amend_ws.update(cx, |ws, cx| ws.toggle_commit_amend(window, cx));
+        },
+    );
+    let commit_box = super::commit_box::render_commit_box(
+        CommitBoxProps {
+            workspace: workspace.clone(),
+            amend_toggle,
+            amend_target,
+            checked_count: display.checked.len(),
+            message: &snapshot.message,
+            submitting: snapshot.submitting,
+        },
+        p,
+        cx,
+    );
+    let upper_tree = render_upper_change_tree(UpperChangeTree {
+        count: snapshot.count,
+        amend: snapshot.amend,
+        amend_files_loading: snapshot.amend_files_loading,
+        amend_files: &snapshot.amend_files,
+        amend_head: snapshot.amend_head.as_ref(),
+        files,
+        palette: p,
+    });
+    let tree_panel = resizable_panel()
+        .size(px(280.0))
+        .size_range(px(100.0)..px(800.0))
+        .child(upper_tree);
+    let box_panel = resizable_panel()
+        .size(px(220.0))
+        .size_range(px(120.0)..px(600.0))
+        .child(commit_box);
+    v_flex()
+        .w_full()
+        .flex_1()
+        .min_h_0()
+        .child(render_commit_tab_header(toolbar, p))
+        .child(
+            div().w_full().flex_1().min_h_0().child(
+                v_resizable(ElementId::Name(
+                    format!("git-commit-inner-split-{}", snapshot.tab_id).into(),
+                ))
+                .child(tree_panel)
+                .child(box_panel),
+            ),
+        )
+        .into_any_element()
+}
+
+fn render_commit_tab_header(toolbar: impl IntoElement, p: &Palette) -> AnyElement {
+    h_flex()
+        .w_full()
+        .h(rems(size::PANE_HEADER_HEIGHT))
+        .flex_none()
+        .px_2()
+        .gap_2()
+        .items_center()
+        .border_color(p.divider(p.border))
+        .divider_edge(DividerEdge::Bottom, p.divider_width)
+        .child(toolbar)
+        .into_any_element()
 }
 
 fn render_commit_tabs(

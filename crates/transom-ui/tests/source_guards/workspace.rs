@@ -360,6 +360,31 @@ fn audit_hotspot_functions_stay_split() {
             "handle_container_request",
             50,
         ),
+        (
+            "crates/transom-ui/src/container/hub/dialog.rs",
+            "render_hub_results_body",
+            30,
+        ),
+        (
+            "crates/transom-ui/src/git/commit_page/mod.rs",
+            "render_git_commit_page",
+            40,
+        ),
+        (
+            "crates/transom-ui/src/container/detail/network.rs",
+            "render_network_detail",
+            50,
+        ),
+        (
+            "crates/transom-ui/src/container/detail/files/mod.rs",
+            "render_files",
+            45,
+        ),
+        (
+            "crates/transom-ui/src/git/actions/event_dispatch/action_done.rs",
+            "handle_git_action_done",
+            45,
+        ),
     ] {
         let source = std::fs::read_to_string(root.join(relative))
             .unwrap_or_else(|error| panic!("读取 {relative} 失败: {error}"));

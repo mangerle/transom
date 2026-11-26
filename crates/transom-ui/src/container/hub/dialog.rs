@@ -246,124 +246,154 @@ fn render_hub_results_body(
     p: &Palette,
 ) -> AnyElement {
     if hub.searching {
-        return v_flex()
-            .size_full()
-            .h(px(320.0))
-            .items_center()
-            .justify_center()
-            .gap_2p5()
-            .child(
-                v_flex()
-                    .w(px(44.0))
-                    .h(px(44.0))
-                    .rounded(p.radius.full)
-                    .bg(p.primary.opacity(0.10))
-                    .items_center()
-                    .justify_center()
-                    .child(
-                        AppIconElement::new(AppIcon::Ui(UiIcon::REFRESH))
-                            .with_size(px(22.0))
-                            .text_color(p.primary),
-                    ),
-            )
-            .child(
-                div()
-                    .text_sm()
-                    .font_weight(FontWeight::MEDIUM)
-                    .text_color(p.foreground)
-                    .child(rust_i18n::t!("container.hub.searching_hint").to_string()),
-            )
-            .into_any_element();
+        return render_hub_searching(p);
     }
-
-    if let Some(err) = hub.search_error.as_deref() {
-        let view_retry = view.clone();
-        return v_flex()
-            .size_full()
-            .h(px(260.0))
-            .items_center()
-            .justify_center()
-            .gap_3()
-            .p_4()
-            .rounded(p.radius.lg)
-            .bg(p.danger.opacity(0.04))
-            .border_1()
-            .border_color(p.danger.opacity(0.18))
-            .child(
-                v_flex()
-                    .w(px(40.0))
-                    .h(px(40.0))
-                    .rounded(p.radius.full)
-                    .bg(p.tone.danger_subtle)
-                    .items_center()
-                    .justify_center()
-                    .child(
-                        AppIconElement::new(AppIcon::Ui(UiIcon::ERROR))
-                            .with_size(px(20.0))
-                            .text_color(p.danger),
-                    ),
-            )
-            .child(div().text_sm().text_color(p.danger).child(err.to_string()))
-            .child(
-                action_button(
-                    "container-hub-retry-btn",
-                    UiIcon::SEARCH,
-                    rust_i18n::t!("container.hub.search").to_string(),
-                )
-                .secondary()
-                .on_click(move |_, _, cx| {
-                    view_retry.update(cx, |workspace, cx| workspace.execute_hub_search(cx));
-                }),
-            )
-            .into_any_element();
+    if let Some(error) = hub.search_error.as_deref() {
+        return render_hub_search_error(view, error, p);
     }
-
     if hub.results.is_empty() {
-        return if input_val.is_empty() {
-            view::render_hub_welcome_guide(p)
-        } else {
+        return render_hub_empty_results(input_val, p);
+    }
+    render_hub_result_list(view, hub, current_registry, p)
+}
+
+fn render_hub_searching(p: &Palette) -> AnyElement {
+    v_flex()
+        .size_full()
+        .h(px(320.0))
+        .items_center()
+        .justify_center()
+        .gap_2p5()
+        .child(
             v_flex()
-                .size_full()
-                .h(px(280.0))
+                .w(px(44.0))
+                .h(px(44.0))
+                .rounded(p.radius.full)
+                .bg(p.primary.opacity(0.10))
                 .items_center()
                 .justify_center()
-                .gap_2p5()
                 .child(
-                    v_flex()
-                        .w(px(44.0))
-                        .h(px(44.0))
-                        .rounded(p.radius.full)
-                        .bg(p.surface.faint)
-                        .items_center()
-                        .justify_center()
-                        .child(
-                            AppIconElement::new(AppIcon::Ui(UiIcon::SEARCH))
-                                .with_size(px(22.0))
-                                .text_color(p.muted_foreground),
-                        ),
-                )
+                    AppIconElement::new(AppIcon::Ui(UiIcon::REFRESH))
+                        .with_size(px(22.0))
+                        .text_color(p.primary),
+                ),
+        )
+        .child(
+            div()
+                .text_sm()
+                .font_weight(FontWeight::MEDIUM)
+                .text_color(p.foreground)
+                .child(rust_i18n::t!("container.hub.searching_hint").to_string()),
+        )
+        .into_any_element()
+}
+
+fn render_hub_search_error(
+    view: &Entity<ContainerWorkspace>,
+    error: &str,
+    p: &Palette,
+) -> AnyElement {
+    let view_retry = view.clone();
+    v_flex()
+        .size_full()
+        .h(px(260.0))
+        .items_center()
+        .justify_center()
+        .gap_3()
+        .p_4()
+        .rounded(p.radius.lg)
+        .bg(p.danger.opacity(0.04))
+        .border_1()
+        .border_color(p.danger.opacity(0.18))
+        .child(
+            v_flex()
+                .w(px(40.0))
+                .h(px(40.0))
+                .rounded(p.radius.full)
+                .bg(p.tone.danger_subtle)
+                .items_center()
+                .justify_center()
                 .child(
-                    div()
-                        .text_sm()
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(p.foreground)
-                        .child(rust_i18n::t!("container.hub.no_description").to_string()),
-                )
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(p.muted_foreground)
-                        .child(rust_i18n::t!("container.hub.empty_hint").to_string()),
-                )
-                .into_any_element()
-        };
+                    AppIconElement::new(AppIcon::Ui(UiIcon::ERROR))
+                        .with_size(px(20.0))
+                        .text_color(p.danger),
+                ),
+        )
+        .child(
+            div()
+                .text_sm()
+                .text_color(p.danger)
+                .child(error.to_string()),
+        )
+        .child(
+            action_button(
+                "container-hub-retry-btn",
+                UiIcon::SEARCH,
+                rust_i18n::t!("container.hub.search").to_string(),
+            )
+            .secondary()
+            .on_click(move |_, _, cx| {
+                view_retry.update(cx, |workspace, cx| workspace.execute_hub_search(cx));
+            }),
+        )
+        .into_any_element()
+}
+
+fn render_hub_empty_results(input_val: &str, p: &Palette) -> AnyElement {
+    if input_val.is_empty() {
+        return view::render_hub_welcome_guide(p);
     }
+    v_flex()
+        .size_full()
+        .h(px(280.0))
+        .items_center()
+        .justify_center()
+        .gap_2p5()
+        .child(
+            v_flex()
+                .w(px(44.0))
+                .h(px(44.0))
+                .rounded(p.radius.full)
+                .bg(p.surface.faint)
+                .items_center()
+                .justify_center()
+                .child(
+                    AppIconElement::new(AppIcon::Ui(UiIcon::SEARCH))
+                        .with_size(px(22.0))
+                        .text_color(p.muted_foreground),
+                ),
+        )
+        .child(
+            div()
+                .text_sm()
+                .font_weight(FontWeight::MEDIUM)
+                .text_color(p.foreground)
+                .child(rust_i18n::t!("container.hub.no_description").to_string()),
+        )
+        .child(
+            div()
+                .text_xs()
+                .text_color(p.muted_foreground)
+                .child(rust_i18n::t!("container.hub.empty_hint").to_string()),
+        )
+        .into_any_element()
+}
 
-    let mut list = v_flex().gap_2().w_full().p_1();
-    let results_header =
-        view::render_hub_results_header(hub.results.len(), &current_registry.name, p);
-    list = list.child(results_header);
-
+fn render_hub_result_list(
+    view: &Entity<ContainerWorkspace>,
+    hub: &ContainerHubDialog,
+    current_registry: &ContainerRegistry,
+    p: &Palette,
+) -> AnyElement {
+    let mut list = v_flex()
+        .gap_2()
+        .w_full()
+        .p_1()
+        .child(view::render_hub_results_header(
+            hub.results.len(),
+            &current_registry.name,
+            p,
+        ));
     for item in &hub.results {
         let img_name = item.name.clone();
         let registry = current_registry.clone();
@@ -372,14 +402,12 @@ fn render_hub_results_body(
             .get(&img_name)
             .cloned()
             .unwrap_or_else(|| "latest".to_string());
-
         let view_pull = view.clone();
         let view_tag = view.clone();
         let view_detail = view.clone();
         let item_clone = item.clone();
         let item_for_tag = img_name.clone();
         let item_for_pull = img_name.clone();
-
         let card = render_hub_result_card(crate::container::hub::card::HubResultCardParams {
             item,
             current_selected_tag: &active_tag,
@@ -399,17 +427,15 @@ fn render_hub_results_body(
                 });
             },
             on_open_detail: move |window: &mut Window, cx: &mut App| {
-                let it = item_clone.clone();
+                let item = item_clone.clone();
                 view_detail.update(cx, move |workspace, cx| {
-                    workspace.select_hub_image_detail(it, window, cx);
+                    workspace.select_hub_image_detail(item, window, cx);
                 });
             },
             palette: p,
         });
-
         list = list.child(card);
     }
-
     div()
         .id("container-hub-scroll")
         .w_full()
