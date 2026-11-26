@@ -65,6 +65,7 @@ pub struct TerminalView {
     /// 已到达但还没解析的输出先并入引擎，保证模式判定尽量贴近写入时刻。
     output_rx: flume::Receiver<Vec<u8>>,
     control: TerminalControlHandle,
+    event_tx: flume::Sender<Event>,
     event_rx: flume::Receiver<Event>,
     key_filter: Option<KeyFilter>,
     pub(crate) ime_text: String,
@@ -133,6 +134,16 @@ pub struct TerminalView {
     _integration_task: Task<()>,
     _focus_subscriptions: Vec<Subscription>,
     recorder: RecorderHandle,
+}
+
+/// 终端视图热替换 I/O 通道的重建参数。
+pub struct TerminalReattachParams {
+    pub io: TerminalIo,
+    pub profile: TerminalProfile,
+    pub interaction: TerminalInteraction,
+    pub audit_path: Option<std::path::PathBuf>,
+    pub shell_integration_enabled: bool,
+    pub remote_clipboard_allowed: bool,
 }
 
 /// 终端视图初始化参数结构体。
@@ -253,6 +264,7 @@ impl TerminalView {
             input_tx,
             output_rx,
             control,
+            event_tx,
             event_rx,
             key_filter,
             ime_text: String::new(),
@@ -288,6 +300,84 @@ impl TerminalView {
             _focus_subscriptions: vec![on_focus, on_blur],
             recorder,
         }
+    }
+
+    /// 重连后热替换底层 I/O 通道，保留现有终端屏幕输出与回滚历史。
+    ///
+    /// 设计原理（Why）：重连时若直接销毁重建 `TerminalView`，用户断线前的报错堆栈与
+    /// 滚动缓冲区会全部清空。保留引擎与渲染器状态并仅替换读写通道，既能延续历史输出，
+    /// 又能让新的 PTY/SSH 流无缝接管当前窗格。
+    pub fn reattach_io(&mut self, params: TerminalReattachParams, cx: &mut Context<Self>) {
+        let TerminalReattachParams {
+            io,
+            profile,
+            interaction,
+            audit_path,
+            shell_integration_enabled,
+            remote_clipboard_allowed,
+        } = params;
+
+        self.control.close();
+        while self.event_rx.try_recv().is_ok() {}
+        while self.output_rx.try_recv().is_ok() {}
+        *self.state.silent_echo.lock() = Default::default();
+
+        let TerminalIo {
+            reader,
+            writer,
+            control,
+            integration_mode,
+            cleanup,
+        } = io;
+
+        self.control = control;
+        self._cleanup = cleanup;
+        self.exited = false;
+        self.user_typed = false;
+        self.remote_clipboard_allowed = remote_clipboard_allowed;
+        self.interaction = interaction;
+        if self.profile.key_bindings != profile.key_bindings {
+            self.custom_keys = build_custom_keys(&profile.key_bindings, cx.platform_info().os);
+        }
+        self.profile = profile;
+
+        self.shell_integration = match integration_mode {
+            transom_core::ShellIntegrationMode::Preinstalled(kind) => {
+                ShellIntegration::preinstalled(kind)
+            }
+            transom_core::ShellIntegrationMode::Disabled => ShellIntegration::new(false),
+            transom_core::ShellIntegrationMode::Auto => {
+                ShellIntegration::new(shell_integration_enabled)
+            }
+        };
+        self._integration_task = Self::spawn_integration_task(cx);
+
+        {
+            let mut engine = self.state.engine.lock();
+            if engine.is_alt_screen() {
+                engine.process(b"\x1b[?1049l");
+            }
+            engine.process("\r\n\x1b[90m--- 已重新连接 ---\x1b[0m\r\n".as_bytes());
+        }
+
+        let (input_tx, output_rx, reader_task) = Self::spawn_io_tasks(
+            tasks::TerminalIoTaskParams {
+                reader,
+                writer,
+                audit_path,
+                recorder: &self.recorder,
+                event_tx: &self.event_tx,
+                state: &self.state,
+            },
+            cx,
+        );
+        self.input_tx = input_tx;
+        self.output_rx = output_rx;
+        self._reader_task = reader_task;
+
+        let size = self.state.engine.lock().size();
+        self.control.resize(size);
+        cx.notify();
     }
 
     /// 从设置重载当前终端的触发器规则。

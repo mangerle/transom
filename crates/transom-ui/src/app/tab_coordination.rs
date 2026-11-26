@@ -5,7 +5,7 @@
 //! - 涉及控制面命令发送、编辑器脏状态拦截、SFTP 预览收起、监控面板同步以及
 //!   窗口关闭的协调动作集中留在 `app/`，彻底消除 `workspace/tabs/` 对 `AppShell` 的反向耦合。
 
-use super::{AppShell, SessionTab, TabContent, TabStatus, WorkspaceTab, app_settings};
+use super::{AppShell, TabStatus, WorkspaceTab, app_settings};
 use crate::pane_tree::LayoutNode;
 use crate::sftp::PendingEditorClose;
 use crate::tiling::StripEntry;
@@ -78,14 +78,13 @@ impl AppShell {
             return;
         };
         let tab = &mut self.state.workspace.tabs[index];
-        tab.content = TabContent::Session(Box::new(SessionTab {
-            session_id: session.id,
-            session: session.clone(),
-            connection_id: None,
-            cwd: None,
-            progress: None,
-            pane: Default::default(),
-        }));
+        if let Some(pane) = tab.session_pane_mut() {
+            // 保留已有 TerminalView 实例以便重连就绪后热替换 I/O 并延续历史输出。
+            pane.reconnect_attempts = 0;
+            pane.reconnect_task = None;
+            pane.zmodem = None;
+            pane.system_stats = None;
+        }
         tab.set_connection_id(None);
         tab.status = TabStatus::Connecting;
         // 新连接尚未收到 OSC 0/2 与 OSC 7：标签回落会话名，SFTP 重新等待上报。

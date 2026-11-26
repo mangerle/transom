@@ -104,29 +104,67 @@ impl AppShell {
         let Some(spawn_settings) = self.terminal_ready_spawn_settings(index, cx) else {
             return false;
         };
-        let terminal = self.spawn_terminal_view(
-            window,
-            cx,
-            TerminalSpawn {
-                io,
-                profile: spawn_settings.profile,
-                interaction: spawn_settings.interaction,
-                key_filter: spawn_settings.key_filter,
-                audit_path: spawn_settings.audit_path,
-                shell_integration_enabled: spawn_settings.shell_integration_enabled,
-                session_id,
-            },
-        );
-        let focus_handle = terminal.read(cx).focus_handle().clone();
-        // 用 subscribe_in：通知要不要弹取决于"窗口是否被系统聚焦"，
-        // 普通 subscribe 拿不到 Window。
-        let subscription = cx.subscribe_in(
-            &terminal,
-            window,
-            move |this, _, event: &TerminalEvent, window, cx| {
-                this.handle_terminal_event(tab_id, event, window, cx)
-            },
-        );
+        let existing_terminal = self.state.workspace.tabs[index].terminal();
+        let (focus_handle, new_terminal, new_subscription) =
+            if let Some(terminal) = existing_terminal {
+                let remote_clipboard_allowed = app_settings(cx)
+                    .terminal_interaction
+                    .default_allow_remote_clipboard_write;
+                let triggers = app_settings(cx).triggers.clone();
+                let block_override = self
+                    .state
+                    .session
+                    .catalog
+                    .sessions
+                    .iter()
+                    .find(|session| session.id == session_id)
+                    .map_or(transom_core::BlockViewOverride::FollowGlobal, |session| {
+                        session.block_view
+                    });
+                let block_view = app_settings(cx).block_view.resolved(block_override);
+                terminal.update(cx, |view, cx| {
+                    view.reattach_io(
+                        transom_terminal::TerminalReattachParams {
+                            io,
+                            profile: spawn_settings.profile,
+                            interaction: spawn_settings.interaction,
+                            audit_path: spawn_settings.audit_path,
+                            shell_integration_enabled: spawn_settings.shell_integration_enabled,
+                            remote_clipboard_allowed,
+                        },
+                        cx,
+                    );
+                    view.reload_triggers(&triggers);
+                    view.set_block_view(Some(block_view), cx);
+                });
+                let focus_handle = terminal.read(cx).focus_handle().clone();
+                (focus_handle, None, None)
+            } else {
+                let terminal = self.spawn_terminal_view(
+                    window,
+                    cx,
+                    TerminalSpawn {
+                        io,
+                        profile: spawn_settings.profile,
+                        interaction: spawn_settings.interaction,
+                        key_filter: spawn_settings.key_filter,
+                        audit_path: spawn_settings.audit_path,
+                        shell_integration_enabled: spawn_settings.shell_integration_enabled,
+                        session_id,
+                    },
+                );
+                let focus_handle = terminal.read(cx).focus_handle().clone();
+                // 用 subscribe_in：通知要不要弹取决于"窗口是否被系统聚焦"，
+                // 普通 subscribe 拿不到 Window。
+                let subscription = cx.subscribe_in(
+                    &terminal,
+                    window,
+                    move |this, _, event: &TerminalEvent, window, cx| {
+                        this.handle_terminal_event(tab_id, event, window, cx)
+                    },
+                );
+                (focus_handle, Some(terminal), Some(subscription))
+            };
         let session_context = self.state.workspace.tabs[index].session().map(|session| {
             (
                 session.name.clone(),
@@ -136,10 +174,14 @@ impl AppShell {
         let tab = &mut self.state.workspace.tabs[index];
         tab.status = TabStatus::Connected;
         if let Some(pane) = tab.session_pane_mut() {
-            pane.terminal = Some(terminal);
+            if let Some(terminal) = new_terminal {
+                pane.terminal = Some(terminal);
+            }
             pane.reconnect_attempts = 0;
             pane.network_traffic = None;
-            pane._subscription = Some(subscription);
+            if let Some(subscription) = new_subscription {
+                pane._subscription = Some(subscription);
+            }
         }
         if let Some((session_name, target)) = session_context {
             log::info!(
