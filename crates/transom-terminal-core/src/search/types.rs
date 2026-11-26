@@ -279,7 +279,7 @@ impl SearchState {
     /// 构造当前帧的绘制数据。
     ///
     /// `display_offset` 为向上滚动的行数，可见行 `row` 对应网格行号 `row - display_offset`，
-    /// 与 [`crate::renderer`] 里的行映射保持同一口径。
+    /// 与渲染层的行映射保持同一口径。
     pub fn paint(
         &self,
         display_offset: i32,

@@ -6,8 +6,8 @@
 //!   排查断连问题的主要入口，率先收敛为 thiserror 枚举；
 //! - 核心优势：变体携带动态现场（主机、端口、原因），Display 全中文自带
 //!   上下文；到 `AppError` 的错误码映射集中在一处，不再散落各调用点；
-//! - 代价与局限：SFTP 与转发子域仍使用 `AppError`（其 detail 已中文化、
-//!   错误码已细分），后续按需迁移；russh 等第三方错误只作为 `source`
+//! - 代价与局限：连接链路保留本枚举，SFTP、转发、同步与存储各自拥有领域错误；
+//!   跨事件边界再统一转换为 `AppError`。russh 等第三方错误只作为 `source`
 //!   存储、不做 `#[from]`，避免外部依赖变动破坏本层契约。
 
 use transom_core::{AppError, ErrorCode, ErrorContext};
