@@ -7,7 +7,7 @@ use crate::palette::Palette;
 use gpui_kit::base::{Selectable, h_flex, v_flex};
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonGroup, ButtonVariants};
-use gpui_kit::component::input::{Input, InputState, NumberInput};
+use gpui_kit::component::input::{Input, InputState, NumberInput, Textarea};
 use gpui_kit::component::menu::{DropdownMenu, PopupMenuItem};
 use gpui_kit::component::switch::Switch;
 use gpui_kit::*;
@@ -102,7 +102,86 @@ pub(crate) fn render_ssh_basic_fields(
             }
         }));
 
-    let mut fields = v_flex().gap_3().child(
+    let can_batch = form.base.is_none() && form.connection == ConnectionChoice::Ssh;
+    let host_port_row = if can_batch && form.batch_mode {
+        v_flex()
+            .gap_1p5()
+            .child(
+                h_flex()
+                    .justify_between()
+                    .items_center()
+                    .child(
+                        h_flex()
+                            .gap_0p5()
+                            .items_center()
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(p.muted_foreground)
+                                    .child(rust_i18n::t!("form.batch_hosts_label").to_string()),
+                            )
+                            .child(div().text_xs().text_color(p.danger).child("*")),
+                    )
+                    .child(render_batch_mode_toggle(form.batch_mode, cx)),
+            )
+            .child(
+                h_flex()
+                    .gap_3()
+                    .items_start()
+                    .child(
+                        div()
+                            .flex_1()
+                            .child(Textarea::new(&form.batch_hosts).h(rems(6.0)).w_full()),
+                    )
+                    .child(div().w(rems(8.5)).child(number_form_field(
+                        rust_i18n::t!("form.port").to_string(),
+                        true,
+                        form.port.clone(),
+                        p,
+                    ))),
+            )
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(p.muted_foreground)
+                    .child(rust_i18n::t!("form.batch_hosts_hint").to_string()),
+            )
+            .into_any_element()
+    } else if can_batch {
+        v_flex()
+            .gap_1()
+            .child(
+                h_flex()
+                    .justify_between()
+                    .items_end()
+                    .child(
+                        h_flex()
+                            .gap_0p5()
+                            .items_center()
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(p.muted_foreground)
+                                    .child(rust_i18n::t!("form.host").to_string()),
+                            )
+                            .child(div().text_xs().text_color(p.danger).child("*")),
+                    )
+                    .child(render_batch_mode_toggle(form.batch_mode, cx)),
+            )
+            .child(
+                h_flex()
+                    .gap_3()
+                    .items_end()
+                    .child(div().flex_1().child(Input::new(&form.host).w_full()))
+                    .child(div().w(rems(8.5)).child(number_form_field(
+                        rust_i18n::t!("form.port").to_string(),
+                        true,
+                        form.port.clone(),
+                        p,
+                    ))),
+            )
+            .into_any_element()
+    } else {
         h_flex()
             .gap_3()
             .items_end()
@@ -116,8 +195,11 @@ pub(crate) fn render_ssh_basic_fields(
                 true,
                 form.port.clone(),
                 p,
-            ))),
-    );
+            )))
+            .into_any_element()
+    };
+
+    let mut fields = v_flex().gap_3().child(host_port_row);
 
     fields = render_account_section(fields, form, cx, p);
 
@@ -245,4 +327,36 @@ pub(crate) fn render_ssh_network_fields(
     }
 
     fields.into_any_element()
+}
+
+/// 新建 SSH 会话时的“单个 / 批量”模式切换按钮组。
+fn render_batch_mode_toggle(batch_mode: bool, cx: &mut Context<SessionFormView>) -> AnyElement {
+    ButtonGroup::new("ssh-batch-mode-toggle")
+        .small()
+        .child(
+            Button::new("ssh-mode-single")
+                .small()
+                .label(rust_i18n::t!("form.host_mode_single").to_string())
+                .selected(!batch_mode),
+        )
+        .child(
+            Button::new("ssh-mode-batch")
+                .small()
+                .label(rust_i18n::t!("form.host_mode_batch").to_string())
+                .selected(batch_mode),
+        )
+        .on_click(cx.listener(|this, clicks: &Vec<usize>, _, cx| {
+            let next = match clicks.first() {
+                Some(0) => Some(false),
+                Some(1) => Some(true),
+                _ => None,
+            };
+            if let Some(batch) = next {
+                this.edit(cx, |form| {
+                    form.batch_mode = batch;
+                    form.error = None;
+                });
+            }
+        }))
+        .into_any_element()
 }

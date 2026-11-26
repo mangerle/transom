@@ -16,44 +16,16 @@
 
 use super::init::text_input;
 use super::types::{
-    AuthChoice, BuiltSession, ConnectionChoice, IdentityOption, SessionForm, SessionFormInit,
-    SessionFormSection,
+    AuthChoice, BuiltSession, ConnectionChoice, ExternalSessionImportKind, IdentityOption,
+    SessionForm, SessionFormEvent, SessionFormInit, SessionFormSection,
 };
-use crate::identity::{BuiltIdentity, IdentityEditState, build_identity_from_edit};
+use crate::identity::{IdentityEditState, build_identity_from_edit};
 use crate::palette::localized_error;
-use gpui_kit::component::input::{InputEvent, InputState};
+use gpui_kit::component::input::InputEvent;
 use gpui_kit::*;
 use transom_core::{
     AppError, AuthMethod, FolderInheritedDefaults, IdentityId, SecretKind, SerialPortDescriptor,
-    SessionId,
 };
-
-/// 会话表单交给外壳处理的意图。
-///
-/// 事件自带全部数据：外壳处理时禁止回读实体，否则会在实体回调期间触发
-/// GPUI 的双重租借崩溃。
-pub(crate) enum SessionFormEvent {
-    /// 校验通过后的构建结果；实体已先关闭再发出本事件。
-    Save {
-        /// 构建结果体积远大于删除事件，装箱避免枚举整体变大。
-        built: Box<BuiltSession>,
-        save_password: bool,
-        save_passphrase: bool,
-    },
-    /// 删除当前编辑的会话；实体已先关闭再发出本事件。
-    Delete { session_id: SessionId },
-    /// 文件夹候选被选中；目录默认值由外壳解析后注入。
-    SelectFolder { path: String },
-    /// 重新枚举系统串口；数据由外壳注入，实体不直接访问系统。
-    RefreshSerialPorts,
-    /// 内联新建或编辑账户（凭据模板）完成；由外壳写入目录与钥匙串。
-    SaveIdentity { built: Box<BuiltIdentity> },
-    /// 打开内联账户编辑时请求外壳后台回填已保存的凭据口令。
-    PrefillIdentitySecrets {
-        id: IdentityId,
-        fields: Vec<(SecretKind, Entity<InputState>)>,
-    },
-}
 
 impl EventEmitter<SessionFormEvent> for SessionFormView {}
 
@@ -212,6 +184,9 @@ impl SessionFormView {
         let prev_default = default_port_for_choice(form.connection);
         let next_default = default_port_for_choice(choice);
         form.connection = choice;
+        if choice != ConnectionChoice::Ssh {
+            form.batch_mode = false;
+        }
         if !super::view::connection::sections_for_connection(choice).contains(&form.section) {
             form.section = SessionFormSection::Basic;
         }
@@ -240,9 +215,26 @@ impl SessionFormView {
             .unwrap_or_default()
     }
 
-    /// 校验并提交表单：成功先关闭再上交 [`SessionFormEvent::Save`]；
+    /// 校验并提交表单：成功先关闭再上交 [`SessionFormEvent::Save`] 或 [`SessionFormEvent::SaveBatch`]；
     /// 失败把错误写回弹窗并保持打开，等待用户就地改正。
     pub(crate) fn save(&mut self, cx: &mut Context<Self>) {
+        let is_batch = self.state.as_ref().is_some_and(|form| {
+            form.base.is_none() && form.connection == ConnectionChoice::Ssh && form.batch_mode
+        });
+        if is_batch {
+            let Some((items, save_password, save_passphrase)) = self.build_batch(cx) else {
+                return;
+            };
+            self.state = None;
+            cx.emit(SessionFormEvent::SaveBatch {
+                items,
+                save_password,
+                save_passphrase,
+            });
+            cx.notify();
+            return;
+        }
+
         let Some((built, save_password, save_passphrase)) = self.build(cx) else {
             return;
         };
@@ -252,6 +244,17 @@ impl SessionFormView {
             save_password,
             save_passphrase,
         });
+        cx.notify();
+    }
+
+    /// 关闭当前新建表单并请求外壳发起外部会话导入。
+    pub(crate) fn trigger_external_import(
+        &mut self,
+        kind: ExternalSessionImportKind,
+        cx: &mut Context<Self>,
+    ) {
+        self.state = None;
+        cx.emit(SessionFormEvent::ImportExternal { kind });
         cx.notify();
     }
 
@@ -266,6 +269,24 @@ impl SessionFormView {
             });
         }
         cx.notify();
+    }
+
+    /// 校验并取出批量构建结果；失败时把错误写回弹窗。
+    fn build_batch(&mut self, cx: &mut Context<Self>) -> Option<(Vec<BuiltSession>, bool, bool)> {
+        let (items, save_password, save_passphrase) = {
+            let form = self.state.as_mut()?;
+            let save_password = !form.password.read(cx).value().is_empty();
+            let save_passphrase = !form.passphrase.read(cx).value().is_empty();
+            match form.build_batch_sessions(cx) {
+                Ok(items) => (items, save_password, save_passphrase),
+                Err(error) => {
+                    form.error = Some(error);
+                    cx.notify();
+                    return None;
+                }
+            }
+        };
+        Some((items, save_password, save_passphrase))
     }
 
     /// 校验并取出构建结果；失败时把错误写回弹窗。

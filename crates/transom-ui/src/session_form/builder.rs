@@ -140,6 +140,63 @@ impl SessionForm {
     }
 
     /// 组装会话级出站代理：`None` 表示跟随全局。
+    pub(super) fn build_proxy_public(
+        &self,
+        cx: &mut Context<impl Sized>,
+    ) -> Result<Option<OutboundProxy>, String> {
+        self.build_proxy(cx)
+    }
+
+    /// 组装 SSH 连接模板（跳过 `host` 非空校验，供批量新建复用）。
+    pub(super) fn build_ssh_template(
+        &self,
+        cx: &mut Context<impl Sized>,
+    ) -> Result<SshConnectionBuild, String> {
+        let template = self.identity_choice.and_then(|id| {
+            self.identities
+                .iter()
+                .find(|option: &&IdentityOption| option.id == id)
+        });
+        let username = match template {
+            Some(option) => option.username.clone(),
+            None => self.username.read(cx).value().trim().to_string(),
+        };
+        if username.is_empty() {
+            return Err(rust_i18n::t!("form.error_username").to_string());
+        }
+        let port: u16 = self
+            .port
+            .read(cx)
+            .value()
+            .trim()
+            .parse()
+            .map_err(|_| rust_i18n::t!("form.error_port").to_string())?;
+        if port == 0 {
+            return Err(rust_i18n::t!("form.error_port").to_string());
+        }
+        let key_path = self.key_path.read(cx).value().trim().to_string();
+        if self.auth == AuthChoice::PrivateKey && key_path.is_empty() {
+            return Err(rust_i18n::t!("form.error_key").to_string());
+        }
+        let options = self.ssh_options(cx)?;
+        let (auth, password, key_passphrase) = self.ssh_auth(template, cx);
+        Ok(SshConnectionBuild {
+            connection: Connection::Ssh(SshConnection {
+                host: String::new(),
+                port,
+                username,
+                auth,
+                options,
+                proxy_jump: self
+                    .jump_choice
+                    .map(|jump_session_id| ProxyJumpConfig { jump_session_id }),
+            }),
+            password,
+            key_passphrase,
+        })
+    }
+
+    /// 组装会话级出站代理：`None` 表示跟随全局。
     fn build_proxy(&self, cx: &mut Context<impl Sized>) -> Result<Option<OutboundProxy>, String> {
         let host = self.proxy_host.read(cx).value().trim().to_string();
         let port_text = self.proxy_port.read(cx).value().trim().to_string();

@@ -5,6 +5,7 @@
 //! 模型的"状态形状"分开放置后，两边的边界一眼可见。
 
 pub mod proxy;
+pub mod session_import;
 pub mod sftp;
 pub mod sftp_filter;
 pub mod sftp_sync;

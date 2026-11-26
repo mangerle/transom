@@ -249,6 +249,14 @@ impl AppShell {
                 save_password,
                 save_passphrase,
             } => self.apply_session_form_save(built, *save_password, *save_passphrase, cx),
+            crate::session_form::SessionFormEvent::SaveBatch {
+                items,
+                save_password,
+                save_passphrase,
+            } => self.apply_session_form_save_batch(items, *save_password, *save_passphrase, cx),
+            crate::session_form::SessionFormEvent::ImportExternal { kind } => {
+                crate::connection::import_external_sessions(&mut self.state, *kind, cx);
+            }
             crate::session_form::SessionFormEvent::Delete { session_id } => {
                 self.delete_session_by_id(*session_id, cx);
             }
@@ -305,25 +313,29 @@ impl AppShell {
                 None => SecretWrite::Delete(key.clone()),
             })
             .collect();
-        if !secret_writes.is_empty() {
-            let secret_store = self.state.runtime.services.secret_store.clone();
-            cx.spawn(async move |this, cx| {
-                let error = cx
-                    .background_executor()
-                    .spawn(
-                        async move { apply_secret_writes(secret_store.as_ref(), &secret_writes) },
-                    )
-                    .await;
-                let _ = this.update(cx, |this, cx| {
-                    if let Some(error) = error {
-                        this.state.set_error(localized_error(&error));
-                        cx.notify();
-                    }
-                });
-            })
-            .detach();
-        }
+        self.spawn_secret_writes(secret_writes, cx);
         cx.notify();
+    }
+
+    /// 后台顺序执行钥匙串写操作，失败时写回全局错误提示。
+    fn spawn_secret_writes(&self, secret_writes: Vec<SecretWrite>, cx: &mut Context<Self>) {
+        if secret_writes.is_empty() {
+            return;
+        }
+        let secret_store = self.state.runtime.services.secret_store.clone();
+        cx.spawn(async move |this, cx| {
+            let error = cx
+                .background_executor()
+                .spawn(async move { apply_secret_writes(secret_store.as_ref(), &secret_writes) })
+                .await;
+            let _ = this.update(cx, |this, cx| {
+                if let Some(error) = error {
+                    this.state.set_error(localized_error(&error));
+                    cx.notify();
+                }
+            });
+        })
+        .detach();
     }
 
     /// 保存会话表单：只做目录落盘与凭据写入，不发起连接。
@@ -377,25 +389,7 @@ impl AppShell {
                 secret_writes.push(SecretWrite::Delete(passphrase_key));
             }
         }
-        let secret_store = self.state.runtime.services.secret_store.clone();
-        cx.spawn(async move |this, cx| {
-            let error = if secret_writes.is_empty() {
-                None
-            } else {
-                cx.background_executor()
-                    .spawn(
-                        async move { apply_secret_writes(secret_store.as_ref(), &secret_writes) },
-                    )
-                    .await
-            };
-            let _ = this.update(cx, |this, cx| {
-                if let Some(error) = error {
-                    this.state.set_error(localized_error(&error));
-                    cx.notify();
-                }
-            });
-        })
-        .detach();
+        self.spawn_secret_writes(secret_writes, cx);
 
         let session_id = built.session.id;
         if editing {
@@ -413,6 +407,49 @@ impl AppShell {
             self.state.session.catalog.sessions.push(built.session);
         }
         self.state.persist_catalog();
+        cx.notify();
+    }
+
+    /// 批量保存新建的 SSH 会话清单：统一写入目录与钥匙串，不发起连接。
+    fn apply_session_form_save_batch(
+        &mut self,
+        items: &[crate::session_form::BuiltSession],
+        save_password: bool,
+        save_passphrase: bool,
+        cx: &mut Context<Self>,
+    ) {
+        if items.is_empty() {
+            return;
+        }
+        let mut secret_writes = Vec::new();
+        let mut added_count = 0usize;
+
+        for item in items {
+            let mut built = item.clone();
+            built.session.folder_id = built
+                .folder_path
+                .as_deref()
+                .and_then(|path| self.state.session.catalog.ensure_folder_path(path));
+            if built.session.identity_id.is_none() {
+                let password_key = SecretKey::new(built.session.id, SecretKind::Password);
+                let passphrase_key = SecretKey::new(built.session.id, SecretKind::KeyPassphrase);
+                if save_password && let Some(password) = &built.password {
+                    secret_writes.push(SecretWrite::Set(password_key, password.clone()));
+                }
+                if save_passphrase && let Some(passphrase) = &built.key_passphrase {
+                    secret_writes.push(SecretWrite::Set(passphrase_key, passphrase.clone()));
+                }
+            }
+            self.state.session.catalog.sessions.push(built.session);
+            added_count += 1;
+        }
+
+        self.spawn_secret_writes(secret_writes, cx);
+
+        if self.state.persist_catalog() {
+            self.state.ui.status =
+                Some(rust_i18n::t!("form.batch_create_success", count = added_count).to_string());
+        }
         cx.notify();
     }
 }

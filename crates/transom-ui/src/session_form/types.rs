@@ -1,15 +1,59 @@
 //! 会话表单核心数据模型与选项类型。
 
+use crate::identity::BuiltIdentity;
 use gpui_kit::App;
 use gpui_kit::Entity;
 use gpui_kit::component::input::{InputState, TextareaState};
 use transom_core::{
     AuthMethod, BlockViewOverride, Connection, ForwardRule, FtpSecurity, IdentityId, OutboundProxy,
-    RdpColorDepth, RdpPerformance, RdpSecurity, SerialDataBits, SerialFlowControl, SerialParity,
-    SerialPortDescriptor, SerialStopBits, Session, SessionColor, SessionIcon, SessionId,
-    TextEncoding,
+    RdpColorDepth, RdpPerformance, RdpSecurity, SecretKind, SerialDataBits, SerialFlowControl,
+    SerialParity, SerialPortDescriptor, SerialStopBits, Session, SessionColor, SessionIcon,
+    SessionId, TextEncoding,
 };
 use zeroize::Zeroizing;
+
+/// 外部会话导入来源类型。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ExternalSessionImportKind {
+    XshellFiles,
+    XshellFolder,
+    MobaXtermFile,
+    SshConfig,
+}
+
+/// 会话表单交给外壳处理的意图。
+///
+/// 事件自带全部数据：外壳处理时禁止回读实体，否则会在实体回调期间触发
+/// GPUI 的双重租借崩溃。
+pub(crate) enum SessionFormEvent {
+    /// 校验通过后的构建结果；实体已先关闭再发出本事件。
+    Save {
+        built: Box<BuiltSession>,
+        save_password: bool,
+        save_passphrase: bool,
+    },
+    /// 批量新建模式下校验通过的多个会话构建结果；实体已先关闭再发出本事件。
+    SaveBatch {
+        items: Vec<BuiltSession>,
+        save_password: bool,
+        save_passphrase: bool,
+    },
+    /// 从新建会话表单触发的外部会话导入请求；实体已先关闭再发出本事件。
+    ImportExternal { kind: ExternalSessionImportKind },
+    /// 删除当前编辑的会话；实体已先关闭再发出本事件。
+    Delete { session_id: SessionId },
+    /// 文件夹候选被选中；目录默认值由外壳解析后注入。
+    SelectFolder { path: String },
+    /// 重新枚举系统串口；数据由外壳注入，实体不直接访问系统。
+    RefreshSerialPorts,
+    /// 内联新建或编辑账户（凭据模板）完成；由外壳写入目录与钥匙串。
+    SaveIdentity { built: Box<BuiltIdentity> },
+    /// 打开内联账户编辑时请求外壳后台回填已保存的凭据口令。
+    PrefillIdentitySecrets {
+        id: IdentityId,
+        fields: Vec<(SecretKind, Entity<InputState>)>,
+    },
+}
 
 /// 会话表单左侧分类导航页签。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -131,7 +175,11 @@ pub(crate) struct SessionForm {
     /// 可选的文件夹路径清单，供下拉快速选择；不随输入过滤。
     pub folder_options: Vec<String>,
     pub connection: ConnectionChoice,
+    /// 新建 SSH 会话时是否启用批量主机模式。
+    pub batch_mode: bool,
     pub host: Entity<InputState>,
+    /// 批量模式下每行一个主机地址的文本域（支持 `host`、`host:port` 或 `名称 host[:port]`）。
+    pub batch_hosts: Entity<TextareaState>,
     pub port: Entity<InputState>,
     pub username: Entity<InputState>,
     pub password: Entity<InputState>,
@@ -272,6 +320,7 @@ impl SessionForm {
             .iter()
             .map(|input| input.read(cx).value().to_string())
             .collect();
+        values.push(self.batch_hosts.read(cx).value().to_string());
         values.push(self.startup_commands.read(cx).value().to_string());
         values.push(self.local_env.read(cx).value().to_string());
         values

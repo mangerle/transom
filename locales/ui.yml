@@ -1229,6 +1229,45 @@ form:
   edit_title:
     en: Edit Session
     zh-CN: 编辑会话
+  host_mode_single:
+    en: Single
+    zh-CN: 单个
+  host_mode_batch:
+    en: Batch
+    zh-CN: 批量
+  batch_hosts_label:
+    en: Batch Hosts (one per line)
+    zh-CN: 批量主机列表（每行一个）
+  batch_hosts_placeholder:
+    en: "192.168.1.10\n192.168.1.11:2222\nweb-01 10.0.0.5"
+    zh-CN: "192.168.1.10\n192.168.1.11:2222\nweb-01 10.0.0.5"
+  batch_hosts_hint:
+    en: "One host per line, supports host:port or name host[:port]; shares account/password/port above. Connection Name acts as prefix when set."
+    zh-CN: "每行一个 IP 或域名，支持 host:port 或 名称 host[:port]，共用上方端口与账户密码；填写连接名称时将作为前缀。"
+  error_batch_hosts_empty:
+    en: Please enter at least one host
+    zh-CN: 请至少输入一个主机地址
+  batch_create_success:
+    en: Created %{count} SSH sessions
+    zh-CN: 已批量创建 %{count} 个 SSH 会话
+  import_external:
+    en: Import Sessions
+    zh-CN: 导入会话
+  import_xshell_files:
+    en: Import Xshell Files (.xsh)
+    zh-CN: 导入 Xshell 会话文件 (.xsh)
+  import_xshell_folder:
+    en: Import Xshell Folder
+    zh-CN: 导入 Xshell 会话文件夹
+  import_mobaxterm:
+    en: Import MobaXterm (.mxtsessions)
+    zh-CN: 导入 MobaXterm 会话 (.mxtsessions)
+  import_external_success:
+    en: Imported %{count} sessions from %{source}
+    zh-CN: 已从 %{source} 导入 %{count} 个会话
+  import_external_none:
+    en: No new sessions found to import
+    zh-CN: 未发现可导入的新会话
   section_basic:
     en: Basic Info
     zh-CN: 基本信息

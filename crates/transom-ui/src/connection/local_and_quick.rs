@@ -3,8 +3,12 @@
 use crate::app::app_settings;
 use crate::app::{AppShell, AppState, WorkspaceTab};
 use crate::keymap;
+use crate::session_form::ExternalSessionImportKind;
 use gpui_kit::*;
-use transom_core::{DeepLinkRequest, LocalConnection, Session, TabId, parse_ssh_config};
+use transom_core::{
+    DeepLinkRequest, ImportedSessionEntry, LocalConnection, Session, TabId,
+    parse_mobaxterm_sessions, parse_ssh_config, parse_xshell_file, scan_xshell_directory,
+};
 use transom_platform::shell::ShellOption;
 
 pub(crate) fn on_new_local_terminal(
@@ -296,6 +300,152 @@ fn finish_import_ssh_config(app_state: &mut AppState, content: String, cx: &mut 
         }
     } else {
         app_state.ui.status = Some(rust_i18n::t!("app.import_none").to_string());
+    }
+    cx.notify();
+}
+
+/// 从新建会话表单触发外部会话批量导入（Xshell `.xsh` / MobaXterm `.mxtsessions` / SSH 配置）。
+///
+/// 文件选择由 GPUI `prompt_for_paths` 异步拉起，磁盘读取与解析均在阻塞线程池
+/// 完成，避免阻塞界面渲染线程。
+pub(crate) fn import_external_sessions(
+    app_state: &mut AppState,
+    kind: ExternalSessionImportKind,
+    cx: &mut Context<AppShell>,
+) {
+    if kind == ExternalSessionImportKind::SshConfig {
+        import_ssh_config(app_state, cx);
+        return;
+    }
+
+    let options = match kind {
+        ExternalSessionImportKind::XshellFiles => PathPromptOptions {
+            files: true,
+            directories: false,
+            multiple: true,
+            prompt: None,
+        },
+        ExternalSessionImportKind::XshellFolder => PathPromptOptions {
+            files: false,
+            directories: true,
+            multiple: false,
+            prompt: None,
+        },
+        ExternalSessionImportKind::MobaXtermFile => PathPromptOptions {
+            files: true,
+            directories: false,
+            multiple: false,
+            prompt: None,
+        },
+        ExternalSessionImportKind::SshConfig => unreachable!(),
+    };
+
+    let picked = cx.prompt_for_paths(options);
+    cx.spawn(async move |this, cx| {
+        let Ok(Ok(Some(paths))) = picked.await else {
+            return;
+        };
+        if paths.is_empty() {
+            return;
+        }
+        let Some(entries) =
+            crate::app::spawn_blocking_local(move || load_external_entries(kind, &paths)).await
+        else {
+            log::error!("读取外部会话文件的阻塞线程创建失败");
+            return;
+        };
+        let _ = this.update(cx, |this, cx| match entries {
+            Ok((root_folder, parsed)) => {
+                finish_import_external_entries(&mut this.state, root_folder, parsed, cx);
+            }
+            Err(error) => {
+                this.state.set_error(error);
+                cx.notify();
+            }
+        });
+    })
+    .detach();
+}
+
+/// 在阻塞线程中读取并解析外部会话文件。
+fn load_external_entries(
+    kind: ExternalSessionImportKind,
+    paths: &[std::path::PathBuf],
+) -> Result<(&'static str, Vec<ImportedSessionEntry>), String> {
+    match kind {
+        ExternalSessionImportKind::XshellFiles => {
+            let mut list = Vec::new();
+            for path in paths {
+                if let Some(entry) = parse_xshell_file(path, None) {
+                    list.push(entry);
+                }
+            }
+            Ok(("Xshell", list))
+        }
+        ExternalSessionImportKind::XshellFolder => {
+            let Some(root) = paths.first() else {
+                return Ok(("Xshell", Vec::new()));
+            };
+            Ok(("Xshell", scan_xshell_directory(root)))
+        }
+        ExternalSessionImportKind::MobaXtermFile => {
+            let Some(path) = paths.first() else {
+                return Ok(("MobaXterm", Vec::new()));
+            };
+            let content = std::fs::read_to_string(path)
+                .map_err(|error| format!("{}: {error}", path.display()))?;
+            Ok(("MobaXterm", parse_mobaxterm_sessions(&content)))
+        }
+        ExternalSessionImportKind::SshConfig => Ok(("SSH Config", Vec::new())),
+    }
+}
+
+/// 将外部导入的会话条目合并到目录（保留子文件夹层级并按目标文件夹内名称去重）。
+fn finish_import_external_entries(
+    app_state: &mut AppState,
+    root_folder: &str,
+    entries: Vec<ImportedSessionEntry>,
+    cx: &mut Context<AppShell>,
+) {
+    if entries.is_empty() {
+        app_state.set_error(rust_i18n::t!("form.import_external_none").to_string());
+        cx.notify();
+        return;
+    }
+
+    let mut added_count = 0usize;
+    for mut entry in entries {
+        let full_path = match entry.folder_path.as_deref() {
+            Some(sub) if !sub.is_empty() => format!("{root_folder}/{sub}"),
+            _ => root_folder.to_string(),
+        };
+        let folder_id = app_state.session.catalog.ensure_folder_path(&full_path);
+        let duplicate = app_state
+            .session
+            .catalog
+            .sessions
+            .iter()
+            .any(|s| s.folder_id == folder_id && s.name == entry.session.name);
+        if !duplicate {
+            entry.session.folder_id = folder_id;
+            app_state.session.catalog.sessions.push(entry.session);
+            added_count += 1;
+        }
+    }
+
+    if added_count > 0 {
+        if app_state.persist_catalog() {
+            app_state.ui.status = Some(
+                rust_i18n::t!(
+                    "form.import_external_success",
+                    count = added_count,
+                    source = root_folder
+                )
+                .to_string(),
+            );
+        }
+    } else {
+        app_state.ui.status = Some(rust_i18n::t!("form.import_external_none").to_string());
     }
     cx.notify();
 }

@@ -14,6 +14,7 @@ pub(super) struct SessionFormInputs {
     name: Entity<InputState>,
     folder_path: Entity<InputState>,
     host: Entity<InputState>,
+    batch_hosts: Entity<TextareaState>,
     port: Entity<InputState>,
     username: Entity<InputState>,
     password: Entity<InputState>,
@@ -79,6 +80,10 @@ impl SessionFormInputs {
                 &rust_i18n::t!("form.group_none"),
             ),
             host: text_input(window, cx, &target.host, "192.168.1.100"),
+            batch_hosts: cx.new(|cx| {
+                TextareaState::new(window, cx)
+                    .placeholder(rust_i18n::t!("form.batch_hosts_placeholder").to_string())
+            }),
             port: number_input(window, cx, &target.port, "22", (1.0, 65535.0, 1.0)),
             username: text_input(
                 window,
@@ -336,7 +341,9 @@ impl SessionForm {
             icon_open: false,
             folder_options,
             connection,
+            batch_mode: false,
             host: inputs.host,
+            batch_hosts: inputs.batch_hosts,
             port: inputs.port,
             username: inputs.username,
             password: inputs.password,

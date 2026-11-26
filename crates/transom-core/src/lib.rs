@@ -100,6 +100,10 @@ pub use model::theme::{PaletteMode, PresetTheme, preset_themes};
 pub use model::trigger::{TriggerAction, TriggerRule, TriggerSettings};
 pub use prompt::{PromptInfo, PromptKind};
 pub use protocol::proxy::{OutboundProxy, ProxyAuth};
+pub use protocol::session_import::{
+    ImportedSessionEntry, parse_mobaxterm_sessions, parse_xshell_file, parse_xshell_session,
+    scan_xshell_directory,
+};
 pub use protocol::sftp::{
     ChecksumAlgorithm, PreviewMode, RemoteDeleteTarget, RemoteFile, RemoteMetadata,
     RemoteSearchQuery, RemoteSearchResultItem, RemoteTextMeta, SftpOperation, SudoCapability,

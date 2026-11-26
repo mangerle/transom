@@ -11,12 +11,13 @@ use super::rdp::{render_rdp_basic_fields, render_rdp_network_fields};
 use super::serial::render_serial_fields;
 use super::ssh::{render_ssh_basic_fields, render_ssh_network_fields};
 use super::telnet::{render_telnet_basic_fields, render_telnet_network_fields};
-use super::types::{ConnectionChoice, SessionForm, SessionFormSection};
+use super::types::{ConnectionChoice, ExternalSessionImportKind, SessionForm, SessionFormSection};
 use crate::palette::Palette;
 use gpui_kit::base::{Selectable, h_flex, v_flex};
 use gpui_kit::component::Sizable;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::input::{Input, Textarea};
+use gpui_kit::component::menu::{DropdownMenu, PopupMenuItem};
 use gpui_kit::component::popover::Popover;
 use gpui_kit::component::scroll::ScrollableElement;
 use gpui_kit::*;
@@ -37,6 +38,66 @@ impl SessionFormView {
         let editing = form.base.is_some();
         let confirm_delete = form.confirm_delete;
         let mut footer = h_flex().gap_2().items_center().justify_end().w_full();
+        if !editing {
+            let entity = cx.entity();
+            let import_btn = Button::new("session-form-import-btn")
+                .outline()
+                .small()
+                .child(AppIconElement::new(AppIcon::Ui(UiIcon::DOWNLOAD)).small())
+                .label(rust_i18n::t!("form.import_external").to_string())
+                .dropdown_menu(move |menu, _, _| {
+                    let e1 = entity.clone();
+                    let e2 = entity.clone();
+                    let e3 = entity.clone();
+                    let e4 = entity.clone();
+                    menu.item(
+                        PopupMenuItem::new(rust_i18n::t!("form.import_xshell_files").to_string())
+                            .on_click(move |_, _, cx| {
+                                e1.update(cx, |this, cx| {
+                                    this.trigger_external_import(
+                                        ExternalSessionImportKind::XshellFiles,
+                                        cx,
+                                    );
+                                });
+                            }),
+                    )
+                    .item(
+                        PopupMenuItem::new(rust_i18n::t!("form.import_xshell_folder").to_string())
+                            .on_click(move |_, _, cx| {
+                                e2.update(cx, |this, cx| {
+                                    this.trigger_external_import(
+                                        ExternalSessionImportKind::XshellFolder,
+                                        cx,
+                                    );
+                                });
+                            }),
+                    )
+                    .item(
+                        PopupMenuItem::new(rust_i18n::t!("form.import_mobaxterm").to_string())
+                            .on_click(move |_, _, cx| {
+                                e3.update(cx, |this, cx| {
+                                    this.trigger_external_import(
+                                        ExternalSessionImportKind::MobaXtermFile,
+                                        cx,
+                                    );
+                                });
+                            }),
+                    )
+                    .item(PopupMenuItem::separator())
+                    .item(
+                        PopupMenuItem::new(rust_i18n::t!("app.import_ssh_config").to_string())
+                            .on_click(move |_, _, cx| {
+                                e4.update(cx, |this, cx| {
+                                    this.trigger_external_import(
+                                        ExternalSessionImportKind::SshConfig,
+                                        cx,
+                                    );
+                                });
+                            }),
+                    )
+                });
+            footer = footer.child(import_btn).child(div().flex_1());
+        }
         if editing {
             if confirm_delete {
                 footer = footer.child(
