@@ -79,45 +79,8 @@ pub(crate) fn render_container_discovery(
         .gap_1()
         .p_2()
         .rounded(p.radius.md)
-        .bg(p.surface.active);
-    let view_dismiss = view.clone();
-    body = body.child(
-        h_flex()
-            .gap_1()
-            .items_center()
-            .justify_between()
-            .child(
-                h_flex()
-                    .gap_1()
-                    .items_center()
-                    .child(
-                        AppIconElement::new(AppIcon::Domain(DomainIcon::MONITOR))
-                            .xsmall()
-                            .text_color(p.primary),
-                    )
-                    .child(
-                        div()
-                            .text_xs()
-                            .font_weight(FontWeight::BOLD)
-                            .child(rust_i18n::t!("container.discovery.title").to_string()),
-                    ),
-            )
-            .child(
-                IconButton::new(
-                    "container-discovery-dismiss",
-                    UiIcon::CLOSE,
-                    "Dismiss container discovery",
-                )
-                .size(IconButtonSize::RowAction)
-                .show_tooltip(false)
-                .render()
-                .on_click(move |_, _, cx| {
-                    view_dismiss.update(cx, |sidebar, cx| {
-                        sidebar.dismiss_discovery(cx);
-                    });
-                }),
-            ),
-    );
+        .bg(p.surface.active)
+        .child(render_discovery_header(view, p));
     if discovery.candidates.is_empty() {
         body = body.child(
             div()
@@ -126,6 +89,54 @@ pub(crate) fn render_container_discovery(
                 .child(rust_i18n::t!("container.discovery.none").to_string()),
         );
     }
+    body = render_discovery_candidates(body, view, discovery, p);
+    render_discovery_ssh_sessions(body, view, catalog, p)
+}
+
+fn render_discovery_header(view: &Entity<ContainerSidebarView>, p: &Palette) -> AnyElement {
+    let view_dismiss = view.clone();
+    h_flex()
+        .gap_1()
+        .items_center()
+        .justify_between()
+        .child(
+            h_flex()
+                .gap_1()
+                .items_center()
+                .child(
+                    AppIconElement::new(AppIcon::Domain(DomainIcon::MONITOR))
+                        .xsmall()
+                        .text_color(p.primary),
+                )
+                .child(
+                    div()
+                        .text_xs()
+                        .font_weight(FontWeight::BOLD)
+                        .child(rust_i18n::t!("container.discovery.title").to_string()),
+                ),
+        )
+        .child(
+            IconButton::new(
+                "container-discovery-dismiss",
+                UiIcon::CLOSE,
+                rust_i18n::t!("container.discovery.dismiss").to_string(),
+            )
+            .size(IconButtonSize::RowAction)
+            .show_tooltip(false)
+            .render()
+            .on_click(move |_, _, cx| {
+                view_dismiss.update(cx, |sidebar, cx| sidebar.dismiss_discovery(cx));
+            }),
+        )
+        .into_any_element()
+}
+
+fn render_discovery_candidates(
+    mut body: Div,
+    view: &Entity<ContainerSidebarView>,
+    discovery: &ContainerDiscovery,
+    p: &Palette,
+) -> Div {
     for candidate in &discovery.candidates {
         let name = candidate.display_name();
         let endpoint = candidate.engine.describe();
@@ -171,69 +182,79 @@ pub(crate) fn render_container_discovery(
                 .child(failure.clone()),
         );
     }
+    body
+}
 
-    // 联动发现：扫描已保存的 SSH 会话供一键直连 Docker。
+fn render_discovery_ssh_sessions(
+    mut body: Div,
+    view: &Entity<ContainerSidebarView>,
+    catalog: &SessionCatalog,
+    p: &Palette,
+) -> AnyElement {
     let ssh_sessions: Vec<_> = catalog
         .sessions
         .iter()
         .filter(|session| matches!(session.connection, Connection::Ssh(_)))
         .cloned()
         .collect();
-
-    if !ssh_sessions.is_empty() {
-        body = body.child(
-            div()
-                .mt_2()
-                .pt_1()
-                .border_t_1()
-                .border_color(p.stroke.medium)
-                .text_xs()
-                .font_weight(FontWeight::BOLD)
-                .text_color(p.muted_foreground)
-                .child(rust_i18n::t!("container.discovery.ssh_sessions_title").to_string()),
-        );
-        for session in ssh_sessions {
-            let session_id = session.id;
-            let session_name = session.name.clone();
-            let host_desc = match &session.connection {
-                Connection::Ssh(ssh) => format!("{}:{}", ssh.host, ssh.port),
-                _ => String::new(),
-            };
-            let view_session = view.clone();
-            body = body.child(
-                h_flex()
-                    .gap_2()
-                    .items_center()
-                    .child(
-                        v_flex()
-                            .flex_1()
-                            .min_w_0()
-                            .child(div().text_xs().truncate().child(session_name))
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .text_color(p.muted_foreground)
-                                    .truncate()
-                                    .child(host_desc),
-                            ),
-                    )
-                    .child(
-                        action_button(
-                            ElementId::Name(
-                                format!("container-discovery-ssh-{}", session_id).into(),
-                            ),
-                            DomainIcon::CONTAINER,
-                            rust_i18n::t!("container.discovery.connect_docker").to_string(),
-                        )
-                        .on_click(move |_, _, cx| {
-                            view_session.update(cx, |sidebar, cx| {
-                                sidebar.request_open_session(session_id, cx);
-                            });
-                        }),
-                    ),
-            );
-        }
+    if ssh_sessions.is_empty() {
+        return body.into_any_element();
     }
-
+    body = body.child(
+        div()
+            .mt_2()
+            .pt_1()
+            .border_t_1()
+            .border_color(p.stroke.medium)
+            .text_xs()
+            .font_weight(FontWeight::BOLD)
+            .text_color(p.muted_foreground)
+            .child(rust_i18n::t!("container.discovery.ssh_sessions_title").to_string()),
+    );
+    for session in ssh_sessions {
+        body = body.child(render_discovery_ssh_session(view, session, p));
+    }
     body.into_any_element()
+}
+
+fn render_discovery_ssh_session(
+    view: &Entity<ContainerSidebarView>,
+    session: transom_core::Session,
+    p: &Palette,
+) -> AnyElement {
+    let session_id = session.id;
+    let host_desc = match &session.connection {
+        Connection::Ssh(ssh) => format!("{}:{}", ssh.host, ssh.port),
+        _ => String::new(),
+    };
+    let view_session = view.clone();
+    h_flex()
+        .gap_2()
+        .items_center()
+        .child(
+            v_flex()
+                .flex_1()
+                .min_w_0()
+                .child(div().text_xs().truncate().child(session.name))
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(p.muted_foreground)
+                        .truncate()
+                        .child(host_desc),
+                ),
+        )
+        .child(
+            action_button(
+                ElementId::Name(format!("container-discovery-ssh-{session_id}").into()),
+                DomainIcon::CONTAINER,
+                rust_i18n::t!("container.discovery.connect_docker").to_string(),
+            )
+            .on_click(move |_, _, cx| {
+                view_session.update(cx, |sidebar, cx| {
+                    sidebar.request_open_session(session_id, cx);
+                });
+            }),
+        )
+        .into_any_element()
 }

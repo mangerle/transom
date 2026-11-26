@@ -224,142 +224,24 @@ fn sync_status_panel(
 }
 
 /// 差异列表：表头、虚拟列表与汇总行。
+struct SyncDiffCounts {
+    diff: usize,
+    upload: usize,
+    download: usize,
+    conflict: usize,
+    skipped: u64,
+}
+
 fn sync_diff_list(
     modal: &SftpSyncModalState,
     cx: &mut Context<SftpSyncModalView>,
     p: &Palette,
 ) -> AnyElement {
-    let tab_id = modal.tab_id;
-    let entries = modal.entries.clone();
-    let selected = modal.selected.clone();
-    let scroll_handle = modal.scroll_handle.clone();
-    let skipped = modal.skipped;
-    let diff_count = entries.len();
-    let upload_count = entries
-        .iter()
-        .zip(selected.iter())
-        .filter(|(entry, checked)| {
-            **checked
-                && entry.status.suggested_direction()
-                    == Some(transom_core::TransferDirection::Upload)
-        })
-        .count();
-    let download_count = entries
-        .iter()
-        .zip(selected.iter())
-        .filter(|(entry, checked)| {
-            **checked
-                && entry.status.suggested_direction()
-                    == Some(transom_core::TransferDirection::Download)
-        })
-        .count();
-    let conflict_count = entries
-        .iter()
-        .filter(|entry| entry.status == DirDiffStatus::TypeMismatch)
-        .count();
-
-    let row_sizes = Rc::new(vec![size(px(0.0), px(32.0)); entries.len()]);
-    let entries_rc = Rc::new(entries);
-    let selected_rc = Rc::new(selected);
-    let list_palette = p.clone();
-    let list = v_virtual_list(
-        cx.entity(),
-        format!("sftp-sync-virtual-list-{tab_id}"),
-        row_sizes,
-        move |_this, range, _window, cx| {
-            range
-                .filter_map(|index| {
-                    let entry = entries_rc.get(index)?;
-                    let checked = selected_rc.get(index).copied().unwrap_or(false);
-                    let selectable = entry.status != DirDiffStatus::TypeMismatch;
-                    let (status_label, status_color) =
-                        status_presentation(entry.status, &list_palette);
-                    let local_text = side_text(entry.local.as_ref());
-                    let remote_text = side_text(entry.remote.as_ref());
-                    let mut row = h_flex()
-                        .id(ElementId::Name(format!("sftp-sync-row-{index}").into()))
-                        .px_2()
-                        .py_1()
-                        .gap_2()
-                        .items_center()
-                        .text_xs()
-                        .border_b_1()
-                        .border_color(list_palette.sidebar_border);
-                    if selectable {
-                        row = row.child(
-                            Checkbox::new(format!("sftp-sync-check-{index}"))
-                                .checked(checked)
-                                .on_change(cx.listener(move |this, checked: &bool, _, cx| {
-                                    this.toggle_entry(index, *checked, cx);
-                                })),
-                        );
-                    } else {
-                        row = row.child(div().w(px(16.0)));
-                    }
-                    Some(
-                        row.child(
-                            div()
-                                .flex_1()
-                                .overflow_hidden()
-                                .child(entry.relative_path.clone()),
-                        )
-                        .child(
-                            div()
-                                .w(px(72.0))
-                                .text_color(status_color)
-                                .child(status_label),
-                        )
-                        .child(
-                            div()
-                                .w(px(132.0))
-                                .text_color(list_palette.muted_foreground)
-                                .child(local_text),
-                        )
-                        .child(
-                            div()
-                                .w(px(132.0))
-                                .text_color(list_palette.muted_foreground)
-                                .child(remote_text),
-                        )
-                        .into_any_element(),
-                    )
-                })
-                .collect()
-        },
-    )
-    .track_scroll(&scroll_handle)
-    .into_any_element();
-
+    let counts = count_sync_entries(modal);
+    let list = render_sync_virtual_list(modal, cx, p);
     v_flex()
         .gap_2()
-        .child(
-            h_flex()
-                .px_2()
-                .py_1()
-                .gap_2()
-                .text_xs()
-                .text_color(p.muted_foreground)
-                .child(
-                    div()
-                        .flex_1()
-                        .child(rust_i18n::t!("sftp.sync.column_relative_path").to_string()),
-                )
-                .child(
-                    div()
-                        .w(px(72.0))
-                        .child(rust_i18n::t!("sftp.sync.column_status").to_string()),
-                )
-                .child(
-                    div()
-                        .w(px(132.0))
-                        .child(rust_i18n::t!("sftp.sync.column_local").to_string()),
-                )
-                .child(
-                    div()
-                        .w(px(132.0))
-                        .child(rust_i18n::t!("sftp.sync.column_remote").to_string()),
-                ),
-        )
+        .child(render_sync_table_header(p))
         .child(
             v_flex()
                 .h(px(330.0))
@@ -369,18 +251,171 @@ fn sync_diff_list(
                 .rounded(p.radius.md)
                 .child(list),
         )
+        .child(render_sync_summary(&counts, p))
+        .into_any_element()
+}
+
+fn count_sync_entries(modal: &SftpSyncModalState) -> SyncDiffCounts {
+    let upload = modal
+        .entries
+        .iter()
+        .zip(modal.selected.iter())
+        .filter(|(entry, checked)| {
+            **checked
+                && entry.status.suggested_direction()
+                    == Some(transom_core::TransferDirection::Upload)
+        })
+        .count();
+    let download = modal
+        .entries
+        .iter()
+        .zip(modal.selected.iter())
+        .filter(|(entry, checked)| {
+            **checked
+                && entry.status.suggested_direction()
+                    == Some(transom_core::TransferDirection::Download)
+        })
+        .count();
+    SyncDiffCounts {
+        diff: modal.entries.len(),
+        upload,
+        download,
+        conflict: modal
+            .entries
+            .iter()
+            .filter(|entry| entry.status == DirDiffStatus::TypeMismatch)
+            .count(),
+        skipped: modal.skipped,
+    }
+}
+
+fn render_sync_virtual_list(
+    modal: &SftpSyncModalState,
+    cx: &mut Context<SftpSyncModalView>,
+    p: &Palette,
+) -> AnyElement {
+    let row_sizes = Rc::new(vec![size(px(0.0), px(32.0)); modal.entries.len()]);
+    let entries = Rc::new(modal.entries.clone());
+    let selected = Rc::new(modal.selected.clone());
+    let palette = p.clone();
+    v_virtual_list(
+        cx.entity(),
+        format!("sftp-sync-virtual-list-{}", modal.tab_id),
+        row_sizes,
+        move |_this, range, _window, cx| {
+            range
+                .filter_map(|index| {
+                    let entry = entries.get(index)?;
+                    let checked = selected.get(index).copied().unwrap_or(false);
+                    Some(render_sync_row(index, entry, checked, &palette, cx))
+                })
+                .collect()
+        },
+    )
+    .track_scroll(&modal.scroll_handle)
+    .into_any_element()
+}
+
+fn render_sync_row(
+    index: usize,
+    entry: &DirDiffEntry,
+    checked: bool,
+    p: &Palette,
+    cx: &mut Context<SftpSyncModalView>,
+) -> AnyElement {
+    let selectable = entry.status != DirDiffStatus::TypeMismatch;
+    let (status_label, status_color) = status_presentation(entry.status, p);
+    let mut row = h_flex()
+        .id(ElementId::Name(format!("sftp-sync-row-{index}").into()))
+        .px_2()
+        .py_1()
+        .gap_2()
+        .items_center()
+        .text_xs()
+        .border_b_1()
+        .border_color(p.sidebar_border);
+    if selectable {
+        row = row.child(
+            Checkbox::new(format!("sftp-sync-check-{index}"))
+                .checked(checked)
+                .on_change(cx.listener(move |this, checked: &bool, _, cx| {
+                    this.toggle_entry(index, *checked, cx);
+                })),
+        );
+    } else {
+        row = row.child(div().w(px(16.0)));
+    }
+    row.child(
+        div()
+            .flex_1()
+            .overflow_hidden()
+            .child(entry.relative_path.clone()),
+    )
+    .child(
+        div()
+            .w(px(72.0))
+            .text_color(status_color)
+            .child(status_label),
+    )
+    .child(
+        div()
+            .w(px(132.0))
+            .text_color(p.muted_foreground)
+            .child(side_text(entry.local.as_ref())),
+    )
+    .child(
+        div()
+            .w(px(132.0))
+            .text_color(p.muted_foreground)
+            .child(side_text(entry.remote.as_ref())),
+    )
+    .into_any_element()
+}
+
+fn render_sync_table_header(p: &Palette) -> AnyElement {
+    h_flex()
+        .px_2()
+        .py_1()
+        .gap_2()
+        .text_xs()
+        .text_color(p.muted_foreground)
         .child(
-            div().text_xs().text_color(p.muted_foreground).child(
-                rust_i18n::t!(
-                    "sftp.sync.summary",
-                    diff = diff_count,
-                    upload = upload_count,
-                    download = download_count,
-                    conflict = conflict_count,
-                    skipped = skipped
-                )
-                .to_string(),
-            ),
+            div()
+                .flex_1()
+                .child(rust_i18n::t!("sftp.sync.column_relative_path").to_string()),
+        )
+        .child(
+            div()
+                .w(px(72.0))
+                .child(rust_i18n::t!("sftp.sync.column_status").to_string()),
+        )
+        .child(
+            div()
+                .w(px(132.0))
+                .child(rust_i18n::t!("sftp.sync.column_local").to_string()),
+        )
+        .child(
+            div()
+                .w(px(132.0))
+                .child(rust_i18n::t!("sftp.sync.column_remote").to_string()),
+        )
+        .into_any_element()
+}
+
+fn render_sync_summary(counts: &SyncDiffCounts, p: &Palette) -> AnyElement {
+    div()
+        .text_xs()
+        .text_color(p.muted_foreground)
+        .child(
+            rust_i18n::t!(
+                "sftp.sync.summary",
+                diff = counts.diff,
+                upload = counts.upload,
+                download = counts.download,
+                conflict = counts.conflict,
+                skipped = counts.skipped
+            )
+            .to_string(),
         )
         .into_any_element()
 }

@@ -45,7 +45,55 @@ impl RequestMode {
 }
 
 pub(super) fn render_request_editor(params: &ApiWorkspaceParams<'_>, p: &Palette) -> AnyElement {
-    let view = params.view;
+    let mut content = v_flex()
+        .size_full()
+        .min_h_0()
+        .overflow_hidden()
+        .bg(p.background)
+        .child(render_request_name_bar(params, p))
+        .child(render_request_url_bar(params, p));
+    content = render_request_notices(content, params, p);
+    let editor = render_request_editor_body(params, p);
+    content.child(editor).into_any_element()
+}
+
+fn render_request_name_bar(params: &ApiWorkspaceParams<'_>, p: &Palette) -> AnyElement {
+    let view = params.view.clone();
+    h_flex()
+        .h(rems(size::PANE_HEADER_HEIGHT))
+        .w_full()
+        .px(rems(space::SM))
+        .gap(rems(space::SM))
+        .items_center()
+        .border_b_1()
+        .border_color(p.divider(p.border))
+        .child(
+            div()
+                .flex_none()
+                .text_color(p.muted_foreground)
+                .child(rust_i18n::t!("api.request.name").to_string()),
+        )
+        .child(
+            Input::new(&params.editors.request_name)
+                .focus_bordered(false)
+                .w(rems(18.0)),
+        )
+        .child(div().flex_1())
+        .child(
+            action_button(
+                "api-request-env-modal",
+                AppIcon::Ui(UiIcon::DEPENDENCIES),
+                rust_i18n::t!("api.project.environment").to_string(),
+            )
+            .ghost()
+            .on_click(move |_, _, cx| {
+                view.update(cx, |this, cx| this.open_config_modal(cx));
+            }),
+        )
+        .into_any_element()
+}
+
+fn render_request_url_bar(params: &ApiWorkspaceParams<'_>, p: &Palette) -> AnyElement {
     let current_mode = RequestMode::current(params.protocol(), params.method());
     let mut mode_options = ApiMethod::ALL
         .into_iter()
@@ -67,7 +115,7 @@ pub(super) fn render_request_editor(params: &ApiWorkspaceParams<'_>, p: &Palette
             let (protocol, method) = mode.pair();
             this.set_request_mode(protocol, method, cx);
         },
-        view.clone(),
+        params.view.clone(),
     );
     let environment_options = params
         .project
@@ -84,93 +132,58 @@ pub(super) fn render_request_editor(params: &ApiWorkspaceParams<'_>, p: &Palette
                 this.set_environment(environment_id, window, cx);
             }
         },
-        view.clone(),
+        params.view.clone(),
     );
-    let send_view = view.clone();
-    let paste_view = view.clone();
-    let env_modal_view = view.clone();
-
-    let mut content = v_flex()
-        .size_full()
-        .min_h_0()
-        .overflow_hidden()
-        .bg(p.background)
+    let send_view = params.view.clone();
+    let paste_view = params.view.clone();
+    h_flex()
+        .h(rems(size::LARGE_HEADER_HEIGHT))
+        .w_full()
+        .px(rems(space::SM))
+        .gap(rems(space::XS))
+        .items_center()
+        .border_b_1()
+        .border_color(p.divider(p.border))
+        .child(mode)
+        .child(environment)
         .child(
-            h_flex()
-                .h(rems(size::PANE_HEADER_HEIGHT))
-                .w_full()
-                .px(rems(space::SM))
-                .gap(rems(space::SM))
-                .items_center()
-                .border_b_1()
-                .border_color(p.divider(p.border))
-                .child(
-                    div()
-                        .flex_none()
-                        .text_color(p.muted_foreground)
-                        .child(rust_i18n::t!("api.request.name").to_string()),
-                )
-                .child(
-                    Input::new(&params.editors.request_name)
-                        .focus_bordered(false)
-                        .w(rems(18.0)),
-                )
-                .child(div().flex_1())
-                .child(
-                    action_button(
-                        "api-request-env-modal",
-                        AppIcon::Ui(UiIcon::DEPENDENCIES),
-                        rust_i18n::t!("api.project.environment").to_string(),
-                    )
-                    .ghost()
-                    .on_click(move |_, _, cx| {
-                        env_modal_view.update(cx, |this, cx| this.open_config_modal(cx));
-                    }),
-                ),
+            Input::new(&params.editors.request_url)
+                .focus_bordered(false)
+                .flex_1()
+                .min_w_0()
+                .on_paste(move |clipboard, window, cx| {
+                    let Some(text) = clipboard.text() else {
+                        return false;
+                    };
+                    paste_view.update(cx, |this, cx| this.import_curl(&text, window, cx))
+                }),
         )
-        .child(
-            h_flex()
-                .h(rems(size::LARGE_HEADER_HEIGHT))
-                .w_full()
-                .px(rems(space::SM))
-                .gap(rems(space::XS))
-                .items_center()
-                .border_b_1()
-                .border_color(p.divider(p.border))
-                .child(mode)
-                .child(environment)
-                .child(
-                    Input::new(&params.editors.request_url)
-                        .focus_bordered(false)
-                        .flex_1()
-                        .min_w_0()
-                        .on_paste(move |clipboard, window, cx| {
-                            let Some(text) = clipboard.text() else {
-                                return false;
-                            };
-                            paste_view.update(cx, |this, cx| this.import_curl(&text, window, cx))
-                        }),
-                )
-                .child(
-                    action_button_with_icon_tint(
-                        "api-request-send",
-                        AppIcon::Ui(UiIcon::FETCH),
-                        if params.protocol() == ApiProtocol::WebSocket {
-                            rust_i18n::t!("api.request.websocket_connect").to_string()
-                        } else {
-                            rust_i18n::t!("api.request.send").to_string()
-                        },
-                        Some(gpui::white()),
-                    )
-                    .primary()
-                    .disabled(params.selected_request.is_none() || params.exec.is_sending())
-                    .on_click(move |_, window, cx| {
-                        send_view.update(cx, |this, cx| this.send_request(window, cx));
-                    }),
-                )
-                .child(super::save_menu::render_save_controls(params, p)),
-        );
+        .child(render_send_button(params, send_view))
+        .child(super::save_menu::render_save_controls(params, p))
+        .into_any_element()
+}
 
+fn render_send_button(params: &ApiWorkspaceParams<'_>, view: Entity<ApiWorkspace>) -> AnyElement {
+    let label = if params.protocol() == ApiProtocol::WebSocket {
+        rust_i18n::t!("api.request.websocket_connect").to_string()
+    } else {
+        rust_i18n::t!("api.request.send").to_string()
+    };
+    action_button_with_icon_tint(
+        "api-request-send",
+        AppIcon::Ui(UiIcon::FETCH),
+        label,
+        Some(gpui::white()),
+    )
+    .primary()
+    .disabled(params.selected_request.is_none() || params.exec.is_sending())
+    .on_click(move |_, window, cx| {
+        view.update(cx, |this, cx| this.send_request(window, cx));
+    })
+    .into_any_element()
+}
+
+fn render_request_notices(mut content: Div, params: &ApiWorkspaceParams<'_>, p: &Palette) -> Div {
     if let Some(error) = params.exec.error.as_deref() {
         content = content.child(div().mx(rems(space::SM)).mt(rems(space::SM)).child(notice(
             NoticeKind::Error,
@@ -178,22 +191,24 @@ pub(super) fn render_request_editor(params: &ApiWorkspaceParams<'_>, p: &Palette
             p,
         )));
     }
-    if let Some(notice_msg) = params.exec.notice.as_deref() {
+    if let Some(message) = params.exec.notice.as_deref() {
         content = content.child(div().mx(rems(space::SM)).mt(rems(space::SM)).child(notice(
             NoticeKind::Success,
-            notice_msg.to_string(),
+            message.to_string(),
             p,
         )));
     }
+    content
+}
 
-    let editor = if params.ui.auxiliary_section.is_some() {
+fn render_request_editor_body(params: &ApiWorkspaceParams<'_>, p: &Palette) -> AnyElement {
+    if params.ui.auxiliary_section.is_some() {
         super::advanced_view::render_auxiliary_panel(params, p)
     } else if params.selected_request.is_some() {
         render_tabbed_request(params, p)
     } else {
         render_empty_request(p)
-    };
-    content.child(editor).into_any_element()
+    }
 }
 
 fn render_tabbed_request(params: &ApiWorkspaceParams<'_>, p: &Palette) -> AnyElement {

@@ -16,9 +16,35 @@ pub(crate) fn render_serial_fields(
     cx: &mut Context<SessionFormView>,
     p: &Palette,
 ) -> AnyElement {
-    let mut fields = v_flex().gap_3();
+    let fields = v_flex()
+        .gap_3()
+        .child(render_serial_port_section(form, cx, p))
+        .child(render_serial_baud_section(form, cx, p))
+        .child(serial_option_row(
+            rust_i18n::t!("form.serial_parity").to_string(),
+            render_parity_buttons(form, cx),
+            p,
+        ))
+        .child(serial_option_row(
+            rust_i18n::t!("form.serial_stop_bits").to_string(),
+            render_stop_bits_buttons(form, cx),
+            p,
+        ))
+        .child(serial_option_row(
+            rust_i18n::t!("form.serial_flow_control").to_string(),
+            render_flow_buttons(form, cx),
+            p,
+        ));
+    fields.into_any_element()
+}
+
+fn render_serial_port_section(
+    form: &SessionForm,
+    cx: &mut Context<SessionFormView>,
+    p: &Palette,
+) -> AnyElement {
     let current_port = form.serial_port.read(cx).value().trim().to_string();
-    let mut port_chips = h_flex().gap_1().flex_wrap();
+    let mut chips = h_flex().gap_1().flex_wrap();
     for (index, descriptor) in form.serial_ports.iter().enumerate() {
         let port_name = descriptor.port_name.clone();
         let label = descriptor
@@ -26,7 +52,7 @@ pub(crate) fn render_serial_fields(
             .as_ref()
             .map(|description| format!("{port_name} · {description}"))
             .unwrap_or_else(|| port_name.clone());
-        port_chips = port_chips.child(
+        chips = chips.child(
             Button::new(ElementId::Name(format!("serial-port-{index}").into()))
                 .xsmall()
                 .label(label)
@@ -36,14 +62,71 @@ pub(crate) fn render_serial_fields(
                 })),
         );
     }
-    let ports_hint = form.serial_ports_error.clone().unwrap_or_else(|| {
+    let hint = form.serial_ports_error.clone().unwrap_or_else(|| {
         if form.serial_ports.is_empty() {
             rust_i18n::t!("form.serial_no_ports").to_string()
         } else {
             rust_i18n::t!("form.serial_detected").to_string()
         }
     });
-    let data_bits_buttons = h_flex()
+    v_flex()
+        .gap_2()
+        .child(
+            h_flex()
+                .gap_2()
+                .items_end()
+                .child(div().flex_1().child(crate::widgets::form_field(
+                    rust_i18n::t!("form.serial_port").to_string(),
+                    form.serial_port.clone(),
+                    p,
+                )))
+                .child(
+                    Button::new("serial-refresh")
+                        .small()
+                        .child(AppIconElement::new(AppIcon::Ui(UiIcon::REFRESH)).small())
+                        .label(rust_i18n::t!("form.serial_refresh").to_string())
+                        .on_click(cx.listener(|_this, _: &ClickEvent, _, cx| {
+                            cx.emit(SessionFormEvent::RefreshSerialPorts);
+                        })),
+                ),
+        )
+        .child(
+            div()
+                .text_xs()
+                .text_color(if form.serial_ports_error.is_some() {
+                    p.danger
+                } else {
+                    p.muted_foreground
+                })
+                .child(hint),
+        )
+        .child(chips)
+        .into_any_element()
+}
+
+fn render_serial_baud_section(
+    form: &SessionForm,
+    cx: &mut Context<SessionFormView>,
+    p: &Palette,
+) -> AnyElement {
+    h_flex()
+        .gap_3()
+        .items_end()
+        .child(div().w(px(160.0)).child(crate::widgets::form_field(
+            rust_i18n::t!("form.serial_baud").to_string(),
+            form.serial_baud.clone(),
+            p,
+        )))
+        .child(div().flex_1().child(serial_option_row(
+            rust_i18n::t!("form.serial_data_bits").to_string(),
+            render_data_bits_buttons(form, cx),
+            p,
+        )))
+        .into_any_element()
+}
+
+fn render_data_bits_buttons(form: &SessionForm, cx: &mut Context<SessionFormView>) -> AnyElement {
+    h_flex()
         .gap_1()
         .children(SerialDataBits::ALL.into_iter().map(|bits| {
             Button::new(ElementId::Name(
@@ -55,124 +138,76 @@ pub(crate) fn render_serial_fields(
             .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
                 this.edit(cx, |form| form.serial_data_bits = bits);
             }))
-        }));
-    let parity_buttons = h_flex().gap_1().children(
-        [
-            (SerialParity::None, "form.parity_none"),
-            (SerialParity::Odd, "form.parity_odd"),
-            (SerialParity::Even, "form.parity_even"),
-        ]
-        .into_iter()
-        .map(|(parity, label)| {
-            Button::new(ElementId::Name(format!("serial-parity-{label}").into()))
-                .small()
-                .label(rust_i18n::t!(label).to_string())
-                .selected(form.serial_parity == parity)
-                .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
-                    this.edit(cx, |form| form.serial_parity = parity);
-                }))
-        }),
-    );
-    let stop_bits_buttons = h_flex().gap_1().children(
-        [
-            (SerialStopBits::One, "form.stop_bits_one"),
-            (SerialStopBits::Two, "form.stop_bits_two"),
-        ]
-        .into_iter()
-        .map(|(stop_bits, label)| {
-            Button::new(ElementId::Name(format!("serial-stop-{label}").into()))
-                .small()
-                .label(rust_i18n::t!(label).to_string())
-                .selected(form.serial_stop_bits == stop_bits)
-                .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
-                    this.edit(cx, |form| form.serial_stop_bits = stop_bits);
-                }))
-        }),
-    );
-    let flow_buttons = h_flex().gap_1().children(
-        [
-            (SerialFlowControl::None, "form.flow_none"),
-            (SerialFlowControl::Software, "form.flow_software"),
-            (SerialFlowControl::Hardware, "form.flow_hardware"),
-        ]
-        .into_iter()
-        .map(|(flow, label)| {
-            Button::new(ElementId::Name(format!("serial-flow-{label}").into()))
-                .small()
-                .label(rust_i18n::t!(label).to_string())
-                .selected(form.serial_flow_control == flow)
-                .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
-                    this.edit(cx, |form| form.serial_flow_control = flow);
-                }))
-        }),
-    );
+        }))
+        .into_any_element()
+}
 
-    fields = fields
-        .child(
-            v_flex()
-                .gap_2()
-                .child(
-                    h_flex()
-                        .gap_2()
-                        .items_end()
-                        .child(div().flex_1().child(crate::widgets::form_field(
-                            rust_i18n::t!("form.serial_port").to_string(),
-                            form.serial_port.clone(),
-                            p,
-                        )))
-                        .child(
-                            Button::new("serial-refresh")
-                                .small()
-                                .child(AppIconElement::new(AppIcon::Ui(UiIcon::REFRESH)).small())
-                                .label(rust_i18n::t!("form.serial_refresh").to_string())
-                                .on_click(cx.listener(|_this, _: &ClickEvent, _, cx| {
-                                    cx.emit(SessionFormEvent::RefreshSerialPorts);
-                                })),
-                        ),
-                )
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(if form.serial_ports_error.is_some() {
-                            p.danger
-                        } else {
-                            p.muted_foreground
-                        })
-                        .child(ports_hint),
-                )
-                .child(port_chips),
+fn render_parity_buttons(form: &SessionForm, cx: &mut Context<SessionFormView>) -> AnyElement {
+    h_flex()
+        .gap_1()
+        .children(
+            [
+                (SerialParity::None, "form.parity_none"),
+                (SerialParity::Odd, "form.parity_odd"),
+                (SerialParity::Even, "form.parity_even"),
+            ]
+            .into_iter()
+            .map(|(parity, label)| {
+                Button::new(ElementId::Name(format!("serial-parity-{label}").into()))
+                    .small()
+                    .label(rust_i18n::t!(label).to_string())
+                    .selected(form.serial_parity == parity)
+                    .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                        this.edit(cx, |form| form.serial_parity = parity);
+                    }))
+            }),
         )
-        .child(
-            h_flex()
-                .gap_3()
-                .items_end()
-                .child(div().w(px(160.0)).child(crate::widgets::form_field(
-                    rust_i18n::t!("form.serial_baud").to_string(),
-                    form.serial_baud.clone(),
-                    p,
-                )))
-                .child(div().flex_1().child(serial_option_row(
-                    rust_i18n::t!("form.serial_data_bits").to_string(),
-                    data_bits_buttons,
-                    p,
-                ))),
+        .into_any_element()
+}
+
+fn render_stop_bits_buttons(form: &SessionForm, cx: &mut Context<SessionFormView>) -> AnyElement {
+    h_flex()
+        .gap_1()
+        .children(
+            [
+                (SerialStopBits::One, "form.stop_bits_one"),
+                (SerialStopBits::Two, "form.stop_bits_two"),
+            ]
+            .into_iter()
+            .map(|(stop_bits, label)| {
+                Button::new(ElementId::Name(format!("serial-stop-{label}").into()))
+                    .small()
+                    .label(rust_i18n::t!(label).to_string())
+                    .selected(form.serial_stop_bits == stop_bits)
+                    .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                        this.edit(cx, |form| form.serial_stop_bits = stop_bits);
+                    }))
+            }),
         )
-        .child(serial_option_row(
-            rust_i18n::t!("form.serial_parity").to_string(),
-            parity_buttons,
-            p,
-        ))
-        .child(serial_option_row(
-            rust_i18n::t!("form.serial_stop_bits").to_string(),
-            stop_bits_buttons,
-            p,
-        ))
-        .child(serial_option_row(
-            rust_i18n::t!("form.serial_flow_control").to_string(),
-            flow_buttons,
-            p,
-        ));
-    fields.into_any_element()
+        .into_any_element()
+}
+
+fn render_flow_buttons(form: &SessionForm, cx: &mut Context<SessionFormView>) -> AnyElement {
+    h_flex()
+        .gap_1()
+        .children(
+            [
+                (SerialFlowControl::None, "form.flow_none"),
+                (SerialFlowControl::Software, "form.flow_software"),
+                (SerialFlowControl::Hardware, "form.flow_hardware"),
+            ]
+            .into_iter()
+            .map(|(flow, label)| {
+                Button::new(ElementId::Name(format!("serial-flow-{label}").into()))
+                    .small()
+                    .label(rust_i18n::t!(label).to_string())
+                    .selected(form.serial_flow_control == flow)
+                    .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                        this.edit(cx, |form| form.serial_flow_control = flow);
+                    }))
+            }),
+        )
+        .into_any_element()
 }
 
 /// 协议选项的行式布局：左侧标签、右侧按钮组。

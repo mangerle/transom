@@ -4,6 +4,7 @@ use super::super::*;
 use crate::container::ContainerWorkspace;
 use crate::theme::tokens::{control, size};
 use crate::widgets::{IconButton, IconButtonSize};
+use gpui_kit::Stateful;
 use gpui_kit::component::menu::PopupMenu;
 use transom_ui_icons::{AppIcon, AppIconElement, UiIcon};
 
@@ -15,8 +16,30 @@ pub(super) fn render_entry_row(
 ) -> AnyElement {
     let entry_path = entry.path.clone();
     let is_dir = entry.kind == ContainerFileKind::Directory;
-    let name = entry.name.clone();
-    let mut row = h_flex()
+    let mut row = render_entry_columns(entry, &entry_path, is_dir, p);
+    row = if is_dir {
+        render_directory_actions(view, row, &entry_path)
+    } else {
+        render_file_actions(view, row, &entry_path)
+    };
+    if !readonly {
+        row = render_editable_actions(view, row, &entry_path, is_dir);
+    }
+    let menu_view = view.clone();
+    let menu_path = entry_path;
+    row.context_menu(move |menu, _, _| {
+        append_entry_context_menu(menu, &menu_view, &menu_path, is_dir, readonly)
+    })
+    .into_any_element()
+}
+
+fn render_entry_columns(
+    entry: &ContainerFileEntry,
+    entry_path: &str,
+    is_dir: bool,
+    p: &Palette,
+) -> Stateful<Div> {
+    h_flex()
         .id(ElementId::Name(
             format!("container-file-row-{entry_path}").into(),
         ))
@@ -30,11 +53,18 @@ pub(super) fn render_entry_row(
             AppIconElement::new(if is_dir {
                 AppIcon::Ui(UiIcon::FOLDER)
             } else {
-                AppIcon::for_file(&entry_path)
+                AppIcon::for_file(entry_path)
             })
             .with_rems(rems(control::ICON)),
         )
-        .child(div().flex_1().min_w_0().text_sm().truncate().child(name))
+        .child(
+            div()
+                .flex_1()
+                .min_w_0()
+                .text_sm()
+                .truncate()
+                .child(entry.name.clone()),
+        )
         .child(
             div()
                 .text_xs()
@@ -61,111 +91,107 @@ pub(super) fn render_entry_row(
                 } else {
                     crate::format::format_size(entry.size)
                 }),
-        );
-    if is_dir {
-        let row_view = view.clone();
-        let row_path = entry_path.clone();
-        row = row
-            .on_click(move |_, _, cx| {
-                row_view.update(cx, |workspace, cx| {
-                    workspace.load_container_dir(row_path.clone(), cx);
-                });
-            })
-            .child(
-                IconButton::new(
-                    ElementId::Name(format!("container-file-download-dir-{entry_path}").into()),
-                    UiIcon::DOWNLOAD,
-                    rust_i18n::t!("container.files.download_directory_tooltip").to_string(),
-                )
-                .size(IconButtonSize::RowAction)
-                .render()
-                .on_click({
-                    let view = view.clone();
-                    let path = entry_path.clone();
-                    move |_, _, cx| {
-                        view.update(cx, |workspace, cx| {
-                            workspace.download_container_directory(path.clone(), cx);
-                        });
-                    }
-                }),
-            );
-    } else {
-        let row_view = view.clone();
-        let row_path = entry_path.clone();
-        row = row
-            .on_click(move |_, _, cx| {
-                row_view.update(cx, |workspace, cx| {
-                    workspace.preview_container_file(row_path.clone(), cx);
-                });
-            })
-            .child(
-                IconButton::new(
-                    ElementId::Name(format!("container-file-download-{entry_path}").into()),
-                    UiIcon::DOWNLOAD,
-                    "Download file",
-                )
-                .size(IconButtonSize::RowAction)
-                .show_tooltip(false)
-                .render()
-                .on_click({
-                    let view = view.clone();
-                    let path = entry_path.clone();
-                    move |_, _, cx| {
-                        view.update(cx, |workspace, cx| {
-                            workspace.download_container_file(path.clone(), cx);
-                        });
-                    }
-                }),
-            );
-    }
-    if !readonly {
-        row = row.child(
-            IconButton::new(
-                ElementId::Name(format!("container-file-rename-{entry_path}").into()),
-                UiIcon::EDIT,
-                "Rename file",
-            )
-            .size(IconButtonSize::RowAction)
-            .show_tooltip(false)
-            .render()
-            .on_click({
-                let view = view.clone();
-                let path = entry_path.clone();
-                move |_, window, cx| {
-                    view.update(cx, |workspace, cx| {
-                        workspace.begin_container_file_rename(path.clone(), window, cx);
-                    });
-                }
-            }),
-        );
-        row = row.child(
-            IconButton::new(
-                ElementId::Name(format!("container-file-delete-{entry_path}").into()),
-                UiIcon::DELETE,
-                "Delete file",
-            )
-            .size(IconButtonSize::RowAction)
-            .show_tooltip(false)
-            .render()
-            .on_click({
-                let view = view.clone();
-                let path = entry_path.clone();
-                move |_, _, cx| {
-                    view.update(cx, |workspace, cx| {
-                        workspace.request_remove_container_path(path.clone(), is_dir, cx);
-                    });
-                }
-            }),
-        );
-    }
-    // 文件行右键菜单：与 SFTP 面板同样把「打开/预览、下载、改名、删除」收进来，
-    // 窄窗下不必再去找行尾那一排小图标。
-    let menu_view = view.clone();
-    let menu_path = entry_path.clone();
-    row.context_menu(move |menu, _, _| {
-        append_entry_context_menu(menu, &menu_view, &menu_path, is_dir, readonly)
+        )
+}
+
+fn render_directory_actions(
+    view: &Entity<ContainerWorkspace>,
+    row: Stateful<Div>,
+    path: &str,
+) -> Stateful<Div> {
+    let row_view = view.clone();
+    let row_path = path.to_string();
+    let download_view = view.clone();
+    let download_path = path.to_string();
+    row.on_click(move |_, _, cx| {
+        row_view.update(cx, |workspace, cx| {
+            workspace.load_container_dir(row_path.clone(), cx);
+        });
     })
-    .into_any_element()
+    .child(
+        IconButton::new(
+            ElementId::Name(format!("container-file-download-dir-{path}").into()),
+            UiIcon::DOWNLOAD,
+            rust_i18n::t!("container.files.download_directory_tooltip").to_string(),
+        )
+        .size(IconButtonSize::RowAction)
+        .render()
+        .on_click(move |_, _, cx| {
+            download_view.update(cx, |workspace, cx| {
+                workspace.download_container_directory(download_path.clone(), cx);
+            });
+        }),
+    )
+}
+
+fn render_file_actions(
+    view: &Entity<ContainerWorkspace>,
+    row: Stateful<Div>,
+    path: &str,
+) -> Stateful<Div> {
+    let row_view = view.clone();
+    let row_path = path.to_string();
+    let download_view = view.clone();
+    let download_path = path.to_string();
+    row.on_click(move |_, _, cx| {
+        row_view.update(cx, |workspace, cx| {
+            workspace.preview_container_file(row_path.clone(), cx);
+        });
+    })
+    .child(
+        IconButton::new(
+            ElementId::Name(format!("container-file-download-{path}").into()),
+            UiIcon::DOWNLOAD,
+            rust_i18n::t!("container.files.download").to_string(),
+        )
+        .size(IconButtonSize::RowAction)
+        .render()
+        .on_click(move |_, _, cx| {
+            download_view.update(cx, |workspace, cx| {
+                workspace.download_container_file(download_path.clone(), cx);
+            });
+        }),
+    )
+}
+
+fn render_editable_actions(
+    view: &Entity<ContainerWorkspace>,
+    row: Stateful<Div>,
+    path: &str,
+    is_dir: bool,
+) -> Stateful<Div> {
+    let rename_view = view.clone();
+    let rename_path = path.to_string();
+    let delete_view = view.clone();
+    let delete_path = path.to_string();
+    row.child(
+        IconButton::new(
+            ElementId::Name(format!("container-file-rename-{path}").into()),
+            UiIcon::EDIT,
+            rust_i18n::t!("container.files.rename").to_string(),
+        )
+        .size(IconButtonSize::RowAction)
+        .render()
+        .on_click(move |_, window, cx| {
+            rename_view.update(cx, |workspace, cx| {
+                workspace.begin_container_file_rename(rename_path.clone(), window, cx);
+            });
+        }),
+    )
+    .child(
+        IconButton::new(
+            ElementId::Name(format!("container-file-delete-{path}").into()),
+            UiIcon::DELETE,
+            rust_i18n::t!("common.delete").to_string(),
+        )
+        .size(IconButtonSize::RowAction)
+        .render()
+        .on_click(move |_, _, cx| {
+            delete_view.update(cx, |workspace, cx| {
+                workspace.request_remove_container_path(delete_path.clone(), is_dir, cx);
+            });
+        }),
+    )
 }
 
 fn append_entry_context_menu(

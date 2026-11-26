@@ -7580,6 +7580,9 @@ container:
     none:
       en: No usable engine found
       zh-CN: 未发现可用引擎
+    dismiss:
+      en: Dismiss container discovery
+      zh-CN: 关闭容器发现提示
     ssh_sessions_title:
       en: Link SSH host sessions
       zh-CN: 联动已保存的 SSH 主机
@@ -8834,6 +8837,9 @@ container:
     cancel:
       en: Cancel
       zh-CN: 取消
+    remove_task:
+      en: Remove download task
+      zh-CN: 移除下载任务
     status_queued:
       en: Queued
       zh-CN: 排队中

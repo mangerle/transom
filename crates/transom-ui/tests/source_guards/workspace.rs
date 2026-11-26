@@ -385,6 +385,61 @@ fn audit_hotspot_functions_stay_split() {
             "handle_git_action_done",
             45,
         ),
+        (
+            "crates/transom-ui/src/container/pull_drawer.rs",
+            "render_pull_task_card",
+            50,
+        ),
+        (
+            "crates/transom-ui/src/container/sidebar/empty.rs",
+            "render_container_discovery",
+            50,
+        ),
+        (
+            "crates/transom-ui/src/container/stats/mod.rs",
+            "render_container_stats",
+            60,
+        ),
+        (
+            "crates/transom-ui/src/session_form/serial.rs",
+            "render_serial_fields",
+            40,
+        ),
+        (
+            "crates/transom-ui/src/session_form/ssh/mod.rs",
+            "render_ssh_basic_fields",
+            40,
+        ),
+        (
+            "crates/transom-ui/src/sftp/sync_modal.rs",
+            "sync_diff_list",
+            40,
+        ),
+        (
+            "crates/transom-ui/src/session_form/rdp.rs",
+            "render_rdp_basic_fields",
+            45,
+        ),
+        (
+            "crates/transom-ui/src/container/detail/files/row.rs",
+            "render_entry_row",
+            35,
+        ),
+        (
+            "crates/transom-ui/src/container/detail/raw_inspect.rs",
+            "render_raw_inspect",
+            35,
+        ),
+        (
+            "crates/transom-ui/src/container/detail/overview.rs",
+            "render_container_overview",
+            35,
+        ),
+        (
+            "crates/transom-ui/src/api_client/workspace/request_view.rs",
+            "render_request_editor",
+            35,
+        ),
     ] {
         let source = std::fs::read_to_string(root.join(relative))
             .unwrap_or_else(|error| panic!("读取 {relative} 失败: {error}"));

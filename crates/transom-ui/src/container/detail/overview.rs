@@ -31,14 +31,23 @@ pub(crate) fn render_container_overview(
     if raw {
         return render_raw_inspect(view, &details.inspect, inspect, p);
     }
+    let cards = v_flex()
+        .gap_3()
+        .child(render_identity_card(view, details, p))
+        .child(render_ports_card(view, details, browser_host, p))
+        .child(render_mounts_overview_card(view, details, p));
+    let cards = render_optional_overview_cards(cards, view, details, p);
+    scroll_body(cards, p).into_any_element()
+}
 
+fn render_identity_card(
+    view: &Entity<ContainerWorkspace>,
+    details: &ContainerDetails,
+    p: &Palette,
+) -> AnyElement {
     use super::overview_cards::*;
-
-    let mut cards = v_flex().gap_3();
-
-    // 1. 运行身份与运行时
-    let mut runtime_fields = v_flex().gap_1p5();
-    runtime_fields = runtime_fields
+    let mut fields = v_flex()
+        .gap_1p5()
         .child(copyable_field(
             view,
             rust_i18n::t!("container.field.id"),
@@ -109,9 +118,8 @@ pub(crate) fn render_container_overview(
             false,
             p,
         ));
-
     if let Some(code) = details.exit_code {
-        runtime_fields = runtime_fields.child(copyable_field(
+        fields = fields.child(copyable_field(
             view,
             rust_i18n::t!("container.field.exit_code"),
             code.to_string(),
@@ -119,64 +127,79 @@ pub(crate) fn render_container_overview(
             p,
         ));
     }
+    overview_card(
+        rust_i18n::t!("container.detail.category_identity").to_string(),
+        AppIcon::Custom(CustomIcon::INFO),
+        p,
+        Some(render_raw_inspect_button(view)),
+        fields,
+    )
+}
 
-    let raw_btn = action_button(
+fn render_raw_inspect_button(view: &Entity<ContainerWorkspace>) -> AnyElement {
+    let view = view.clone();
+    action_button(
         "container-overview-raw-inspect",
         UiIcon::EDITOR_ONLY,
         rust_i18n::t!("container.field.inspect").to_string(),
     )
     .ghost()
-    .on_click({
-        let view = view.clone();
-        move |_, _, cx| {
-            view.update(cx, |workspace, cx| {
-                workspace.state.overview_raw = true;
-                cx.notify();
-            });
-        }
+    .on_click(move |_, _, cx| {
+        view.update(cx, |workspace, cx| {
+            workspace.state.overview_raw = true;
+            cx.notify();
+        });
     })
-    .into_any_element();
+    .into_any_element()
+}
 
-    cards = cards.child(overview_card(
-        rust_i18n::t!("container.detail.category_identity").to_string(),
-        AppIcon::Custom(CustomIcon::INFO),
-        p,
-        Some(raw_btn),
-        runtime_fields,
-    ));
-
-    // 2. 网络与端口映射
-    let container_name = details.name.trim_start_matches('/');
-    let port_chips = render_port_chips(view, &details.ports, browser_host, container_name, p);
-    cards = cards.child(overview_card(
+fn render_ports_card(
+    view: &Entity<ContainerWorkspace>,
+    details: &ContainerDetails,
+    browser_host: &str,
+    p: &Palette,
+) -> AnyElement {
+    use super::overview_cards::*;
+    let name = details.name.trim_start_matches('/');
+    let ports = render_port_chips(view, &details.ports, browser_host, name, p);
+    overview_card(
         rust_i18n::t!("container.field.ports").to_string(),
         AppIcon::Custom(CustomIcon::PORT),
         p,
         None,
-        port_chips,
-    ));
+        ports,
+    )
+}
 
-    // 3. 存储挂载
-    let mounts_el = render_mounts_card(view, &details.mounts, p);
-    cards = cards.child(overview_card(
+fn render_mounts_overview_card(
+    view: &Entity<ContainerWorkspace>,
+    details: &ContainerDetails,
+    p: &Palette,
+) -> AnyElement {
+    use super::overview_cards::*;
+    overview_card(
         rust_i18n::t!("container.field.mounts").to_string(),
         AppIcon::Custom(CustomIcon::MOUNT),
         p,
         None,
-        mounts_el,
-    ));
+        render_mounts_card(view, &details.mounts, p),
+    )
+}
 
-    // 4. 健康检查时间线（如果有）
-    if let Some(health_diag) = &details.health_details {
-        cards = cards.child(render_health_timeline(view, health_diag, p));
+fn render_optional_overview_cards(
+    mut cards: Div,
+    view: &Entity<ContainerWorkspace>,
+    details: &ContainerDetails,
+    p: &Palette,
+) -> Div {
+    use super::overview_cards::*;
+    if let Some(health) = &details.health_details {
+        cards = cards.child(render_health_timeline(view, health, p));
     }
-
-    // 5. 环境变量
     if !details.env.is_empty() {
         cards = cards.child(render_env_card(view, &details.env, p));
     }
-
-    scroll_body(cards, p).into_any_element()
+    cards
 }
 
 /// 关联容器行：卷、网络与编排详情里点名字直接跳到那个容器。

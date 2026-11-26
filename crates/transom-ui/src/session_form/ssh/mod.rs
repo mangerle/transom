@@ -70,7 +70,25 @@ pub(crate) fn render_ssh_basic_fields(
     cx: &mut Context<SessionFormView>,
     p: &Palette,
 ) -> AnyElement {
-    let auth_selector = ButtonGroup::new("auth-methods")
+    let auth_selector = render_auth_selector(form, cx);
+    let host_port_row = render_host_port_row(form, cx, p);
+    let mut fields = v_flex().gap_3().child(host_port_row);
+    fields = render_account_section(fields, form, cx, p);
+    if form.identity_choice.is_none() {
+        fields = fields
+            .child(required_form_field(
+                rust_i18n::t!("form.username").to_string(),
+                form.username.clone(),
+                p,
+            ))
+            .child(render_auth_choice(auth_selector, p));
+        fields = render_auth_credential_fields(fields, form, cx, p);
+    }
+    fields.into_any_element()
+}
+
+fn render_auth_selector(form: &SessionForm, cx: &mut Context<SessionFormView>) -> AnyElement {
+    ButtonGroup::new("auth-methods")
         .small()
         .child(
             Button::new("auth-password")
@@ -100,131 +118,130 @@ pub(crate) fn render_ssh_basic_fields(
             if let Some(choice) = choice {
                 this.edit(cx, |form| form.auth = choice);
             }
-        }));
+        }))
+        .into_any_element()
+}
 
+fn render_auth_choice(auth_selector: AnyElement, p: &Palette) -> AnyElement {
+    v_flex()
+        .gap_1()
+        .child(
+            div()
+                .text_xs()
+                .text_color(p.muted_foreground)
+                .child(rust_i18n::t!("form.auth").to_string()),
+        )
+        .child(auth_selector)
+        .into_any_element()
+}
+
+fn render_host_port_row(
+    form: &SessionForm,
+    cx: &mut Context<SessionFormView>,
+    p: &Palette,
+) -> AnyElement {
     let can_batch = form.base.is_none() && form.connection == ConnectionChoice::Ssh;
-    let host_port_row = if can_batch && form.batch_mode {
-        v_flex()
-            .gap_1p5()
-            .child(
-                h_flex()
-                    .justify_between()
-                    .items_center()
-                    .child(
-                        h_flex()
-                            .gap_0p5()
-                            .items_center()
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .text_color(p.muted_foreground)
-                                    .child(rust_i18n::t!("form.batch_hosts_label").to_string()),
-                            )
-                            .child(div().text_xs().text_color(p.danger).child("*")),
-                    )
-                    .child(render_batch_mode_toggle(form.batch_mode, cx)),
-            )
-            .child(
-                h_flex()
-                    .gap_3()
-                    .items_start()
-                    .child(
-                        div()
-                            .flex_1()
-                            .child(Textarea::new(&form.batch_hosts).h(rems(6.0)).w_full()),
-                    )
-                    .child(div().w(rems(8.5)).child(number_form_field(
-                        rust_i18n::t!("form.port").to_string(),
-                        true,
-                        form.port.clone(),
-                        p,
-                    ))),
-            )
-            .child(
-                div()
-                    .text_xs()
-                    .text_color(p.muted_foreground)
-                    .child(rust_i18n::t!("form.batch_hosts_hint").to_string()),
-            )
-            .into_any_element()
+    if can_batch && form.batch_mode {
+        render_batch_hosts_row(form, cx, p)
     } else if can_batch {
-        v_flex()
-            .gap_1()
-            .child(
-                h_flex()
-                    .justify_between()
-                    .items_end()
-                    .child(
-                        h_flex()
-                            .gap_0p5()
-                            .items_center()
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .text_color(p.muted_foreground)
-                                    .child(rust_i18n::t!("form.host").to_string()),
-                            )
-                            .child(div().text_xs().text_color(p.danger).child("*")),
-                    )
-                    .child(render_batch_mode_toggle(form.batch_mode, cx)),
-            )
-            .child(
-                h_flex()
-                    .gap_3()
-                    .items_end()
-                    .child(div().flex_1().child(Input::new(&form.host).w_full()))
-                    .child(div().w(rems(8.5)).child(number_form_field(
-                        rust_i18n::t!("form.port").to_string(),
-                        true,
-                        form.port.clone(),
-                        p,
-                    ))),
-            )
-            .into_any_element()
+        render_single_batch_host_row(form, cx, p)
     } else {
-        h_flex()
-            .gap_3()
-            .items_end()
-            .child(div().flex_1().child(required_form_field(
-                rust_i18n::t!("form.host").to_string(),
-                form.host.clone(),
-                p,
-            )))
-            .child(div().w(rems(8.5)).child(number_form_field(
-                rust_i18n::t!("form.port").to_string(),
-                true,
-                form.port.clone(),
-                p,
-            )))
-            .into_any_element()
-    };
-
-    let mut fields = v_flex().gap_3().child(host_port_row);
-
-    fields = render_account_section(fields, form, cx, p);
-
-    if form.identity_choice.is_none() {
-        fields = fields
-            .child(required_form_field(
-                rust_i18n::t!("form.username").to_string(),
-                form.username.clone(),
-                p,
-            ))
-            .child(
-                v_flex()
-                    .gap_1()
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(p.muted_foreground)
-                            .child(rust_i18n::t!("form.auth").to_string()),
-                    )
-                    .child(auth_selector),
-            );
-        fields = render_auth_credential_fields(fields, form, cx, p);
+        render_regular_host_port_row(form, p)
     }
+}
 
-    fields.into_any_element()
+fn render_host_label(cx: &mut Context<SessionFormView>, batch: bool, p: &Palette) -> AnyElement {
+    let label = if batch {
+        rust_i18n::t!("form.batch_hosts_label").to_string()
+    } else {
+        rust_i18n::t!("form.host").to_string()
+    };
+    h_flex()
+        .justify_between()
+        .items_center()
+        .child(
+            h_flex()
+                .gap_0p5()
+                .items_center()
+                .child(div().text_xs().text_color(p.muted_foreground).child(label))
+                .child(div().text_xs().text_color(p.danger).child("*")),
+        )
+        .child(render_batch_mode_toggle(batch, cx))
+        .into_any_element()
+}
+
+fn render_batch_hosts_row(
+    form: &SessionForm,
+    cx: &mut Context<SessionFormView>,
+    p: &Palette,
+) -> AnyElement {
+    v_flex()
+        .gap_1p5()
+        .child(render_host_label(cx, true, p))
+        .child(
+            h_flex()
+                .gap_3()
+                .items_start()
+                .child(
+                    div()
+                        .flex_1()
+                        .child(Textarea::new(&form.batch_hosts).h(rems(6.0)).w_full()),
+                )
+                .child(div().w(rems(8.5)).child(number_form_field(
+                    rust_i18n::t!("form.port").to_string(),
+                    true,
+                    form.port.clone(),
+                    p,
+                ))),
+        )
+        .child(
+            div()
+                .text_xs()
+                .text_color(p.muted_foreground)
+                .child(rust_i18n::t!("form.batch_hosts_hint").to_string()),
+        )
+        .into_any_element()
+}
+
+fn render_single_batch_host_row(
+    form: &SessionForm,
+    cx: &mut Context<SessionFormView>,
+    p: &Palette,
+) -> AnyElement {
+    v_flex()
+        .gap_1()
+        .child(render_host_label(cx, false, p))
+        .child(
+            h_flex()
+                .gap_3()
+                .items_end()
+                .child(div().flex_1().child(Input::new(&form.host).w_full()))
+                .child(div().w(rems(8.5)).child(number_form_field(
+                    rust_i18n::t!("form.port").to_string(),
+                    true,
+                    form.port.clone(),
+                    p,
+                ))),
+        )
+        .into_any_element()
+}
+
+fn render_regular_host_port_row(form: &SessionForm, p: &Palette) -> AnyElement {
+    h_flex()
+        .gap_3()
+        .items_end()
+        .child(div().flex_1().child(required_form_field(
+            rust_i18n::t!("form.host").to_string(),
+            form.host.clone(),
+            p,
+        )))
+        .child(div().w(rems(8.5)).child(number_form_field(
+            rust_i18n::t!("form.port").to_string(),
+            true,
+            form.port.clone(),
+            p,
+        )))
+        .into_any_element()
 }
 
 /// 渲染 SSH / Mosh 的“网络与代理”区（跳板机、出站代理、超时保活、重连与高级网络项）。

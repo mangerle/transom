@@ -78,56 +78,111 @@ pub(crate) fn render_rdp_basic_fields(
     cx: &mut Context<SessionFormView>,
     p: &Palette,
 ) -> AnyElement {
-    let res_dynamic = rust_i18n::t!("form.rdp_res_dynamic");
-    let res_fixed = rust_i18n::t!("form.rdp_res_fixed");
-    let resolution_picker = render_segmented_picker(
-        "rdp-res",
-        form.rdp_dynamic_resolution,
-        &[(true, &*res_dynamic), (false, &*res_fixed)],
-        |f, v| f.rdp_dynamic_resolution = v,
-        cx,
-    );
-    let color_depth_buttons = render_segmented_picker(
-        "rdp-depth",
-        form.rdp_color_depth,
-        &[
-            (RdpColorDepth::Depth16, "16-bit"),
-            (RdpColorDepth::Depth24, "24-bit"),
-            (RdpColorDepth::Depth32, "32-bit"),
-        ],
-        |f, v| f.rdp_color_depth = v,
-        cx,
-    );
-    let perf_lan = rust_i18n::t!("form.rdp_perf_lan");
-    let perf_broadband = rust_i18n::t!("form.rdp_perf_broadband");
-    let perf_wan = rust_i18n::t!("form.rdp_perf_wan");
-    let performance_buttons = render_segmented_picker(
-        "rdp-perf",
-        form.rdp_performance,
-        &[
-            (RdpPerformance::Lan, &*perf_lan),
-            (RdpPerformance::Broadband, &*perf_broadband),
-            (RdpPerformance::Wan, &*perf_wan),
-        ],
-        |f, v| f.rdp_performance = v,
-        cx,
-    );
-    let sec_negotiate = rust_i18n::t!("form.rdp_sec_negotiate");
-    let sec_rdp = rust_i18n::t!("form.rdp_sec_rdp");
-    let security_buttons = render_segmented_picker(
-        "rdp-sec",
-        form.rdp_security,
-        &[
-            (RdpSecurity::Negotiate, &*sec_negotiate),
-            (RdpSecurity::Nla, "NLA"),
-            (RdpSecurity::Tls, "TLS"),
-            (RdpSecurity::Rdp, &*sec_rdp),
-        ],
-        |f, v| f.rdp_security = v,
-        cx,
-    );
-
+    let pickers = RdpPickers::new(form, cx);
     let mut fields = v_flex()
+        .gap_3()
+        .child(render_rdp_identity_fields(form, p))
+        .child(serial_option_row(
+            rust_i18n::t!("form.rdp_resolution_mode").to_string(),
+            pickers.resolution,
+            p,
+        ));
+    if !form.rdp_dynamic_resolution {
+        fields = fields.child(render_rdp_fixed_resolution(form, p));
+    }
+    fields
+        .child(serial_option_row(
+            rust_i18n::t!("form.rdp_color_depth").to_string(),
+            pickers.color_depth,
+            p,
+        ))
+        .child(serial_option_row(
+            rust_i18n::t!("form.rdp_performance").to_string(),
+            pickers.performance,
+            p,
+        ))
+        .child(serial_option_row(
+            rust_i18n::t!("form.rdp_security").to_string(),
+            pickers.security,
+            p,
+        ))
+        .child(optional_form_field(
+            rust_i18n::t!("form.rdp_shared_dir").to_string(),
+            form.rdp_shared_dir.clone(),
+            p,
+        ))
+        .child(render_rdp_switches(form, cx))
+        .into_any_element()
+}
+
+struct RdpPickers {
+    resolution: AnyElement,
+    color_depth: AnyElement,
+    performance: AnyElement,
+    security: AnyElement,
+}
+
+impl RdpPickers {
+    fn new(form: &SessionForm, cx: &mut Context<SessionFormView>) -> Self {
+        let dynamic = rust_i18n::t!("form.rdp_res_dynamic");
+        let fixed = rust_i18n::t!("form.rdp_res_fixed");
+        let resolution = render_segmented_picker(
+            "rdp-res",
+            form.rdp_dynamic_resolution,
+            &[(true, &*dynamic), (false, &*fixed)],
+            |form, value| form.rdp_dynamic_resolution = value,
+            cx,
+        );
+        let color_depth = render_segmented_picker(
+            "rdp-depth",
+            form.rdp_color_depth,
+            &[
+                (RdpColorDepth::Depth16, "16-bit"),
+                (RdpColorDepth::Depth24, "24-bit"),
+                (RdpColorDepth::Depth32, "32-bit"),
+            ],
+            |form, value| form.rdp_color_depth = value,
+            cx,
+        );
+        let lan = rust_i18n::t!("form.rdp_perf_lan");
+        let broadband = rust_i18n::t!("form.rdp_perf_broadband");
+        let wan = rust_i18n::t!("form.rdp_perf_wan");
+        let performance = render_segmented_picker(
+            "rdp-perf",
+            form.rdp_performance,
+            &[
+                (RdpPerformance::Lan, &*lan),
+                (RdpPerformance::Broadband, &*broadband),
+                (RdpPerformance::Wan, &*wan),
+            ],
+            |form, value| form.rdp_performance = value,
+            cx,
+        );
+        let negotiate = rust_i18n::t!("form.rdp_sec_negotiate");
+        let rdp = rust_i18n::t!("form.rdp_sec_rdp");
+        let security = render_segmented_picker(
+            "rdp-sec",
+            form.rdp_security,
+            &[
+                (RdpSecurity::Negotiate, &*negotiate),
+                (RdpSecurity::Nla, "NLA"),
+                (RdpSecurity::Tls, "TLS"),
+                (RdpSecurity::Rdp, &*rdp),
+            ],
+            |form, value| form.rdp_security = value,
+            cx,
+        );
+        Self {
+            resolution,
+            color_depth,
+            performance,
+            security,
+        }
+    }
+}
+
+fn render_rdp_identity_fields(form: &SessionForm, p: &Palette) -> AnyElement {
+    v_flex()
         .gap_3()
         .child(
             h_flex()
@@ -169,65 +224,43 @@ pub(crate) fn render_rdp_basic_fields(
             form.password.clone(),
             p,
         ))
-        .child(serial_option_row(
-            rust_i18n::t!("form.rdp_resolution_mode").to_string(),
-            resolution_picker,
-            p,
-        ));
+        .into_any_element()
+}
 
-    if !form.rdp_dynamic_resolution {
-        fields = fields.child(
-            h_flex()
-                .gap_3()
-                .items_end()
-                .child(div().flex_1().child(number_form_field(
-                    rust_i18n::t!("form.rdp_fixed_width").to_string(),
-                    true,
-                    form.rdp_width.clone(),
-                    p,
-                )))
-                .child(div().flex_1().child(number_form_field(
-                    rust_i18n::t!("form.rdp_fixed_height").to_string(),
-                    true,
-                    form.rdp_height.clone(),
-                    p,
-                ))),
-        );
-    }
+fn render_rdp_fixed_resolution(form: &SessionForm, p: &Palette) -> AnyElement {
+    h_flex()
+        .gap_3()
+        .items_end()
+        .child(div().flex_1().child(number_form_field(
+            rust_i18n::t!("form.rdp_fixed_width").to_string(),
+            true,
+            form.rdp_width.clone(),
+            p,
+        )))
+        .child(div().flex_1().child(number_form_field(
+            rust_i18n::t!("form.rdp_fixed_height").to_string(),
+            true,
+            form.rdp_height.clone(),
+            p,
+        )))
+        .into_any_element()
+}
 
-    fields
-        .child(serial_option_row(
-            rust_i18n::t!("form.rdp_color_depth").to_string(),
-            color_depth_buttons,
-            p,
-        ))
-        .child(serial_option_row(
-            rust_i18n::t!("form.rdp_performance").to_string(),
-            performance_buttons,
-            p,
-        ))
-        .child(serial_option_row(
-            rust_i18n::t!("form.rdp_security").to_string(),
-            security_buttons,
-            p,
-        ))
-        .child(optional_form_field(
-            rust_i18n::t!("form.rdp_shared_dir").to_string(),
-            form.rdp_shared_dir.clone(),
-            p,
-        ))
+fn render_rdp_switches(form: &SessionForm, cx: &mut Context<SessionFormView>) -> AnyElement {
+    v_flex()
+        .gap_3()
         .child(rdp_switch_row(
             "toggle-rdp-audio",
             rust_i18n::t!("form.rdp_audio").to_string(),
             form.rdp_audio,
-            |form, v| form.rdp_audio = v,
+            |form, value| form.rdp_audio = value,
             cx,
         ))
         .child(rdp_switch_row(
             "toggle-rdp-clipboard",
             rust_i18n::t!("form.rdp_clipboard").to_string(),
             form.rdp_clipboard,
-            |form, v| form.rdp_clipboard = v,
+            |form, value| form.rdp_clipboard = value,
             cx,
         ))
         .into_any_element()

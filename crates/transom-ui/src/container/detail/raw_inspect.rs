@@ -35,73 +35,41 @@ pub(crate) fn render_raw_inspect(
     if inspect_json.trim().is_empty() {
         return centered_hint(rust_i18n::t!("container.detail.no_inspect").to_string(), p);
     }
-
-    let search_keyword = search.keyword.trim().to_lowercase();
+    let keyword = search.keyword.trim().to_lowercase();
     let lines: Vec<&str> = inspect_json.lines().collect();
     let total_lines = lines.len();
-
-    // 统计匹配行数
-    let matching_count = if search_keyword.is_empty() {
+    let matched_lines = if keyword.is_empty() {
         total_lines
     } else {
         lines
             .iter()
-            .filter(|line| contains_case_insensitive(line, &search_keyword))
+            .filter(|line| contains_case_insensitive(line, &keyword))
             .count()
     };
+    let toolbar = render_inspect_toolbar(
+        view,
+        inspect_json,
+        search.input,
+        &keyword,
+        matched_lines,
+        total_lines,
+        p,
+    );
+    let code_card = render_inspect_code(&lines, &keyword, p);
+    scroll_body(v_flex().child(toolbar).child(code_card), p).into_any_element()
+}
 
-    let copy_btn = action_button(
-        ElementId::Name("btn-copy-raw-inspect".into()),
-        UiIcon::COPY,
-        rust_i18n::t!("container.detail.copy_inspect").to_string(),
-    )
-    .ghost()
-    .on_click({
-        let view = view.clone();
-        let copy_text = inspect_json.to_string();
-        move |_, _, cx| {
-            cx.write_to_clipboard(ClipboardItem::new_string(copy_text.clone()));
-            let message = rust_i18n::t!("container.detail.copied").to_string();
-            view.update(cx, |workspace, cx| {
-                workspace.state.notice = Some(message);
-                cx.notify();
-            });
-        }
-    });
-
-    let stats_label = if search_keyword.is_empty() {
-        rust_i18n::t!(
-            "container.inspect.stats_total",
-            lines = total_lines,
-            bytes = inspect_json.len()
-        )
-        .to_string()
-    } else {
-        rust_i18n::t!(
-            "container.inspect.stats_matched",
-            matched = matching_count,
-            total = total_lines
-        )
-        .to_string()
-    };
-
-    let back_btn = action_button(
-        ElementId::Name("btn-back-overview".into()),
-        UiIcon::EDITOR_PREVIEW,
-        rust_i18n::t!("container.detail.overview").to_string(),
-    )
-    .ghost()
-    .on_click({
-        let view = view.clone();
-        move |_, _, cx| {
-            view.update(cx, |workspace, cx| {
-                workspace.state.overview_raw = false;
-                cx.notify();
-            });
-        }
-    });
-
-    let toolbar = h_flex()
+fn render_inspect_toolbar(
+    view: &Entity<ContainerWorkspace>,
+    inspect_json: &str,
+    input: &Entity<InputState>,
+    keyword: &str,
+    matched_lines: usize,
+    total_lines: usize,
+    p: &Palette,
+) -> AnyElement {
+    let stats = inspect_stats_label(keyword, matched_lines, total_lines, inspect_json.len());
+    h_flex()
         .justify_between()
         .items_center()
         .gap_2()
@@ -114,74 +82,124 @@ pub(crate) fn render_raw_inspect(
                 .child(
                     div()
                         .w_64()
-                        .child(Input::new(search.input).cleanable(true).small()),
+                        .child(Input::new(input).cleanable(true).small()),
                 )
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(p.muted_foreground)
-                        .child(stats_label),
-                ),
+                .child(div().text_xs().text_color(p.muted_foreground).child(stats)),
         )
         .child(
             h_flex()
                 .gap_2()
                 .items_center()
-                .child(copy_btn)
-                .child(back_btn),
-        );
+                .child(render_copy_inspect_button(view, inspect_json))
+                .child(render_back_overview_button(view)),
+        )
+        .into_any_element()
+}
 
-    // 逐行渲染带有行号与关键词高亮的代码块
-    let mut code_body = v_flex()
+fn inspect_stats_label(
+    keyword: &str,
+    matched_lines: usize,
+    total_lines: usize,
+    bytes: usize,
+) -> String {
+    if keyword.is_empty() {
+        return rust_i18n::t!(
+            "container.inspect.stats_total",
+            lines = total_lines,
+            bytes = bytes
+        )
+        .to_string();
+    }
+    rust_i18n::t!(
+        "container.inspect.stats_matched",
+        matched = matched_lines,
+        total = total_lines
+    )
+    .to_string()
+}
+
+fn render_copy_inspect_button(view: &Entity<ContainerWorkspace>, inspect_json: &str) -> AnyElement {
+    let view = view.clone();
+    let copy_text = inspect_json.to_string();
+    action_button(
+        ElementId::Name("btn-copy-raw-inspect".into()),
+        UiIcon::COPY,
+        rust_i18n::t!("container.detail.copy_inspect").to_string(),
+    )
+    .ghost()
+    .on_click(move |_, _, cx| {
+        cx.write_to_clipboard(ClipboardItem::new_string(copy_text.clone()));
+        let message = rust_i18n::t!("container.detail.copied").to_string();
+        view.update(cx, |workspace, cx| {
+            workspace.state.notice = Some(message);
+            cx.notify();
+        });
+    })
+    .into_any_element()
+}
+
+fn render_back_overview_button(view: &Entity<ContainerWorkspace>) -> AnyElement {
+    let view = view.clone();
+    action_button(
+        ElementId::Name("btn-back-overview".into()),
+        UiIcon::EDITOR_PREVIEW,
+        rust_i18n::t!("container.detail.overview").to_string(),
+    )
+    .ghost()
+    .on_click(move |_, _, cx| {
+        view.update(cx, |workspace, cx| {
+            workspace.state.overview_raw = false;
+            cx.notify();
+        });
+    })
+    .into_any_element()
+}
+
+fn render_inspect_code(lines: &[&str], keyword: &str, p: &Palette) -> AnyElement {
+    let mut body = v_flex()
         .gap_0()
         .font_family(p.mono_font_family.clone())
         .text_size(p.mono_font_size);
-
-    for (idx, line) in lines.iter().enumerate() {
-        let is_matched = contains_case_insensitive(line, &search_keyword);
-
-        let mut row = h_flex()
-            .items_start()
-            .gap_2()
-            .py_0p5()
-            .px_1()
-            .rounded(p.radius.sm);
-
-        if is_matched {
-            row = row.bg(p.primary.opacity(0.18));
-        }
-
-        // 行号
-        let line_num = div()
-            .w_10()
-            .text_right()
-            .flex_none()
-            .text_xs()
-            .text_color(p.muted_foreground.opacity(0.6))
-            .child((idx + 1).to_string());
-
-        // 行内容
-        let line_content = div()
-            .flex_1()
-            .min_w_0()
-            .text_xs()
-            .text_color(if is_matched {
-                p.foreground
-            } else {
-                p.foreground.opacity(0.9)
-            })
-            .child(line.to_string());
-
-        code_body = code_body.child(row.child(line_num).child(line_content));
+    for (index, line) in lines.iter().enumerate() {
+        body = body.child(render_inspect_line(index, line, keyword, p));
     }
-
-    let code_card = div()
+    div()
         .p_2()
         .rounded(p.radius.md)
         .bg(p.muted.opacity(0.2))
         .border_1()
         .border_color(p.stroke.strong)
-        .child(code_body);
+        .child(body)
+        .into_any_element()
+}
 
-    scroll_body(v_flex().child(toolbar).child(code_card), p).into_any_element()
+fn render_inspect_line(index: usize, line: &str, keyword: &str, p: &Palette) -> AnyElement {
+    let matched = contains_case_insensitive(line, keyword);
+    let mut row = h_flex()
+        .items_start()
+        .gap_2()
+        .py_0p5()
+        .px_1()
+        .rounded(p.radius.sm);
+    if matched {
+        row = row.bg(p.primary.opacity(0.18));
+    }
+    let line_number = div()
+        .w_10()
+        .text_right()
+        .flex_none()
+        .text_xs()
+        .text_color(p.muted_foreground.opacity(0.6))
+        .child((index + 1).to_string());
+    let content = div()
+        .flex_1()
+        .min_w_0()
+        .text_xs()
+        .text_color(if matched {
+            p.foreground
+        } else {
+            p.foreground.opacity(0.9)
+        })
+        .child(line.to_string());
+    row.child(line_number).child(content).into_any_element()
 }
