@@ -1,9 +1,9 @@
 //! 本地 API HTTP、GraphQL 与原始 gRPC 执行服务。
 
-use super::{ApiCookie, ApiEnvironment, ApiProtocol, ApiRequest};
+use super::{ApiAuth, ApiCookie, ApiEnvironment, ApiExecutionPlan, ApiProtocol, ApiRequest};
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
-use reqwest::{Client, Method, Url, Version};
+use reqwest::{Client, Method, Url, Version, redirect::Policy};
 use std::time::{Duration, Instant};
 use thiserror::Error;
 use tokio::runtime::Handle;
@@ -13,9 +13,10 @@ use tokio::task::JoinHandle;
 use self::http_auth::{AuthRequest, apply_auth};
 use super::http_body::{PreparedRequestParts, prepared_http_parts, send_form_http};
 use super::http_support::{
-    grpc_payload, header_name, header_value, method_for, read_response, request_host,
+    header_name, header_value, method_for, read_grpc_response, read_response, request_host,
     safe_url_label,
 };
+use crate::model::cookie_header_value;
 
 #[path = "http/http_auth.rs"]
 pub(super) mod http_auth;
@@ -61,16 +62,18 @@ pub enum ApiError {
     InvalidGrpcPayload { reason: String },
     #[error("请求体配置无效，原因: {reason}")]
     InvalidBody { reason: String },
+    #[error("协议 {protocol} 配置无效，原因: {reason}")]
+    InvalidProtocolConfig { protocol: String, reason: String },
     #[error("当前执行器不支持协议 {protocol}")]
     UnsupportedProtocol { protocol: String },
     #[error("发送请求失败，目标: {host}，原因: {reason}")]
     Transport { host: String, reason: String },
+    #[error("API 请求任务异常退出，原因: {reason}")]
+    TaskFailed { reason: String },
     #[error("读取响应失败，目标: {host}，原因: {reason}")]
     ResponseRead { host: String, reason: String },
     #[error("响应体超过 {limit} 字节上限，目标: {host}")]
     ResponseTooLarge { host: String, limit: usize },
-    #[error("解析响应文本失败，目标: {host}，原因: {reason}")]
-    ResponseText { host: String, reason: String },
     #[error("读取上传文件失败，路径: {path}，原因: {reason}")]
     UploadFile { path: String, reason: String },
     #[error("上传文件超过 {limit} 字节上限，路径: {path}")]
@@ -82,13 +85,14 @@ pub enum ApiError {
 /// 一次在 Tokio 控制面执行的请求；接收端可在 GPUI 执行器上等待。
 pub struct ApiExchange {
     receiver: oneshot::Receiver<Result<ApiResponseSnapshot, ApiError>>,
-    task: JoinHandle<()>,
+    task: Option<JoinHandle<()>>,
 }
 
 /// 全局唯一的 API HTTP 客户端服务。
 #[derive(Clone)]
 pub struct ApiHttpService {
     client: Client,
+    token_client: Client,
     runtime: Handle,
 }
 
@@ -98,45 +102,49 @@ impl ApiHttpService {
     /// # Errors
     /// `reqwest::Client` 构建失败时返回 `ApiError::Transport`。
     pub fn new(runtime: Handle) -> Result<Self, ApiError> {
-        let client = Client::builder()
-            .connect_timeout(CONNECT_TIMEOUT)
-            .timeout(REQUEST_TIMEOUT)
-            .build()
-            .map_err(|error| ApiError::Transport {
-                host: "HTTP 客户端".to_string(),
-                reason: error.to_string(),
-            })?;
-        Ok(Self { client, runtime })
+        let client = build_client(Policy::limited(10))?;
+        let token_client = build_client(Policy::none())?;
+        Ok(Self {
+            client,
+            token_client,
+            runtime,
+        })
     }
 
-    /// 在 Tokio 控制面发起请求，返回可由 UI 等待的一次性结果。
-    pub fn start(
-        &self,
-        request: ApiRequest,
-        environment: ApiEnvironment,
-        cookies: Vec<ApiCookie>,
-    ) -> ApiExchange {
+    /// 在 Tokio 控制面执行已解析请求，返回可由 UI 等待的一次性结果。
+    pub fn start(&self, plan: ApiExecutionPlan) -> ApiExchange {
         let client = self.client.clone();
+        let token_client = self.token_client.clone();
         let (sender, receiver) = oneshot::channel();
         let task = self.runtime.spawn(async move {
-            let result = execute_request(&client, &request, &environment, &cookies).await;
+            let result = execute_request(&client, &token_client, &plan).await;
             let _ = sender.send(result);
         });
-        ApiExchange { receiver, task }
+        ApiExchange {
+            receiver,
+            task: Some(task),
+        }
     }
 
     /// 直接执行请求；测试和 Tokio 侧调用使用。
     ///
     /// # Errors
     /// URL、认证、网络或响应读取失败时返回 [`ApiError`]。
-    pub async fn execute(
-        &self,
-        request: &ApiRequest,
-        environment: &ApiEnvironment,
-        cookies: &[ApiCookie],
-    ) -> Result<ApiResponseSnapshot, ApiError> {
-        execute_request(&self.client, request, environment, cookies).await
+    pub async fn execute(&self, plan: &ApiExecutionPlan) -> Result<ApiResponseSnapshot, ApiError> {
+        execute_request(&self.client, &self.token_client, plan).await
     }
+}
+
+fn build_client(redirect_policy: Policy) -> Result<Client, ApiError> {
+    Client::builder()
+        .connect_timeout(CONNECT_TIMEOUT)
+        .timeout(REQUEST_TIMEOUT)
+        .redirect(redirect_policy)
+        .build()
+        .map_err(|error| ApiError::Transport {
+            host: "HTTP 客户端".to_string(),
+            reason: error.to_string(),
+        })
 }
 
 impl ApiExchange {
@@ -146,7 +154,13 @@ impl ApiExchange {
     /// 请求构造、传输、响应读取失败，或执行任务在返回前中止时返回
     /// [`ApiError`]。
     pub async fn recv(&mut self) -> Result<ApiResponseSnapshot, ApiError> {
-        match (&mut self.receiver).await {
+        let receiver_result = (&mut self.receiver).await;
+        if let Some(task) = self.task.take() {
+            task.await.map_err(|error| ApiError::TaskFailed {
+                reason: error.to_string(),
+            })?;
+        }
+        match receiver_result {
             Ok(result) => result,
             Err(_) => Err(ApiError::Transport {
                 host: "API 请求任务".to_string(),
@@ -158,21 +172,28 @@ impl ApiExchange {
 
 impl Drop for ApiExchange {
     fn drop(&mut self) {
-        self.task.abort();
+        if let Some(task) = self.task.take() {
+            task.abort();
+        }
     }
 }
 
 async fn execute_request(
     client: &Client,
-    request: &ApiRequest,
-    environment: &ApiEnvironment,
-    cookies: &[ApiCookie],
+    token_client: &Client,
+    plan: &ApiExecutionPlan,
 ) -> Result<ApiResponseSnapshot, ApiError> {
-    request.validate()?;
+    let request = plan.request();
+    let environment = plan.environment();
+    let cookies = plan.cookies();
     match request.protocol {
-        ApiProtocol::Http => send_http(client, request, environment, cookies, false).await,
-        ApiProtocol::GraphQl => send_http(client, request, environment, cookies, true).await,
-        ApiProtocol::Grpc => send_grpc(client, request, environment).await,
+        ApiProtocol::Http => {
+            send_http(client, token_client, request, environment, cookies, false).await
+        }
+        ApiProtocol::GraphQl => {
+            send_http(client, token_client, request, environment, cookies, true).await
+        }
+        ApiProtocol::Grpc => send_grpc(client, token_client, request, environment).await,
         ApiProtocol::WebSocket => Err(ApiError::UnsupportedProtocol {
             protocol: ApiProtocol::WebSocket.as_str().to_string(),
         }),
@@ -181,13 +202,14 @@ async fn execute_request(
 
 async fn send_http(
     client: &Client,
+    token_client: &Client,
     request: &ApiRequest,
     environment: &ApiEnvironment,
     cookies: &[ApiCookie],
     graphql: bool,
 ) -> Result<ApiResponseSnapshot, ApiError> {
     if !graphql && request.body_type.is_form() {
-        return send_form_http(client, request, environment, cookies).await;
+        return send_form_http(client, token_client, request, environment, cookies).await;
     }
     let url = Url::parse(request.url.trim()).map_err(|error| ApiError::InvalidUrl {
         host: safe_url_label(request.url.trim()),
@@ -205,24 +227,26 @@ async fn send_http(
     } else {
         method_for(request.method)
     };
-    let PreparedRequestParts {
-        mut headers,
-        mut body,
-    } = prepared_http_parts(request, environment, graphql).await?;
+    let PreparedRequestParts { mut headers, body } = prepared_http_parts(request, graphql).await?;
     apply_cookies(&url, cookies, &mut headers);
+    let payload_hash = if matches!(request.auth, ApiAuth::AwsSigV4 { .. }) {
+        body.sha256_hex().await?
+    } else {
+        None
+    };
     apply_auth(AuthRequest {
-        client,
+        token_client,
         request,
         environment,
         headers: &mut headers,
-        body: &body,
+        body: body.as_bytes().unwrap_or(&[]),
+        payload_hash: payload_hash.as_deref(),
         url: &url,
         method: method.as_str(),
     })
     .await?;
-    let mut builder = client
-        .request(method, url.clone())
-        .body(std::mem::take(&mut body));
+    let request_body = body.into_reqwest_body().await?;
+    let mut builder = client.request(method, url.clone()).body(request_body);
     if request.timeout_seconds > 0 {
         builder = builder.timeout(Duration::from_secs(
             request.timeout_seconds.min(MAX_REQUEST_TIMEOUT_SECONDS),
@@ -241,17 +265,19 @@ async fn send_http(
 
 async fn send_grpc(
     client: &Client,
+    token_client: &Client,
     request: &ApiRequest,
     environment: &ApiEnvironment,
 ) -> Result<ApiResponseSnapshot, ApiError> {
     if request.grpc_service.trim().is_empty() || request.grpc_method.trim().is_empty() {
-        return Err(ApiError::InvalidAuth {
+        return Err(ApiError::InvalidProtocolConfig {
+            protocol: ApiProtocol::Grpc.as_str().to_string(),
             reason: "gRPC 服务名和方法名不能为空".to_string(),
         });
     }
-    let base = environment.resolve(request.url.trim());
-    let url = Url::parse(&base).map_err(|error| ApiError::InvalidUrl {
-        host: safe_url_label(&base),
+    let base = request.url.trim();
+    let url = Url::parse(base).map_err(|error| ApiError::InvalidUrl {
+        host: safe_url_label(base),
         reason: error.to_string(),
     })?;
     let host = request_host(&url);
@@ -283,17 +309,15 @@ async fn send_grpc(
         ("grpc-accept-encoding".to_string(), "identity".to_string()),
     ];
     for header in request.headers.iter().filter(|header| header.enabled) {
-        headers.push((
-            environment.resolve(&header.name),
-            environment.resolve(&header.value),
-        ));
+        headers.push((header.name.clone(), header.value.clone()));
     }
     apply_auth(AuthRequest {
-        client,
+        token_client,
         request,
         environment,
         headers: &mut headers,
         body: &framed,
+        payload_hash: None,
         url: &endpoint,
         method: "POST",
     })
@@ -315,23 +339,11 @@ async fn send_grpc(
         host: host.clone(),
         reason: error.to_string(),
     })?;
-    let mut snapshot = read_response(response, started, &host).await?;
-    if let Some(payload) = grpc_payload(snapshot.body.as_bytes()) {
-        snapshot.body = STANDARD.encode(payload);
-    } else {
-        snapshot.body = STANDARD.encode(snapshot.body.as_bytes());
-    }
-    Ok(snapshot)
+    read_grpc_response(response, started, &host).await
 }
 
 pub(super) fn apply_cookies(url: &Url, cookies: &[ApiCookie], headers: &mut Vec<(String, String)>) {
-    let values = cookies
-        .iter()
-        .filter(|cookie| cookie.applies_to(url))
-        .map(|cookie| format!("{}={}", cookie.name, cookie.value))
-        .collect::<Vec<_>>();
-    if !values.is_empty() {
-        let value = values.join("; ");
+    if let Some(value) = cookie_header_value(url, cookies) {
         if let Some((_, existing)) = headers
             .iter_mut()
             .find(|(name, _)| name.eq_ignore_ascii_case("cookie"))
@@ -352,6 +364,29 @@ mod tests {
     use crate::ApiAuth;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     use tokio::net::TcpListener;
+
+    fn plan(
+        request: ApiRequest,
+        environment: ApiEnvironment,
+        cookies: Vec<ApiCookie>,
+    ) -> ApiExecutionPlan {
+        ApiExecutionPlan::new(request, environment, cookies).expect("测试执行计划应合法")
+    }
+
+    #[tokio::test]
+    async fn exchange_reports_panicked_background_task() {
+        let (sender, receiver) = oneshot::channel();
+        drop(sender);
+        let task = tokio::spawn(async {
+            panic!("模拟请求任务 panic");
+        });
+        let mut exchange = ApiExchange {
+            receiver,
+            task: Some(task),
+        };
+        let error = exchange.recv().await.expect_err("任务 panic 应返回错误");
+        assert!(matches!(error, ApiError::TaskFailed { .. }));
+    }
 
     #[tokio::test]
     async fn executes_get_against_local_server() {
@@ -403,7 +438,7 @@ mod tests {
             expires_at: None,
         };
         let response = service
-            .execute(&request, &ApiEnvironment::empty(), &[cookie])
+            .execute(&plan(request, ApiEnvironment::empty(), vec![cookie]))
             .await
             .expect("请求成功");
         server.await.expect("测试服务结束");
@@ -411,6 +446,72 @@ mod tests {
         assert!(response.body.contains("\"ok\": true"));
         assert_eq!(response.set_cookies[0].name, "theme");
         assert_eq!(response.set_cookies[0].value, "dark");
+    }
+
+    #[tokio::test]
+    async fn decodes_gzip_response_body() {
+        let listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("绑定测试端口");
+        let address = listener.local_addr().expect("读取测试地址");
+        let server = tokio::spawn(async move {
+            let (mut stream, _) = listener.accept().await.expect("接受连接");
+            let mut request = [0_u8; 1024];
+            let _ = stream.read(&mut request).await.expect("读取请求");
+            stream
+                .write_all(b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Encoding: gzip\r\nContent-Length: 31\r\nConnection: close\r\n\r\n")
+                .await
+                .expect("写响应头");
+            stream
+                .write_all(&[
+                    0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xab, 0x56, 0xca,
+                    0xcf, 0x56, 0xb2, 0x2a, 0x29, 0x2a, 0x4d, 0xad, 0x05, 0x00, 0x90, 0x5f, 0xd4,
+                    0xa7, 0x0b, 0x00, 0x00, 0x00,
+                ])
+                .await
+                .expect("写压缩响应体");
+        });
+        let service = ApiHttpService::new(tokio::runtime::Handle::current()).expect("构造服务");
+        let mut request = ApiRequest::new("压缩响应", None);
+        request.url = format!("http://{address}/compressed");
+        let response = service
+            .execute(&plan(request, ApiEnvironment::empty(), Vec::new()))
+            .await
+            .expect("gzip 响应应可解码");
+        server.await.expect("测试服务结束");
+        assert!(response.body.contains("\"ok\": true"));
+    }
+
+    #[tokio::test]
+    async fn rejects_oversized_response_before_reading_body() {
+        let listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("绑定测试端口");
+        let address = listener.local_addr().expect("读取测试地址");
+        let server = tokio::spawn(async move {
+            let (mut stream, _) = listener.accept().await.expect("接受连接");
+            let mut request = [0_u8; 1024];
+            let _ = stream.read(&mut request).await.expect("读取请求");
+            stream
+                .write_all(
+                    format!(
+                        "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                        MAX_RESPONSE_BYTES.saturating_add(1)
+                    )
+                    .as_bytes(),
+                )
+                .await
+                .expect("写响应头");
+        });
+        let service = ApiHttpService::new(tokio::runtime::Handle::current()).expect("构造服务");
+        let mut request = ApiRequest::new("超限响应", None);
+        request.url = format!("http://{address}/large");
+        let error = service
+            .execute(&plan(request, ApiEnvironment::empty(), Vec::new()))
+            .await
+            .expect_err("超限响应应被拒绝");
+        server.await.expect("测试服务结束");
+        assert!(matches!(error, ApiError::ResponseTooLarge { .. }));
     }
 
     #[tokio::test]
@@ -447,7 +548,11 @@ mod tests {
             secret: false,
         });
         let response = service
-            .execute(&request, &environment, &[])
+            .execute(&plan(
+                request.resolved("", &environment),
+                environment,
+                Vec::new(),
+            ))
             .await
             .expect("GraphQL 请求成功");
         server.await.expect("测试服务结束");
@@ -487,7 +592,7 @@ Content-Length: 2
             super::super::ApiFormField::new("city", "New York"),
         ];
         let response = service
-            .execute(&request, &ApiEnvironment::empty(), &[])
+            .execute(&plan(request, ApiEnvironment::empty(), Vec::new()))
             .await
             .expect("表单请求成功");
         server.await.expect("测试服务结束");
@@ -505,9 +610,23 @@ Content-Length: 2
         let address = listener.local_addr().expect("读取测试地址");
         let server = tokio::spawn(async move {
             let (mut stream, _) = listener.accept().await.expect("接受连接");
-            let mut buffer = [0_u8; 8192];
-            let read = stream.read(&mut buffer).await.expect("读取请求");
-            let text = String::from_utf8_lossy(&buffer[..read]);
+            let mut received = Vec::with_capacity(8192);
+            let mut chunk = [0_u8; 8192];
+            let text = tokio::time::timeout(Duration::from_secs(2), async {
+                loop {
+                    let read = stream.read(&mut chunk).await.expect("读取请求");
+                    if read == 0 {
+                        break;
+                    }
+                    received.extend_from_slice(&chunk[..read]);
+                    if String::from_utf8_lossy(&received).contains("hello upload") {
+                        break;
+                    }
+                }
+                String::from_utf8_lossy(&received).into_owned()
+            })
+            .await
+            .expect("读取 multipart 请求超时");
             assert!(text.contains("multipart/form-data"));
             assert!(text.contains("name=\"file\""));
             assert!(text.contains("filename=\"hello.txt\""));
@@ -535,7 +654,7 @@ Content-Length: 2
             kind: super::super::ApiFormFieldKind::File,
         }];
         let response = service
-            .execute(&request, &ApiEnvironment::empty(), &[])
+            .execute(&plan(request, ApiEnvironment::empty(), Vec::new()))
             .await
             .expect("multipart 请求成功");
         server.await.expect("测试服务结束");
@@ -597,10 +716,59 @@ Content-Length: 2
             secret: true,
         });
         let response = service
-            .execute(&request, &environment, &[])
+            .execute(&plan(request, environment, Vec::new()))
             .await
             .expect("OAuth 请求成功");
         server.await.expect("测试服务结束");
         assert_eq!(response.status, 201);
+    }
+
+    #[tokio::test]
+    async fn oauth_token_client_does_not_follow_redirects() {
+        let listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("绑定测试端口");
+        let address = listener.local_addr().expect("读取测试地址");
+        let server = tokio::spawn(async move {
+            let (mut stream, _) = listener.accept().await.expect("接受令牌请求");
+            let mut request = [0_u8; 2048];
+            let read = stream.read(&mut request).await.expect("读取令牌请求");
+            assert!(String::from_utf8_lossy(&request[..read]).starts_with("POST /token HTTP/1.1"));
+            stream
+                .write_all(
+                    b"HTTP/1.1 307 Temporary Redirect\r\nLocation: /leak\r\nContent-Length: 0\r\n\r\n",
+                )
+                .await
+                .expect("写入重定向响应");
+            assert!(
+                tokio::time::timeout(Duration::from_millis(200), listener.accept())
+                    .await
+                    .is_err(),
+                "OAuth 令牌客户端不应跟随重定向"
+            );
+        });
+        let service = ApiHttpService::new(tokio::runtime::Handle::current()).expect("构造服务");
+        let mut request = ApiRequest::new("OAuth 重定向", None);
+        request.url = format!("http://{address}/resource");
+        request.auth = ApiAuth::OAuth2ClientCredentials {
+            token_url: format!("http://{address}/token"),
+            client_id: "client-id".to_string(),
+            client_secret_env: "CLIENT_SECRET".to_string(),
+            scope: "read".to_string(),
+        };
+        let mut environment = ApiEnvironment::empty();
+        environment.variables.push(crate::ApiVariable {
+            name: "CLIENT_SECRET".to_string(),
+            value: "secret".to_string(),
+            enabled: true,
+            secret: true,
+        });
+        let error = service
+            .execute(&plan(request, environment, Vec::new()))
+            .await
+            .expect_err("重定向应被拒绝");
+        assert!(matches!(error, ApiError::OAuthToken { .. }));
+        assert!(error.to_string().contains("307"));
+        server.await.expect("测试服务结束");
     }
 }

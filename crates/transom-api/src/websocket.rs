@@ -1,25 +1,62 @@
 //! WebSocket 连接、发送与接收事件服务。
 
-use super::{ApiAuth, ApiEnvironment, ApiHeader};
-use base64::Engine;
-use base64::engine::general_purpose::STANDARD;
+use super::ApiExecutionPlan;
+use crate::http_support::safe_url_label;
+use futures::stream::SplitSink;
 use futures::{SinkExt, StreamExt};
+use thiserror::Error;
+use tokio::net::TcpStream;
 use tokio::runtime::Handle;
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::{mpsc, oneshot, watch};
 use tokio::task::JoinHandle;
 use tokio_tungstenite::tungstenite::Message;
-use tokio_tungstenite::tungstenite::client::IntoClientRequest;
-use tokio_tungstenite::tungstenite::http::{HeaderName, HeaderValue};
+use tokio_tungstenite::tungstenite::protocol::WebSocketConfig;
+use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
+
+mod handshake;
+
+use handshake::build_handshake;
 
 const COMMAND_CAPACITY: usize = 32;
-const EVENT_CAPACITY: usize = 64;
+const EVENT_CAPACITY: usize = 16;
+const MAX_MESSAGE_BYTES: usize = 512 * 1024;
+const WRITE_BUFFER_BYTES: usize = 32 * 1024;
+const MAX_WRITE_BUFFER_BYTES: usize = 2 * 1024 * 1024;
 const CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15);
 const IO_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
 
 /// WebSocket 控制命令。
 pub(crate) enum WsCommand {
     Message(String),
-    Close,
+}
+
+/// WebSocket 连接、认证、消息与任务生命周期错误。
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
+pub enum ApiWebSocketError {
+    #[error("构建 WebSocket 请求失败，目标: {host}，原因: {reason}")]
+    BuildRequest { host: String, reason: String },
+    #[error("WebSocket 请求头名称无效，名称: {name}，原因: {reason}")]
+    InvalidHeaderName { name: String, reason: String },
+    #[error("WebSocket 请求头内容无效，名称: {name}，原因: {reason}")]
+    InvalidHeaderValue { name: String, reason: String },
+    #[error("WebSocket 认证配置无效，原因: {reason}")]
+    InvalidAuth { reason: String },
+    #[error("WebSocket 暂时不支持 {kind} 认证")]
+    UnsupportedAuth { kind: String },
+    #[error("WebSocket 握手超时，目标: {host}，超时: {seconds} 秒")]
+    ConnectTimeout { host: String, seconds: u64 },
+    #[error("WebSocket 握手失败，目标: {host}，原因: {reason}")]
+    Connect { host: String, reason: String },
+    #[error("WebSocket 发送队列不可用，原因: {reason}")]
+    SendQueue { reason: String },
+    #[error("WebSocket 消息超过 {limit} 字节上限")]
+    MessageTooLarge { limit: usize },
+    #[error("WebSocket 连接任务在返回结果前结束")]
+    TaskEnded,
+    #[error("WebSocket 连接任务异常退出，原因: {reason}")]
+    TaskFailed { reason: String },
+    #[error("WebSocket 事件接收端已关闭")]
+    EventReceiverClosed,
 }
 
 /// WebSocket UI 收到的状态和消息。
@@ -31,16 +68,17 @@ pub enum ApiWebSocketEvent {
     Error(String),
 }
 
-/// WebSocket 连接句柄；Drop 时中止任务并关闭连接。
+/// WebSocket 连接句柄；Drop 时发出关闭意图并让连接任务自行收尾。
 pub struct ApiWebSocketHandle {
     command_tx: mpsc::Sender<WsCommand>,
+    close_tx: watch::Sender<bool>,
     event_rx: mpsc::Receiver<ApiWebSocketEvent>,
     task: Option<JoinHandle<()>>,
 }
 
 /// WebSocket 启动句柄。
 pub struct ApiWebSocketStart {
-    receiver: oneshot::Receiver<Result<ApiWebSocketHandle, String>>,
+    receiver: oneshot::Receiver<Result<ApiWebSocketHandle, ApiWebSocketError>>,
     task: Option<JoinHandle<()>>,
 }
 
@@ -57,22 +95,18 @@ impl ApiWebSocketService {
     }
 
     /// 新建连接任务；调用方等待连接结果后再启用发送按钮。
-    pub fn start(
-        &self,
-        url: String,
-        headers: Vec<ApiHeader>,
-        environment: ApiEnvironment,
-        auth: ApiAuth,
-    ) -> ApiWebSocketStart {
+    pub fn start(&self, plan: ApiExecutionPlan) -> ApiWebSocketStart {
         let (result_tx, result_rx) = oneshot::channel();
         let (command_tx, command_rx) = mpsc::channel(COMMAND_CAPACITY);
+        let (close_tx, close_rx) = watch::channel(false);
         let (event_tx, event_rx) = mpsc::channel(EVENT_CAPACITY);
         let task = self.runtime.spawn(async move {
-            let result = connect(url, headers, environment, auth, command_rx, event_tx).await;
+            let result = connect(plan, command_rx, close_rx, event_tx).await;
             match result {
                 Ok(nested_task) => {
                     let _ = result_tx.send(Ok(ApiWebSocketHandle {
                         command_tx,
+                        close_tx,
                         event_rx,
                         task: Some(nested_task),
                     }));
@@ -94,11 +128,15 @@ impl ApiWebSocketStart {
     ///
     /// # Errors
     /// URL、请求头或握手失败时返回中文错误。
-    pub async fn into_handle(mut self) -> Result<ApiWebSocketHandle, String> {
+    pub async fn into_handle(mut self) -> Result<ApiWebSocketHandle, ApiWebSocketError> {
         let result = (&mut self.receiver)
             .await
-            .map_err(|_| "WebSocket 连接任务在返回结果前结束".to_string())?;
-        self.task.take();
+            .map_err(|_| ApiWebSocketError::TaskEnded)?;
+        if let Some(task) = self.task.take() {
+            task.await.map_err(|error| ApiWebSocketError::TaskFailed {
+                reason: error.to_string(),
+            })?;
+        }
         result
     }
 }
@@ -113,25 +151,60 @@ impl Drop for ApiWebSocketStart {
 
 impl ApiWebSocketHandle {
     /// 非阻塞发送文本；命令队列满或连接关闭时快速失败。
-    pub fn try_send_text(&self, text: String) -> Result<(), String> {
+    ///
+    /// # Errors
+    /// 消息超过上限、连接已关闭或发送队列已满时返回
+    /// [`ApiWebSocketError`]。
+    pub fn try_send_text(&self, text: String) -> Result<(), ApiWebSocketError> {
+        validate_message_size(text.len())?;
         self.command_tx
             .try_send(WsCommand::Message(text))
-            .map_err(|error| format!("WebSocket 发送队列不可用: {error}"))
+            .map_err(|error| ApiWebSocketError::SendQueue {
+                reason: error.to_string(),
+            })
     }
 
     /// 发送文本消息。
-    pub async fn send_text(&self, text: String) -> Result<(), String> {
+    ///
+    /// # Errors
+    /// 消息超过上限或连接已关闭时返回 [`ApiWebSocketError`]。
+    pub async fn send_text(&self, text: String) -> Result<(), ApiWebSocketError> {
+        validate_message_size(text.len())?;
         self.command_tx
             .send(WsCommand::Message(text))
             .await
-            .map_err(|_| "WebSocket 连接已关闭".to_string())
+            .map_err(|_| ApiWebSocketError::SendQueue {
+                reason: "WebSocket 连接已关闭".to_string(),
+            })
     }
 
     /// 请求关闭连接。
-    pub fn close(&self) -> Result<(), String> {
-        self.command_tx
-            .try_send(WsCommand::Close)
-            .map_err(|error| format!("WebSocket 关闭命令未能提交: {error}"))
+    ///
+    /// 关闭请求通过独立的 watch 通道立即生效，不依赖消息队列剩余容量。
+    ///
+    /// # Errors
+    /// 连接任务已经停止时返回 [`ApiWebSocketError::SendQueue`]。
+    pub fn request_close(&self) -> Result<(), ApiWebSocketError> {
+        self.close_tx
+            .send(true)
+            .map_err(|_| ApiWebSocketError::SendQueue {
+                reason: "WebSocket 连接已关闭".to_string(),
+            })
+    }
+
+    /// 请求关闭并等待连接任务完成发送侧收尾。
+    ///
+    /// # Errors
+    /// 关闭请求无法提交，或连接任务异常退出时返回
+    /// [`ApiWebSocketError`]。
+    pub async fn shutdown(mut self) -> Result<(), ApiWebSocketError> {
+        self.request_close()?;
+        if let Some(task) = self.task.take() {
+            task.await.map_err(|error| ApiWebSocketError::TaskFailed {
+                reason: error.to_string(),
+            })?;
+        }
+        Ok(())
     }
 
     /// 取走事件接收端，交给 GPUI 异步任务逐条消费。
@@ -143,154 +216,188 @@ impl ApiWebSocketHandle {
 
 impl Drop for ApiWebSocketHandle {
     fn drop(&mut self) {
-        if let Some(task) = self.task.take() {
-            task.abort();
-        }
+        let _ = self.close_tx.send(true);
     }
 }
 
-async fn connect(
-    url: String,
-    headers: Vec<ApiHeader>,
-    environment: ApiEnvironment,
-    auth: ApiAuth,
-    command_rx: mpsc::Receiver<WsCommand>,
-    event_tx: mpsc::Sender<ApiWebSocketEvent>,
-) -> Result<JoinHandle<()>, String> {
-    let mut request = url
-        .into_client_request()
-        .map_err(|error| format!("构建 WebSocket 请求失败: {error}"))?;
-    for header in headers.iter().filter(|header| header.enabled) {
-        let name = environment.resolve(&header.name);
-        let value = environment.resolve(&header.value);
-        let header_name: HeaderName = name
-            .parse()
-            .map_err(|error| format!("WebSocket 请求头名称无效，名称: {name}，原因: {error}"))?;
-        request.headers_mut().insert(
-            header_name,
-            HeaderValue::from_str(&value).map_err(|error| {
-                format!("WebSocket 请求头内容无效，名称: {name}，原因: {error}")
-            })?,
-        );
+fn validate_message_size(size: usize) -> Result<(), ApiWebSocketError> {
+    if size > MAX_MESSAGE_BYTES {
+        Err(ApiWebSocketError::MessageTooLarge {
+            limit: MAX_MESSAGE_BYTES,
+        })
+    } else {
+        Ok(())
     }
-    apply_websocket_auth(&mut request, &environment, auth)?;
-    let (socket, _) =
-        tokio::time::timeout(CONNECT_TIMEOUT, tokio_tungstenite::connect_async(request))
-            .await
-            .map_err(|_| "WebSocket 握手超时，目标未在 15 秒内完成连接".to_string())?
-            .map_err(|error| format!("WebSocket 握手失败: {error}"))?;
-    let _ = event_tx.send(ApiWebSocketEvent::Opened).await;
+}
+
+type WsWrite = SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>;
+
+async fn connect(
+    plan: ApiExecutionPlan,
+    command_rx: mpsc::Receiver<WsCommand>,
+    close_rx: watch::Receiver<bool>,
+    event_tx: mpsc::Sender<ApiWebSocketEvent>,
+) -> Result<JoinHandle<()>, ApiWebSocketError> {
+    let (request, environment, cookies) = plan.into_parts();
+    let host = safe_url_label(&request.url);
+    let handshake = build_handshake(&request, &environment, &cookies)?;
+    let config = WebSocketConfig::default()
+        .read_buffer_size(64 * 1024)
+        .write_buffer_size(WRITE_BUFFER_BYTES)
+        .max_write_buffer_size(MAX_WRITE_BUFFER_BYTES)
+        .max_message_size(Some(MAX_MESSAGE_BYTES))
+        .max_frame_size(Some(MAX_MESSAGE_BYTES));
+    let socket = tokio::time::timeout(
+        CONNECT_TIMEOUT,
+        tokio_tungstenite::connect_async_with_config(handshake, Some(config), false),
+    )
+    .await
+    .map_err(|_| ApiWebSocketError::ConnectTimeout {
+        host: host.clone(),
+        seconds: CONNECT_TIMEOUT.as_secs(),
+    })?
+    .map_err(|error| ApiWebSocketError::Connect {
+        host,
+        reason: error.to_string(),
+    })?
+    .0;
+    if event_tx.send(ApiWebSocketEvent::Opened).await.is_err() {
+        return Err(ApiWebSocketError::EventReceiverClosed);
+    }
+    Ok(tokio::spawn(run_socket(
+        socket, command_rx, close_rx, event_tx,
+    )))
+}
+
+async fn run_socket(
+    socket: WebSocketStream<MaybeTlsStream<TcpStream>>,
+    mut command_rx: mpsc::Receiver<WsCommand>,
+    mut close_rx: watch::Receiver<bool>,
+    event_tx: mpsc::Sender<ApiWebSocketEvent>,
+) {
     let (mut write, mut read) = socket.split();
-    let mut command_rx = command_rx;
-    let task = tokio::spawn(async move {
-        loop {
-            tokio::select! {
-                command = command_rx.recv() => match command {
-                    Some(WsCommand::Message(text)) => {
-                        match tokio::time::timeout(IO_TIMEOUT, write.send(Message::Text(text.into()))).await {
-                            Ok(Ok(())) => {}
-                            Ok(Err(error)) => {
-                                let _ = event_tx.send(ApiWebSocketEvent::Error(format!("发送 WebSocket 消息失败: {error}"))).await;
-                                break;
-                            }
-                            Err(_) => {
-                                let _ = event_tx.send(ApiWebSocketEvent::Error("发送 WebSocket 消息超时".to_string())).await;
-                                break;
-                            }
-                        }
-                    }
-                    Some(WsCommand::Close) | None => {
-                        if let Ok(Err(error)) = tokio::time::timeout(IO_TIMEOUT, write.close()).await {
-                            let _ = event_tx.send(ApiWebSocketEvent::Error(format!("关闭 WebSocket 连接失败: {error}"))).await;
-                        }
-                        break;
-                    }
-                },
-                message = read.next() => match message {
-                    Some(Ok(Message::Text(text))) => {
-                        let _ = event_tx.send(ApiWebSocketEvent::Message(text.to_string())).await;
-                    }
-                    Some(Ok(Message::Binary(bytes))) => {
-                        let _ = event_tx.send(ApiWebSocketEvent::Message(format!("[二进制 {} 字节]", bytes.len()))).await;
-                    }
-                    Some(Ok(Message::Close(frame))) => {
-                        let _ = event_tx.send(ApiWebSocketEvent::Closed(frame.map_or_else(|| "连接已关闭".to_string(), |frame| frame.reason.to_string()))).await;
-                        break;
-                    }
-                    Some(Ok(Message::Ping(_)) | Ok(Message::Pong(_)) | Ok(Message::Frame(_))) => {}
-                    Some(Err(error)) => {
-                        let _ = event_tx.send(ApiWebSocketEvent::Error(format!("接收 WebSocket 消息失败: {error}"))).await;
-                        break;
-                    }
-                    None => {
-                        let _ = event_tx.send(ApiWebSocketEvent::Closed("连接已关闭".to_string())).await;
+    loop {
+        tokio::select! {
+            command = command_rx.recv() => match command {
+                Some(WsCommand::Message(text)) => {
+                    if !send_message(&mut write, text, &event_tx).await {
                         break;
                     }
                 }
+                None => {
+                    close_socket(&mut write, &event_tx).await;
+                    break;
+                }
+            },
+            close = close_rx.changed() => {
+                let should_close = close.is_err() || *close_rx.borrow_and_update();
+                if should_close {
+                    close_socket(&mut write, &event_tx).await;
+                    break;
+                }
+            },
+            message = read.next() => {
+                if !handle_incoming(&event_tx, message).await {
+                    break;
+                }
             }
         }
-    });
-    Ok(task)
+    }
 }
 
-fn apply_websocket_auth(
-    request: &mut tokio_tungstenite::tungstenite::http::Request<()>,
-    environment: &ApiEnvironment,
-    auth: ApiAuth,
-) -> Result<(), String> {
-    let value = match auth {
-        ApiAuth::None => return Ok(()),
-        ApiAuth::Bearer { token_env } => {
-            let token = environment_value(environment, &token_env)?;
-            format!("Bearer {token}")
-        }
-        ApiAuth::Basic {
-            username_env,
-            password_env,
-        } => {
-            let username = environment_value(environment, &username_env)?;
-            let password = environment_value(environment, &password_env)?;
-            format!(
-                "Basic {}",
-                STANDARD.encode(format!("{username}:{password}"))
+async fn send_message(
+    write: &mut WsWrite,
+    text: String,
+    event_tx: &mpsc::Sender<ApiWebSocketEvent>,
+) -> bool {
+    match tokio::time::timeout(IO_TIMEOUT, write.send(Message::Text(text.into()))).await {
+        Ok(Ok(())) => true,
+        Ok(Err(error)) => {
+            emit_event(
+                event_tx,
+                ApiWebSocketEvent::Error(format!("发送 WebSocket 消息失败: {error}")),
             )
+            .await;
+            false
         }
-        ApiAuth::OAuth2ClientCredentials { .. } | ApiAuth::AwsSigV4 { .. } => {
-            return Err("WebSocket 暂只支持 Bearer、Basic 与自定义请求头认证".to_string());
+        Err(_) => {
+            emit_event(
+                event_tx,
+                ApiWebSocketEvent::Error("发送 WebSocket 消息超时".to_string()),
+            )
+            .await;
+            false
         }
-    };
-    request.headers_mut().insert(
-        "authorization",
-        HeaderValue::from_str(&value)
-            .map_err(|error| format!("WebSocket 认证头内容无效: {error}"))?,
-    );
-    Ok(())
+    }
 }
 
-fn environment_value(environment: &ApiEnvironment, name: &str) -> Result<String, String> {
-    environment
-        .variables
-        .iter()
-        .find(|variable| variable.enabled && variable.name == name)
-        .map(|variable| variable.value.clone())
-        .filter(|value| !value.is_empty())
-        .ok_or_else(|| format!("WebSocket 认证环境变量 {name} 未配置"))
+async fn handle_incoming(
+    event_tx: &mpsc::Sender<ApiWebSocketEvent>,
+    message: Option<Result<Message, tokio_tungstenite::tungstenite::Error>>,
+) -> bool {
+    let event = match message {
+        Some(Ok(Message::Text(text))) => ApiWebSocketEvent::Message(text.to_string()),
+        Some(Ok(Message::Binary(bytes))) => {
+            ApiWebSocketEvent::Message(format!("[二进制 {} 字节]", bytes.len()))
+        }
+        Some(Ok(Message::Close(frame))) => ApiWebSocketEvent::Closed(frame.map_or_else(
+            || "连接已关闭".to_string(),
+            |frame| frame.reason.to_string(),
+        )),
+        Some(Ok(Message::Ping(_) | Message::Pong(_) | Message::Frame(_))) => return true,
+        Some(Err(error)) => ApiWebSocketEvent::Error(format!("接收 WebSocket 消息失败: {error}")),
+        None => ApiWebSocketEvent::Closed("连接已关闭".to_string()),
+    };
+    let keep_open = !matches!(
+        event,
+        ApiWebSocketEvent::Closed(_) | ApiWebSocketEvent::Error(_)
+    );
+    emit_event(event_tx, event).await && keep_open
+}
+
+async fn close_socket(write: &mut WsWrite, event_tx: &mpsc::Sender<ApiWebSocketEvent>) {
+    match tokio::time::timeout(IO_TIMEOUT, write.close()).await {
+        Ok(Ok(())) => {}
+        Ok(Err(error)) => {
+            emit_event(
+                event_tx,
+                ApiWebSocketEvent::Error(format!("关闭 WebSocket 连接失败: {error}")),
+            )
+            .await;
+        }
+        Err(_) => {
+            emit_event(
+                event_tx,
+                ApiWebSocketEvent::Error("关闭 WebSocket 连接超时".to_string()),
+            )
+            .await;
+        }
+    }
+}
+
+async fn emit_event(event_tx: &mpsc::Sender<ApiWebSocketEvent>, event: ApiWebSocketEvent) -> bool {
+    event_tx.send(event).await.is_ok()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{ApiAuth, ApiEnvironment, ApiMethod, ApiProtocol, ApiRequest};
     use tokio::net::TcpListener;
+
+    fn plan(url: &str, environment: ApiEnvironment, auth: ApiAuth) -> ApiExecutionPlan {
+        let mut request = ApiRequest::new("WebSocket 测试", None);
+        request.protocol = ApiProtocol::WebSocket;
+        request.method = ApiMethod::Get;
+        request.url = url.to_string();
+        request.auth = auth;
+        ApiExecutionPlan::new(request, environment, Vec::new()).expect("测试执行计划应合法")
+    }
 
     #[tokio::test]
     async fn rejects_invalid_websocket_url() {
         let service = ApiWebSocketService::new(Handle::current());
-        let start = service.start(
-            "not-a-url".to_string(),
-            Vec::new(),
-            ApiEnvironment::empty(),
-            ApiAuth::None,
-        );
+        let start = service.start(plan("not-a-url", ApiEnvironment::empty(), ApiAuth::None));
         let result = start.into_handle().await;
         assert!(result.is_err());
     }
@@ -309,12 +416,11 @@ mod tests {
         });
         let service = ApiWebSocketService::new(Handle::current());
         let handle = service
-            .start(
-                format!("ws://{address}"),
-                Vec::new(),
+            .start(plan(
+                &format!("ws://{address}"),
                 ApiEnvironment::empty(),
                 ApiAuth::None,
-            )
+            ))
             .into_handle()
             .await;
         assert!(handle.is_ok());

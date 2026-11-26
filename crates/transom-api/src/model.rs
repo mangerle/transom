@@ -3,11 +3,18 @@
 use super::{ApiEnvironmentId, ApiFolderId, ApiProjectId, ApiRequestId};
 use super::{ApiHeader, ApiQueryParam, ApiRequest};
 use serde::{Deserialize, Serialize};
-use transom_core::AppError;
 
+mod cookie;
+mod environment;
 mod global;
 mod util;
 
+use self::cookie::optional_domain_eq;
+pub use self::cookie::{ApiCookie, cookies_text, parse_cookies_text};
+pub(crate) use self::cookie::{
+    cookie_domain_matches, cookie_header_value, is_valid_cookie_name, is_valid_cookie_value,
+};
+pub use self::environment::{ApiEnvironment, ApiEnvironmentResolver};
 pub use self::global::{ApiGlobalParameter, ApiGlobalParameterTarget};
 use self::util::{normalize_name, unix_now};
 
@@ -253,91 +260,6 @@ impl ApiFolder {
     }
 }
 
-/// 命名环境；变量值可以在请求、请求头和请求体中使用 `{{name}}` 引用。
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub struct ApiEnvironment {
-    #[serde(default)]
-    pub id: ApiEnvironmentId,
-    pub name: String,
-    #[serde(default)]
-    pub variables: Vec<ApiVariable>,
-}
-
-impl ApiEnvironment {
-    /// 新建环境。
-    pub fn new(name: impl Into<String>) -> Self {
-        Self {
-            id: ApiEnvironmentId::new(),
-            name: normalize_name(name.into(), "未命名环境"),
-            variables: Vec::new(),
-        }
-    }
-
-    /// 创建没有变量的匿名环境。
-    pub fn empty() -> Self {
-        Self {
-            id: ApiEnvironmentId::new(),
-            name: "本地".to_string(),
-            variables: Vec::new(),
-        }
-    }
-
-    /// 解析变量模板；未知变量保留原样，便于用户看到缺失配置。
-    pub fn resolve(&self, text: &str) -> String {
-        let mut resolved = text.to_string();
-        for variable in self.variables.iter().filter(|variable| variable.enabled) {
-            let needle = format!("{{{{{}}}}}", variable.name);
-            resolved = resolved.replace(&needle, &variable.value);
-        }
-        resolved
-    }
-
-    /// 将环境变量渲染为 `NAME=value` 文本。
-    pub fn variables_text(&self) -> String {
-        self.variables
-            .iter()
-            .map(|variable| format!("{}={}", variable.name, variable.value))
-            .collect::<Vec<_>>()
-            .join("\n")
-    }
-
-    /// 从 `NAME=value` 文本替换变量；缺少等号时返回带行号的错误。
-    ///
-    /// # Errors
-    /// 非空行没有 `=` 或变量名为空时返回 `AppError`。
-    pub fn set_variables_text(&mut self, text: &str) -> Result<(), AppError> {
-        let mut variables = Vec::with_capacity(text.lines().count());
-        for (index, line) in text.lines().enumerate() {
-            let trimmed = line.trim();
-            if trimmed.is_empty() || trimmed.starts_with('#') {
-                continue;
-            }
-            let Some((name, value)) = trimmed.split_once('=') else {
-                return Err(AppError::with_detail(
-                    transom_core::ErrorCode::Configuration,
-                    format!("环境变量第 {} 行缺少等号: {}", index + 1, trimmed),
-                ));
-            };
-            let name = name.trim();
-            if name.is_empty() {
-                return Err(AppError::with_detail(
-                    transom_core::ErrorCode::Configuration,
-                    format!("环境变量第 {} 行名称为空", index + 1),
-                ));
-            }
-            variables.push(ApiVariable {
-                name: name.to_string(),
-                value: value.trim().to_string(),
-                enabled: true,
-                secret: false,
-            });
-        }
-        self.variables = variables;
-        Ok(())
-    }
-}
-
 /// 单个环境变量；`secret` 仅用于界面遮罩，不改变模板替换行为。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -352,121 +274,6 @@ pub struct ApiVariable {
 
 fn default_true() -> bool {
     true
-}
-
-/// 本地 Cookie；请求发送时按域名、过期时间和 Secure 规则筛选。
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub struct ApiCookie {
-    pub name: String,
-    pub value: String,
-    #[serde(default)]
-    pub domain: Option<String>,
-    #[serde(default = "default_cookie_path")]
-    pub path: String,
-    #[serde(default)]
-    pub secure: bool,
-    #[serde(default)]
-    pub http_only: bool,
-    #[serde(default)]
-    pub expires_at: Option<u64>,
-}
-
-fn default_cookie_path() -> String {
-    "/".to_string()
-}
-
-impl ApiCookie {
-    /// 是否适用于当前请求地址。
-    pub fn applies_to(&self, url: &reqwest::Url) -> bool {
-        let host = url.host_str().unwrap_or_default();
-        let domain = self.domain.as_deref().unwrap_or(host);
-        cookie_domain_matches(host, domain)
-            && cookie_path_matches(url.path(), &self.path)
-            && (!self.secure || url.scheme() == "https")
-            && self.expires_at.is_none_or(|expires| expires > unix_now())
-    }
-}
-
-fn optional_domain_eq(left: Option<&str>, right: Option<&str>) -> bool {
-    match (left, right) {
-        (None, None) => true,
-        (Some(left), Some(right)) => left
-            .trim_start_matches('.')
-            .eq_ignore_ascii_case(right.trim_start_matches('.')),
-        _ => false,
-    }
-}
-
-fn cookie_domain_matches(host: &str, domain: &str) -> bool {
-    let host = host.trim_end_matches('.').to_ascii_lowercase();
-    let domain = domain
-        .trim_start_matches('.')
-        .trim_end_matches('.')
-        .to_ascii_lowercase();
-    if domain.is_empty() {
-        return false;
-    }
-    host == domain || host.ends_with(&format!(".{domain}"))
-}
-
-fn cookie_path_matches(request_path: &str, cookie_path: &str) -> bool {
-    let cookie_path = if cookie_path.trim().is_empty() {
-        "/"
-    } else {
-        cookie_path.trim()
-    };
-    if cookie_path == "/" || request_path == cookie_path {
-        return true;
-    }
-    request_path.starts_with(cookie_path)
-        && request_path.as_bytes().get(cookie_path.len()) == Some(&b'/')
-}
-
-/// 将项目 Cookie 渲染为 `name=value` 文本；域名和属性由响应自动维护。
-pub fn cookies_text(cookies: &[ApiCookie]) -> String {
-    cookies
-        .iter()
-        .map(|cookie| format!("{}={}", cookie.name, cookie.value))
-        .collect::<Vec<_>>()
-        .join("\n")
-}
-
-/// 从 `name=value` 文本替换 Cookie；域名缺省时按发送目标主机生效。
-///
-/// # Errors
-/// 非空行没有等号或 Cookie 名称为空时返回中文错误。
-pub fn parse_cookies_text(text: &str) -> Result<Vec<ApiCookie>, AppError> {
-    let mut cookies = Vec::with_capacity(text.lines().count());
-    for (index, line) in text.lines().enumerate() {
-        let trimmed = line.trim();
-        if trimmed.is_empty() || trimmed.starts_with('#') {
-            continue;
-        }
-        let Some((name, value)) = trimmed.split_once('=') else {
-            return Err(AppError::with_detail(
-                transom_core::ErrorCode::Configuration,
-                format!("Cookie 第 {} 行缺少等号: {}", index + 1, trimmed),
-            ));
-        };
-        let name = name.trim();
-        if name.is_empty() {
-            return Err(AppError::with_detail(
-                transom_core::ErrorCode::Configuration,
-                format!("Cookie 第 {} 行名称为空", index + 1),
-            ));
-        }
-        cookies.push(ApiCookie {
-            name: name.to_string(),
-            value: value.trim().to_string(),
-            domain: None,
-            path: "/".to_string(),
-            secure: false,
-            http_only: false,
-            expires_at: None,
-        });
-    }
-    Ok(cookies)
 }
 
 /// 一次请求在项目历史中的摘要；不保存完整响应体，避免项目文件无限膨胀。
@@ -553,6 +360,46 @@ mod tests {
         let merged = project.merged_environment(&environment);
         assert_eq!(merged.resolve("{{HOST}}"), "env.example.com");
         assert_eq!(merged.resolve("{{GLOBAL_ONLY}}"), "global");
+    }
+
+    #[test]
+    fn execution_plan_resolves_request_once_and_captures_cookie_snapshot() {
+        let mut project = ApiProject::new("执行计划");
+        project.cookies.push(ApiCookie {
+            name: "session".to_string(),
+            value: "abc".to_string(),
+            domain: None,
+            path: "/".to_string(),
+            secure: false,
+            http_only: false,
+            expires_at: None,
+        });
+        let mut request = ApiRequest::new("单次解析", None);
+        request.url = "https://example.com/{{A}}".to_string();
+        request.body = "{{A}}".to_string();
+        let mut environment = ApiEnvironment::empty();
+        environment.variables = vec![
+            ApiVariable {
+                name: "A".to_string(),
+                value: "{{B}}".to_string(),
+                enabled: true,
+                secret: false,
+            },
+            ApiVariable {
+                name: "B".to_string(),
+                value: "expanded".to_string(),
+                enabled: true,
+                secret: false,
+            },
+        ];
+        let plan = project
+            .execution_plan(&request, &environment)
+            .expect("执行计划应合法");
+        assert!(
+            plan.request().url.contains("%7B%7BB%7D%7D") || plan.request().url.ends_with("{{B}}")
+        );
+        assert_eq!(plan.request().body, "{{B}}");
+        assert_eq!(plan.cookies().len(), 1);
     }
 
     #[test]

@@ -33,16 +33,17 @@ pub use import_export::{
     import_projects_auto,
 };
 pub use model::{
-    API_SCHEMA_VERSION, ApiCookie, ApiEnvironment, ApiFolder, ApiGlobalParameter,
-    ApiGlobalParameterTarget, ApiHistoryEntry, ApiProject, ApiRegistry, ApiVariable,
-    MAX_IMPORT_BYTES, cookies_text, parse_cookies_text,
+    API_SCHEMA_VERSION, ApiCookie, ApiEnvironment, ApiEnvironmentResolver, ApiFolder,
+    ApiGlobalParameter, ApiGlobalParameterTarget, ApiHistoryEntry, ApiProject, ApiRegistry,
+    ApiVariable, MAX_IMPORT_BYTES, cookies_text, parse_cookies_text,
 };
 pub use request::{
-    ApiAssertion, ApiAssertionResult, ApiAuth, ApiBodyType, ApiFormField, ApiFormFieldKind,
-    ApiHeader, ApiMethod, ApiProtocol, ApiQueryParam, ApiRawLanguage, ApiRequest,
+    ApiAssertion, ApiAssertionResult, ApiAuth, ApiBodyType, ApiExecutionPlan, ApiFormField,
+    ApiFormFieldKind, ApiHeader, ApiMethod, ApiProtocol, ApiQueryParam, ApiRawLanguage, ApiRequest,
     method_for_request,
 };
 pub use store::{ApiProjectStore, parse_project_import};
 pub use websocket::{
-    ApiWebSocketEvent, ApiWebSocketHandle, ApiWebSocketService, ApiWebSocketStart,
+    ApiWebSocketError, ApiWebSocketEvent, ApiWebSocketHandle, ApiWebSocketService,
+    ApiWebSocketStart,
 };

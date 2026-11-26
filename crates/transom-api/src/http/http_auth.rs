@@ -1,6 +1,6 @@
 //! API 请求认证策略：Bearer、Basic、OAuth 2.0 与 AWS SigV4。
 
-use super::super::http_support::{ensure_header, safe_url_label};
+use super::super::http_support::{ensure_header, read_limited_body, safe_url_label};
 use super::super::{ApiAuth, ApiEnvironment, ApiError, ApiRequest};
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
@@ -9,22 +9,24 @@ use reqwest::{Client, Url};
 
 /// 认证阶段需要的完整请求上下文；集中传递避免参数列表继续膨胀。
 pub(crate) struct AuthRequest<'a> {
-    pub(crate) client: &'a Client,
+    pub(crate) token_client: &'a Client,
     pub(crate) request: &'a ApiRequest,
     pub(crate) environment: &'a ApiEnvironment,
     pub(crate) headers: &'a mut Vec<(String, String)>,
     pub(crate) body: &'a [u8],
+    pub(crate) payload_hash: Option<&'a str>,
     pub(crate) url: &'a Url,
     pub(crate) method: &'a str,
 }
 
 pub(crate) async fn apply_auth(input: AuthRequest<'_>) -> Result<(), ApiError> {
     let AuthRequest {
-        client,
+        token_client,
         request,
         environment,
         headers,
         body,
+        payload_hash,
         url,
         method,
     } = input;
@@ -61,7 +63,7 @@ pub(crate) async fn apply_auth(input: AuthRequest<'_>) -> Result<(), ApiError> {
             if !scope.is_empty() {
                 form.push(("scope", scope.as_str()));
             }
-            let response = client
+            let response = token_client
                 .post(&token_url)
                 .form(&form)
                 .send()
@@ -70,14 +72,24 @@ pub(crate) async fn apply_auth(input: AuthRequest<'_>) -> Result<(), ApiError> {
                     url: safe_url_label(&token_url),
                     reason: error.to_string(),
                 })?;
+            let label = safe_url_label(&token_url);
+            if !response.status().is_success() {
+                return Err(ApiError::OAuthToken {
+                    url: label,
+                    reason: format!("令牌端点返回 HTTP {}", response.status().as_u16()),
+                });
+            }
+            let body = read_limited_body(response, &label).await.map_err(|error| {
+                ApiError::OAuthToken {
+                    url: label.clone(),
+                    reason: error.to_string(),
+                }
+            })?;
             let value: serde_json::Value =
-                response
-                    .json()
-                    .await
-                    .map_err(|error| ApiError::OAuthToken {
-                        url: safe_url_label(&token_url),
-                        reason: error.to_string(),
-                    })?;
+                serde_json::from_slice(&body).map_err(|error| ApiError::OAuthToken {
+                    url: label.clone(),
+                    reason: format!("令牌响应不是有效 JSON: {error}"),
+                })?;
             let token = value
                 .get("access_token")
                 .and_then(serde_json::Value::as_str)
@@ -102,20 +114,25 @@ pub(crate) async fn apply_auth(input: AuthRequest<'_>) -> Result<(), ApiError> {
             } else {
                 Some(env_value(environment, session_token_env)?)
             };
-            crate::signing::sign_aws_v4(
-                method,
-                url,
-                headers,
-                body,
-                &crate::signing::AwsSigV4Params {
-                    access_key: &access_key,
-                    secret_key: &secret_key,
-                    session_token: session_token.as_deref(),
-                    region,
-                    service,
-                    now: Utc::now(),
-                },
-            )
+            let params = crate::signing::AwsSigV4Params {
+                access_key: &access_key,
+                secret_key: &secret_key,
+                session_token: session_token.as_deref(),
+                region,
+                service,
+                now: Utc::now(),
+            };
+            if let Some(payload_hash) = payload_hash {
+                crate::signing::sign_aws_v4_with_payload_hash(
+                    method,
+                    url,
+                    headers,
+                    payload_hash,
+                    &params,
+                )
+            } else {
+                crate::signing::sign_aws_v4(method, url, headers, body, &params)
+            }
         }
     }
 }

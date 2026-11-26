@@ -1,15 +1,17 @@
 //! API 请求、协议、环境模板与认证配置。
 
 use self::request_text::{normalize_request_name, parse_assertion, parse_headers};
-use super::{ApiEnvironment, ApiError, ApiRequestId};
+use super::{ApiEnvironment, ApiEnvironmentResolver, ApiError, ApiRequestId};
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
 mod body;
+mod execution;
 mod request_text;
 mod validation;
 
 pub use self::body::{ApiBodyType, ApiFormField, ApiFormFieldKind, ApiRawLanguage};
+pub use self::execution::ApiExecutionPlan;
 pub use self::request_text::method_for_request;
 
 /// HTTP 方法；与常用 API 客户端保持同一集合。
@@ -283,36 +285,28 @@ impl ApiRequest {
 
     /// 发送时将相对地址接到项目基础地址后，并合并启用中的查询参数。
     pub fn resolved_url(&self, base_url: &str, environment: &ApiEnvironment) -> String {
-        let url = environment.resolve(self.url.trim());
-        let base = environment
-            .resolve(base_url.trim())
-            .trim_end_matches('/')
-            .to_string();
-        let url = if url.starts_with('/') && !base.is_empty() {
-            format!("{base}{url}")
-        } else {
-            url
-        };
-        let enabled = self
+        self.resolved_url_with_resolver(base_url, &environment.resolver())
+    }
+
+    fn resolved_url_with_resolver(
+        &self,
+        base_url: &str,
+        resolver: &ApiEnvironmentResolver<'_>,
+    ) -> String {
+        let url = resolver.resolve(self.url.trim());
+        let base = resolver.resolve(base_url.trim());
+        let query = self
             .query
             .iter()
-            .filter(|param| param.enabled && !param.name.trim().is_empty());
-        if enabled.clone().next().is_none() {
-            return url;
-        }
-        let Ok(mut parsed) = reqwest::Url::parse(&url) else {
-            return url;
-        };
-        {
-            let mut pairs = parsed.query_pairs_mut();
-            for param in enabled {
-                pairs.append_pair(
-                    environment.resolve(param.name.trim()).as_str(),
-                    environment.resolve(param.value.trim()).as_str(),
-                );
-            }
-        }
-        parsed.to_string()
+            .filter(|param| param.enabled && !param.name.trim().is_empty())
+            .map(|param| {
+                (
+                    resolver.resolve(param.name.trim()),
+                    resolver.resolve(param.value.trim()),
+                )
+            })
+            .collect::<Vec<_>>();
+        compose_url(url, base, &query)
     }
 
     /// 将启用的请求头渲染为一行一个 `名称: 值` 文本。
@@ -391,28 +385,80 @@ impl ApiRequest {
 
     /// 按当前环境生成用于发送的副本，解析 URL、头、体和 GraphQL 变量。
     pub fn resolved(&self, base_url: &str, environment: &ApiEnvironment) -> Self {
+        self.resolved_with_resolver(base_url, &environment.resolver())
+    }
+
+    pub(crate) fn resolved_with_resolver(
+        &self,
+        base_url: &str,
+        resolver: &ApiEnvironmentResolver<'_>,
+    ) -> Self {
         let mut resolved = self.clone();
-        resolved.url = self.resolved_url(base_url, environment);
         for query in &mut resolved.query {
-            query.name = environment.resolve(&query.name);
-            query.value = environment.resolve(&query.value);
-            query.description = environment.resolve(&query.description);
+            query.name = resolver.resolve(&query.name);
+            query.value = resolver.resolve(&query.value);
         }
         for header in &mut resolved.headers {
-            header.name = environment.resolve(&header.name);
-            header.value = environment.resolve(&header.value);
-            header.description = environment.resolve(&header.description);
+            header.name = resolver.resolve(&header.name);
+            header.value = resolver.resolve(&header.value);
         }
-        resolved.body = environment.resolve(&self.body);
-        resolved.body_file = environment.resolve(&self.body_file);
+        resolved.body = resolver.resolve(&self.body);
+        resolved.body_file = resolver.resolve(&self.body_file);
         for field in &mut resolved.form_fields {
-            field.name = environment.resolve(&field.name);
-            field.value = environment.resolve(&field.value);
-            field.description = environment.resolve(&field.description);
+            field.name = resolver.resolve(&field.name);
+            field.value = resolver.resolve(&field.value);
         }
-        resolved.graphql_variables = environment.resolve(&self.graphql_variables);
+        resolved.graphql_variables = resolver.resolve(&self.graphql_variables);
+        resolved.url = resolver.resolve(&self.url);
+        let base = resolver.resolve(base_url.trim());
+        let query = resolved
+            .query
+            .iter()
+            .filter(|param| param.enabled && !param.name.trim().is_empty())
+            .map(|param| (param.name.clone(), param.value.clone()))
+            .collect::<Vec<_>>();
+        resolved.url = compose_url(resolved.url, base, &query);
         resolved
     }
+}
+
+fn compose_url(url: String, base: String, query: &[(String, String)]) -> String {
+    let url = join_base_url(base.trim(), url.trim());
+    if query.is_empty() {
+        return url;
+    }
+    let Ok(mut parsed) = reqwest::Url::parse(&url) else {
+        return url;
+    };
+    {
+        let mut pairs = parsed.query_pairs_mut();
+        for (name, value) in query {
+            pairs.append_pair(name, value);
+        }
+    }
+    parsed.to_string()
+}
+
+fn join_base_url(base: &str, request_url: &str) -> String {
+    if base.is_empty() {
+        return request_url.to_string();
+    }
+    if request_url.is_empty() {
+        return base.to_string();
+    }
+    if reqwest::Url::parse(request_url).is_ok() {
+        return request_url.to_string();
+    }
+    let Ok(mut base_url) = reqwest::Url::parse(base) else {
+        return request_url.to_string();
+    };
+    if !base_url.path().ends_with('/') {
+        let path = format!("{}/", base_url.path().trim_end_matches('/'));
+        base_url.set_path(&path);
+    }
+    base_url
+        .join(request_url)
+        .map_or_else(|_| request_url.to_string(), |url| url.to_string())
 }
 
 #[cfg(test)]
@@ -445,6 +491,27 @@ mod tests {
             .map(|(name, value)| (name.into_owned(), value.into_owned()))
             .collect::<Vec<_>>();
         assert_eq!(query, vec![("q".to_string(), "abc".to_string())]);
+    }
+
+    #[test]
+    fn relative_urls_join_under_base_path() {
+        let mut request = ApiRequest::new("相对地址", None);
+        let environment = ApiEnvironment::empty();
+        request.url = "users".to_string();
+        assert_eq!(
+            request.resolved_url("https://example.com/api", &environment),
+            "https://example.com/api/users"
+        );
+        request.url = "/users".to_string();
+        assert_eq!(
+            request.resolved_url("https://example.com/api", &environment),
+            "https://example.com/users"
+        );
+        request.url = "https://other.example.com/users".to_string();
+        assert_eq!(
+            request.resolved_url("https://example.com/api", &environment),
+            "https://other.example.com/users"
+        );
     }
 
     #[test]

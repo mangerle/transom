@@ -58,6 +58,17 @@ pub(crate) fn sign_aws_v4(
     body: &[u8],
     params: &AwsSigV4Params<'_>,
 ) -> Result<(), ApiError> {
+    let payload_hash = hex::encode(Sha256::digest(body));
+    sign_aws_v4_with_payload_hash(method, url, headers, &payload_hash, params)
+}
+
+pub(crate) fn sign_aws_v4_with_payload_hash(
+    method: &str,
+    url: &Url,
+    headers: &mut Vec<(String, String)>,
+    payload_hash: &str,
+    params: &AwsSigV4Params<'_>,
+) -> Result<(), ApiError> {
     if params.access_key.is_empty()
         || params.secret_key.is_empty()
         || params.region.is_empty()
@@ -67,7 +78,12 @@ pub(crate) fn sign_aws_v4(
             reason: "AWS 访问密钥、区域和服务不能为空".to_string(),
         });
     }
-    headers.retain(|(name, _)| !name.eq_ignore_ascii_case("authorization"));
+    headers.retain(|(name, _)| {
+        !name.eq_ignore_ascii_case("authorization")
+            && !name.eq_ignore_ascii_case("host")
+            && !name.eq_ignore_ascii_case("x-amz-date")
+            && !name.eq_ignore_ascii_case("x-amz-security-token")
+    });
     let host = url.host_str().ok_or_else(|| ApiError::InvalidUrl {
         host: safe_host(url),
         reason: "AWS 签名要求 URL 包含主机".to_string(),
@@ -95,7 +111,6 @@ pub(crate) fn sign_aws_v4(
     } else {
         url.path()
     };
-    let payload_hash = hex::encode(Sha256::digest(body));
     let canonical_request = format!(
         "{method}\n{canonical_uri}\n{canonical_query}\n{canonical_headers_text}\n\n{signed_headers}\n{payload_hash}",
         canonical_headers_text = canonical_headers
@@ -232,6 +247,57 @@ mod tests {
             headers
                 .iter()
                 .any(|(name, value)| name == "authorization" && value.contains("Signature="))
+        );
+    }
+
+    #[test]
+    fn signing_replaces_user_supplied_canonical_headers() {
+        let url = Url::parse("https://example.com/path").expect("URL");
+        let now = Utc
+            .with_ymd_and_hms(2024, 1, 1, 0, 0, 0)
+            .single()
+            .expect("时间");
+        let mut headers = vec![
+            ("Host".to_string(), "evil.example".to_string()),
+            ("X-Amz-Date".to_string(), "old".to_string()),
+            ("X-Amz-Security-Token".to_string(), "old".to_string()),
+        ];
+        sign_aws_v4(
+            "GET",
+            &url,
+            &mut headers,
+            b"",
+            &AwsSigV4Params {
+                access_key: "AKID",
+                secret_key: "SECRET",
+                session_token: Some("new-token"),
+                region: "us-east-1",
+                service: "execute-api",
+                now,
+            },
+        )
+        .expect("签名成功");
+        assert_eq!(
+            headers
+                .iter()
+                .filter(|(name, _)| name.eq_ignore_ascii_case("host"))
+                .count(),
+            1
+        );
+        assert_eq!(
+            headers
+                .iter()
+                .find(|(name, _)| name.eq_ignore_ascii_case("host"))
+                .map(|(_, value)| value.as_str()),
+            Some("example.com")
+        );
+        assert_eq!(
+            headers
+                .iter()
+                .filter(|(name, _)| name.eq_ignore_ascii_case("x-amz-security-token"))
+                .map(|(_, value)| value.as_str())
+                .collect::<Vec<_>>(),
+            vec!["new-token"]
         );
     }
 }
