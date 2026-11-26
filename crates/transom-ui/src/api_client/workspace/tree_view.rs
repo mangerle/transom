@@ -284,8 +284,9 @@ fn render_request_row(
             for folder in &menu_folders {
                 let move_view = view_for_menu.clone();
                 let folder_id = folder.id;
-                let label = rust_i18n::t!("api.request.move_to_folder", name = folder.name.as_str())
-                    .to_string();
+                let label =
+                    rust_i18n::t!("api.request.move_to_folder", name = folder.name.as_str())
+                        .to_string();
                 menu = menu.item(
                     MenuItem::new(label, AppIcon::Ui(UiIcon::FOLDER))
                         .disabled(current_folder == Some(folder_id))

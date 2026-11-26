@@ -7,7 +7,8 @@ use gpui_kit::*;
 use std::collections::VecDeque;
 use transom_api::{
     ApiAssertionResult, ApiBodyType, ApiEnvironmentId, ApiFolderId, ApiHttpService, ApiProject,
-    ApiRawLanguage, ApiResponseSnapshot, ApiWebSocketHandle, ApiWebSocketService, CodeTarget,
+    ApiRawLanguage, ApiRequestId, ApiResponseSnapshot, ApiWebSocketHandle, ApiWebSocketService,
+    CodeTarget,
 };
 
 /// API 工作区需要的外壳服务集合。
@@ -193,10 +194,16 @@ pub(in crate::api_client) struct WsLogBuffer {
 }
 
 impl WsLogBuffer {
-    /// 追加一行日志，超过行数或字节上限时从头部淘汰旧记录，并返回最新完整文本。
-    pub(in crate::api_client) fn push(&mut self, line: String) -> String {
-        self.total_bytes = self.total_bytes.saturating_add(line.len());
-        self.lines.push_back(line);
+    /// 批量追加日志，只在批次结束时构造一次完整文本。
+    pub(in crate::api_client) fn push_many(
+        &mut self,
+        new_lines: impl IntoIterator<Item = String>,
+    ) -> String {
+        for line in new_lines {
+            let line = truncate_log_tail(line, MAX_WS_LOG_BYTES);
+            self.total_bytes = self.total_bytes.saturating_add(line.len());
+            self.lines.push_back(line);
+        }
         while (self.lines.len() > MAX_WS_LOG_LINES || self.total_bytes > MAX_WS_LOG_BYTES)
             && self.lines.len() > 1
         {
@@ -215,12 +222,25 @@ impl WsLogBuffer {
     }
 }
 
+fn truncate_log_tail(mut line: String, limit: usize) -> String {
+    if line.len() <= limit {
+        return line;
+    }
+    let mut start = line.len().saturating_sub(limit);
+    while !line.is_char_boundary(start) {
+        start = start.saturating_add(1);
+    }
+    line.drain(..start);
+    line
+}
+
 /// 请求执行、WebSocket 连接、响应快照与用户提示状态。
 #[derive(Default)]
 pub(in crate::api_client) struct ExecutionState {
     pub(in crate::api_client) response: Option<ApiResponseSnapshot>,
     pub(in crate::api_client) assertion_results: Vec<ApiAssertionResult>,
-    pub(in crate::api_client) sending: bool,
+    pub(in crate::api_client) send_generation: u64,
+    pub(in crate::api_client) sending_request: Option<ApiRequestId>,
     pub(in crate::api_client) ws_connected: bool,
     pub(in crate::api_client) notice: Option<String>,
     pub(in crate::api_client) error: Option<String>,
@@ -230,6 +250,26 @@ pub(in crate::api_client) struct ExecutionState {
     pub(in crate::api_client) ws_handle: Option<ApiWebSocketHandle>,
     pub(in crate::api_client) ws_log_buffer: WsLogBuffer,
     pub(in crate::api_client) binary_file_task: Option<Task<()>>,
+}
+
+impl ExecutionState {
+    pub(in crate::api_client) fn is_sending(&self) -> bool {
+        self.sending_request.is_some()
+    }
+
+    pub(in crate::api_client) fn begin_send(&mut self, request_id: ApiRequestId) -> u64 {
+        self.send_generation = self.send_generation.saturating_add(1);
+        self.sending_request = Some(request_id);
+        self.send_generation
+    }
+
+    pub(in crate::api_client) fn finish_send(&mut self, generation: u64) -> bool {
+        if self.send_generation != generation {
+            return false;
+        }
+        self.sending_request = None;
+        true
+    }
 }
 
 /// 工作区可拖拽分栏状态。
@@ -250,19 +290,31 @@ impl WorkspaceSplits {
 
 #[cfg(test)]
 mod tests {
-    use super::{MAX_WS_LOG_BYTES, MAX_WS_LOG_LINES, WsLogBuffer};
+    use super::{ExecutionState, MAX_WS_LOG_BYTES, MAX_WS_LOG_LINES, WsLogBuffer};
+    use transom_api::ApiRequestId;
 
     #[test]
     fn ws_log_buffer_evicts_oldest_when_exceeding_limits() {
         let mut buffer = WsLogBuffer::default();
         for index in 0..(MAX_WS_LOG_LINES + 5) {
-            let _ = buffer.push(format!("line-{index}"));
+            let _ = buffer.push_many([format!("line-{index}")]);
         }
         assert_eq!(buffer.lines.len(), MAX_WS_LOG_LINES);
         assert_eq!(buffer.lines.front().map(String::as_str), Some("line-5"));
-        let oversized = "x".repeat(MAX_WS_LOG_BYTES);
-        let text = buffer.push(oversized);
+        let oversized = "x".repeat(MAX_WS_LOG_BYTES.saturating_add(100));
+        let text = buffer.push_many([oversized]);
         assert_eq!(buffer.lines.len(), 1);
-        assert_eq!(text.len(), MAX_WS_LOG_BYTES);
+        assert!(text.len() <= MAX_WS_LOG_BYTES);
+    }
+
+    #[test]
+    fn stale_send_completion_does_not_clear_newer_send_state() {
+        let mut state = ExecutionState::default();
+        let first = state.begin_send(ApiRequestId::new());
+        let second = state.begin_send(ApiRequestId::new());
+        assert!(!state.finish_send(first));
+        assert!(state.is_sending());
+        assert!(state.finish_send(second));
+        assert!(!state.is_sending());
     }
 }

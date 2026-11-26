@@ -87,7 +87,7 @@ pub(super) fn render_response(params: &ApiWorkspaceParams<'_>, p: &Palette) -> A
 
 fn render_summary(params: &ApiWorkspaceParams<'_>, p: &Palette) -> Vec<AnyElement> {
     let Some(response) = params.exec.response.as_ref() else {
-        if params.exec.sending {
+        if params.exec.is_sending() {
             return vec![
                 div()
                     .text_color(p.muted_foreground)
@@ -189,7 +189,7 @@ fn render_body(
     if let Some(_response) = response {
         return text_content("api-response-body", params.editors.response_body.clone(), p);
     }
-    if params.exec.sending {
+    if params.exec.is_sending() {
         return centered_message(rust_i18n::t!("api.response.sending").to_string(), p);
     }
     centered_message(rust_i18n::t!("api.response.empty").to_string(), p)

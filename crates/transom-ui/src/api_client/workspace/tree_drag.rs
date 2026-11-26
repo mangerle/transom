@@ -20,10 +20,7 @@ pub(super) enum ApiTreeDrag {
 pub(super) enum ApiTreeDropTarget {
     Folder(ApiFolderId),
     Root,
-    Relative {
-        anchor: ApiTreeDrag,
-        side: DropSide,
-    },
+    Relative { anchor: ApiTreeDrag, side: DropSide },
 }
 
 /// 拖动时跟随鼠标的预览卡片；与会话/Git 侧栏同款。
@@ -141,11 +138,7 @@ impl ApiWorkspace {
     }
 }
 
-fn apply_tree_drop(
-    project: &mut ApiProject,
-    drag: ApiTreeDrag,
-    target: ApiTreeDropTarget,
-) -> bool {
+fn apply_tree_drop(project: &mut ApiProject, drag: ApiTreeDrag, target: ApiTreeDropTarget) -> bool {
     match (drag, target) {
         (ApiTreeDrag::Request(request_id), ApiTreeDropTarget::Folder(folder_id))
         | (
@@ -316,7 +309,10 @@ mod tests {
             ApiTreeDrag::Request(r1_id),
             ApiTreeDropTarget::Folder(folder),
         ));
-        assert_eq!(project.request(r1_id).and_then(|r| r.folder_id), Some(folder));
+        assert_eq!(
+            project.request(r1_id).and_then(|r| r.folder_id),
+            Some(folder)
+        );
 
         assert!(apply_tree_drop(
             &mut project,

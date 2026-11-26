@@ -3,16 +3,20 @@
 use super::ApiWorkspace;
 use gpui_kit::*;
 use transom_api::{
-    ApiEnvironment, ApiHistoryEntry, ApiProtocol, ApiRequest, ApiWebSocketEvent, CodeTarget,
-    evaluate_assertions, generate_code, method_for_request, response_excerpt,
+    ApiHistoryEntry, ApiProtocol, ApiRequest, ApiWebSocketEvent, CodeTarget, evaluate_assertions,
+    generate_code, method_for_request, response_excerpt,
 };
 
 /// 响应正文预览上限（512 KiB），超出时截断展示以避免大响应拖垮文本排版。
 const MAX_RESPONSE_PREVIEW_BYTES: usize = 512 * 1024;
+const WS_EVENT_BATCH_LIMIT: usize = 32;
 
 impl ApiWorkspace {
     /// 发送当前请求；WebSocket 请求改为建立连接。
     pub(crate) fn send_request(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.exec.is_sending() {
+            return;
+        }
         if !self.capture_request(cx) {
             cx.notify();
             return;
@@ -29,14 +33,16 @@ impl ApiWorkspace {
             self.set_error(rust_i18n::t!("api.request.url_required").to_string(), cx);
             return;
         }
-        let environment = self.environment();
-        let resolved = self.project.resolved_request(&request, &environment);
-        if let Err(error) = resolved.validate() {
-            self.set_error(error.to_string(), cx);
-            return;
-        }
-        let cookies = self.project.cookies.clone();
-        self.exec.sending = true;
+        let environment = self.project.active_environment();
+        let plan = match self.project.execution_plan(&request, &environment) {
+            Ok(plan) => plan,
+            Err(error) => {
+                self.set_error(error.to_string(), cx);
+                return;
+            }
+        };
+        let request_snapshot = plan.request().clone();
+        let generation = self.exec.begin_send(request_snapshot.id);
         self.exec.response = None;
         self.exec.assertion_results.clear();
         self.clear_response_editor(window, cx);
@@ -44,24 +50,23 @@ impl ApiWorkspace {
         cx.notify();
 
         let http = self.services.http.clone();
-        let project_base = self.project.base_url.clone();
         let task = cx.spawn_in(window, async move |this, cx| {
-            let mut exchange = http.start(resolved.clone(), environment.clone(), cookies);
+            let mut exchange = http.start(plan);
             let result = exchange.recv().await;
             let _ = this.update_in(cx, |this, window, cx| {
-                this.exec.sending = false;
+                if !this.exec.finish_send(generation) {
+                    return;
+                }
+                let is_selected = this.selected_request == Some(request_snapshot.id);
                 match result {
-                    Ok(response) => this.apply_response(
-                        &resolved,
-                        &environment,
-                        &project_base,
-                        response,
-                        window,
-                        cx,
-                    ),
+                    Ok(response) => {
+                        this.apply_response(&request_snapshot, response, window, cx);
+                    }
                     Err(error) => {
-                        this.exec.response = None;
-                        this.exec.error = Some(error.to_string());
+                        if is_selected {
+                            this.exec.response = None;
+                            this.exec.error = Some(error.to_string());
+                        }
                     }
                 }
                 cx.notify();
@@ -156,14 +161,18 @@ impl ApiWorkspace {
             self.set_error(rust_i18n::t!("api.request.url_required").to_string(), cx);
             return;
         }
-        let environment = self.environment();
-        let resolved = self.project.resolved_request(&request, &environment);
-        let url = resolved.url.clone();
-        let headers = resolved.headers.clone();
+        let environment = self.project.active_environment();
+        let plan = match self.project.execution_plan(&request, &environment) {
+            Ok(plan) => plan,
+            Err(error) => {
+                self.set_error(error.to_string(), cx);
+                return;
+            }
+        };
         // 建立新连接前先关闭并清理旧连接及事件监听任务，避免残留事件流交叉写入日志。
         self.reset_websocket_connection();
         let service = self.services.websocket.clone();
-        let start = service.start(url, headers, environment, resolved.auth.clone());
+        let start = service.start(plan);
         let task = cx.spawn_in(window, async move |this, cx| {
             let result = start.into_handle().await;
             let _ = this.update_in(cx, |this, window, cx| match result {
@@ -179,7 +188,7 @@ impl ApiWorkspace {
                     );
                     this.exec.ws_event_task = Some(this.spawn_ws_events(events, window, cx));
                 }
-                Err(error) => this.set_error(error, cx),
+                Err(error) => this.set_error(error.to_string(), cx),
             });
         });
         self.exec.ws_task = Some(task);
@@ -187,7 +196,7 @@ impl ApiWorkspace {
 
     fn reset_websocket_connection(&mut self) {
         if let Some(handle) = self.exec.ws_handle.take()
-            && let Err(error) = handle.close()
+            && let Err(error) = handle.request_close()
         {
             log::warn!("关闭旧 WebSocket 连接失败，原因: {error}");
         }
@@ -207,7 +216,7 @@ impl ApiWorkspace {
             return;
         };
         if let Err(error) = handle.try_send_text(text.clone()) {
-            self.set_error(error, cx);
+            self.set_error(error.to_string(), cx);
             return;
         }
         self.editors
@@ -222,10 +231,10 @@ impl ApiWorkspace {
     /// 关闭 WebSocket。
     pub(crate) fn close_websocket(&mut self, cx: &mut Context<Self>) {
         if let Some(handle) = self.exec.ws_handle.take()
-            && let Err(error) = handle.close()
+            && let Err(error) = handle.request_close()
         {
             self.exec.ws_handle = Some(handle);
-            self.set_error(error, cx);
+            self.set_error(error.to_string(), cx);
             return;
         }
         self.exec.ws_task = None;
@@ -290,20 +299,18 @@ impl ApiWorkspace {
     fn apply_response(
         &mut self,
         request: &ApiRequest,
-        _environment: &ApiEnvironment,
-        _base_url: &str,
         mut response: transom_api::ApiResponseSnapshot,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.exec.assertion_results = evaluate_assertions(request, &response);
+        let assertion_results = evaluate_assertions(request, &response);
         if !response.set_cookies.is_empty() {
             for cookie in response.set_cookies.drain(..) {
                 self.project.upsert_cookie(cookie);
             }
             self.load_cookies(window, cx);
         }
-        let (passed, total) = transom_api::assertion_summary(&self.exec.assertion_results);
+        let (passed, total) = transom_api::assertion_summary(&assertion_results);
         self.project.push_history(ApiHistoryEntry {
             request_id: request.id,
             request_name: request.display_name().to_string(),
@@ -317,19 +324,22 @@ impl ApiWorkspace {
             response_excerpt: response_excerpt(&response, 500),
         });
         self.ui.selected_history = Some(self.project.history.len().saturating_sub(1));
-        let preview = truncate_response_preview(&response.body, MAX_RESPONSE_PREVIEW_BYTES);
-        self.editors
-            .response_body
-            .update(cx, |state, cx| state.set_value(preview, window, cx));
-        self.exec.response = Some(response);
-        self.exec.error = None;
+        if self.selected_request == Some(request.id) {
+            let preview = truncate_response_preview(&response.body, MAX_RESPONSE_PREVIEW_BYTES);
+            self.editors
+                .response_body
+                .update(cx, |state, cx| state.set_value(preview, window, cx));
+            self.exec.assertion_results = assertion_results;
+            self.exec.response = Some(response);
+            self.exec.error = None;
+        }
         cx.emit(super::ApiWorkspaceEvent::PersistProject {
             project: self.project.clone(),
             notice: None,
         });
     }
 
-    fn clear_response_editor(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    pub(super) fn clear_response_editor(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.editors
             .response_body
             .update(cx, |state, cx| state.set_value(String::new(), window, cx));
@@ -342,37 +352,58 @@ impl ApiWorkspace {
         cx: &mut Context<Self>,
     ) -> Task<()> {
         cx.spawn_in(window, async move |this, cx| {
-            while let Some(event) = events.recv().await {
-                let _ = this.update_in(cx, |this, window, cx| {
-                    match event {
-                        ApiWebSocketEvent::Opened => {
-                            this.exec.ws_connected = true;
-                            this.append_ws_log(
-                                rust_i18n::t!("api.websocket.connected").to_string(),
-                                window,
-                                cx,
-                            );
-                        }
-                        ApiWebSocketEvent::Message(text) => this.append_ws_log(text, window, cx),
-                        ApiWebSocketEvent::Closed(reason) => {
-                            this.exec.ws_connected = false;
-                            this.exec.ws_handle = None;
-                            this.append_ws_log(reason, window, cx);
-                        }
-                        ApiWebSocketEvent::Error(error) => {
-                            this.exec.ws_connected = false;
-                            this.exec.ws_handle = None;
-                            this.append_ws_log(error, window, cx);
-                        }
+            while let Some(first) = events.recv().await {
+                let mut batch = Vec::with_capacity(WS_EVENT_BATCH_LIMIT);
+                batch.push(first);
+                while batch.len() < WS_EVENT_BATCH_LIMIT {
+                    match events.try_recv() {
+                        Ok(event) => batch.push(event),
+                        Err(_) => break,
                     }
+                }
+                let _ = this.update_in(cx, |this, window, cx| {
+                    this.apply_ws_event_batch(batch, window, cx);
                     cx.notify();
                 });
             }
         })
     }
 
+    fn apply_ws_event_batch(
+        &mut self,
+        events: Vec<ApiWebSocketEvent>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let mut lines = Vec::with_capacity(events.len());
+        for event in events {
+            match event {
+                ApiWebSocketEvent::Opened => {
+                    self.exec.ws_connected = true;
+                    lines.push(rust_i18n::t!("api.websocket.connected").to_string());
+                }
+                ApiWebSocketEvent::Message(text) => lines.push(text),
+                ApiWebSocketEvent::Closed(reason) => {
+                    self.exec.ws_connected = false;
+                    self.exec.ws_handle = None;
+                    lines.push(reason);
+                }
+                ApiWebSocketEvent::Error(error) => {
+                    self.exec.ws_connected = false;
+                    self.exec.ws_handle = None;
+                    lines.push(error);
+                }
+            }
+        }
+        self.append_ws_logs(lines, window, cx);
+    }
+
     fn append_ws_log(&mut self, text: String, window: &mut Window, cx: &mut Context<Self>) {
-        let log = self.exec.ws_log_buffer.push(text);
+        self.append_ws_logs(vec![text], window, cx);
+    }
+
+    fn append_ws_logs(&mut self, lines: Vec<String>, window: &mut Window, cx: &mut Context<Self>) {
+        let log = self.exec.ws_log_buffer.push_many(lines);
         self.editors
             .websocket_log
             .update(cx, |state, cx| state.set_value(log, window, cx));

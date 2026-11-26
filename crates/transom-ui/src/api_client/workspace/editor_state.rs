@@ -70,6 +70,9 @@ impl ApiWorkspace {
     }
 
     pub(super) fn load_selected(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.exec.response = None;
+        self.exec.assertion_results.clear();
+        self.clear_response_editor(window, cx);
         let request = self.selected_request().cloned();
         let query_entries = request
             .as_ref()

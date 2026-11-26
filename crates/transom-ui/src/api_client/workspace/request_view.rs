@@ -163,7 +163,7 @@ pub(super) fn render_request_editor(params: &ApiWorkspaceParams<'_>, p: &Palette
                         Some(gpui::white()),
                     )
                     .primary()
-                    .disabled(params.selected_request.is_none() || params.exec.sending)
+                    .disabled(params.selected_request.is_none() || params.exec.is_sending())
                     .on_click(move |_, window, cx| {
                         send_view.update(cx, |this, cx| this.send_request(window, cx));
                     }),
