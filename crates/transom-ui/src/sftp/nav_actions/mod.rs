@@ -7,7 +7,8 @@
 mod init;
 mod panel_events;
 pub(crate) use init::{
-    attach_sftp_panel_view, build_sftp_panel, focus_active_sftp_panel, on_toggle_sftp, toggle_sftp,
+    attach_sftp_panel_view, build_sftp_panel, focus_active_sftp_panel, on_toggle_sftp,
+    reattach_sftp_panel, toggle_sftp,
 };
 mod local_nav;
 

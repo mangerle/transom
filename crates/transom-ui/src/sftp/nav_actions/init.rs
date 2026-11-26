@@ -324,6 +324,29 @@ pub(crate) fn build_sftp_panel(
     }
 }
 
+/// 重连就绪后把既有 SFTP 面板绑定到新连接，并按原路径自动刷新目录。
+pub(crate) fn reattach_sftp_panel(
+    app_state: &mut AppState,
+    tab_id: TabId,
+    connection_id: transom_core::ConnectionId,
+    cx: &mut Context<AppShell>,
+) {
+    let Some(view) = app_state.sftp_view(tab_id) else {
+        return;
+    };
+    let (should_refresh, remote_path) = view.update(cx, |view, cx| {
+        view.state.main_connection = Some(connection_id);
+        view.state.remote.error = None;
+        view.state.remote.loading = false;
+        view.state.remote.dir_cache.clear();
+        cx.notify();
+        (view.state.open, view.state.remote.path.clone())
+    });
+    if should_refresh {
+        crate::sftp::request_sftp_list(app_state, tab_id, remote_path, cx);
+    }
+}
+
 pub(crate) fn on_toggle_sftp(
     app_state: &mut AppState,
     _: &keymap::ToggleSftp,

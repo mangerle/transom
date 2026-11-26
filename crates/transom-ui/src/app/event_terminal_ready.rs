@@ -242,7 +242,11 @@ impl AppShell {
         if let Some(target) = target {
             log::info!("FTP 会话就绪，窗格: {tab_id}，连接: {connection_id:?}，目标: {target}");
         }
-        crate::sftp::build_sftp_panel(&mut self.state, tab_id, index, true, window, cx);
+        if self.state.sftp_view(tab_id).is_some() {
+            crate::sftp::reattach_sftp_panel(&mut self.state, tab_id, connection_id, cx);
+        } else {
+            crate::sftp::build_sftp_panel(&mut self.state, tab_id, index, true, window, cx);
+        }
         true
     }
 
@@ -279,6 +283,7 @@ impl AppShell {
             window,
             cx,
         );
+        crate::sftp::reattach_sftp_panel(&mut self.state, tab_id, connection_id, cx);
         crate::forward::auto_start_forwards(&mut self.state, tab_id, connection_id, session_id, cx);
         if still_active && self.state.features.monitor.read(cx).is_open() {
             let collapsed = self.state.features.monitor.read(cx).processes_collapsed();

@@ -12,7 +12,27 @@ use transom_core::{
 };
 
 impl AppState {
+    /// 记录断线前仍处于活跃或启动中的转发规则，供重连成功后恢复。
+    pub(crate) fn snapshot_active_forwards(&mut self, tab_id: TabId) {
+        if let Some(pane) = self
+            .workspace
+            .tab_mut(tab_id)
+            .and_then(|tab| tab.session_pane_mut())
+        {
+            for (rule_id, status) in &pane.forward_statuses {
+                if matches!(
+                    status.state,
+                    ForwardState::Active { .. } | ForwardState::Starting
+                ) && !pane.active_forwards_snapshot.contains(rule_id)
+                {
+                    pane.active_forwards_snapshot.push(*rule_id);
+                }
+            }
+        }
+    }
+
     pub(crate) fn mark_forwards_stopped(&mut self, tab_id: TabId) {
+        self.snapshot_active_forwards(tab_id);
         if let Some(pane) = self
             .workspace
             .tab_mut(tab_id)
@@ -108,7 +128,16 @@ pub(crate) fn auto_start_forwards(
         .find(|session| session.id == session_id)
         .map(|session| session.forwards.clone())
         .unwrap_or_default();
-    for rule in rules.into_iter().filter(|rule| rule.enabled) {
+    let active_snapshot = app_state
+        .workspace
+        .tab_mut(tab_id)
+        .and_then(|tab| tab.session_pane_mut())
+        .map(|pane| std::mem::take(&mut pane.active_forwards_snapshot))
+        .unwrap_or_default();
+    for rule in rules
+        .into_iter()
+        .filter(|rule| rule.enabled || active_snapshot.contains(&rule.id))
+    {
         // 自动启动不能成为“导入会话后静默开放公网端口”的通道：
         // 公网 bind 一律留待用户在转发面板手动启动并二次确认。
         if is_public_bind_address(forward_bind_host(&rule)) {

@@ -91,8 +91,8 @@ pub(crate) use handlers::{
 pub(crate) use local_only::open_local_file_panel;
 pub(crate) use nav_actions::{
     attach_sftp_panel_view, build_sftp_panel, focus_active_sftp_panel, on_toggle_sftp,
-    request_sftp_list, request_sftp_list_for_connection, send_sftp_op_for_connection,
-    sftp_sync_with_terminal_cwd, toggle_sftp,
+    reattach_sftp_panel, request_sftp_list, request_sftp_list_for_connection,
+    send_sftp_op_for_connection, sftp_sync_with_terminal_cwd, toggle_sftp,
 };
 pub(crate) use overlay::render_drop_overlay;
 pub(crate) use preview_view::render_sftp_hover_preview;

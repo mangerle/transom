@@ -232,8 +232,9 @@ pub(crate) fn schedule_auto_reconnect(
     cx.notify();
 }
 
-/// 新连接建立前清空旧通道残留：连接标识、cwd 与面板快照。
+/// 新连接建立前清空旧通道残留：连接标识、cwd 与临时运行态快照。
 fn reset_tab_connection(app_state: &mut AppState, tab_id: TabId, connection_id: ConnectionId) {
+    app_state.snapshot_active_forwards(tab_id);
     if let Some(tab) = app_state.workspace.tab_mut(tab_id) {
         tab.set_connection_id(Some(connection_id));
         // 新通道上的 Shell 还没上报 OSC 7，旧目录不再代表当前 cwd；
@@ -242,7 +243,7 @@ fn reset_tab_connection(app_state: &mut AppState, tab_id: TabId, connection_id: 
         // 旧连接的进度条属于已经结束的任务，不能带到新通道上继续显示。
         tab.set_progress(None);
         if let Some(pane) = tab.session_pane_mut() {
-            pane.sftp_view = None;
+            // 保留 SFTP 面板实体，以便重连就绪后更新主连接并原地恢复当前目录。
             pane.forward_statuses.clear();
             pane.network_traffic = None;
             pane._startup_task = None;
