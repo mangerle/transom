@@ -232,6 +232,51 @@ fn git_sidebar_render_uses_cached_badges() {
     );
 }
 
+/// 领域错误必须使用 thiserror 枚举，并在跨层边界集中转换为 `AppError`。
+#[test]
+fn domain_errors_are_typed_and_mapped() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    for (relative, name, consumer) in [
+        (
+            "crates/transom-net/src/sftp/error.rs",
+            "SftpError",
+            "crates/transom-net/src/sftp/ops.rs",
+        ),
+        (
+            "crates/transom-net/src/forward/error.rs",
+            "ForwardError",
+            "crates/transom-net/src/forward/mod.rs",
+        ),
+        (
+            "crates/transom-sync/src/error.rs",
+            "SyncError",
+            "crates/transom-sync/src/webdav/mod.rs",
+        ),
+        (
+            "crates/transom-store/src/error.rs",
+            "StorageError",
+            "crates/transom-store/src/file_io.rs",
+        ),
+    ] {
+        let source = std::fs::read_to_string(root.join(relative))
+            .unwrap_or_else(|error| panic!("读取 {relative} 失败: {error}"));
+        assert!(
+            source.contains("#[derive(Debug, thiserror::Error)]"),
+            "{name} 必须使用 thiserror 定义领域错误"
+        );
+        assert!(
+            source.contains(&format!("impl From<{name}> for AppError")),
+            "{name} 必须集中在模块边界转换为 AppError"
+        );
+        let consumer = std::fs::read_to_string(root.join(consumer))
+            .unwrap_or_else(|error| panic!("读取 {consumer} 失败: {error}"));
+        assert!(
+            consumer.contains(&format!("{name}::")),
+            "{consumer} 必须使用 {name}，不得继续用裸字符串构造领域错误"
+        );
+    }
+}
+
 /// 窗口请求队列必须声明容量上限并支持可覆盖请求合并。
 #[test]
 fn window_requests_are_bounded_and_coalesced() {

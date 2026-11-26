@@ -5,12 +5,13 @@
 //! 这三处写入点曾各自复述整套流程，任何一处漏掉 fsync 都会在断电时产出空
 //! 文件或旧内容；收敛到本模块后只维护一份实现。
 
+use crate::StorageError;
 use serde::{Serialize, de::DeserializeOwned};
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
-use transom_core::{AppError, ErrorCode};
+use transom_core::AppError;
 use transom_platform::private_fs;
 
 pub(crate) fn read_json<T: DeserializeOwned>(path: &Path) -> Result<Option<T>, AppError> {
@@ -20,23 +21,24 @@ pub(crate) fn read_json<T: DeserializeOwned>(path: &Path) -> Result<Option<T>, A
             Err(error) => {
                 let detail = match quarantine(path, "corrupt") {
                     Some(saved) => format!(
-                        "配置文件内容损坏，无法解析，原文件已保留到 {}，路径: {}，原因: {error}",
-                        saved.display(),
-                        path.display()
+                        "无法解析，原文件已保留到 {}，原因: {error}",
+                        saved.display()
                     ),
-                    None => format!(
-                        "配置文件内容损坏，无法解析，路径: {}，原因: {error}",
-                        path.display()
-                    ),
+                    None => error.to_string(),
                 };
-                Err(AppError::with_detail(ErrorCode::Configuration, detail))
+                Err(StorageError::Corrupt {
+                    path: path.display().to_string(),
+                    reason: detail,
+                }
+                .into())
             }
         },
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
-        Err(error) => Err(AppError::with_detail(
-            ErrorCode::Io,
-            format!("读取配置文件失败，路径: {}，原因: {error}", path.display()),
-        )),
+        Err(error) => Err(StorageError::Read {
+            path: path.display().to_string(),
+            source: error,
+        }
+        .into()),
     }
 }
 
@@ -81,8 +83,12 @@ pub(crate) fn quarantine(path: &Path, reason: &str) -> Option<PathBuf> {
 
 /// 把 JSON 以私有文件形式原子写盘（临时文件 + fsync + rename）。
 pub(crate) fn write_json<T: Serialize>(path: &Path, value: &T) -> Result<(), AppError> {
-    let data = serde_json::to_vec_pretty(value)
-        .map_err(|error| AppError::with_detail(ErrorCode::Configuration, error.to_string()))?;
+    let data = serde_json::to_vec_pretty(value).map_err(|error| {
+        AppError::from(StorageError::Serialization {
+            path: path.display().to_string(),
+            reason: error.to_string(),
+        })
+    })?;
     write_atomic(path, &data)
 }
 
@@ -109,37 +115,45 @@ pub(crate) fn write_json<T: Serialize>(path: &Path, value: &T) -> Result<(), App
 /// `Io` 错误，错误信息附带目标路径便于定位。
 pub fn write_atomic(path: &Path, data: &[u8]) -> Result<(), AppError> {
     let parent = path.parent().ok_or_else(|| {
-        AppError::with_detail(ErrorCode::Configuration, "存储路径非法：没有父目录可写")
+        AppError::from(StorageError::InvalidPath {
+            path: path.display().to_string(),
+            reason: "没有父目录可写".to_string(),
+        })
     })?;
-    private_fs::ensure_private_dir(parent).map_err(|error| write_error(path, error))?;
+    private_fs::ensure_private_dir(parent)
+        .map_err(|error| storage_write_error("创建私有目录", path, error))?;
 
     let temp = temp_sibling(path);
-    let mut temp_file =
-        private_fs::open_private_truncate(&temp).map_err(|error| write_error(&temp, error))?;
+    let mut temp_file = private_fs::open_private_truncate(&temp)
+        .map_err(|error| storage_write_error("创建临时文件", &temp, error))?;
     temp_file
         .write_all(data)
-        .map_err(|error| write_error(&temp, error))?;
+        .map_err(|error| storage_write_error("写入临时文件", &temp, error))?;
     // flush 把数据交给内核，sync_all 才保证数据与元数据落到介质。
     temp_file
         .flush()
-        .map_err(|error| write_error(&temp, error))?;
+        .map_err(|error| storage_write_error("刷新临时文件", &temp, error))?;
     temp_file
         .sync_all()
-        .map_err(|error| write_error(&temp, error))?;
+        .map_err(|error| storage_write_error("同步临时文件", &temp, error))?;
     drop(temp_file);
-    transom_platform::filesystem::replace_file(&temp, path)
-        .map_err(|error| write_error(path, error))?;
+    transom_platform::filesystem::replace_file(&temp, path).map_err(|error| {
+        StorageError::AtomicReplace {
+            path: path.display().to_string(),
+            source: error,
+        }
+    })?;
     #[cfg(windows)]
     {
         // ReplaceFile 可能保留旧目标的 ACL；重新打开一次并应用私有 DACL，
         // 使旧版本留下的宽权限文件也在本轮写入后完成收紧。
-        let _file =
-            private_fs::open_private_append(path).map_err(|error| write_error(path, error))?;
+        let _file = private_fs::open_private_append(path)
+            .map_err(|error| storage_write_error("收紧文件权限", path, error))?;
     }
     #[cfg(unix)]
     fs::File::open(parent)
         .and_then(|directory| directory.sync_all())
-        .map_err(|error| write_error(parent, error))?;
+        .map_err(|error| storage_write_error("同步父目录", parent, error))?;
     Ok(())
 }
 
@@ -154,12 +168,24 @@ fn temp_sibling(path: &Path) -> PathBuf {
     path.with_file_name(format!("{name}.{}.{seq}.tmp", std::process::id()))
 }
 
-/// 原子写路径上的统一 IO 错误描述：附带目标路径便于定位。
-fn write_error(path: &Path, error: std::io::Error) -> AppError {
-    AppError::with_detail(
-        ErrorCode::Io,
-        format!("写入文件失败，路径: {}，原因: {error}", path.display()),
-    )
+/// 原子写路径上的统一 IO 错误分类：权限问题与一般写入失败分开。
+fn storage_write_error(operation: &str, path: &Path, error: std::io::Error) -> AppError {
+    let path = path.display().to_string();
+    if error.kind() == std::io::ErrorKind::PermissionDenied {
+        StorageError::Permission {
+            operation: operation.to_string(),
+            path,
+            source: error,
+        }
+        .into()
+    } else {
+        StorageError::Write {
+            operation: operation.to_string(),
+            path,
+            source: error,
+        }
+        .into()
+    }
 }
 
 /// 有限大小 UTF-8 文本读取与基线比对原子替换的错误分类。

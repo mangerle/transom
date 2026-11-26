@@ -4,12 +4,13 @@ use std::time::Instant;
 
 use sha2::{Digest, Sha256};
 use transom_core::{
-    AppError, BackupDocument, CloudSyncTarget, ErrorCode, SecretKey, SecretStore, SessionCatalog,
+    AppError, BackupDocument, CloudSyncTarget, SecretKey, SecretStore, SessionCatalog,
     SyncDocumentSummary, SyncEndpoint, SyncRelation, SyncSettings, collect_catalog_secrets,
 };
 use transom_crypto::backup::{BackupFormat, encrypt_document};
 use zeroize::Zeroizing;
 
+use crate::SyncError;
 use crate::s3::S3Target;
 use crate::webdav::WebDavTarget;
 
@@ -52,10 +53,10 @@ pub(super) fn build_target(
                 &SecretKey::cloud_sync_credential(),
             )?
             .ok_or_else(|| {
-                AppError::with_detail(
-                    ErrorCode::Configuration,
-                    "尚未在钥匙串保存 S3 Secret Access Key，请先在设置中填写并保存",
-                )
+                AppError::from(SyncError::InvalidConfiguration {
+                    field: "S3 Secret Access Key".to_string(),
+                    reason: "尚未在钥匙串保存凭据，请先在设置中填写并保存".to_string(),
+                })
             })?;
             let session_token = secrets.get(&SecretKey::cloud_sync_s3_session_token())?;
             Ok(Box::new(S3Target::new(
@@ -91,10 +92,11 @@ pub(super) fn passphrase_from(secrets: &dyn SecretStore) -> Result<Zeroizing<Str
     secrets
         .get(&SecretKey::cloud_sync_passphrase())?
         .ok_or_else(|| {
-            AppError::with_detail(
-                ErrorCode::Configuration,
-                "尚未设置同步口令，云端备份必须加密；请先在设置中填写并保存",
-            )
+            SyncError::InvalidConfiguration {
+                field: "同步口令".to_string(),
+                reason: "云端备份必须加密，请先在设置中填写并保存".to_string(),
+            }
+            .into()
         })
 }
 
@@ -106,18 +108,23 @@ where
 {
     match tokio::task::spawn_blocking(job).await {
         Ok(result) => result,
-        Err(error) => Err(AppError::with_detail(
-            ErrorCode::CloudSyncFailed,
-            format!("{action}任务异常终止: {error}"),
-        )),
+        Err(error) => Err(SyncError::TaskFailed {
+            operation: action.to_string(),
+            reason: error.to_string(),
+        }
+        .into()),
     }
 }
 
 /// 取出当前通道对应的 WebDAV/S3 端点。
 pub(super) fn required_endpoint(settings: &SyncSettings) -> Result<SyncEndpoint, AppError> {
-    settings
-        .active_endpoint()
-        .ok_or_else(|| AppError::with_detail(ErrorCode::Configuration, "尚未配置云同步端点"))
+    settings.active_endpoint().ok_or_else(|| {
+        SyncError::InvalidConfiguration {
+            field: "云同步端点".to_string(),
+            reason: "尚未配置活动端点".to_string(),
+        }
+        .into()
+    })
 }
 
 /// 构建加密信封：收集口令（可选）-> 快照文档 -> Argon2id 派生加密。

@@ -1,7 +1,8 @@
+use crate::StorageError;
 use crate::file_io::{read_json, write_json};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
-use transom_core::{AppError, AppSettings, ErrorCode, SettingsStore};
+use transom_core::{AppError, AppSettings, SettingsStore};
 
 const SCHEMA_VERSION: u32 = 1;
 
@@ -35,19 +36,13 @@ impl SettingsStore for JsonSettingsStore {
             return Ok(AppSettings::default());
         };
         if file.version > SCHEMA_VERSION {
-            let detail = match crate::file_io::quarantine(&self.path, "newer-version") {
-                Some(saved) => format!(
-                    "设置文件版本 {} 高于当前支持版本 {}，原文件已保留到 {}，请升级 Transom",
-                    file.version,
-                    SCHEMA_VERSION,
-                    saved.display()
-                ),
-                None => format!(
-                    "设置文件版本 {} 高于当前支持版本 {}，请升级 Transom",
-                    file.version, SCHEMA_VERSION
-                ),
-            };
-            return Err(AppError::with_detail(ErrorCode::Configuration, detail));
+            let _ = crate::file_io::quarantine(&self.path, "newer-version");
+            return Err(StorageError::SchemaTooNew {
+                path: self.path.display().to_string(),
+                found: u64::from(file.version),
+                supported: u64::from(SCHEMA_VERSION),
+            }
+            .into());
         }
         Ok(file.settings)
     }

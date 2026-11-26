@@ -3,12 +3,13 @@
 //! 版本 2 引入显式文件夹树；版本 1 的 `session.group` 扁平字符串在加载时
 //! 迁移为多级文件夹。迁移只发生一次，写回后即固定为版本 2。
 
+use crate::StorageError;
 use crate::file_io::{read_json, write_json};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::path::{Path, PathBuf};
 use transom_core::{
-    AppError, ContainerEngineProfile, ErrorCode, Identity, Session, SessionCatalog, SessionFolder,
+    AppError, ContainerEngineProfile, Identity, Session, SessionCatalog, SessionFolder,
     SessionStore,
 };
 
@@ -74,13 +75,10 @@ impl JsonSessionStore {
                 .and_then(Value::as_str)
                 .map(str::to_owned);
             let mut session: Session = serde_json::from_value(value).map_err(|error| {
-                AppError::with_detail(
-                    ErrorCode::Configuration,
-                    format!(
-                        "解析会话记录失败，文件: {}，原因: {error}",
-                        self.path.display()
-                    ),
-                )
+                AppError::from(StorageError::Corrupt {
+                    path: self.path.display().to_string(),
+                    reason: format!("解析会话记录失败: {error}"),
+                })
             })?;
             if session.folder_id.is_none()
                 && let Some(group) = legacy_group
@@ -100,19 +98,13 @@ impl SessionStore for JsonSessionStore {
             return Ok(SessionCatalog::default());
         };
         if file.version > SCHEMA_VERSION {
-            let detail = match crate::file_io::quarantine(&self.path, "newer-version") {
-                Some(saved) => format!(
-                    "会话文件版本 {} 高于当前支持版本 {}，原文件已保留到 {}，请升级 Transom",
-                    file.version,
-                    SCHEMA_VERSION,
-                    saved.display()
-                ),
-                None => format!(
-                    "会话文件版本 {} 高于当前支持版本 {}，请升级 Transom",
-                    file.version, SCHEMA_VERSION
-                ),
-            };
-            return Err(AppError::with_detail(ErrorCode::Configuration, detail));
+            let _ = crate::file_io::quarantine(&self.path, "newer-version");
+            return Err(StorageError::SchemaTooNew {
+                path: self.path.display().to_string(),
+                found: u64::from(file.version),
+                supported: u64::from(SCHEMA_VERSION),
+            }
+            .into());
         }
         self.decode(file)
     }

@@ -12,6 +12,7 @@ mod digest;
 #[cfg(test)]
 mod tests;
 
+use crate::SyncError;
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD as BASE64;
 use digest::{DigestState, digest_challenge, digest_uri, next_cnonce};
@@ -49,21 +50,22 @@ impl WebDavTarget {
         directory: &str,
     ) -> Result<Self, AppError> {
         let mut base = reqwest::Url::parse(base_url).map_err(|error| {
-            AppError::with_detail(
-                ErrorCode::Configuration,
-                format!("WebDAV 地址无法解析: {error}"),
-            )
+            AppError::from(SyncError::InvalidConfiguration {
+                field: "WebDAV 地址".to_string(),
+                reason: error.to_string(),
+            })
         })?;
         // 丢弃 base 上可能携带的查询与片段，仅保留 scheme://host/path 前缀。
         base.set_query(None);
         base.set_fragment(None);
         if base.scheme() != "https" {
-            return Err(AppError::with_detail(
-                ErrorCode::Configuration,
-                format!(
-                    "WebDAV 地址必须使用 https（http 会明文传输同步口令与备份内容），当前为「{base_url}」"
+            return Err(SyncError::InvalidConfiguration {
+                field: "WebDAV 协议".to_string(),
+                reason: format!(
+                    "必须使用 https，避免明文传输同步口令与备份内容，当前为「{base_url}」"
                 ),
-            ));
+            }
+            .into());
         }
         let host = base
             .host_str()
@@ -80,18 +82,18 @@ impl WebDavTarget {
         let mut current = base;
         for segment in directory.split('/').filter(|segment| !segment.is_empty()) {
             current = current.join(&format!("{segment}/")).map_err(|error| {
-                AppError::with_detail(
-                    ErrorCode::Configuration,
-                    format!("同步目录拼接失败: {error}"),
-                )
+                AppError::from(SyncError::InvalidConfiguration {
+                    field: "WebDAV 同步目录".to_string(),
+                    reason: error.to_string(),
+                })
             })?;
             directory_urls.push(current.clone());
         }
         let object_url = current.join(SYNC_OBJECT_NAME).map_err(|error| {
-            AppError::with_detail(
-                ErrorCode::Configuration,
-                format!("同步对象地址拼接失败: {error}"),
-            )
+            AppError::from(SyncError::InvalidConfiguration {
+                field: "WebDAV 同步对象".to_string(),
+                reason: error.to_string(),
+            })
         })?;
 
         Ok(Self {
@@ -329,15 +331,23 @@ impl CloudSyncTarget for WebDavTarget {
 
 /// 网络层错误的统一包装：附带动作语境与主机名，不含凭据。
 pub(super) fn http_error(action: &str, host: &str, error: reqwest::Error) -> AppError {
-    let detail = if error.is_timeout() {
-        "请求超时".to_string()
-    } else if error.is_connect() {
+    if error.is_timeout() {
+        return SyncError::Timeout {
+            endpoint: host.to_string(),
+            operation: action.to_string(),
+            timeout_ms: 0,
+        }
+        .into();
+    }
+    let detail = if error.is_connect() {
         "无法建立连接".to_string()
     } else {
         error.to_string()
     };
-    AppError::with_detail(
-        ErrorCode::CloudSyncFailed,
-        format!("{action}失败，服务器: {host}，原因: {detail}"),
-    )
+    SyncError::Transport {
+        endpoint: host.to_string(),
+        operation: action.to_string(),
+        reason: detail,
+    }
+    .into()
 }

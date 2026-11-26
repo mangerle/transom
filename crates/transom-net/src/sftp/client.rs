@@ -1,5 +1,6 @@
 //! SFTP 会话客户端封装与通用错误转换。
 
+use super::error::SftpError;
 use crate::client::SshRemote;
 use crate::timeout::{SFTP_HANDSHAKE_TIMEOUT, with_timeout};
 use russh_sftp::client::{Config, SftpSession};
@@ -123,26 +124,27 @@ impl SftpClient {
 /// 而服务器回的文本随实现与 locale 变化——中文系统不会回 "Permission denied"，
 /// 靠字符串匹配等于在部分机器上这个功能根本不存在。状态码是协议规定的，可靠。
 pub(crate) fn sftp_error(error: russh_sftp::client::error::Error) -> AppError {
-    if let russh_sftp::client::error::Error::Status(status) = &error
-        && status.status_code == russh_sftp::protocol::StatusCode::PermissionDenied
-    {
-        return AppError::with_detail(
-            ErrorCode::PermissionDenied,
-            format!(
-                "远端拒绝授权本次操作，路径状态码: {:?}，说明: {}",
-                status.status_code, status.error_message
-            ),
-        );
-    }
-    AppError::with_detail(ErrorCode::SftpFailed, error.to_string())
+    sftp_error_at("SFTP 请求", "<未知路径>", error)
+}
+
+/// 带操作名与路径的协议错误转换，便于事件层保留精确现场。
+pub(crate) fn sftp_error_at(
+    operation: impl Into<String>,
+    path: impl Into<String>,
+    error: russh_sftp::client::error::Error,
+) -> AppError {
+    SftpError::from_protocol(error, operation, path).into()
 }
 
 pub(crate) fn sftp_io_error(error: std::io::Error) -> AppError {
-    if error.kind() == std::io::ErrorKind::PermissionDenied {
-        return AppError::with_detail(
-            ErrorCode::PermissionDenied,
-            format!("远端拒绝授权读写操作，原因: {error}"),
-        );
-    }
-    AppError::with_detail(ErrorCode::SftpFailed, error.to_string())
+    SftpError::local_io("SFTP 本地文件操作", "<未知路径>", error).into()
+}
+
+/// 把带路径的 SFTP 本地 IO 错误转换为稳定的事件边界错误。
+pub(crate) fn sftp_io_error_at(
+    operation: impl Into<String>,
+    path: impl Into<String>,
+    error: std::io::Error,
+) -> AppError {
+    SftpError::local_io(operation, path, error).into()
 }

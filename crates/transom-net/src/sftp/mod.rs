@@ -7,6 +7,7 @@
 pub mod check_file;
 mod client;
 pub(crate) mod dir;
+mod error;
 pub(crate) mod hash;
 mod ops;
 mod preview;
@@ -22,7 +23,9 @@ mod tests;
 
 pub use client::SftpClient;
 pub(crate) use client::{
-    MAX_LIST_ENTRIES, TRANSFER_CHUNK, notify_shared_progress, sftp_error, sftp_io_error,
+    MAX_LIST_ENTRIES, TRANSFER_CHUNK, notify_shared_progress, sftp_error, sftp_error_at,
+    sftp_io_error, sftp_io_error_at,
 };
+pub use error::SftpError;
 pub(crate) use text::BACKUP_SLACK_BYTES;
 pub use transfer::TransferProgressResult;

@@ -1,6 +1,9 @@
 //! SOCKS5 动态转发：握手、CONNECT 与 UDP ASSOCIATE。
 
-use super::{ForwardTask, bind_listener, forward_error, relay_counted, serve_listener};
+use super::{
+    ForwardError, ForwardTask, bind_listener, forward_error, forward_io_error, relay_counted,
+    serve_listener,
+};
 use crate::client::SshRemote;
 use crate::timeout::SOCKS5_HANDSHAKE_TIMEOUT;
 use russh::Channel;
@@ -10,7 +13,7 @@ use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpStream, UdpSocket};
 use tokio::sync::watch;
-use transom_core::{AppError, BindAddress, ErrorCode, ErrorContext, ForwardMeter};
+use transom_core::{AppError, BindAddress, ErrorContext, ForwardMeter};
 
 /// SOCKS5 协商完成后的转发形态。
 enum Socks5Route {
@@ -88,13 +91,13 @@ async fn run_socks5(
     )
     .await
     .map_err(|_| {
-        AppError::with_detail(
-            ErrorCode::Timeout,
-            format!(
-                "SOCKS5 握手超时，等待上限: {} 秒",
-                SOCKS5_HANDSHAKE_TIMEOUT.as_secs()
-            ),
-        )
+        AppError::from(ForwardError::Timeout {
+            operation: "SOCKS5 握手".to_string(),
+            target: "本地客户端".to_string(),
+            timeout_ms: SOCKS5_HANDSHAKE_TIMEOUT
+                .as_millis()
+                .min(u128::from(u64::MAX)) as u64,
+        })
     })??;
     match route {
         Socks5Route::Connect(channel) => {
@@ -119,10 +122,11 @@ async fn socks5_negotiate(
         3 => udp_associate(client, request[3]).await,
         other => {
             let _ = client.write_all(&[5, 7, 0, 1, 0, 0, 0, 0, 0, 0]).await;
-            Err(AppError::with_detail(
-                ErrorCode::ForwardFailed,
-                format!("仅支持 SOCKS5 CONNECT 与 UDP ASSOCIATE，实际命令: {other}"),
-            ))
+            Err(ForwardError::Protocol {
+                operation: "SOCKS5 请求".to_string(),
+                reason: format!("仅支持 CONNECT 与 UDP ASSOCIATE，实际命令: {other}"),
+            }
+            .into())
         }
     }
 }
@@ -135,10 +139,11 @@ async fn negotiate_methods(client: &mut TcpStream) -> Result<(), AppError> {
         .await
         .map_err(forward_error)?;
     if greeting[0] != 5 {
-        return Err(AppError::with_detail(
-            ErrorCode::ForwardFailed,
-            format!("不支持的 SOCKS 版本: {}", greeting[0]),
-        ));
+        return Err(ForwardError::Protocol {
+            operation: "SOCKS5 问候".to_string(),
+            reason: format!("不支持的版本: {}", greeting[0]),
+        }
+        .into());
     }
     let mut methods = vec![0u8; greeting[1] as usize];
     client
@@ -146,11 +151,15 @@ async fn negotiate_methods(client: &mut TcpStream) -> Result<(), AppError> {
         .await
         .map_err(forward_error)?;
     if !methods.contains(&0) {
-        client.write_all(&[5, 0xff]).await.map_err(forward_error)?;
-        return Err(AppError::with_detail(
-            ErrorCode::ForwardFailed,
-            "SOCKS 客户端未提供免认证方式",
-        ));
+        client
+            .write_all(&[5, 0xff])
+            .await
+            .map_err(|error| forward_io_error("SOCKS5 拒绝认证方法", error))?;
+        return Err(ForwardError::Protocol {
+            operation: "SOCKS5 认证协商".to_string(),
+            reason: "客户端未提供免认证方式".to_string(),
+        }
+        .into());
     }
     client.write_all(&[5, 0]).await.map_err(forward_error)?;
     Ok(())
@@ -165,10 +174,11 @@ async fn read_request_header(client: &mut TcpStream) -> Result<[u8; 4], AppError
         .map_err(forward_error)?;
     if request[0] != 5 {
         let _ = client.write_all(&[5, 7, 0, 1, 0, 0, 0, 0, 0, 0]).await;
-        return Err(AppError::with_detail(
-            ErrorCode::ForwardFailed,
-            format!("不支持的 SOCKS 版本: {}", request[0]),
-        ));
+        return Err(ForwardError::Protocol {
+            operation: "SOCKS5 请求头".to_string(),
+            reason: format!("不支持的版本: {}", request[0]),
+        }
+        .into());
     }
     Ok(request)
 }
@@ -292,8 +302,12 @@ async fn read_socks5_address_and_port(
                 .read_exact(&mut domain)
                 .await
                 .map_err(forward_error)?;
-            String::from_utf8(domain)
-                .map_err(|_| AppError::with_detail(ErrorCode::ForwardFailed, "SOCKS 域名非法"))?
+            String::from_utf8(domain).map_err(|_| {
+                AppError::from(ForwardError::Protocol {
+                    operation: "SOCKS5 域名解析".to_string(),
+                    reason: "域名不是合法 UTF-8".to_string(),
+                })
+            })?
         }
         4 => {
             let mut address = [0u8; 16];
@@ -305,10 +319,11 @@ async fn read_socks5_address_and_port(
         }
         _ => {
             let _ = client.write_all(&[5, 8, 0, 1, 0, 0, 0, 0, 0, 0]).await;
-            return Err(AppError::with_detail(
-                ErrorCode::ForwardFailed,
-                format!("不支持的 SOCKS 地址类型: {}", atyp),
-            ));
+            return Err(ForwardError::Protocol {
+                operation: "SOCKS5 地址解析".to_string(),
+                reason: format!("不支持的地址类型: {atyp}"),
+            }
+            .into());
         }
     };
     let mut port = [0u8; 2];

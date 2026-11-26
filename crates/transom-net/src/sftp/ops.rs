@@ -1,30 +1,36 @@
 //! SFTP 目录列表、元数据与常规文件系统操作。
 
-use super::client::{SftpClient, list_limit_reached, sftp_error};
+use super::SftpError;
+use super::client::{MAX_LIST_ENTRIES, SftpClient, list_limit_reached, sftp_error_at};
 use crate::file_order::sort_remote_files;
-use transom_core::{AppError, ErrorCode, RemoteFile, RemoteMetadata, is_safe_file_name};
+use transom_core::{AppError, RemoteFile, RemoteMetadata, is_safe_file_name};
 
 impl SftpClient {
     pub async fn list(&self, path: &str) -> Result<(String, Vec<RemoteFile>), AppError> {
-        let canonical = self.session.canonicalize(path).await.map_err(sftp_error)?;
+        let canonical = self
+            .session
+            .canonicalize(path)
+            .await
+            .map_err(|error| sftp_error_at("解析远端目录", path, error))?;
         let mut entries = Vec::new();
         let mut rejected = 0usize;
         for entry in self
             .session
             .read_dir(&canonical)
             .await
-            .map_err(sftp_error)?
+            .map_err(|error| sftp_error_at("列举远端目录", &canonical, error))?
         {
             let name = entry.file_name();
             // 超限即中止：不把截断的目录视图交给界面（会误导删除/同步
             // 这类破坏性操作），也不让异常目录吃光客户端内存。
             if list_limit_reached(entries.len()) {
-                return Err(AppError::with_detail(
-                    ErrorCode::SftpFailed,
-                    format!(
-                        "目录条目超过上限，已中止读取，请使用过滤或进入子目录，目录: {canonical}"
-                    ),
-                ));
+                return Err(SftpError::TooLarge {
+                    operation: "列举目录".to_string(),
+                    path: canonical.clone(),
+                    actual: entries.len() as u64,
+                    limit: MAX_LIST_ENTRIES as u64,
+                }
+                .into());
             }
             // 服务端控制 filename，绝不能把它当成可信的单段路径：非法名字
             // 一旦进入 UI，下载时 join 到本地目录就会越界写文件。
@@ -67,7 +73,7 @@ impl SftpClient {
             .session
             .symlink_metadata(path)
             .await
-            .map_err(sftp_error)?;
+            .map_err(|error| sftp_error_at("读取远端属性", path, error))?;
         let is_symlink = metadata.is_symlink();
         let link_target = if is_symlink {
             self.session.read_link(path).await.ok()
@@ -91,7 +97,10 @@ impl SftpClient {
     }
 
     pub async fn create_dir(&self, path: &str) -> Result<(), AppError> {
-        self.session.create_dir(path).await.map_err(sftp_error)
+        self.session
+            .create_dir(path)
+            .await
+            .map_err(|error| sftp_error_at("创建远端目录", path, error))
     }
 
     /// 递归创建远端目录，已存在的目录视为成功。
@@ -125,10 +134,7 @@ impl SftpClient {
                 .map(|metadata| metadata.is_dir())
                 .unwrap_or(false);
             if !exists_as_dir {
-                return Err(AppError::with_detail(
-                    ErrorCode::SftpFailed,
-                    format!("创建远端目录失败 {path}: {error}"),
-                ));
+                return Err(sftp_error_at("创建远端目录", path, error));
             }
         }
         Ok(())
@@ -158,7 +164,7 @@ impl SftpClient {
         self.session
             .posix_rename(from, to)
             .await
-            .map_err(sftp_error)
+            .map_err(|error| sftp_error_at("原子重命名", to, error))
     }
 
     /// 尝试以 POSIX 原子语义重命名，服务端不支持时自动降级为标准重命名（必要时清理旧目标）。
@@ -170,12 +176,15 @@ impl SftpClient {
                 if let Err(error) = self.session.rename(from, to).await {
                     // 若标准 rename 失败（如因目标已存在导致），进行兜底删除后重试
                     let _ = self.session.remove_file(to).await;
-                    self.session.rename(from, to).await.map_err(sftp_error)?;
+                    self.session
+                        .rename(from, to)
+                        .await
+                        .map_err(|error| sftp_error_at("重命名", to, error))?;
                     let _ = error;
                 }
                 Ok(())
             }
-            Err(error) => Err(sftp_error(error)),
+            Err(error) => Err(sftp_error_at("原子重命名", to, error)),
         }
     }
 
@@ -197,7 +206,7 @@ impl SftpClient {
         self.session
             .symlink(target, link_path)
             .await
-            .map_err(sftp_error)
+            .map_err(|error| sftp_error_at("创建软链接", link_path, error))
     }
 
     /// 删除远端文件或目录。
@@ -208,7 +217,10 @@ impl SftpClient {
         if is_dir {
             self.delete_dir_recursive(path).await
         } else {
-            self.session.remove_file(path).await.map_err(sftp_error)
+            self.session
+                .remove_file(path)
+                .await
+                .map_err(|error| sftp_error_at("删除远端文件", path, error))
         }
     }
 
@@ -224,7 +236,7 @@ impl SftpClient {
         self.session
             .set_metadata(path, meta)
             .await
-            .map_err(sftp_error)
+            .map_err(|error| sftp_error_at("修改远端权限", path, error))
     }
 
     /// 仅设置远端文件的修改时间，不触碰权限与其他属性。
@@ -241,6 +253,6 @@ impl SftpClient {
         self.session
             .set_metadata(path, attributes)
             .await
-            .map_err(sftp_error)
+            .map_err(|error| sftp_error_at("设置远端修改时间", path, error))
     }
 }

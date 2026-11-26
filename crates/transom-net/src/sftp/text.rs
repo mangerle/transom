@@ -13,10 +13,10 @@
 //!   备份属尽力而为：目标不存在或读取失败时跳过，备份文件本身写不进去才中止
 //!   覆盖（说明同目录写入必然失败，提前止损）。
 
-use crate::sftp::{SftpClient, TRANSFER_CHUNK, sftp_error, sftp_io_error};
+use crate::sftp::{SftpClient, SftpError, TRANSFER_CHUNK, sftp_error_at, sftp_io_error_at};
 use russh_sftp::client::fs::File;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use transom_core::{AppError, ErrorCode, RemoteTextMeta};
+use transom_core::{AppError, RemoteTextMeta};
 
 const UTF8_BOM: [u8; 3] = [0xEF, 0xBB, 0xBF];
 /// 备份读取的尺寸余量：防止 stat 与读取之间文件被替换成更大的内容导致误判。
@@ -45,7 +45,11 @@ impl SftpClient {
         path: &str,
         max_bytes: u64,
     ) -> Result<(String, RemoteTextMeta), AppError> {
-        let remote = self.session.open(path).await.map_err(sftp_error)?;
+        let remote = self
+            .session
+            .open(path)
+            .await
+            .map_err(|error| sftp_error_at("打开远端文本", path, error))?;
         let opened = remote.metadata().await.ok();
         let total = opened.as_ref().and_then(|metadata| metadata.size);
         // mtime 取读取前的 stat：若文件在读取过程中被改写，随后保存前的比对
@@ -55,10 +59,13 @@ impl SftpClient {
             && total > max_bytes
         {
             let _ = remote.close().await;
-            return Err(AppError::with_detail(
-                ErrorCode::SftpFailed,
-                format!("文件 {path} 大小 {total} 字节，超过编辑器上限 {max_bytes} 字节"),
-            ));
+            return Err(SftpError::TooLarge {
+                operation: "打开远端文本".to_string(),
+                path: path.to_string(),
+                actual: total,
+                limit: max_bytes,
+            }
+            .into());
         }
 
         let raw_len = read_file_capped(remote, path, max_bytes).await?;
@@ -114,17 +121,23 @@ impl SftpClient {
         if let Some(expected) = expected
             && !force
         {
-            let metadata = self.session.metadata(path).await.map_err(sftp_error)?;
+            let metadata = self
+                .session
+                .metadata(path)
+                .await
+                .map_err(|error| sftp_error_at("读取远端文本属性", path, error))?;
             if let Some(current) = remote_text_meta_of(metadata.size, metadata.mtime)
                 && expected.conflicts_with(&current)
             {
-                return Err(AppError::with_detail(
-                    ErrorCode::SftpTextConflict,
-                    format!(
-                        "文件 {path} 自打开后已被修改：当前 {} 字节（mtime {:?}），打开时 {} 字节（mtime {:?}）",
+                return Err(SftpError::Conflict {
+                    operation: "保存远端文本".to_string(),
+                    path: path.to_string(),
+                    reason: format!(
+                        "文件自打开后已被修改：当前 {} 字节（mtime {:?}），打开时 {} 字节（mtime {:?}）",
                         current.size, current.mtime, expected.size, expected.mtime
                     ),
-                ));
+                }
+                .into());
             }
         }
         Ok(restore_write_payload(content, expected.as_ref()))
@@ -141,17 +154,23 @@ impl SftpClient {
         if let Some(expected) = expected
             && !force
         {
-            let metadata = self.session.metadata(path).await.map_err(sftp_error)?;
+            let metadata = self
+                .session
+                .metadata(path)
+                .await
+                .map_err(|error| sftp_error_at("读取远端文本属性", path, error))?;
             if let Some(current) = remote_text_meta_of(metadata.size, metadata.mtime)
                 && expected.conflicts_with(&current)
             {
-                return Err(AppError::with_detail(
-                    ErrorCode::SftpTextConflict,
-                    format!(
-                        "文件 {path} 自打开后已被修改：当前 {} 字节（mtime {:?}），打开时 {} 字节（mtime {:?}）",
+                return Err(SftpError::Conflict {
+                    operation: "保存远端文本".to_string(),
+                    path: path.to_string(),
+                    reason: format!(
+                        "文件自打开后已被修改：当前 {} 字节（mtime {:?}），打开时 {} 字节（mtime {:?}）",
                         current.size, current.mtime, expected.size, expected.mtime
                     ),
-                ));
+                }
+                .into());
             }
         }
         let payload = restore_write_payload(content, expected.as_ref());
@@ -167,24 +186,37 @@ impl SftpClient {
                     | russh_sftp::protocol::OpenFlags::TRUNCATE,
             )
             .await
-            .map_err(sftp_error)?;
-        remote.write_all(&payload).await.map_err(sftp_io_error)?;
-        remote.flush().await.map_err(sftp_io_error)?;
+            .map_err(|error| sftp_error_at("写入远端文本", path, error))?;
+        remote
+            .write_all(&payload)
+            .await
+            .map_err(|error| sftp_io_error_at("写入远端文本", path, error))?;
+        remote
+            .flush()
+            .await
+            .map_err(|error| sftp_io_error_at("刷新远端文本", path, error))?;
         let submitted = payload.len() as u64;
         let _ = remote.close().await;
 
-        let metadata = self.session.metadata(path).await.map_err(sftp_error)?;
-        let written = metadata.size.ok_or_else(|| {
-            AppError::with_detail(
-                ErrorCode::SftpFailed,
-                format!("写回后无法读取远端文件 {path} 的大小，无法确认写入结果"),
-            )
+        let metadata = self
+            .session
+            .metadata(path)
+            .await
+            .map_err(|error| sftp_error_at("读取远端文本属性", path, error))?;
+        let written = metadata.size.ok_or_else(|| SftpError::Protocol {
+            operation: "确认远端文本".to_string(),
+            path: path.to_string(),
+            reason: "写回后无法读取文件大小".to_string(),
         })?;
         if written != submitted {
-            return Err(AppError::with_detail(
-                ErrorCode::SftpFailed,
-                format!("远端确认 {written} 字节，提交内容 {submitted} 字节，写入可能被中断"),
-            ));
+            return Err(SftpError::Conflict {
+                operation: "确认远端文本".to_string(),
+                path: path.to_string(),
+                reason: format!(
+                    "远端确认 {written} 字节，提交内容 {submitted} 字节，写入可能被中断"
+                ),
+            }
+            .into());
         }
         let (bom, crlf, transcoded) = expected
             .map(|meta| (meta.bom, meta.crlf, meta.transcoded))
@@ -230,17 +262,20 @@ impl SftpClient {
                     | russh_sftp::protocol::OpenFlags::TRUNCATE,
             )
             .await
-            .map_err(sftp_error)?;
+            .map_err(|error| sftp_error_at("创建远端备份", &backup_path, error))?;
         backup
             .write_all(&raw)
             .await
-            .map_err(sftp_io_error)
+            .map_err(|error| sftp_io_error_at("写入远端备份", &backup_path, error))
             .inspect_err(|_| {
                 log::warn!(
                     "写入远端备份文件失败，已中止覆盖，路径: {path}，备份路径: {backup_path}"
                 );
             })?;
-        backup.flush().await.map_err(sftp_io_error)?;
+        backup
+            .flush()
+            .await
+            .map_err(|error| sftp_io_error_at("刷新远端备份", &backup_path, error))?;
         let _ = backup.close().await;
         log::debug!(
             "已备份远端文件当前内容，路径: {path}，字节数: {}",
@@ -263,7 +298,7 @@ async fn read_file_capped(mut file: File, path: &str, limit: u64) -> Result<Vec<
             Ok(count) => count,
             Err(error) => {
                 let _ = file.close().await;
-                return Err(sftp_io_error(error));
+                return Err(sftp_io_error_at("读取远端文本", path, error));
             }
         };
         if count == 0 {
@@ -271,10 +306,13 @@ async fn read_file_capped(mut file: File, path: &str, limit: u64) -> Result<Vec<
         }
         if buffer.len().saturating_add(count) > limit {
             let _ = file.close().await;
-            return Err(AppError::with_detail(
-                ErrorCode::SftpFailed,
-                format!("文件 {path} 实际大小超过读取上限 {limit} 字节，已放弃读取"),
-            ));
+            return Err(SftpError::TooLarge {
+                operation: "读取远端文本".to_string(),
+                path: path.to_string(),
+                actual: buffer.len().saturating_add(count) as u64,
+                limit: limit as u64,
+            }
+            .into());
         }
         buffer.extend_from_slice(&chunk[..count]);
     }
@@ -301,12 +339,12 @@ pub(crate) fn normalize_read_text(
             let bytes = error.into_bytes();
             let (decoded, had_errors) = encoding_rs::GBK.decode_without_bom_handling(&bytes);
             if had_errors {
-                return Err(AppError::with_detail(
-                    ErrorCode::SftpFailed,
-                    format!(
-                        "文件 {path} 不是 UTF-8 文本，且无法按 GBK 解码（可能是二进制内容），内置编辑器无法打开"
-                    ),
-                ));
+                return Err(SftpError::Protocol {
+                    operation: "解析远端文本".to_string(),
+                    path: path.to_string(),
+                    reason: "内容不是 UTF-8，且无法按 GBK 解码".to_string(),
+                }
+                .into());
             }
             (decoded.into_owned(), true)
         }

@@ -6,8 +6,10 @@
 //! - 动态转发把 SOCKS5 握手与 UDP 关联放在 socks5.rs，主文件只保留任务生命周期
 //!   与 TCP/远程转发的编排。
 
+mod error;
 mod socks5;
 
+pub use error::ForwardError;
 use socks5::{relay_local_connection, start_dynamic};
 
 use crate::client::SshRemote;
@@ -21,8 +23,7 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::{Semaphore, watch};
 use tokio::task::{JoinHandle, JoinSet};
 use transom_core::{
-    AppError, BindAddress, ErrorCode, ForwardKind, ForwardMeter, ForwardRule, SocksAuth,
-    TargetAddress,
+    AppError, BindAddress, ForwardKind, ForwardMeter, ForwardRule, SocksAuth, TargetAddress,
 };
 
 /// accept 失败后的退避窗口：EMFILE 等瞬时错误下避免 100% CPU 忙等。
@@ -92,20 +93,22 @@ pub async fn start_forward(
         }
         ForwardKind::Dynamic { bind, socks } => {
             if !matches!(socks.auth, SocksAuth::None) {
-                return Err(AppError::with_detail(
-                    ErrorCode::ForwardFailed,
-                    "动态转发暂不支持 SOCKS 认证",
-                ));
+                return Err(ForwardError::Unsupported {
+                    operation: "启动动态转发".to_string(),
+                    reason: "暂不支持 SOCKS 认证".to_string(),
+                }
+                .into());
             }
             start_dynamic(remote, bind, meter.clone()).await
         }
         ForwardKind::Remote { bind, target } => {
             start_remote(remote, bind, target, meter.clone()).await
         }
-        _ => Err(AppError::with_detail(
-            ErrorCode::ForwardFailed,
-            "不支持的转发模式",
-        )),
+        _ => Err(ForwardError::Unsupported {
+            operation: "启动转发".to_string(),
+            reason: "不支持的转发模式".to_string(),
+        }
+        .into()),
     }
 }
 
@@ -233,11 +236,30 @@ async fn start_remote(
 pub(super) async fn bind_listener(bind: &BindAddress) -> Result<TcpListener, AppError> {
     TcpListener::bind((bind.host.as_str(), bind.port))
         .await
-        .map_err(forward_error)
+        .map_err(|error| {
+            ForwardError::BindFailed {
+                bind: format!("{}:{}", bind.host, bind.port),
+                source: error,
+            }
+            .into()
+        })
 }
 
 pub(super) fn forward_error(error: std::io::Error) -> AppError {
-    AppError::with_detail(ErrorCode::ForwardFailed, error.to_string())
+    ForwardError::Io {
+        operation: "转发链路 IO".to_string(),
+        source: error,
+    }
+    .into()
+}
+
+/// 带操作名的转发 IO 错误转换。
+pub(super) fn forward_io_error(operation: impl Into<String>, error: std::io::Error) -> AppError {
+    ForwardError::Io {
+        operation: operation.into(),
+        source: error,
+    }
+    .into()
 }
 
 /// 双向字节中继：两侧各自拷贝并计入 [`ForwardMeter`]。
@@ -292,32 +314,34 @@ pub async fn test_forward_target(rule: &ForwardRule) -> Result<(), AppError> {
             (target.host.as_str(), target.port)
         }
         _ => {
-            return Err(AppError::with_detail(
-                ErrorCode::NotSupported,
-                "动态转发的目标按每条连接决定，无法预探测连通性",
-            ));
+            return Err(ForwardError::Unsupported {
+                operation: "探测转发目标".to_string(),
+                reason: "动态转发的目标按每条连接决定，无法预探测连通性".to_string(),
+            }
+            .into());
         }
     };
     if host.trim().is_empty() || port == 0 {
-        return Err(AppError::with_detail(
-            ErrorCode::ForwardFailed,
-            format!("转发目标地址无效，目标: {host}:{port}"),
-        ));
+        return Err(ForwardError::InvalidTarget {
+            target: format!("{host}:{port}"),
+            reason: "主机为空或端口为零".to_string(),
+        }
+        .into());
     }
     let connect = TcpStream::connect((host, port));
     match tokio::time::timeout(FORWARD_PROBE_TIMEOUT, connect).await {
         Ok(Ok(_)) => Ok(()),
-        Ok(Err(error)) => Err(AppError::with_detail(
-            ErrorCode::ForwardFailed,
-            format!("连接目标失败，目标: {host}:{port}，原因: {error}"),
-        )),
-        Err(_) => Err(AppError::with_detail(
-            ErrorCode::Timeout,
-            format!(
-                "连接目标超时，目标: {host}:{port}，等待上限: {} 秒",
-                FORWARD_PROBE_TIMEOUT.as_secs()
-            ),
-        )),
+        Ok(Err(error)) => Err(ForwardError::TargetUnreachable {
+            target: format!("{host}:{port}"),
+            reason: error.to_string(),
+        }
+        .into()),
+        Err(_) => Err(ForwardError::Timeout {
+            operation: "探测转发目标".to_string(),
+            target: format!("{host}:{port}"),
+            timeout_ms: FORWARD_PROBE_TIMEOUT.as_millis().min(u128::from(u64::MAX)) as u64,
+        }
+        .into()),
     }
 }
 

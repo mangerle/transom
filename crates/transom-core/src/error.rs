@@ -92,6 +92,16 @@ pub enum ErrorCode {
     GitCommandFailed,
     /// 仓库索引或引用被其他 git 进程锁定，稍后重试即可恢复。
     GitBusy,
+    /// 远端路径不存在；与通用 SFTP 故障分开，便于界面给出刷新或创建路径的恢复动作。
+    SftpNotFound,
+    /// SFTP 操作与当前文件状态冲突，例如目标已存在或版本条件不满足。
+    SftpConflict,
+    /// SFTP 预览、读取或传输内容超过调用方声明的体积上限。
+    SftpTooLarge,
+    /// 本地持久化内容损坏，无法按当前格式解析。
+    StorageCorrupt,
+    /// 持久化格式版本高于当前程序支持范围，禁止降级覆盖。
+    StorageSchemaTooNew,
 }
 
 /// 跨层保留的失败现场。
@@ -144,6 +154,30 @@ pub enum ErrorContext {
     ChannelRejected { reason: String },
     /// Wake-on-LAN 发包失败。
     Wake { mac: String, reason: String },
+    /// SFTP 操作现场；`reason` 仅保存可诊断摘要，不携带凭证或文件正文。
+    Sftp {
+        operation: String,
+        path: String,
+        reason: String,
+    },
+    /// 端口转发操作现场。
+    Forward {
+        operation: String,
+        target: String,
+        reason: String,
+    },
+    /// 云同步操作现场。
+    Sync {
+        endpoint: String,
+        operation: String,
+        reason: String,
+    },
+    /// 本地存储操作现场。
+    Storage {
+        operation: String,
+        path: String,
+        reason: String,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

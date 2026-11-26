@@ -2100,6 +2100,21 @@ error:
   cloud_sync_missing:
     en: No backup on the cloud yet
     zh-CN: 云端还没有备份
+  sftp_not_found:
+    en: Remote path not found
+    zh-CN: 远端路径不存在
+  sftp_conflict:
+    en: Remote file state conflict
+    zh-CN: 远端文件状态冲突
+  sftp_too_large:
+    en: File exceeds the allowed size
+    zh-CN: 文件超过允许大小
+  storage_corrupt:
+    en: Stored data is corrupted
+    zh-CN: 本地数据已损坏
+  storage_schema_too_new:
+    en: Stored data requires a newer app version
+    zh-CN: 本地数据版本高于当前程序
   forward_requires_ssh:
     en: Port forwarding is only available for SSH sessions.
     zh-CN: 端口转发仅支持 SSH 会话。

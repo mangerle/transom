@@ -80,6 +80,11 @@ pub(crate) fn localized_error(error: &AppError) -> String {
         ErrorCode::CloudSyncFailed => rust_i18n::t!("error.cloud_sync_failed"),
         ErrorCode::CloudSyncConflict => rust_i18n::t!("error.cloud_sync_conflict"),
         ErrorCode::CloudSyncMissing => rust_i18n::t!("error.cloud_sync_missing"),
+        ErrorCode::SftpNotFound => rust_i18n::t!("error.sftp_not_found"),
+        ErrorCode::SftpConflict => rust_i18n::t!("error.sftp_conflict"),
+        ErrorCode::SftpTooLarge => rust_i18n::t!("error.sftp_too_large"),
+        ErrorCode::StorageCorrupt => rust_i18n::t!("error.storage_corrupt"),
+        ErrorCode::StorageSchemaTooNew => rust_i18n::t!("error.storage_schema_too_new"),
         _ => rust_i18n::t!("app.error"),
     }
     .to_string();
