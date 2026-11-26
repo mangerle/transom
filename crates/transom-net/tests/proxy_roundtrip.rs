@@ -246,6 +246,7 @@ fn ssh_connection(port: u16) -> SshConnection {
             auto_reconnect: false,
             agent_forward: false,
             wol_mac: None,
+            ..Default::default()
         },
         proxy_jump: None,
     }

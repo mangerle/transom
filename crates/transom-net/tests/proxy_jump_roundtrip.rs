@@ -157,6 +157,7 @@ fn ssh_connection(host: &str, port: u16, user: &str) -> SshConnection {
             auto_reconnect: false,
             agent_forward: false,
             wol_mac: None,
+            ..Default::default()
         },
         proxy_jump: None,
     }

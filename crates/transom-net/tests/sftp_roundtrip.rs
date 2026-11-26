@@ -56,6 +56,7 @@ async fn sftp_list_upload_download_and_mutations() {
             auto_reconnect: false,
             agent_forward: false,
             wol_mac: None,
+            ..Default::default()
         },
         proxy_jump: None,
     };
@@ -762,6 +763,7 @@ async fn upload_interrupted_does_not_corrupt_existing_remote_file() {
             auto_reconnect: false,
             agent_forward: false,
             wol_mac: None,
+            ..Default::default()
         },
         proxy_jump: None,
     };

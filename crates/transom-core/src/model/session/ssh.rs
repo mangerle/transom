@@ -78,10 +78,16 @@ pub struct SessionOptions {
     /// `0` disables keepalive messages.
     pub keepalive_secs: u64,
     pub allow_keyboard_interactive: bool,
-    /// 意外断线后自动重连（退避 2s/5s/10s，上限 3 次）。
+    /// 意外断线后自动重连（退避 2s/5s/10s/20s，上限 4 次）。
     /// 老会话文件没有该字段，按关闭降级。
     #[serde(default)]
     pub auto_reconnect: bool,
+    /// 重连成功后自动切换回断线前最后一次记录的工作目录（基于 OSC 7）。
+    #[serde(default)]
+    pub restore_cwd_on_reconnect: bool,
+    /// 连接/重连时尝试自动创建或附着远端 tmux 会话，防止断线丢失运行中进程。
+    #[serde(default)]
+    pub persist_tmux_session: bool,
     /// 是否启用 SSH Agent 代理转发（对应 ssh -A）。
     /// 在多跳堡垒机场景下将本地 SSH Agent 安全转发至下游远端主机。
     #[serde(default)]
@@ -101,6 +107,8 @@ impl Default for SessionOptions {
             keepalive_secs: 30,
             allow_keyboard_interactive: true,
             auto_reconnect: false,
+            restore_cwd_on_reconnect: false,
+            persist_tmux_session: false,
             agent_forward: false,
             wol_mac: None,
         }

@@ -54,5 +54,7 @@ pub(crate) struct SessionPaneState {
     pub(crate) reconnect_task: Option<Task<()>>,
     /// 等待自动重连期间展示在横幅上的倒计时说明。
     pub(crate) reconnect_detail: Option<String>,
+    /// 断线前最后一次通过 OSC 7 上报的远端工作目录，供重连后按配置自动切回。
+    pub(crate) last_cwd: Option<String>,
     pub(crate) zmodem: Option<ZmodemState>,
 }

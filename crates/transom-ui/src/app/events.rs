@@ -354,6 +354,9 @@ impl AppShell {
                 log::debug!("收到终端 OSC 7 cwd，窗格: {tab_id}，路径: {path}");
                 if let Some(tab) = self.state.workspace.tab_mut(tab_id) {
                     tab.set_cwd(Some(path.clone()));
+                    if let Some(pane) = tab.session_pane_mut() {
+                        pane.last_cwd = Some(path.clone());
+                    }
                 }
                 crate::sftp::sftp_sync_with_terminal_cwd(&mut self.state, tab_id, path, window, cx);
             }

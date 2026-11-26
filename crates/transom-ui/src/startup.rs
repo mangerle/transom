@@ -8,12 +8,44 @@
 use crate::app::{AppShell, AppState};
 use gpui_kit::*;
 use std::time::Duration;
-use transom_core::{ConnectionId, TabId};
+use transom_core::{Connection, ConnectionId, Session, TabId};
 
 /// 连接建立到第一条命令之间的等待时间。
 const STARTUP_GRACE: Duration = Duration::from_millis(700);
 /// 相邻命令之间的等待时间。
 const STARTUP_INTERVAL: Duration = Duration::from_millis(250);
+
+/// 把 POSIX 路径用单引号安全转义，避免空格或特殊字符破坏 `cd` 命令。
+fn quote_posix_arg(raw: &str) -> String {
+    let escaped = raw.replace('\'', "'\\''");
+    format!("'{escaped}'")
+}
+
+/// 根据 SSH 会话持久化与目录恢复选项生成连接就绪后的附加命令。
+///
+/// 设计原理（Why）：开启 `persist_tmux_session` 时，tmux 会自行保留会话内的工作目录与
+/// 前台进程，因此优先接入 tmux 而不再额外注入 `cd`；仅在未启用 tmux 且存在断线前的
+/// `last_cwd` 时才下发 `cd` 切回原目录。
+pub(crate) fn build_persistence_commands(session: &Session, last_cwd: Option<&str>) -> Vec<String> {
+    let Connection::Ssh(ssh) = &session.connection else {
+        return Vec::new();
+    };
+    let mut commands = Vec::new();
+    if ssh.options.persist_tmux_session {
+        let short_id = session.id.to_string().chars().take(8).collect::<String>();
+        let tmux_name = format!("transom_{short_id}");
+        commands.push(format!(
+            "command -v tmux >/dev/null 2>&1 && tmux new-session -A -s {tmux_name}"
+        ));
+        return commands;
+    }
+    if ssh.options.restore_cwd_on_reconnect
+        && let Some(cwd) = last_cwd.filter(|path| !path.trim().is_empty())
+    {
+        commands.push(format!("cd -- {}", quote_posix_arg(cwd)));
+    }
+    commands
+}
 
 /// 为已就绪的终端安排初始化命令。
 ///
@@ -32,8 +64,11 @@ pub(crate) fn schedule_startup_commands(
         .iter()
         .find(|tab| tab.id == tab_id && tab.connection_id() == Some(connection_id))
         .and_then(|tab| {
-            tab.session()
-                .map(|session| session.startup.commands.clone())
+            let session = tab.session()?;
+            let last_cwd = tab.session_pane().and_then(|pane| pane.last_cwd.as_deref());
+            let mut commands = session.startup.commands.clone();
+            commands.extend(build_persistence_commands(session, last_cwd));
+            Some(commands)
         })
         .filter(|commands| !commands.is_empty())
     else {
@@ -75,5 +110,39 @@ pub(crate) fn schedule_startup_commands(
         .and_then(|tab| tab.session_pane_mut())
     {
         pane._startup_task = Some(task);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::build_persistence_commands;
+    use transom_core::{Connection, Session, SshConnection};
+
+    fn make_ssh_session(restore_cwd: bool, persist_tmux: bool) -> Session {
+        let mut ssh = SshConnection::new("example.com", "root");
+        ssh.options.restore_cwd_on_reconnect = restore_cwd;
+        ssh.options.persist_tmux_session = persist_tmux;
+        Session::new("test", Connection::Ssh(ssh))
+    }
+
+    #[test]
+    fn restores_quoted_cwd_when_enabled() {
+        let session = make_ssh_session(true, false);
+        let cmds = build_persistence_commands(&session, Some("/var/log/my app's"));
+        assert_eq!(cmds, vec!["cd -- '/var/log/my app'\\''s'"]);
+    }
+
+    #[test]
+    fn tmux_persistence_takes_precedence_over_cwd_restore() {
+        let session = make_ssh_session(true, true);
+        let cmds = build_persistence_commands(&session, Some("/tmp"));
+        assert_eq!(cmds.len(), 1);
+        assert!(cmds[0].contains("tmux new-session -A -s transom_"));
+    }
+
+    #[test]
+    fn skips_when_both_options_disabled() {
+        let session = make_ssh_session(false, false);
+        assert!(build_persistence_commands(&session, Some("/tmp")).is_empty());
     }
 }

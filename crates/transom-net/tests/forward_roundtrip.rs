@@ -137,6 +137,7 @@ async fn connect(port: u16, dir: &tempfile::TempDir) -> SshSession {
             auto_reconnect: false,
             agent_forward: false,
             wol_mac: None,
+            ..Default::default()
         },
         proxy_jump: None,
     };

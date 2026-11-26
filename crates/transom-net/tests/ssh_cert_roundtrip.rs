@@ -181,6 +181,7 @@ async fn run_case(
             auto_reconnect: false,
             agent_forward: false,
             wol_mac: None,
+            ..Default::default()
         },
         proxy_jump: None,
     };

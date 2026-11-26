@@ -102,6 +102,7 @@ async fn password_auth_pty_and_tofu_roundtrip() {
             auto_reconnect: false,
             agent_forward: false,
             wol_mac: None,
+            ..Default::default()
         },
         proxy_jump: None,
     };
