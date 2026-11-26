@@ -1,25 +1,52 @@
 //! 容器工作区延迟请求处理。
 
 use super::AppShell;
+use crate::container::{ContainerDetailTab, ContainerWorkspaceEvent};
 use gpui_kit::component::input::TextareaState;
 use gpui_kit::*;
 
 impl AppShell {
     /// 执行一条在事件派发期不能直接完成的容器工作区动作。
-    ///
-    /// 设计原理（Why）：事件在标签实体派发阶段产生，那里既拿不到 `Window`，
-    /// 也不能在实体正被租借时回读它；外壳先把事件连同订阅捕获的标签 id 入队，
-    /// 渲染期再调用既有打开/切换方法。这里只处理需要延后的分支，纯实体动作已
-    /// 在事件处理函数之外由工作区自己完成。
     pub(super) fn handle_container_request(
         &mut self,
         tab_id: transom_core::TabId,
-        event: &crate::container::ContainerWorkspaceEvent,
+        event: &ContainerWorkspaceEvent,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        use crate::container::ContainerDetailTab;
-        use crate::container::ContainerWorkspaceEvent;
+        if matches!(
+            event,
+            ContainerWorkspaceEvent::OpenRunForm(_)
+                | ContainerWorkspaceEvent::OpenImageHub
+                | ContainerWorkspaceEvent::OpenCreateDialog(_)
+                | ContainerWorkspaceEvent::OpenBuildDialog
+                | ContainerWorkspaceEvent::OpenPortForward { .. }
+                | ContainerWorkspaceEvent::OpenVolumeFiles
+                | ContainerWorkspaceEvent::ComposeYamlLoaded { .. }
+                | ContainerWorkspaceEvent::ComposeYamlReadFailed(_)
+                | ContainerWorkspaceEvent::OpenContainerUpdate(_)
+                | ContainerWorkspaceEvent::OpenContainerExport(_)
+                | ContainerWorkspaceEvent::OpenContainerCommit(_)
+                | ContainerWorkspaceEvent::OpenImageTag(_)
+                | ContainerWorkspaceEvent::OpenImagePush { .. }
+                | ContainerWorkspaceEvent::OpenNetworkConnect(_)
+                | ContainerWorkspaceEvent::CloneContainer { .. }
+                | ContainerWorkspaceEvent::RecreateContainer { .. }
+        ) {
+            self.handle_container_modal_request(tab_id, event, window, cx);
+            return;
+        }
+        self.handle_container_action_request(tab_id, event, window, cx);
+    }
+
+    /// 打开或装配容器工作区弹窗、编辑器与派生表单。
+    fn handle_container_modal_request(
+        &mut self,
+        tab_id: transom_core::TabId,
+        event: &ContainerWorkspaceEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         match event {
             ContainerWorkspaceEvent::OpenRunForm(image) => {
                 crate::container::open_container_run_form(
@@ -151,6 +178,19 @@ impl AppShell {
             ContainerWorkspaceEvent::RecreateContainer { id, name } => {
                 crate::container::recreate_container(&mut self.state, tab_id, id, name, window, cx);
             }
+            _ => {}
+        }
+    }
+
+    /// 处理详情页页签切换、行动作与提示。
+    fn handle_container_action_request(
+        &mut self,
+        tab_id: transom_core::TabId,
+        event: &ContainerWorkspaceEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        match event {
             ContainerWorkspaceEvent::SetDetailTab(tab) => {
                 if let Some(workspace) = self.state.container_workspace(tab_id) {
                     workspace.update(cx, |workspace, cx| workspace.set_detail_tab(*tab, cx));

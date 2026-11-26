@@ -209,7 +209,8 @@ pub(super) fn handle_remote_and_init(
                         path,
                         error,
                     },
-                );
+                )
+                .await;
             });
         }
         _ => {}

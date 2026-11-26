@@ -21,7 +21,6 @@
 //!      容器动作与输入框动作两路。
 
 use crate::app::{AppShell, AppState};
-use crate::container::ContainerFormFolders;
 use crate::palette::Palette;
 use gpui_kit::base::actions::{Cancel, Confirm};
 use gpui_kit::component::input::{
@@ -179,8 +178,10 @@ impl ModalKind {
 mod api_client;
 mod body;
 mod container;
+mod entity;
 mod git;
 mod registry;
+mod sftp;
 mod stack;
 pub(crate) use stack::{dialog_dim, reconcile_dialogs};
 mod state;
@@ -189,13 +190,7 @@ pub(crate) use body::{dialog_bindings, on_event};
 pub(crate) use stack::OpenModals;
 
 impl ModalKind {
-    /// 弹窗体：内容与页脚仍由各领域自己渲染。
-    /// 设置、已知主机、备份、审计查看器、密钥向导、会话回放、会话表单、
-    /// 连接确认与运行容器表单的状态归实体，先克隆句柄再进入 `update`，
-    /// 其它弹窗直接读外壳。
-    ///
-    /// 分开两条路径是为了避免“`app.read(cx)` 的只读借用一直活到实体的可变
-    /// `update`”这类借用冲突：实体分支先克隆句柄、立即结束外壳借用。
+    /// 弹窗体：按实体归属分层分发，主函数只保留有序探测链。
     fn render_body(
         self,
         app: &Entity<AppShell>,
@@ -203,108 +198,17 @@ impl ModalKind {
         cx: &mut App,
         p: &Palette,
     ) -> AnyElement {
-        if self == ModalKind::Settings {
-            let settings = app.read(cx).state.ui.modals.settings.clone();
-            return settings.update(cx, |view, cx| view.render_body(&settings, window, cx, p));
+        if let Some(body) = self.render_entity_modal_body(app, window, cx, p) {
+            return body;
         }
-        if self == ModalKind::Update {
-            let update = app.read(cx).state.features.update.clone();
-            return update.update(cx, |view, _cx| view.render_body(&update, p));
+        if let Some(body) = self.container_form_body(app, cx, p) {
+            return body;
         }
-        if self == ModalKind::KnownHosts {
-            let view = app.read(cx).state.ui.modals.connection.known_hosts.clone();
-            return view.update(cx, |view, cx| view.render_body(cx, p));
+        if let Some(body) = self.container_run_form_body(app, cx, p) {
+            return body;
         }
-        if self == ModalKind::BackupPrompt {
-            let view = app.read(cx).state.ui.modals.tools.backup_prompt.clone();
-            return view.update(cx, |view, cx| view.render_body(cx, p));
-        }
-        if self == ModalKind::AuditViewer {
-            let view = app.read(cx).state.ui.modals.tools.audit_viewer.clone();
-            return view.update(cx, |view, cx| view.render_body(cx, p));
-        }
-        if self == ModalKind::KeyWizard {
-            let (view, targets) = {
-                let app_state = &app.read(cx).state;
-                (
-                    app_state.ui.modals.tools.key_wizard.clone(),
-                    app_state.key_targets(),
-                )
-            };
-            return view.update(cx, |view, cx| view.render_body(&targets, cx, p));
-        }
-        if self == ModalKind::Replay {
-            let view = app.read(cx).state.ui.modals.tools.replay.clone();
-            return view.update(cx, |view, cx| view.render_body(cx, p));
-        }
-        if self == ModalKind::SessionForm {
-            let view = app.read(cx).state.ui.modals.session.form.clone();
-            return view.update(cx, |view, cx| view.render_body(window, cx, p));
-        }
-        if self == ModalKind::ContainerForm {
-            // 分组候选由外壳在读锁内快照后注入，实体不反查目录；快照读完即
-            // 结束外壳借用，随后的实体 update 才不会撞上双重租借。
-            let (view, folders) = {
-                let app_state = &app.read(cx).state;
-                let options = app_state
-                    .session
-                    .catalog
-                    .engine_folders
-                    .iter()
-                    .map(|folder| (folder.id, folder.name.clone()))
-                    .collect();
-                (
-                    app_state.ui.modals.tools.container_form.clone(),
-                    ContainerFormFolders { options },
-                )
-            };
-            return view.update(cx, |view, cx| view.render_body(&folders, p, cx));
-        }
-        if self == ModalKind::ContainerRunForm {
-            // 镜像摘要由外壳在读锁内快照后注入，实体不反查工作区；快照读完即
-            // 结束外壳借用，随后的实体 update 才不会撞上双重租借。
-            let (view, image_meta) = {
-                let app_state = &app.read(cx).state;
-                let view = app_state.ui.modals.tools.run_form.clone();
-                let image_meta = view.read(cx).state().and_then(|form| {
-                    let image_raw = form.image.read(cx).value().trim().to_string();
-                    app_state
-                        .container_workspace(form.tab_id)
-                        .and_then(|workspace| {
-                            workspace
-                                .read(cx)
-                                .state
-                                .images
-                                .iter()
-                                .find(|image| {
-                                    image.tags.contains(&image_raw)
-                                        || image.id.starts_with(&image_raw)
-                                })
-                                .cloned()
-                        })
-                });
-                (view, image_meta)
-            };
-            return view.update(cx, |view, cx| view.render_body(image_meta.as_ref(), p, cx));
-        }
-        if self == ModalKind::ContainerCreate {
-            // 主输入仍归目标工作区：弹窗宿主在只读外壳里取出句柄后注入实体，
-            // 实体不反查工作区；句柄读完即结束外壳借用，随后的实体 update
-            // 才不会撞上双重租借。
-            let (view, create_input) = {
-                let app_state = &app.read(cx).state;
-                let view = app_state.ui.modals.tools.create_dialog.clone();
-                let create_input = view.read(cx).state().and_then(|dialog| {
-                    app_state
-                        .container_workspace(dialog.tab_id)
-                        .map(|workspace| workspace.read(cx).state.create_input.clone())
-                });
-                (view, create_input)
-            };
-            let Some(create_input) = create_input else {
-                return div().into_any_element();
-            };
-            return view.update(cx, |view, cx| view.render_body(create_input, p, cx));
+        if let Some(body) = self.container_create_body(app, cx, p) {
+            return body;
         }
         if let Some(element) = {
             let app_state = &app.read(cx).state;
@@ -319,66 +223,14 @@ impl ModalKind {
             let view = app.read(cx).state.ui.modals.connection.prompts.clone();
             return view.update(cx, |view, cx| view.render_body(self, cx, p));
         }
-        let app_state = &app.read(cx).state;
-        match self {
-            ModalKind::SftpConfirm => app_state
-                .ui
-                .modals
-                .sftp
-                .confirm
-                .as_ref()
-                .map(|m| m.clone().into_any_element())
-                .unwrap_or_else(|| div().into_any_element()),
-            ModalKind::SftpInput => app_state
-                .ui
-                .modals
-                .sftp
-                .input
-                .as_ref()
-                .map(|m| m.clone().into_any_element())
-                .unwrap_or_else(|| div().into_any_element()),
-            ModalKind::SftpChmod => app_state
-                .ui
-                .modals
-                .sftp
-                .chmod
-                .as_ref()
-                .map(|m| m.clone().into_any_element())
-                .unwrap_or_else(|| div().into_any_element()),
-            ModalKind::SftpProperties => app_state
-                .ui
-                .modals
-                .sftp
-                .properties
-                .as_ref()
-                .map(|m| m.clone().into_any_element())
-                .unwrap_or_else(|| div().into_any_element()),
-            ModalKind::SftpFilter => app_state
-                .ui
-                .modals
-                .sftp
-                .filter
-                .as_ref()
-                .map(|m| m.clone().into_any_element())
-                .unwrap_or_else(|| div().into_any_element()),
-            ModalKind::SftpSearch => app_state
-                .ui
-                .modals
-                .sftp
-                .search
-                .as_ref()
-                .map(|m| m.clone().into_any_element())
-                .unwrap_or_else(|| div().into_any_element()),
-            ModalKind::SftpSync => app_state
-                .ui
-                .modals
-                .sftp
-                .sync
-                .as_ref()
-                .map(|m| m.clone().into_any_element())
-                .unwrap_or_else(|| div().into_any_element()),
-            _ => self.render_shell_body(app_state, app, window, cx, p),
+        if let Some(element) = {
+            let app_state = &app.read(cx).state;
+            self.render_sftp_modal_body(app_state)
+        } {
+            return element;
         }
+        let app_state = &app.read(cx).state;
+        self.render_shell_body(app_state, app, window, cx, p)
     }
 
     /// 非实体弹窗的渲染分发：只读外壳状态。

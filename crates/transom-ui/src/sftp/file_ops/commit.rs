@@ -8,7 +8,7 @@ use std::path::PathBuf;
 use transom_core::{ConnectionId, SftpOperation, TabId};
 
 /// SFTP 输入弹窗提交一次的参数集合，避免七个平铺参数造成顺序错误。
-pub(in crate::sftp) struct SftpInputCommit<'a> {
+pub(in crate::app::sftp) struct SftpInputCommit<'a> {
     pub tab_id: TabId,
     pub connection_id: Option<ConnectionId>,
     pub target: &'a SftpInputTarget,
@@ -16,7 +16,7 @@ pub(in crate::sftp) struct SftpInputCommit<'a> {
 }
 
 /// 执行已通过基础名称校验的 SFTP 输入弹窗提交动作。
-pub(in crate::sftp) fn commit_sftp_input_value(
+pub(in crate::app::sftp) fn commit_sftp_input_value(
     app_state: &mut AppState,
     params: SftpInputCommit<'_>,
     window: &mut Window,

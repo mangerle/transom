@@ -73,6 +73,7 @@ pub(crate) struct SessionSidebarParams<'a> {
     pub(crate) view: &'a Entity<SessionSidebarView>,
     pub(crate) search: &'a Entity<InputState>,
     pub(crate) rows: Rc<Vec<SidebarRow>>,
+    pub(crate) item_sizes: Rc<Vec<Size<Pixels>>>,
     pub(crate) query: &'a str,
     pub(crate) selection_mode: bool,
     pub(crate) selected_sessions: &'a HashSet<SessionId>,
@@ -82,20 +83,44 @@ pub(crate) struct SessionSidebarParams<'a> {
 }
 
 impl AppState {
-    pub(crate) fn sidebar_rows(&mut self, query: &str) -> Rc<Vec<SidebarRow>> {
+    pub(crate) fn sidebar_rows(
+        &mut self,
+        query: &str,
+        rem_size: Pixels,
+    ) -> (Rc<Vec<SidebarRow>>, Rc<Vec<Size<Pixels>>>) {
         if let Some(cache) = &self.session.sidebar.rows_cache
             && cache.revision == self.session.catalog_revision
             && cache.query == query
         {
-            return cache.rows.clone();
+            if cache.rem_size == rem_size {
+                return (cache.rows.clone(), cache.item_sizes.clone());
+            }
+            let row_height = cache
+                .rows
+                .first()
+                .map_or(px(0.0), |row| row.height(rem_size));
+            let item_sizes = Rc::new(vec![size(px(0.0), row_height); cache.rows.len()]);
+            let rows = cache.rows.clone();
+            self.session.sidebar.rows_cache = Some(SidebarRowsCache {
+                revision: self.session.catalog_revision,
+                query: cache.query.clone(),
+                rows: rows.clone(),
+                rem_size,
+                item_sizes: item_sizes.clone(),
+            });
+            return (rows, item_sizes);
         }
         let rows = Rc::new(build_rows(&self.session.catalog, query));
+        let row_height = rows.first().map_or(px(0.0), |row| row.height(rem_size));
+        let item_sizes = Rc::new(vec![size(px(0.0), row_height); rows.len()]);
         self.session.sidebar.rows_cache = Some(SidebarRowsCache {
             revision: self.session.catalog_revision,
             query: query.to_string(),
             rows: rows.clone(),
+            rem_size,
+            item_sizes: item_sizes.clone(),
         });
-        rows
+        (rows, item_sizes)
     }
 
     pub(crate) fn active_session_id(&self) -> Option<SessionId> {
@@ -108,20 +133,14 @@ impl AppState {
 /// 渲染会话侧栏主体（头部工具条 + 虚拟列表 + 根层级拖放区）。
 pub(crate) fn render_sidebar(
     params: SessionSidebarParams<'_>,
-    window: &Window,
+    _window: &Window,
     p: &Palette,
 ) -> AnyElement {
     let view = params.view.clone();
     let content = if params.rows.is_empty() {
         render_sidebar_empty(params.query, p)
     } else {
-        let item_sizes = Rc::new(
-            params
-                .rows
-                .iter()
-                .map(|row| size(px(0.0), row.height(window.rem_size())))
-                .collect::<Vec<_>>(),
-        );
+        let item_sizes = params.item_sizes.clone();
         let rows = params.rows.clone();
         let active_session = params.active_session;
         let selection_mode = params.selection_mode;

@@ -9,7 +9,7 @@ use gpui_kit::*;
 const TABS: [ApiGlobalParameterTab; 2] =
     [ApiGlobalParameterTab::Query, ApiGlobalParameterTab::Header];
 
-pub(in crate::api_client) fn render_global_parameters(
+pub(in crate::app::api_client) fn render_global_parameters(
     params: &ApiWorkspaceParams<'_>,
     p: &Palette,
 ) -> AnyElement {

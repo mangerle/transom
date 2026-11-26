@@ -53,6 +53,7 @@ mod entity;
 mod form;
 mod inspect;
 mod lifecycle;
+mod row;
 mod view;
 
 pub(crate) use actions::{auto_start_forwards, on_toggle_forward, toggle_forward_panel};

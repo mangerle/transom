@@ -15,7 +15,7 @@ use gpui_kit::*;
 use transom_ui_icons::{AppIcon, AppIconElement, CustomIcon, UiIcon};
 
 /// 渲染环境变量、全局变量、全局参数与 Cookie 管理器弹窗主体。
-pub(in crate::api_client) fn render_config_modal(
+pub(in crate::app::api_client) fn render_config_modal(
     params: &ApiWorkspaceParams<'_>,
     section: ApiConfigModalSection,
     p: &Palette,

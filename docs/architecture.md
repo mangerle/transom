@@ -56,7 +56,7 @@ apps/transom (组合根 + 控制平面)
 
 ## UI 内部结构
 
-`transom-ui` 的功能模块通过 `#[path]` 挂在 `app` 模块之下，`AppShell` 的字段只对 `app` 及其后代可见，crate 其它模块无法绕过外壳直接改状态。应用状态集中在 `app::state::AppState`，`AppShell` 只保留一个 `state` 字段；状态访问一律显式写 `self.state.xxx`，不用 `Deref` 继承方法。
+`transom-ui` 的功能模块通过 `#[path]` 挂在 `app` 模块之下，`AppShell` 只保留一个私有的 `state` 字段，crate 根仅保留基础模块与兼容重导出。应用状态集中在 `app::state::AppState`；状态访问一律显式写 `self.state.xxx`，不用 `Deref` 继承方法。源码守卫同时约束模块位置与字段私有性。
 
 碎片文件审计结论：小于 30 行的文件全部是 `mod.rs` 索引、`common.rs` 共享导入或 `tests.rs` 测试模块，不存在单函数碎片；守卫 `tiny_source_files_are_index_or_tests` 阻止新增无归属小文件。
 
@@ -272,7 +272,8 @@ SSH 通道 / PTY / 串口 / TCP
 
 终端输出的每一块只经过"过滤层拷贝 → 通道 → 引擎"，不进入 AppEvent
 总线，避免把高频字节流与低频控制事件混在同一队列。渲染侧按损伤集合
-（damage）只重画变化行。
+（damage）只重画变化行。读、写线程句柄由 `TerminalView` 持有，重连或销毁
+时先关闭控制通道，再交给进程级有界回收器统一 `join`，避免线程句柄静默丢失。
 
 ### 控制面（低频，三条有界通道）
 
@@ -286,10 +287,10 @@ UI（try_send，满则提示）
   └─ 内部通道 64   （建连任务与主循环之间的完成/断开通知）
 ```
 
-背压口径：可覆盖状态样本（流量、系统统计、SFTP 进度）由生产者
-`try_send`，通道满即丢弃、不占位；状态迁移事件（连接建立/断开、转发
-变更、失败）保持 `send_async` 反压，UI 停滞时拖慢发送方而非内存无限
-积压。
+背压口径：可覆盖状态样本（流量、系统统计、SFTP 进度、容器日志块）由生产者
+`try_send`，通道满即丢弃；操作完成、失败和状态迁移（连接建立/断开、Git、
+容器任务收尾）保持 `send_async` 反压，UI 停滞时拖慢发送方而非丢失收尾事件
+或无限积压。
 
 ### 连接接入（单一路径）
 
@@ -316,6 +317,9 @@ AppCommand::Connect
 - 凭据（口令/口令短语）：只进系统钥匙串，文件里只有 `save: bool` 开关；
 - 备份/同步文档：两套信封（`transom-crypto::envelope` 的 TSYN 二进制对象、
   `transom-crypto::backup` 的 JSON/YAML 内嵌字段），Argon2id + XChaCha20-Poly1305。
+
+UI 侧临时阻塞文件任务统一进入进程级固定大小线程池与有界队列；Future 取消时
+尚未开始的任务会跳过，已经进入系统调用的任务受线程池并发上限约束。
 
 ### Git 配置
 
@@ -354,7 +358,9 @@ crates/transom-crypto/src/
 
 crates/transom-desktop/src/
   linux/       freedesktop 默认终端注册、桌面条目与图标安装
-  unsupported.rs  macOS/Windows 同名入口的占位实现
+  macos.rs      LaunchServices/应用包边界；默认终端概念不适用
+  windows.rs    注册 `ssh://` 默认应用候选；默认终端交给 Console Handoff
+  unsupported.rs 非 Linux/Windows/macOS 平台的明确错误入口
 
 crates/transom-terminal/src/
   highlight/ 关键词高亮扫描与编译规则引擎

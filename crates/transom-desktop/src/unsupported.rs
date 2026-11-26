@@ -1,8 +1,7 @@
 //! 其它平台的桌面集成占位实现。
 //!
-//! macOS 与 Windows 没有 XDG 默认终端规范，后续应分别接 LaunchServices 与
-//! 注册表；在实现完成前，上层仍能编译并拿到明确的“不支持”错误，而不是
-//! 静默成功或直接 panic。
+//! 仅供 Linux、Windows、macOS 之外的平台使用。三个主流平台各有独立实现；
+//! 未支持平台仍能编译并拿到明确的“不支持”错误，而不是静默成功或直接 panic。
 
 use std::path::Path;
 use transom_core::{AppError, ErrorCode};

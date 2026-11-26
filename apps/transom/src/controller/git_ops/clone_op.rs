@@ -5,7 +5,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use super::super::state::{ControllerCtx, ControllerState};
-use super::runner::{send_event, to_app_error};
+use super::runner::{send_event, send_progress, to_app_error};
 use transom_core::{AppEvent, GitAppEvent, GitRequestId};
 
 /// 派发一次克隆。
@@ -53,13 +53,14 @@ pub(super) fn spawn_clone(
                 dest,
                 error,
             },
-        );
+        )
+        .await;
     });
 }
 
 /// 克隆进度的时间窗合并器。
 ///
-/// 设计原理（Why）：事件通道有界且用 `try_send`（打满就丢并记一条警告），
+/// 设计原理（Why）：进度事件使用可丢弃的 `try_send` 路径，
 /// 而 `git clone --progress` 在慢网络上每秒能刷几十行，逐行发等于自己把队列
 /// 灌满、把真正的完成事件挤掉。这里攒够 150 毫秒一次性发一条，界面看到的
 /// 是连续的进度而不是断档，队列也始终留有余量。
@@ -98,7 +99,7 @@ impl ProgressBatch {
         }
         self.since = Instant::now();
         let text = std::mem::take(&mut self.buffer);
-        send_event(
+        send_progress(
             &self.tx,
             GitAppEvent::CloneProgress {
                 request_id: self.request_id,

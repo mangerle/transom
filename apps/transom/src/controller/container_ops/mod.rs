@@ -304,10 +304,16 @@ fn one_shot<T, Fut, Q, R>(
     Q: FnOnce(Engine) -> Fut + Send + 'static,
     R: FnOnce(ContainerRequestId, T) -> ContainerAppEvent + Send + 'static,
 {
-    let Some(engine) = engine_for(state, ctx, tab_id, request_id) else {
-        return;
-    };
     let event_tx = ctx.event_tx.clone();
+    let engine = match engine_for(state, tab_id) {
+        Ok(engine) => engine,
+        Err(error) => {
+            state.container_ops.spawn(async move {
+                send_event(&event_tx, ContainerAppEvent::Failed { request_id, error }).await;
+            });
+            return;
+        }
+    };
     state.container_ops.spawn(async move {
         match query(engine).await {
             Ok(value) => send_event(&event_tx, reply(request_id, value)).await,
@@ -387,12 +393,21 @@ fn transfer<Fut, T>(
 
 /// 取引擎并登记取消标志；工作区不在时直接回报失败。
 fn register_long_task(
-    state: &ControllerState,
+    state: &mut ControllerState,
     ctx: &ControllerCtx,
     tab_id: TabId,
     request_id: ContainerRequestId,
 ) -> Option<(Engine, Arc<AtomicBool>)> {
-    let engine = engine_for(state, ctx, tab_id, request_id)?;
+    let engine = match engine_for(state, tab_id) {
+        Ok(engine) => engine,
+        Err(error) => {
+            let event_tx = ctx.event_tx.clone();
+            state.container_ops.spawn(async move {
+                send_event(&event_tx, ContainerAppEvent::Failed { request_id, error }).await;
+            });
+            return None;
+        }
+    };
     Some((engine, ctx.container.register_cancel(request_id)))
 }
 
@@ -429,25 +444,17 @@ fn is_local_engine(engine: &transom_container::Engine) -> bool {
     )
 }
 
-fn engine_for(
-    state: &ControllerState,
-    ctx: &ControllerCtx,
-    tab_id: TabId,
-    request_id: ContainerRequestId,
-) -> Option<Engine> {
-    match state.container_workspaces.get(&tab_id) {
-        Some(workspace) => Some(workspace.engine.clone()),
-        None => {
-            let error = AppError::with_detail(
+fn engine_for(state: &ControllerState, tab_id: TabId) -> Result<Engine, AppError> {
+    state
+        .container_workspaces
+        .get(&tab_id)
+        .map(|workspace| workspace.engine.clone())
+        .ok_or_else(|| {
+            AppError::with_detail(
                 ErrorCode::ContainerUnavailable,
                 "容器工作区尚未连接或已关闭",
-            );
-            let _ = ctx
-                .event_tx
-                .try_send(ContainerAppEvent::Failed { request_id, error }.into());
-            None
-        }
-    }
+            )
+        })
 }
 
 async fn send_event(event_tx: &flume::Sender<transom_core::AppEvent>, event: ContainerAppEvent) {

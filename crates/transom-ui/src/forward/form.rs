@@ -14,6 +14,34 @@ use transom_ui_icons::AppIconElement;
 use transom_ui_icons::UiIcon;
 
 impl ForwardView {
+    /// 应用一条端口转发预设，只填充空名称与端口字段。
+    fn apply_preset(
+        &mut self,
+        preset: &'static transom_core::ForwardPreset,
+        label: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.state.kind = match preset.kind {
+            transom_core::ForwardPresetKind::Local => ForwardKindChoice::Local,
+            transom_core::ForwardPresetKind::Dynamic => ForwardKindChoice::Dynamic,
+        };
+        if self.state.name_input.read(cx).value().trim().is_empty() {
+            self.state.name_input.update(cx, |input, cx| {
+                input.set_value(label.to_string(), window, cx);
+            });
+        }
+        self.state.bind_port_input.update(cx, |input, cx| {
+            input.set_value(preset.listen_port.to_string(), window, cx);
+        });
+        if preset.needs_target() {
+            self.state.target_port_input.update(cx, |input, cx| {
+                input.set_value(preset.target_port.to_string(), window, cx);
+            });
+        }
+        cx.notify();
+    }
+
     /// 转发类型三选一：本地 / 远程 / 动态。
     pub(crate) fn render_kind_selector(
         &self,
@@ -73,99 +101,8 @@ impl ForwardView {
 
         let kind_buttons = self.render_kind_selector(kind, cx);
 
-        // 常用预设快捷方式
-        let preset_buttons = v_flex()
-            .gap_1()
-            .child(
-                div()
-                    .text_xs()
-                    .font_weight(FontWeight::MEDIUM)
-                    .text_color(p.muted_foreground)
-                    .child(rust_i18n::t!("forward.preset_header").to_string()),
-            )
-            .child(h_flex().gap_1p5().flex_wrap().children(
-                transom_core::FORWARD_PRESETS.iter().map(|preset| {
-                    let preset_label = rust_i18n::t!(preset.label_key).to_string();
-                    let label_for_click = preset_label.clone();
-                    div()
-                        .id(ElementId::Name(
-                            format!("forward-preset-{}", preset.listen_port).into(),
-                        ))
-                        .px_2()
-                        .py_0p5()
-                        .rounded(p.radius.sm)
-                        .bg(p.surface.ghost)
-                        .border_1()
-                        .border_color(p.stroke.subtle)
-                        .text_xs()
-                        .cursor_pointer()
-                        .hover(|s| s.bg(p.surface.hover).border_color(p.primary))
-                        .child(preset_label)
-                        .on_click(cx.listener(move |this, _, window, cx| {
-                            this.state.kind = match preset.kind {
-                                transom_core::ForwardPresetKind::Local => ForwardKindChoice::Local,
-                                transom_core::ForwardPresetKind::Dynamic => {
-                                    ForwardKindChoice::Dynamic
-                                }
-                            };
-                            if this.state.name_input.read(cx).value().trim().is_empty() {
-                                this.state.name_input.update(cx, |input, cx| {
-                                    input.set_value(label_for_click.clone(), window, cx);
-                                });
-                            }
-                            this.state.bind_port_input.update(cx, |input, cx| {
-                                input.set_value(preset.listen_port.to_string(), window, cx)
-                            });
-                            if preset.needs_target() {
-                                this.state.target_port_input.update(cx, |input, cx| {
-                                    input.set_value(preset.target_port.to_string(), window, cx)
-                                });
-                            }
-                            cx.notify();
-                        }))
-                }),
-            ));
-
-        // 模式说明与流量走向
-        let (kind_help_text, flow_text) = match kind {
-            ForwardKindChoice::Local => (
-                rust_i18n::t!("forward.kind_help_local").to_string(),
-                rust_i18n::t!("forward.flow_local").to_string(),
-            ),
-            ForwardKindChoice::Remote => (
-                rust_i18n::t!("forward.kind_help_remote").to_string(),
-                rust_i18n::t!("forward.flow_remote").to_string(),
-            ),
-            ForwardKindChoice::Dynamic => (
-                rust_i18n::t!("forward.kind_help_dynamic").to_string(),
-                rust_i18n::t!("forward.flow_dynamic").to_string(),
-            ),
-        };
-        let flow_banner = v_flex()
-            .min_h(px(52.0))
-            .p_2()
-            .gap_1()
-            .rounded(p.radius.sm)
-            .bg(p.surface.subtle)
-            .border_1()
-            .border_color(p.stroke.subtle)
-            .child(
-                div()
-                    .text_xs()
-                    .text_color(p.muted_foreground)
-                    .line_height(rems(1.2))
-                    .child(kind_help_text),
-            )
-            .child(
-                h_flex()
-                    .gap_1()
-                    .items_center()
-                    .text_xs()
-                    .text_color(p.primary)
-                    .font_weight(FontWeight::MEDIUM)
-                    .child(AppIconElement::new(AppIcon::Ui(UiIcon::LIGHTNING)).xsmall())
-                    .child(flow_text),
-            );
+        let preset_buttons = render_forward_presets(cx, p);
+        let flow_banner = render_flow_banner(kind, p);
 
         let mut add_form = v_flex()
             .w_full()
@@ -175,29 +112,7 @@ impl ForwardView {
             .divider_edge(DividerEdge::Top, p.divider_width);
 
         if editing {
-            add_form = add_form.child(
-                h_flex()
-                    .items_center()
-                    .gap_1p5()
-                    .px_2()
-                    .py_1()
-                    .rounded(p.radius.sm)
-                    .bg(p.tone.warning_subtle)
-                    .border_1()
-                    .border_color(p.warning.opacity(0.4))
-                    .child(
-                        AppIconElement::new(AppIcon::Ui(UiIcon::EDIT))
-                            .small()
-                            .text_color(p.warning),
-                    )
-                    .child(
-                        div()
-                            .text_xs()
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(p.warning)
-                            .child(rust_i18n::t!("forward.editing_badge").to_string()),
-                    ),
-            );
+            add_form = add_form.child(render_editing_badge(p));
         }
 
         add_form = add_form
@@ -218,20 +133,7 @@ impl ForwardView {
             );
 
         // 监听端点与目标端点字段
-        let (listen_title, target_title) = match kind {
-            ForwardKindChoice::Local => (
-                rust_i18n::t!("forward.listen_local_title").to_string(),
-                rust_i18n::t!("forward.target_remote_title").to_string(),
-            ),
-            ForwardKindChoice::Remote => (
-                rust_i18n::t!("forward.listen_remote_title").to_string(),
-                rust_i18n::t!("forward.target_local_title").to_string(),
-            ),
-            ForwardKindChoice::Dynamic => (
-                rust_i18n::t!("forward.socks5_listen_title").to_string(),
-                String::new(),
-            ),
-        };
+        let (listen_title, target_title) = forward_endpoint_titles(kind);
 
         add_form = add_form.child(render_endpoint_group(
             listen_title,
@@ -287,74 +189,212 @@ impl ForwardView {
             p,
         ));
 
-        // 编辑态：保存修改 + 取消；新增态：单一添加按钮。
-        let actions = if editing {
+        let actions = render_forward_actions(tab_id, editing, cx, p);
+        add_form = add_form.child(actions);
+        if let Some(error) = panel_error {
+            add_form = add_form.child(render_forward_error(error, p));
+        }
+
+        add_form.into_any_element()
+    }
+}
+
+fn render_forward_presets(cx: &mut Context<ForwardView>, p: &Palette) -> AnyElement {
+    v_flex()
+        .gap_1()
+        .child(
+            div()
+                .text_xs()
+                .font_weight(FontWeight::MEDIUM)
+                .text_color(p.muted_foreground)
+                .child(rust_i18n::t!("forward.preset_header").to_string()),
+        )
+        .child(
             h_flex()
-                .gap_2()
-                .w_full()
-                .child(
-                    div().flex_1().child(
-                        Button::new("forward-save-edit")
-                            .primary()
-                            .small()
-                            .w_full()
-                            .child(AppIconElement::new(AppIcon::Ui(UiIcon::CHECK)).small())
-                            .label(rust_i18n::t!("forward.save_edit").to_string())
-                            .on_click(cx.listener(move |this, _, window, cx| {
-                                if let Some(rule) = this.build_rule(cx) {
-                                    cx.emit(super::ForwardPanelEvent::UpdateRule { tab_id, rule });
-                                    this.cancel_edit(window, cx);
-                                    cx.notify();
-                                }
-                            })),
-                    ),
-                )
-                .child(div().flex_1().child(crate::widgets::dialog_cancel_button(
-                    "forward-cancel-edit",
-                    rust_i18n::t!("common.cancel").to_string(),
-                    cx.listener(move |this, _, window, cx| {
-                        this.cancel_edit(window, cx);
-                    }),
-                )))
-        } else {
-            h_flex().w_full().child(
+                .gap_1p5()
+                .flex_wrap()
+                .children(transom_core::FORWARD_PRESETS.iter().map(|preset| {
+                    let preset_label = rust_i18n::t!(preset.label_key).to_string();
+                    let label_for_click = preset_label.clone();
+                    div()
+                        .id(ElementId::Name(
+                            format!("forward-preset-{}", preset.listen_port).into(),
+                        ))
+                        .px_2()
+                        .py_0p5()
+                        .rounded(p.radius.sm)
+                        .bg(p.surface.ghost)
+                        .border_1()
+                        .border_color(p.stroke.subtle)
+                        .text_xs()
+                        .cursor_pointer()
+                        .hover(|style| style.bg(p.surface.hover).border_color(p.primary))
+                        .child(preset_label)
+                        .on_click(cx.listener(move |view, _, window, cx| {
+                            view.apply_preset(preset, &label_for_click, window, cx);
+                        }))
+                })),
+        )
+        .into_any_element()
+}
+
+fn render_flow_banner(kind: ForwardKindChoice, p: &Palette) -> AnyElement {
+    let (kind_help_text, flow_text) = match kind {
+        ForwardKindChoice::Local => (
+            rust_i18n::t!("forward.kind_help_local").to_string(),
+            rust_i18n::t!("forward.flow_local").to_string(),
+        ),
+        ForwardKindChoice::Remote => (
+            rust_i18n::t!("forward.kind_help_remote").to_string(),
+            rust_i18n::t!("forward.flow_remote").to_string(),
+        ),
+        ForwardKindChoice::Dynamic => (
+            rust_i18n::t!("forward.kind_help_dynamic").to_string(),
+            rust_i18n::t!("forward.flow_dynamic").to_string(),
+        ),
+    };
+    v_flex()
+        .min_h(px(52.0))
+        .p_2()
+        .gap_1()
+        .rounded(p.radius.sm)
+        .bg(p.surface.subtle)
+        .border_1()
+        .border_color(p.stroke.subtle)
+        .child(
+            div()
+                .text_xs()
+                .text_color(p.muted_foreground)
+                .line_height(rems(1.2))
+                .child(kind_help_text),
+        )
+        .child(
+            h_flex()
+                .gap_1()
+                .items_center()
+                .text_xs()
+                .text_color(p.primary)
+                .font_weight(FontWeight::MEDIUM)
+                .child(AppIconElement::new(AppIcon::Ui(UiIcon::LIGHTNING)).xsmall())
+                .child(flow_text),
+        )
+        .into_any_element()
+}
+
+fn render_editing_badge(p: &Palette) -> AnyElement {
+    h_flex()
+        .items_center()
+        .gap_1p5()
+        .px_2()
+        .py_1()
+        .rounded(p.radius.sm)
+        .bg(p.tone.warning_subtle)
+        .border_1()
+        .border_color(p.warning.opacity(0.4))
+        .child(
+            AppIconElement::new(AppIcon::Ui(UiIcon::EDIT))
+                .small()
+                .text_color(p.warning),
+        )
+        .child(
+            div()
+                .text_xs()
+                .font_weight(FontWeight::MEDIUM)
+                .text_color(p.warning)
+                .child(rust_i18n::t!("forward.editing_badge").to_string()),
+        )
+        .into_any_element()
+}
+
+fn forward_endpoint_titles(kind: ForwardKindChoice) -> (String, String) {
+    match kind {
+        ForwardKindChoice::Local => (
+            rust_i18n::t!("forward.listen_local_title").to_string(),
+            rust_i18n::t!("forward.target_remote_title").to_string(),
+        ),
+        ForwardKindChoice::Remote => (
+            rust_i18n::t!("forward.listen_remote_title").to_string(),
+            rust_i18n::t!("forward.target_local_title").to_string(),
+        ),
+        ForwardKindChoice::Dynamic => (
+            rust_i18n::t!("forward.socks5_listen_title").to_string(),
+            String::new(),
+        ),
+    }
+}
+
+fn render_forward_actions(
+    tab_id: transom_core::TabId,
+    editing: bool,
+    cx: &mut Context<ForwardView>,
+    _p: &Palette,
+) -> AnyElement {
+    if editing {
+        h_flex()
+            .gap_2()
+            .w_full()
+            .child(
+                div().flex_1().child(
+                    Button::new("forward-save-edit")
+                        .primary()
+                        .small()
+                        .w_full()
+                        .child(AppIconElement::new(AppIcon::Ui(UiIcon::CHECK)).small())
+                        .label(rust_i18n::t!("forward.save_edit").to_string())
+                        .on_click(cx.listener(move |view, _, window, cx| {
+                            if let Some(rule) = view.build_rule(cx) {
+                                cx.emit(super::ForwardPanelEvent::UpdateRule { tab_id, rule });
+                                view.cancel_edit(window, cx);
+                                cx.notify();
+                            }
+                        })),
+                ),
+            )
+            .child(div().flex_1().child(crate::widgets::dialog_cancel_button(
+                "forward-cancel-edit",
+                rust_i18n::t!("common.cancel").to_string(),
+                cx.listener(move |view, _, window, cx| {
+                    view.cancel_edit(window, cx);
+                }),
+            )))
+            .into_any_element()
+    } else {
+        h_flex()
+            .w_full()
+            .child(
                 Button::new("forward-add")
                     .primary()
                     .small()
                     .w_full()
                     .child(AppIconElement::new(AppIcon::Ui(UiIcon::ADD)).small())
                     .label(rust_i18n::t!("forward.add").to_string())
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        // 表单校验在实体里完成，通过后把规则交给外壳落库并发命令。
-                        if let Some(rule) = this.build_rule(cx) {
+                    .on_click(cx.listener(move |view, _, _, cx| {
+                        if let Some(rule) = view.build_rule(cx) {
                             cx.emit(super::ForwardPanelEvent::SubmitRule { tab_id, rule });
                             cx.notify();
                         }
                     })),
             )
-        };
-        add_form = add_form.child(actions);
-        if let Some(error) = panel_error {
-            add_form = add_form.child(
-                h_flex()
-                    .p_2()
-                    .gap_1p5()
-                    .items_center()
-                    .rounded(p.radius.sm)
-                    .bg(p.tone.danger_subtle)
-                    .border_1()
-                    .border_color(p.danger.opacity(0.4))
-                    .child(
-                        AppIconElement::new(AppIcon::Ui(UiIcon::ERROR))
-                            .xsmall()
-                            .text_color(p.danger),
-                    )
-                    .child(div().text_xs().text_color(p.danger).child(error)),
-            );
-        }
-
-        add_form.into_any_element()
+            .into_any_element()
     }
+}
+
+fn render_forward_error(error: String, p: &Palette) -> AnyElement {
+    h_flex()
+        .p_2()
+        .gap_1p5()
+        .items_center()
+        .rounded(p.radius.sm)
+        .bg(p.tone.danger_subtle)
+        .border_1()
+        .border_color(p.danger.opacity(0.4))
+        .child(
+            AppIconElement::new(AppIcon::Ui(UiIcon::ERROR))
+                .xsmall()
+                .text_color(p.danger),
+        )
+        .child(div().text_xs().text_color(p.danger).child(error))
+        .into_any_element()
 }
 
 /// 端点字段分组：组标题在顶，地址与端口并排并在各自输入框上方标出名称。

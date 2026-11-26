@@ -8,4 +8,4 @@ pub(super) mod form;
 pub(super) mod form_file;
 pub(super) mod form_view;
 pub(super) mod kv;
-pub(in crate::api_client) mod table;
+pub(in crate::app::api_client) mod table;

@@ -84,7 +84,7 @@ impl SessionFormView {
 }
 
 /// 按连接协议真实能力返回左侧边栏应展示的配置分组列表。
-pub(in crate::session_form) fn sections_for_connection(
+pub(in crate::app::session_form) fn sections_for_connection(
     choice: ConnectionChoice,
 ) -> &'static [SessionFormSection] {
     match choice {

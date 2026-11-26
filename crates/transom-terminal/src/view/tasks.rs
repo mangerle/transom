@@ -10,9 +10,96 @@ use alacritty_terminal::vte::ansi::Rgb as AnsiRgb;
 use gpui_kit::*;
 use std::io::{Read, Write};
 use std::sync::Arc;
+use std::sync::OnceLock;
 use std::thread;
+use std::thread::JoinHandle;
 use std::time::Instant;
 use transom_core::Rgb as PaletteColor;
+
+/// 终端读、写线程句柄；随 TerminalView 存活并在销毁或重连时交给回收器。
+pub(super) struct TerminalIoThreads {
+    pub(super) reader: Option<JoinHandle<()>>,
+    pub(super) writer: Option<JoinHandle<()>>,
+}
+
+/// 启动终端 I/O 后交回视图的全部拥有型资源。
+pub(super) struct TerminalIoRuntime {
+    pub(super) input_tx: flume::Sender<Vec<u8>>,
+    pub(super) output_rx: flume::Receiver<Vec<u8>>,
+    pub(super) reader_task: Task<()>,
+    pub(super) threads: TerminalIoThreads,
+}
+
+impl TerminalIoThreads {
+    /// 线程创建失败时保留空槽位，视图仍按已退出路径降级。
+    fn empty() -> Self {
+        Self {
+            reader: None,
+            writer: None,
+        }
+    }
+}
+
+/// 终端线程回收队列容量；关闭窗格时不能无限堆积待 join 的句柄。
+const TERMINAL_THREAD_QUEUE_CAPACITY: usize = 64;
+/// 两个回收线程避免单个阻塞读永久占住全部回收能力。
+const TERMINAL_REAPER_THREADS: usize = 2;
+
+struct TerminalThreadReaper {
+    sender: flume::Sender<JoinHandle<()>>,
+    _workers: Vec<JoinHandle<()>>,
+}
+
+impl TerminalThreadReaper {
+    fn start() -> Option<Self> {
+        let (sender, receiver) = flume::bounded(TERMINAL_THREAD_QUEUE_CAPACITY);
+        let mut workers = Vec::with_capacity(TERMINAL_REAPER_THREADS);
+        for index in 0..TERMINAL_REAPER_THREADS {
+            let receiver = receiver.clone();
+            match thread::Builder::new()
+                .name(format!("transom-terminal-reaper-{index}"))
+                .spawn(move || run_terminal_reaper(receiver))
+            {
+                Ok(handle) => workers.push(handle),
+                Err(error) => {
+                    log::error!("启动终端线程回收器失败，序号: {index}，原因: {error}");
+                }
+            }
+        }
+        (!workers.is_empty()).then_some(Self {
+            sender,
+            _workers: workers,
+        })
+    }
+}
+
+fn terminal_reaper() -> Option<&'static TerminalThreadReaper> {
+    static REAPER: OnceLock<Option<TerminalThreadReaper>> = OnceLock::new();
+    REAPER.get_or_init(TerminalThreadReaper::start).as_ref()
+}
+
+fn run_terminal_reaper(receiver: flume::Receiver<JoinHandle<()>>) {
+    while let Ok(handle) = receiver.recv() {
+        if handle.join().is_err() {
+            log::warn!("终端 I/O 线程异常退出，相关窗格可能已经关闭");
+        }
+    }
+}
+
+/// 把终端读写线程移交给进程级有界回收器，避免句柄在 view Drop 中丢失。
+pub(super) fn reap_io_threads(threads: TerminalIoThreads) {
+    let TerminalIoThreads { reader, writer } = threads;
+    let handles = [reader, writer];
+    let Some(reaper) = terminal_reaper() else {
+        log::error!("终端线程回收器不可用，读写线程句柄只能随进程退出释放");
+        return;
+    };
+    for handle in handles.into_iter().flatten() {
+        if let Err(error) = reaper.sender.try_send(handle) {
+            log::warn!("终端线程回收队列已满，线程句柄只能随进程退出释放: {error}");
+        }
+    }
+}
 
 /// 终端 I/O 线程派生任务参数结构体。
 pub(super) struct TerminalIoTaskParams<'a> {
@@ -32,7 +119,7 @@ impl TerminalView {
     pub(super) fn spawn_io_tasks(
         params: TerminalIoTaskParams<'_>,
         cx: &mut Context<Self>,
-    ) -> (flume::Sender<Vec<u8>>, flume::Receiver<Vec<u8>>, Task<()>) {
+    ) -> TerminalIoRuntime {
         let TerminalIoTaskParams {
             mut reader,
             mut writer,
@@ -81,10 +168,14 @@ impl TerminalView {
                     audit.finish();
                 }
             });
-        if reader_spawn.is_err() {
-            log::error!("创建终端读取线程失败，该窗格按已退出降级处理");
-            let _ = exit_tx.try_send(Event::Exit);
-        }
+        let reader_thread = match reader_spawn {
+            Ok(handle) => Some(handle),
+            Err(_) => {
+                log::error!("创建终端读取线程失败，该窗格按已退出降级处理");
+                let _ = exit_tx.try_send(Event::Exit);
+                None
+            }
+        };
 
         let (input_tx, input_rx) = flume::bounded::<Vec<u8>>(256);
         let writer_exit_tx = event_tx.clone();
@@ -100,10 +191,22 @@ impl TerminalView {
                     let _ = writer.flush();
                 }
             });
-        if writer_spawn.is_err() {
-            log::error!("创建终端写入线程失败，该窗格按已退出降级处理");
-            let _ = exit_tx.try_send(Event::Exit);
-        }
+        let writer_thread = match writer_spawn {
+            Ok(handle) => Some(handle),
+            Err(_) => {
+                log::error!("创建终端写入线程失败，该窗格按已退出降级处理");
+                let _ = exit_tx.try_send(Event::Exit);
+                None
+            }
+        };
+        let threads = if reader_thread.is_none() && writer_thread.is_none() {
+            TerminalIoThreads::empty()
+        } else {
+            TerminalIoThreads {
+                reader: reader_thread,
+                writer: writer_thread,
+            }
+        };
 
         let reader_rx = bytes_rx.clone();
         let reader_task = cx.spawn(async move |this: WeakEntity<Self>, cx: &mut AsyncApp| {
@@ -118,7 +221,12 @@ impl TerminalView {
             let _ = this.update(cx, |view, cx| view.mark_exited(cx));
         });
 
-        (input_tx, bytes_rx, reader_task)
+        TerminalIoRuntime {
+            input_tx,
+            output_rx: bytes_rx,
+            reader_task,
+            threads,
+        }
     }
 
     /// 把一批终端输出并入引擎，并处理触发器命中。

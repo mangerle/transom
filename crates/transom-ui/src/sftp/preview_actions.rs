@@ -194,6 +194,7 @@ impl SftpPanelView {
         };
         // 本地缩略图任务在状态变更前启动：回调晚于本函数返回，句柄随即挂回预览项。
         let local_image = self.prepare_preview_local_image(&target, kind, cx);
+        let local_text = self.prepare_preview_local_text(&target, kind, cx);
 
         let Some(preview) = self.state.hover_preview.as_mut() else {
             return;
@@ -234,11 +235,41 @@ impl SftpPanelView {
                     }
                 }
                 PreviewKind::Text => {
-                    preview.content = local_text_preview(&target.key.path);
+                    if let Some((op_id, task)) = local_text {
+                        preview.op_id = Some(op_id);
+                        preview.decode_task = Some(task);
+                    }
                 }
             }
         }
         cx.notify();
+    }
+
+    /// 本地文本预览任务：文件读取和行切分都移出 UI 线程。
+    fn prepare_preview_local_text(
+        &self,
+        target: &SftpHoverTarget,
+        kind: PreviewKind,
+        cx: &mut Context<Self>,
+    ) -> Option<(TransferId, gpui::Task<()>)> {
+        if kind != PreviewKind::Text || target.key.is_remote {
+            return None;
+        }
+        let op_id = TransferId::new();
+        let path = target.key.path.clone();
+        let task = cx.spawn(async move |this, cx| {
+            let content = crate::app::spawn_blocking_local(move || local_text_preview(&path))
+                .await
+                .unwrap_or_else(|| {
+                    PreviewContent::Error(
+                        rust_i18n::t!("error.background_io_task_failed").to_string(),
+                    )
+                });
+            let _ = this.update(cx, |view, cx| {
+                view.finish_preview_local_text(op_id, content, cx);
+            });
+        });
+        Some((op_id, task))
     }
     /// 本地图片在状态变更前启动缩略图任务，句柄随后挂回预览项。
     fn prepare_preview_local_image(
@@ -393,6 +424,24 @@ impl SftpPanelView {
             Ok(thumbnail) => PreviewContent::Image { thumbnail },
             Err(message) => PreviewContent::Error(message),
         };
+        cx.notify();
+    }
+
+    fn finish_preview_local_text(
+        &mut self,
+        op_id: TransferId,
+        content: PreviewContent,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(preview) = self.state.hover_preview.as_mut() else {
+            return;
+        };
+        if preview.op_id != Some(op_id) {
+            return;
+        }
+        preview.op_id = None;
+        preview.decode_task = None;
+        preview.content = content;
         cx.notify();
     }
 }

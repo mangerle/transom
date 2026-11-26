@@ -31,13 +31,29 @@ impl SftpPanelView {
         path: std::path::PathBuf,
         cx: &mut Context<Self>,
     ) {
-        match local_file_properties(&path) {
+        let task = cx.spawn(async move |this, cx| {
+            let result = crate::app::spawn_blocking_local(move || local_file_properties(&path))
+                .await
+                .unwrap_or_else(|| {
+                    Err(rust_i18n::t!("error.background_io_task_failed").to_string())
+                });
+            let _ = this.update(cx, |view, cx| view.finish_local_properties(result, cx));
+        });
+        self.state.properties_task = Some(task);
+    }
+
+    fn finish_local_properties(
+        &mut self,
+        result: Result<FileProperties, String>,
+        cx: &mut Context<Self>,
+    ) {
+        self.state.properties_task = None;
+        match result {
             Ok(properties) => {
                 cx.emit(crate::sftp::SftpPanelEvent::ShowProperties {
                     scope: "本地".to_string(),
                     properties,
                 });
-                cx.notify();
             }
             Err(err) => {
                 self.state.set_local_error(

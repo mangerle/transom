@@ -7,7 +7,7 @@
 use super::ModalKind;
 use super::body::ModalFocus;
 use crate::app::{AppShell, AppState};
-use crate::container::ContainerWorkspaceModal;
+use crate::container::{ContainerFormFolders, ContainerWorkspaceModal};
 use crate::palette::Palette;
 use gpui_kit::*;
 
@@ -95,5 +95,92 @@ impl ModalKind {
             crate::container::find_container_modal_tab(app_state, cx, |ws| modal.is_open(ws))?;
         let state = &view.read(cx).state;
         Some(modal.render_body(&view, state, cx, p))
+    }
+
+    /// 容器引擎连接表单主体。
+    pub(super) fn container_form_body(
+        self,
+        app: &Entity<AppShell>,
+        cx: &mut App,
+        p: &Palette,
+    ) -> Option<AnyElement> {
+        if self != ModalKind::ContainerForm {
+            return None;
+        }
+        let (view, folders) = {
+            let app_state = &app.read(cx).state;
+            let options = app_state
+                .session
+                .catalog
+                .engine_folders
+                .iter()
+                .map(|folder| (folder.id, folder.name.clone()))
+                .collect();
+            (
+                app_state.ui.modals.tools.container_form.clone(),
+                ContainerFormFolders { options },
+            )
+        };
+        Some(view.update(cx, |view, cx| view.render_body(&folders, p, cx)))
+    }
+
+    /// 运行容器表单主体，镜像摘要由外壳快照注入。
+    pub(super) fn container_run_form_body(
+        self,
+        app: &Entity<AppShell>,
+        cx: &mut App,
+        p: &Palette,
+    ) -> Option<AnyElement> {
+        if self != ModalKind::ContainerRunForm {
+            return None;
+        }
+        let (view, image_meta) = {
+            let app_state = &app.read(cx).state;
+            let view = app_state.ui.modals.tools.run_form.clone();
+            let image_meta = view.read(cx).state().and_then(|form| {
+                let image_raw = form.image.read(cx).value().trim().to_string();
+                app_state
+                    .container_workspace(form.tab_id)
+                    .and_then(|workspace| {
+                        workspace
+                            .read(cx)
+                            .state
+                            .images
+                            .iter()
+                            .find(|image| {
+                                image.tags.contains(&image_raw) || image.id.starts_with(&image_raw)
+                            })
+                            .cloned()
+                    })
+            });
+            (view, image_meta)
+        };
+        Some(view.update(cx, |view, cx| view.render_body(image_meta.as_ref(), p, cx)))
+    }
+
+    /// 新建容器/卷/网络弹窗主体，主输入仍归目标工作区。
+    pub(super) fn container_create_body(
+        self,
+        app: &Entity<AppShell>,
+        cx: &mut App,
+        p: &Palette,
+    ) -> Option<AnyElement> {
+        if self != ModalKind::ContainerCreate {
+            return None;
+        }
+        let (view, create_input) = {
+            let app_state = &app.read(cx).state;
+            let view = app_state.ui.modals.tools.create_dialog.clone();
+            let create_input = view.read(cx).state().and_then(|dialog| {
+                app_state
+                    .container_workspace(dialog.tab_id)
+                    .map(|workspace| workspace.read(cx).state.create_input.clone())
+            });
+            (view, create_input)
+        };
+        let Some(create_input) = create_input else {
+            return Some(div().into_any_element());
+        };
+        Some(view.update(cx, |view, cx| view.render_body(create_input, p, cx)))
     }
 }

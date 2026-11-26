@@ -237,6 +237,7 @@ fn build_sftp_state(
         active_pane: SftpActivePane::default(),
         focus_handle: cx.focus_handle(),
         hover_preview: None,
+        properties_task: None,
         // 分栏状态由面板自己持有：折叠期间分栏组不渲染，
         // 窗口的 keyed state 会被回收，列宽必须另有去处。
         column_state: cx.new(|_| ResizableState::default()),

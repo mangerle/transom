@@ -10,7 +10,7 @@ use transom_api::ApiProtocol;
 use transom_ui_icons::{AppIcon, AppIconElement, CustomIcon, UiIcon};
 
 /// 渲染新建协议与导入方式弹窗主体。
-pub(in crate::api_client) fn render_new_request_modal(
+pub(in crate::app::api_client) fn render_new_request_modal(
     params: &ApiWorkspaceParams<'_>,
     p: &Palette,
 ) -> AnyElement {

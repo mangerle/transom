@@ -4,12 +4,13 @@ use super::folder::FolderEditor;
 use gpui_kit::component::input::{EditorState, InputState, TextareaState};
 use gpui_kit::component::resizable::ResizableState;
 use gpui_kit::*;
-use std::collections::VecDeque;
 use transom_api::{
     ApiAssertionResult, ApiBodyType, ApiEnvironmentId, ApiFolderId, ApiHttpService, ApiProject,
     ApiRawLanguage, ApiRequestId, ApiResponseSnapshot, ApiWebSocketHandle, ApiWebSocketService,
     CodeTarget,
 };
+
+use super::ws_log_view::WsLogView;
 
 /// API 工作区需要的外壳服务集合。
 #[derive(Clone)]
@@ -141,26 +142,25 @@ pub(crate) struct ApiWorkspaceEditors {
     pub(crate) cookies: Entity<crate::api_client::editors::cookie::CookieEditor>,
     pub(crate) form: Entity<crate::api_client::editors::form::FormEditor>,
     pub(crate) websocket_input: Entity<TextareaState>,
-    pub(crate) websocket_log: Entity<TextareaState>,
     pub(crate) response_body: Entity<TextareaState>,
     pub(crate) code_preview: Entity<TextareaState>,
     pub(crate) save_destination_search: Entity<InputState>,
 }
 
 /// 工作区交互与界面视图状态（页签、弹窗、辅助面板、目录编辑等）。
-pub(in crate::api_client) struct WorkspaceUiState {
-    pub(in crate::api_client) request_tab: ApiRequestTab,
-    pub(in crate::api_client) response_tab: ApiResponseTab,
-    pub(in crate::api_client) selected_history: Option<usize>,
-    pub(in crate::api_client) save_destination_open: bool,
-    pub(in crate::api_client) auxiliary_section: Option<ApiAuxiliarySection>,
-    pub(in crate::api_client) config_modal: Option<ApiConfigModalSection>,
-    pub(in crate::api_client) new_request_modal_open: bool,
-    pub(in crate::api_client) global_parameter_tab: ApiGlobalParameterTab,
-    pub(in crate::api_client) codegen_target: CodeTarget,
-    pub(in crate::api_client) folder_editor: Option<FolderEditor>,
-    pub(in crate::api_client) pending_folder_delete: Option<ApiFolderId>,
-    pub(in crate::api_client) collapsed_folders: std::collections::HashSet<ApiFolderId>,
+pub(in crate::app::api_client) struct WorkspaceUiState {
+    pub(in crate::app::api_client) request_tab: ApiRequestTab,
+    pub(in crate::app::api_client) response_tab: ApiResponseTab,
+    pub(in crate::app::api_client) selected_history: Option<usize>,
+    pub(in crate::app::api_client) save_destination_open: bool,
+    pub(in crate::app::api_client) auxiliary_section: Option<ApiAuxiliarySection>,
+    pub(in crate::app::api_client) config_modal: Option<ApiConfigModalSection>,
+    pub(in crate::app::api_client) new_request_modal_open: bool,
+    pub(in crate::app::api_client) global_parameter_tab: ApiGlobalParameterTab,
+    pub(in crate::app::api_client) codegen_target: CodeTarget,
+    pub(in crate::app::api_client) folder_editor: Option<FolderEditor>,
+    pub(in crate::app::api_client) pending_folder_delete: Option<ApiFolderId>,
+    pub(in crate::app::api_client) collapsed_folders: std::collections::HashSet<ApiFolderId>,
 }
 
 impl Default for WorkspaceUiState {
@@ -182,88 +182,53 @@ impl Default for WorkspaceUiState {
     }
 }
 
-/// WebSocket 日志有界环形缓冲区上限。
-const MAX_WS_LOG_LINES: usize = 1_000;
-const MAX_WS_LOG_BYTES: usize = 256 * 1024;
-
-/// 有界 WebSocket 消息日志缓冲区，避免全量回读与无上限内存增长。
-#[derive(Default)]
-pub(in crate::api_client) struct WsLogBuffer {
-    lines: VecDeque<String>,
-    total_bytes: usize,
-}
-
-impl WsLogBuffer {
-    /// 批量追加日志，只在批次结束时构造一次完整文本。
-    pub(in crate::api_client) fn push_many(
-        &mut self,
-        new_lines: impl IntoIterator<Item = String>,
-    ) -> String {
-        for line in new_lines {
-            let line = truncate_log_tail(line, MAX_WS_LOG_BYTES);
-            self.total_bytes = self.total_bytes.saturating_add(line.len());
-            self.lines.push_back(line);
-        }
-        while (self.lines.len() > MAX_WS_LOG_LINES || self.total_bytes > MAX_WS_LOG_BYTES)
-            && self.lines.len() > 1
-        {
-            if let Some(oldest) = self.lines.pop_front() {
-                self.total_bytes = self.total_bytes.saturating_sub(oldest.len());
-            }
-        }
-        let mut out = String::with_capacity(self.total_bytes + self.lines.len());
-        for (index, item) in self.lines.iter().enumerate() {
-            if index > 0 {
-                out.push('\n');
-            }
-            out.push_str(item);
-        }
-        out
-    }
-}
-
-fn truncate_log_tail(mut line: String, limit: usize) -> String {
-    if line.len() <= limit {
-        return line;
-    }
-    let mut start = line.len().saturating_sub(limit);
-    while !line.is_char_boundary(start) {
-        start = start.saturating_add(1);
-    }
-    line.drain(..start);
-    line
-}
-
 /// 请求执行、WebSocket 连接、响应快照与用户提示状态。
-#[derive(Default)]
-pub(in crate::api_client) struct ExecutionState {
-    pub(in crate::api_client) response: Option<ApiResponseSnapshot>,
-    pub(in crate::api_client) assertion_results: Vec<ApiAssertionResult>,
-    pub(in crate::api_client) send_generation: u64,
-    pub(in crate::api_client) sending_request: Option<ApiRequestId>,
-    pub(in crate::api_client) ws_connected: bool,
-    pub(in crate::api_client) notice: Option<String>,
-    pub(in crate::api_client) error: Option<String>,
-    pub(in crate::api_client) send_task: Option<Task<()>>,
-    pub(in crate::api_client) ws_task: Option<Task<()>>,
-    pub(in crate::api_client) ws_event_task: Option<Task<()>>,
-    pub(in crate::api_client) ws_handle: Option<ApiWebSocketHandle>,
-    pub(in crate::api_client) ws_log_buffer: WsLogBuffer,
-    pub(in crate::api_client) binary_file_task: Option<Task<()>>,
+pub(in crate::app::api_client) struct ExecutionState {
+    pub(in crate::app::api_client) response: Option<ApiResponseSnapshot>,
+    pub(in crate::app::api_client) assertion_results: Vec<ApiAssertionResult>,
+    pub(in crate::app::api_client) send_generation: u64,
+    pub(in crate::app::api_client) sending_request: Option<ApiRequestId>,
+    pub(in crate::app::api_client) ws_connected: bool,
+    pub(in crate::app::api_client) notice: Option<String>,
+    pub(in crate::app::api_client) error: Option<String>,
+    pub(in crate::app::api_client) send_task: Option<Task<()>>,
+    pub(in crate::app::api_client) ws_task: Option<Task<()>>,
+    pub(in crate::app::api_client) ws_event_task: Option<Task<()>>,
+    pub(in crate::app::api_client) ws_handle: Option<ApiWebSocketHandle>,
+    pub(in crate::app::api_client) ws_log: Entity<WsLogView>,
+    pub(in crate::app::api_client) binary_file_task: Option<Task<()>>,
 }
 
 impl ExecutionState {
-    pub(in crate::api_client) fn is_sending(&self) -> bool {
+    pub(in crate::app::api_client) fn new(ws_log: Entity<WsLogView>) -> Self {
+        Self {
+            response: None,
+            assertion_results: Vec::new(),
+            send_generation: 0,
+            sending_request: None,
+            ws_connected: false,
+            notice: None,
+            error: None,
+            send_task: None,
+            ws_task: None,
+            ws_event_task: None,
+            ws_handle: None,
+            ws_log,
+            binary_file_task: None,
+        }
+    }
+
+    pub(in crate::app::api_client) fn is_sending(&self) -> bool {
         self.sending_request.is_some()
     }
 
-    pub(in crate::api_client) fn begin_send(&mut self, request_id: ApiRequestId) -> u64 {
+    pub(in crate::app::api_client) fn begin_send(&mut self, request_id: ApiRequestId) -> u64 {
         self.send_generation = self.send_generation.saturating_add(1);
         self.sending_request = Some(request_id);
         self.send_generation
     }
 
-    pub(in crate::api_client) fn finish_send(&mut self, generation: u64) -> bool {
+    pub(in crate::app::api_client) fn finish_send(&mut self, generation: u64) -> bool {
         if self.send_generation != generation {
             return false;
         }
@@ -273,14 +238,14 @@ impl ExecutionState {
 }
 
 /// 工作区可拖拽分栏状态。
-pub(in crate::api_client) struct WorkspaceSplits {
-    pub(in crate::api_client) tree_editor: Entity<ResizableState>,
-    pub(in crate::api_client) request_response: Entity<ResizableState>,
+pub(in crate::app::api_client) struct WorkspaceSplits {
+    pub(in crate::app::api_client) tree_editor: Entity<ResizableState>,
+    pub(in crate::app::api_client) request_response: Entity<ResizableState>,
 }
 
 impl WorkspaceSplits {
     /// 初始化工作区左右树栏与上下编辑/响应分栏。
-    pub(in crate::api_client) fn new<T: 'static>(cx: &mut Context<T>) -> Self {
+    pub(in crate::app::api_client) fn new<T: 'static>(cx: &mut Context<T>) -> Self {
         Self {
             tree_editor: cx.new(|_| ResizableState::default()),
             request_response: cx.new(|_| ResizableState::default()),
@@ -290,26 +255,14 @@ impl WorkspaceSplits {
 
 #[cfg(test)]
 mod tests {
-    use super::{ExecutionState, MAX_WS_LOG_BYTES, MAX_WS_LOG_LINES, WsLogBuffer};
+    use super::{ExecutionState, WsLogView};
+    use gpui_kit::{AppContext, TestAppContext};
     use transom_api::ApiRequestId;
 
     #[test]
-    fn ws_log_buffer_evicts_oldest_when_exceeding_limits() {
-        let mut buffer = WsLogBuffer::default();
-        for index in 0..(MAX_WS_LOG_LINES + 5) {
-            let _ = buffer.push_many([format!("line-{index}")]);
-        }
-        assert_eq!(buffer.lines.len(), MAX_WS_LOG_LINES);
-        assert_eq!(buffer.lines.front().map(String::as_str), Some("line-5"));
-        let oversized = "x".repeat(MAX_WS_LOG_BYTES.saturating_add(100));
-        let text = buffer.push_many([oversized]);
-        assert_eq!(buffer.lines.len(), 1);
-        assert!(text.len() <= MAX_WS_LOG_BYTES);
-    }
-
-    #[test]
     fn stale_send_completion_does_not_clear_newer_send_state() {
-        let mut state = ExecutionState::default();
+        let app = TestAppContext::single();
+        let mut state = app.update(|cx| ExecutionState::new(cx.new(|_| WsLogView::new())));
         let first = state.begin_send(ApiRequestId::new());
         let second = state.begin_send(ApiRequestId::new());
         assert!(!state.finish_send(first));

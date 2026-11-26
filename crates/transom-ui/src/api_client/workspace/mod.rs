@@ -8,7 +8,7 @@ mod editor_state;
 mod editors;
 mod folder;
 mod global_config;
-pub(in crate::api_client) mod global_params_view;
+pub(in crate::app::api_client) mod global_params_view;
 mod history_view;
 mod kv_sync;
 mod project_switcher;
@@ -22,6 +22,7 @@ mod tree_drag;
 mod tree_view;
 mod types;
 mod view;
+mod ws_log_view;
 
 use super::editors::kv::KvEditorEvent;
 use super::sidebar::{ApiSidebarState, ApiSidebarView};
@@ -40,15 +41,16 @@ pub(crate) use view::{
     ApiWorkspaceParams, render_api_config_dialog_body, render_api_new_request_dialog_body,
     render_api_workspace,
 };
+pub(in crate::app::api_client) use ws_log_view::WsLogView;
 
 /// 单个 API 项目标签的工作区实体。
 pub(crate) struct ApiWorkspace {
     pub(crate) project: ApiProject,
-    pub(in crate::api_client) selected_request: Option<ApiRequestId>,
-    pub(in crate::api_client) ui: WorkspaceUiState,
-    pub(in crate::api_client) exec: ExecutionState,
-    pub(in crate::api_client) editors: ApiWorkspaceEditors,
-    pub(in crate::api_client) splits: WorkspaceSplits,
+    pub(in crate::app::api_client) selected_request: Option<ApiRequestId>,
+    pub(in crate::app::api_client) ui: WorkspaceUiState,
+    pub(in crate::app::api_client) exec: ExecutionState,
+    pub(in crate::app::api_client) editors: ApiWorkspaceEditors,
+    pub(in crate::app::api_client) splits: WorkspaceSplits,
     services: ApiWorkspaceServices,
     editor_subscriptions: Vec<Subscription>,
 }
@@ -68,7 +70,7 @@ impl ApiWorkspace {
             selected_request: project.requests.first().map(|request| request.id),
             project,
             ui: WorkspaceUiState::default(),
-            exec: ExecutionState::default(),
+            exec: ExecutionState::new(cx.new(|_| WsLogView::new())),
             editors,
             splits: WorkspaceSplits::new(cx),
             services,
@@ -252,13 +254,13 @@ impl ApiWorkspace {
     }
 
     /// 当前选中请求的协议；未选中请求时默认为 HTTP。
-    pub(in crate::api_client) fn current_protocol(&self) -> ApiProtocol {
+    pub(in crate::app::api_client) fn current_protocol(&self) -> ApiProtocol {
         self.selected_request()
             .map_or(ApiProtocol::Http, |request| request.protocol)
     }
 
     /// 当前激活环境 ID（以项目中的 `active_environment_id` 为唯一来源）。
-    pub(in crate::api_client) fn active_environment_id(&self) -> Option<ApiEnvironmentId> {
+    pub(in crate::app::api_client) fn active_environment_id(&self) -> Option<ApiEnvironmentId> {
         self.project
             .active_environment_id
             .or_else(|| self.project.environments.first().map(|env| env.id))

@@ -15,7 +15,7 @@ use gpui_kit::*;
 use transom_api::ApiImportFormat;
 use transom_ui_icons::{AppIcon, AppIconElement, UiIcon};
 
-pub(in crate::api_client) fn render_editor(
+pub(in crate::app::api_client) fn render_editor(
     view: &Entity<ApiSidebarView>,
     editor: &super::ApiProjectEditor,
     p: &Palette,
@@ -58,7 +58,7 @@ pub(in crate::api_client) fn render_editor(
     row.into_any_element()
 }
 
-pub(in crate::api_client) fn render_delete_confirm(
+pub(in crate::app::api_client) fn render_delete_confirm(
     view: &Entity<ApiSidebarView>,
     project_name: &str,
     p: &Palette,
@@ -94,7 +94,7 @@ pub(in crate::api_client) fn render_delete_confirm(
         .into_any_element()
 }
 
-pub(in crate::api_client) fn render_import_state(
+pub(in crate::app::api_client) fn render_import_state(
     view: &Entity<ApiSidebarView>,
     state: &ApiImportState,
     p: &Palette,

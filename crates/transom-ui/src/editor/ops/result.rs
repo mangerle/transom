@@ -9,22 +9,22 @@ use super::*;
 use transom_core::RemoteTextMeta;
 
 /// 回传成功后交给外壳的跨域动作快照。
-pub(in crate::editor) struct EditorWrittenAction {
-    pub(in crate::editor) tab_id: TabId,
-    pub(in crate::editor) remote_path: String,
-    pub(in crate::editor) meta: RemoteTextMeta,
+pub(in crate::app::editor) struct EditorWrittenAction {
+    pub(in crate::app::editor) tab_id: TabId,
+    pub(in crate::app::editor) remote_path: String,
+    pub(in crate::app::editor) meta: RemoteTextMeta,
     /// 新建文件首次落盘：列表里还没有该条目，需要按需刷新当前目录。
-    pub(in crate::editor) was_new_file: bool,
+    pub(in crate::app::editor) was_new_file: bool,
     /// 面板因"保存并关闭"已从集合移除，外壳需要把焦点交还 SFTP。
-    pub(in crate::editor) dropped: bool,
+    pub(in crate::app::editor) dropped: bool,
     /// 挂起的标签关闭意图快照；由外壳结合受影响标签判定能否续行。
-    pub(in crate::editor) pending_close: Option<PendingEditorClose>,
+    pub(in crate::app::editor) pending_close: Option<PendingEditorClose>,
     /// 当前仍为脏的标签快照。
-    pub(in crate::editor) dirty_tabs: Vec<TabId>,
+    pub(in crate::app::editor) dirty_tabs: Vec<TabId>,
 }
 
 /// 提权探测结果落地后的下一步。
-pub(in crate::editor) enum SudoProbeOutcome {
+pub(in crate::app::editor) enum SudoProbeOutcome {
     /// 免密可用：直接提交提权写入。
     WritePasswordless { editor: Entity<EditorState> },
     /// 必须口令：外壳打开口令输入框。
@@ -34,7 +34,7 @@ pub(in crate::editor) enum SudoProbeOutcome {
 }
 
 /// 读取/回传失败落地后的下一步。
-pub(in crate::editor) enum EditorFailureAction {
+pub(in crate::app::editor) enum EditorFailureAction {
     /// 权限拒绝且尚未自动探测过：外壳投递提权探测。
     Probe(SudoProbeRequest),
     /// sudo 票据失效：外壳重新询问口令。
@@ -46,7 +46,7 @@ pub(in crate::editor) enum EditorFailureAction {
 impl EditorPanels {
     /// 回传成功：脏基准与版本指纹都换成远端确认后的新值，目录列表条目由外壳
     /// 就地补丁；请求过"保存并关闭"时在这里移除面板。
-    pub(in crate::editor) fn note_editor_text_written(
+    pub(in crate::app::editor) fn note_editor_text_written(
         &mut self,
         op_id: TransferId,
         meta: RemoteTextMeta,
@@ -135,7 +135,7 @@ impl EditorPanels {
     /// 写回失败且错误码是权限拒绝时，自动转入提权探测而不是只留一条错误文本：
     /// 这是唯一有明确恢复路径的失败。探测只自动走一次，避免提权仍被拒时形成循环；
     /// sudo 票据失效（`AuthFailed`）则直接重新询问口令。
-    pub(in crate::editor) fn note_editor_text_failed(
+    pub(in crate::app::editor) fn note_editor_text_failed(
         &mut self,
         op_id: TransferId,
         message: String,
@@ -230,7 +230,7 @@ impl EditorPanels {
     }
 
     /// 提权探测结果：免密直接写、需要口令才弹框、不可用则说明原因。
-    pub(in crate::editor) fn note_sudo_probed(
+    pub(in crate::app::editor) fn note_sudo_probed(
         &mut self,
         op_id: TransferId,
         capability: SudoCapability,

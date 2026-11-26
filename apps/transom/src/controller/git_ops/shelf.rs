@@ -145,7 +145,7 @@ fn spawn_load(
             log::debug!("Git 搁置项读取已取消，结果被丢弃，项目: {project_id}");
             return;
         }
-        send_event(&event_tx, event);
+        send_event(&event_tx, event).await;
     });
 }
 
@@ -168,7 +168,7 @@ fn spawn_shelve(
             },
             Err(error) => shelf_failed(project_id, request_id, GitShelfOperation::Shelve, error),
         };
-        send_event(&event_tx, event);
+        send_event(&event_tx, event).await;
     });
 }
 
@@ -195,7 +195,7 @@ fn spawn_apply(
             },
             Err(error) => shelf_failed(project_id, request_id, GitShelfOperation::Apply, error),
         };
-        send_event(&event_tx, event);
+        send_event(&event_tx, event).await;
     });
 }
 
@@ -217,7 +217,7 @@ fn spawn_drop(
             },
             Err(error) => shelf_failed(project_id, request_id, GitShelfOperation::Drop, error),
         };
-        send_event(&event_tx, event);
+        send_event(&event_tx, event).await;
     });
 }
 

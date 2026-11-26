@@ -217,6 +217,8 @@ pub(crate) struct SftpPanelState {
     pub(crate) focus_handle: FocusHandle,
     /// 当前悬停预览；同一时刻只保留一个目标，切换目标或离开行时整体释放。
     pub(crate) hover_preview: Option<SftpPreviewState>,
+    /// 本地属性后台读取任务；同一时间只保留最近一次请求。
+    pub(crate) properties_task: Option<gpui_kit::Task<()>>,
     /// 多列分栏状态：由面板自己持有，跨帧保留用户拖出来的列宽。
     pub(crate) column_state: Entity<ResizableState>,
     /// 各列宽度记忆（像素，按列身份），折叠时展开列按它固定宽度。

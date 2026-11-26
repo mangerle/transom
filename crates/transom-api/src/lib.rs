@@ -5,8 +5,9 @@
 //! 只依赖一个清晰的 API 能力边界，不需要直接引入 CyberAPI 的任何 crate，也不会
 //! 让旧项目的账号、团队、邀请或服务端同步模型渗入 Transom。
 //!
-//! 代价与局限：当前版本提供桌面端本地项目、HTTP 请求和响应查看的最小闭环；
-//! Postman、OpenAPI、cURL 等复杂导入器以及 GraphQL、gRPC、WebSocket 不在本阶段。
+//! 代价与局限：当前版本提供桌面端本地项目、HTTP/GraphQL/原始 gRPC/WebSocket
+//! 请求闭环；OpenAPI 服务端工程生成、完整 GraphQL schema 补全和 gRPC proto
+//! 代码生成仍不在本阶段。
 
 mod assertions;
 mod codegen;

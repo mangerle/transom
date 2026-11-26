@@ -2043,6 +2043,9 @@ error:
   controller_stopped:
     en: The controller has stopped running. Please restart the app.
     zh-CN: 应用控制器已停止运行，请重启应用。
+  background_io_task_failed:
+    en: The background file task could not be started.
+    zh-CN: 后台文件任务启动失败。
   host_key_unknown:
     en: Unknown host key
     zh-CN: 未知的主机密钥

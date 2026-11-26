@@ -3,6 +3,40 @@
 use crate::common::{normalized_path, walkdir_like};
 
 #[test]
+fn feature_modules_are_nested_under_app() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/lib.rs");
+    let content = std::fs::read_to_string(&path).expect("读取 lib.rs 失败");
+    let allowed_root_modules = [
+        "app",
+        "app_assets",
+        "brand",
+        "bundled_fonts",
+        "i18n",
+        "keymap",
+        "palette",
+        "search",
+        "theme",
+        "widgets",
+        "window_appearance",
+    ];
+    let offenders: Vec<&str> = content
+        .lines()
+        .map(str::trim)
+        .filter_map(|line| {
+            let declaration = line
+                .strip_prefix("pub(crate) mod ")
+                .or_else(|| line.strip_prefix("mod "))?;
+            let name = declaration.strip_suffix(';')?;
+            (!allowed_root_modules.contains(&name)).then_some(name)
+        })
+        .collect();
+    assert!(
+        offenders.is_empty(),
+        "功能模块必须通过 app/mod.rs 的 #[path] 挂在 app 下，crate 根仅允许基础模块与重导出：{offenders:?}"
+    );
+}
+
+#[test]
 fn app_shell_keeps_single_state_field() {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/app/mod.rs");
     let content = std::fs::read_to_string(&path).expect("读取 app/mod.rs 失败");
@@ -21,8 +55,8 @@ fn app_shell_keeps_single_state_field() {
         .collect();
     assert_eq!(
         fields,
-        vec!["pub(crate) state: AppState,"],
-        "AppShell 只允许持有 state 一个字段，新增状态请放进 AppState 或 feature 结构体"
+        vec!["state: AppState,"],
+        "AppShell 只允许持有私有的 state 字段，新增状态请放进 AppState 或 feature 结构体"
     );
 }
 

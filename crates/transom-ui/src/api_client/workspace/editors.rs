@@ -66,7 +66,6 @@ pub(super) fn new_editors(
         cookies: cx.new(|cx| CookieEditor::new(window, cx)),
         form: cx.new(|cx| FormEditor::new(window, cx)),
         websocket_input: placeholder(window, cx, "api.request.websocket_input_placeholder"),
-        websocket_log: cx.new(|cx| TextareaState::new(window, cx)),
         response_body: cx.new(|cx| TextareaState::new(window, cx)),
         code_preview: cx.new(|cx| TextareaState::new(window, cx)),
         save_destination_search: cx.new(|cx| {

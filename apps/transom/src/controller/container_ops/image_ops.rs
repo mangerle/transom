@@ -149,16 +149,18 @@ fn spawn_pull_image_task(
         .get(&tab_id)
         .map(|w| w.engine.clone())
     else {
-        let _ = ctx.event_tx.try_send(
-            ContainerAppEvent::PullTaskFinished {
-                task_id,
-                error: Some(AppError::with_detail(
-                    ErrorCode::ContainerUnavailable,
-                    "工作区未连接",
-                )),
-            }
-            .into(),
-        );
+        let event_tx = ctx.event_tx.clone();
+        let error = AppError::with_detail(ErrorCode::ContainerUnavailable, "工作区未连接");
+        state.container_ops.spawn(async move {
+            send_event(
+                &event_tx,
+                ContainerAppEvent::PullTaskFinished {
+                    task_id,
+                    error: Some(error),
+                },
+            )
+            .await;
+        });
         return;
     };
     let cancel = ctx.container.register_task_cancel(&task_id);
@@ -194,13 +196,14 @@ fn spawn_pull_image_task(
             .await
             .err()
             .map(AppError::from);
-        let _ = event_tx.try_send(
+        send_event(
+            &event_tx,
             ContainerAppEvent::PullTaskFinished {
                 task_id: tid.clone(),
                 error,
-            }
-            .into(),
-        );
+            },
+        )
+        .await;
         let _ = internal_tx
             .send_async(Internal::ContainerPullTaskFinished {
                 tab_id,

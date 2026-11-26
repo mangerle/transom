@@ -74,71 +74,115 @@ pub(crate) struct WindowRequests {
     items: Vec<WindowRequest>,
 }
 
+/// 单帧窗口请求上限；超过后先淘汰可覆盖请求，再拒绝新增请求。
+const WINDOW_REQUEST_LIMIT: usize = 256;
+
 impl WindowRequests {
+    /// 入队一条请求；可覆盖项只保留最新一条，队列满时优先淘汰低优先级项。
+    fn push(&mut self, request: WindowRequest) {
+        if Self::is_coalescible(&request) {
+            self.items
+                .retain(|existing| !Self::same_coalescible_kind(existing, &request));
+        } else if self.items.len() >= WINDOW_REQUEST_LIMIT {
+            if let Some(index) = self.items.iter().position(Self::is_coalescible) {
+                self.items.remove(index);
+                log::warn!("窗口请求队列已满，已淘汰一条可覆盖请求");
+            } else {
+                log::warn!("窗口请求队列已满，新增请求被丢弃");
+                return;
+            }
+        }
+        if self.items.len() < WINDOW_REQUEST_LIMIT {
+            self.items.push(request);
+        } else {
+            log::warn!("窗口请求队列已满，新增请求被丢弃");
+        }
+    }
+
+    fn is_coalescible(request: &WindowRequest) -> bool {
+        matches!(
+            request,
+            WindowRequest::Toast { .. }
+                | WindowRequest::TransientStatus(_)
+                | WindowRequest::ActivateTab(_)
+        )
+    }
+
+    fn same_coalescible_kind(left: &WindowRequest, right: &WindowRequest) -> bool {
+        matches!(
+            (left, right),
+            (WindowRequest::Toast { .. }, WindowRequest::Toast { .. })
+                | (
+                    WindowRequest::TransientStatus(_),
+                    WindowRequest::TransientStatus(_)
+                )
+                | (WindowRequest::ActivateTab(_), WindowRequest::ActivateTab(_))
+        )
+    }
+
     pub(crate) fn push_sftp(&mut self, request: SftpPanelEvent) {
-        self.items.push(WindowRequest::Sftp(request));
+        self.push(WindowRequest::Sftp(request));
     }
 
     pub(crate) fn push_monitor(&mut self, request: MonitorPanelEvent) {
-        self.items.push(WindowRequest::Monitor(request));
+        self.push(WindowRequest::Monitor(request));
     }
 
     pub(crate) fn push_editor(&mut self, request: EditorPanelEvent) {
-        self.items.push(WindowRequest::Editor(request));
+        self.push(WindowRequest::Editor(request));
     }
 
     pub(crate) fn push_settings(&mut self, request: SettingsRequest) {
-        self.items.push(WindowRequest::Settings(request));
+        self.push(WindowRequest::Settings(request));
     }
 
     /// 容器工作区的窗口动作：事件在派发阶段不持有实体句柄，直接连标签 id 入队。
     pub(crate) fn push_container(&mut self, tab_id: TabId, event: ContainerWorkspaceEvent) {
-        self.items.push(WindowRequest::Container { tab_id, event });
+        self.push(WindowRequest::Container { tab_id, event });
     }
 
     pub(crate) fn push_container_sidebar(
         &mut self,
         event: crate::container::ContainerSidebarEvent,
     ) {
-        self.items.push(WindowRequest::ContainerSidebar(event));
+        self.push(WindowRequest::ContainerSidebar(event));
     }
 
     pub(crate) fn push_git_sidebar(&mut self, event: crate::git::GitSidebarEvent) {
-        self.items.push(WindowRequest::GitSidebar(event));
+        self.push(WindowRequest::GitSidebar(event));
     }
 
     pub(crate) fn push_api_sidebar(&mut self, event: ApiSidebarEvent) {
-        self.items.push(WindowRequest::ApiSidebar(event));
+        self.push(WindowRequest::ApiSidebar(event));
     }
 
     pub(crate) fn push_api_workspace(&mut self, tab_id: TabId, event: ApiWorkspaceEvent) {
-        self.items
-            .push(WindowRequest::ApiWorkspace { tab_id, event });
+        self.push(WindowRequest::ApiWorkspace { tab_id, event });
     }
 
     pub(crate) fn push_session_sidebar(&mut self, event: crate::sidebar::SessionSidebarEvent) {
-        self.items.push(WindowRequest::SessionSidebar(event));
+        self.push(WindowRequest::SessionSidebar(event));
     }
 
     pub(crate) fn push_git(&mut self, event: GitWorkspaceEvent) {
-        self.items.push(WindowRequest::Git(event));
+        self.push(WindowRequest::Git(event));
     }
 
     pub(crate) fn push_activate_tab(&mut self, tab_id: TabId) {
-        self.items.push(WindowRequest::ActivateTab(tab_id));
+        self.push(WindowRequest::ActivateTab(tab_id));
     }
 
     pub(crate) fn push_editor_close(&mut self, request: EditorCloseRequest) {
-        self.items.push(WindowRequest::EditorClose(request));
+        self.push(WindowRequest::EditorClose(request));
     }
 
     pub(crate) fn push_open_settings(&mut self, page: Option<usize>) {
-        self.items.push(WindowRequest::OpenSettings(page));
+        self.push(WindowRequest::OpenSettings(page));
     }
 
     /// 排队一条结果提示：提示需要窗口，统一交给渲染期展示。
     pub(crate) fn push_toast(&mut self, message: impl Into<String>, success: bool) {
-        self.items.push(WindowRequest::Toast {
+        self.push(WindowRequest::Toast {
             message: message.into(),
             success,
         });
@@ -146,33 +190,32 @@ impl WindowRequests {
 
     /// 关闭标签所属的整组窗格。
     pub(crate) fn push_close_tab(&mut self, tab_id: TabId) {
-        self.items.push(WindowRequest::CloseTab(tab_id));
+        self.push(WindowRequest::CloseTab(tab_id));
     }
 
     /// 关闭指定标签组。
     pub(crate) fn push_close_group(&mut self, group_id: GroupId) {
-        self.items.push(WindowRequest::CloseGroup(group_id));
+        self.push(WindowRequest::CloseGroup(group_id));
     }
 
     /// 关闭单个标签窗格（与整组关闭区分）。
     pub(crate) fn push_close_pane(&mut self, tab_id: TabId) {
-        self.items.push(WindowRequest::ClosePane(tab_id));
+        self.push(WindowRequest::ClosePane(tab_id));
     }
 
     /// 在新的标签页打开本地终端。
     pub(crate) fn push_local_terminal(&mut self, cwd: Option<std::path::PathBuf>) {
-        self.items.push(WindowRequest::LocalTerminal(cwd));
+        self.push(WindowRequest::LocalTerminal(cwd));
     }
 
     /// 排队一条底栏瞬态提示。
     pub(crate) fn push_transient_status(&mut self, message: impl Into<String>) {
-        self.items
-            .push(WindowRequest::TransientStatus(message.into()));
+        self.push(WindowRequest::TransientStatus(message.into()));
     }
 
     /// 打开会话表单：`None` 为新建，`Some` 为编辑。
     pub(crate) fn push_open_session_form(&mut self, session_id: Option<transom_core::SessionId>) {
-        self.items.push(WindowRequest::OpenSessionForm(session_id));
+        self.push(WindowRequest::OpenSessionForm(session_id));
     }
 
     pub(crate) fn is_empty(&self) -> bool {
@@ -182,5 +225,54 @@ impl WindowRequests {
     /// 取走本轮全部请求；渲染期逐个执行。
     pub(crate) fn take(&mut self) -> Vec<WindowRequest> {
         std::mem::take(&mut self.items)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{WINDOW_REQUEST_LIMIT, WindowRequest, WindowRequests};
+
+    #[test]
+    fn coalescible_requests_keep_latest_only() {
+        let mut requests = WindowRequests::default();
+        requests.push_toast("第一条", false);
+        requests.push_toast("第二条", true);
+        requests.push_transient_status("旧提示");
+        requests.push_transient_status("新提示");
+        let items = requests.take();
+        assert_eq!(items.len(), 2);
+        assert!(matches!(
+            &items[0],
+            WindowRequest::Toast { message, success }
+                if message == "第二条" && *success
+        ));
+        assert!(matches!(
+            &items[1],
+            WindowRequest::TransientStatus(message) if message == "新提示"
+        ));
+    }
+
+    #[test]
+    fn queue_limit_evicts_coalescible_requests_before_critical_ones() {
+        let mut requests = WindowRequests::default();
+        for _ in 0..(WINDOW_REQUEST_LIMIT - 1) {
+            requests.push_close_pane(transom_core::TabId::new());
+        }
+        requests.push_transient_status("低优先级提示");
+        let tab_id = transom_core::TabId::new();
+        requests.push_close_tab(tab_id);
+        assert_eq!(requests.items.len(), WINDOW_REQUEST_LIMIT);
+        assert!(
+            requests
+                .items
+                .iter()
+                .any(|request| matches!(request, WindowRequest::CloseTab(id) if *id == tab_id))
+        );
+        assert!(
+            !requests
+                .items
+                .iter()
+                .any(|request| matches!(request, WindowRequest::TransientStatus(_)))
+        );
     }
 }

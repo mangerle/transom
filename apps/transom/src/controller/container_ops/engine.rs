@@ -14,9 +14,10 @@ pub(super) fn handle(state: &mut ControllerState, ctx: &ControllerCtx, command: 
                     ctx.container.finish(request_id);
                 }
             }
-            let _ = ctx
-                .event_tx
-                .try_send(ContainerAppEvent::Disconnected { tab_id }.into());
+            let event_tx = ctx.event_tx.clone();
+            state.container_ops.spawn(async move {
+                send_event(&event_tx, ContainerAppEvent::Disconnected { tab_id }).await;
+            });
         }
         ContainerCommand::TestConnection {
             request_id,

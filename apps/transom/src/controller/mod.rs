@@ -13,6 +13,7 @@
 use std::sync::Arc;
 use std::sync::mpsc;
 use tokio::runtime::Runtime;
+use tokio::task::JoinError;
 use transom_container::ContainerService;
 use transom_core::{
     AppCommand, AppError, AppEvent, ConnectionId, ContainerRequestId, ErrorCode, ForwardId,
@@ -316,6 +317,9 @@ async fn run_controller(wiring: ControlPlaneWiring) {
         let has_host_actions = !state.host_action_tasks.is_empty();
         let has_monitors = !state.monitor_set.is_empty();
         let has_container_ops = !state.container_ops.is_empty();
+        let has_cleanup = !state.cleanup_set.is_empty();
+        let has_git = !state.git_set.is_empty();
+        let has_sync = state.sync_task.is_some();
         let incoming = tokio::select! {
             command = command_rx.recv_async() => Incoming::Command(command),
             message = internal_rx.recv_async() => Incoming::Internal(message),
@@ -339,6 +343,24 @@ async fn run_controller(wiring: ControlPlaneWiring) {
                 }
                 continue;
             }
+            joined = state.cleanup_set.join_next(), if has_cleanup => {
+                report_join_error("会话收尾", joined);
+                continue;
+            }
+            joined = state.git_set.join_next(), if has_git => {
+                report_join_error("Git 请求", joined);
+                continue;
+            }
+            joined = async {
+                match state.sync_task.as_mut() {
+                    Some(task) => task.await,
+                    None => std::future::pending().await,
+                }
+            }, if has_sync => {
+                state.sync_task = None;
+                report_join_error("云同步", Some(joined));
+                continue;
+            }
         };
 
         let control = match incoming {
@@ -359,5 +381,17 @@ async fn run_controller(wiring: ControlPlaneWiring) {
             commands::shutdown(&mut state, &ctx, &shutdown_tx).await;
             break;
         }
+    }
+}
+
+/// 记录任务集合中异常退出的任务；取消只视为可恢复停止，panic 需要告警。
+fn report_join_error(label: &str, joined: Option<Result<(), JoinError>>) {
+    let Some(Err(error)) = joined else {
+        return;
+    };
+    if error.is_panic() {
+        log::error!("{label}任务异常崩溃，相关操作可能无法完成: {error}");
+    } else {
+        log::warn!("{label}任务被取消或未正常完成: {error}");
     }
 }

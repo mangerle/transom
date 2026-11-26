@@ -135,7 +135,7 @@ impl ApiWorkspace {
     /// 复制当前响应正文；WebSocket 请求复制消息日志。
     pub(crate) fn copy_response_body(&mut self, cx: &mut Context<Self>) {
         let text = if self.current_protocol() == ApiProtocol::WebSocket {
-            self.editors.websocket_log.read(cx).value().to_string()
+            self.exec.ws_log.read(cx).to_text()
         } else if let Some(response) = &self.exec.response {
             response.body.clone()
         } else {
@@ -402,11 +402,10 @@ impl ApiWorkspace {
         self.append_ws_logs(vec![text], window, cx);
     }
 
-    fn append_ws_logs(&mut self, lines: Vec<String>, window: &mut Window, cx: &mut Context<Self>) {
-        let log = self.exec.ws_log_buffer.push_many(lines);
-        self.editors
-            .websocket_log
-            .update(cx, |state, cx| state.set_value(log, window, cx));
+    fn append_ws_logs(&mut self, lines: Vec<String>, _window: &mut Window, cx: &mut Context<Self>) {
+        self.exec
+            .ws_log
+            .update(cx, |view, cx| view.push_many(lines, cx));
     }
 
     fn set_error(&mut self, message: String, cx: &mut Context<Self>) {

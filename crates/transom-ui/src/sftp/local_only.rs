@@ -103,6 +103,7 @@ pub(crate) fn open_local_file_panel(
         active_pane: SftpActivePane::Local,
         focus_handle: cx.focus_handle(),
         hover_preview: None,
+        properties_task: None,
         column_state: cx.new(|_| ResizableState::default()),
         column_widths: ColumnWidthMemory::default(),
         pending_width_adjustment: None,

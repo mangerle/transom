@@ -15,7 +15,7 @@ use transom_core::is_safe_file_name;
 /// - 代价与局限：本地「新建文件夹」保留 `a/b` 相对多级创建能力，
 ///   但同样拒绝绝对路径与 `..` 逃逸片段；其余目标严格要求单层名称，
 ///   重命名等场景不再支持输入含 `/` 的路径。
-pub(in crate::sftp) fn name_validation_error(
+pub(in crate::app::sftp) fn name_validation_error(
     target: &SftpInputTarget,
     name: &str,
 ) -> Option<String> {

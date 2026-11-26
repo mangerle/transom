@@ -11,7 +11,7 @@ use crate::app::app_settings;
 /// 两条通道的准入闸门、载荷来源与投递失败兜底完全一致，差异只在命令变体
 /// 与成功后清理的状态位；用一个枚举把它们收进同一投递路径，避免两份生命周期
 /// 各自演化后出现口径漂移。
-pub(in crate::editor) enum EditorWriteMode {
+pub(in crate::app::editor) enum EditorWriteMode {
     /// 普通通道；`force` 为冲突横幅上显式触发的强制覆盖。
     Normal { force: bool },
     /// sudo 通道；`password` 为口令，`None` 表示探测确认可免密。
@@ -19,30 +19,30 @@ pub(in crate::editor) enum EditorWriteMode {
 }
 
 /// 实体改完状态后交给外壳投递的一次写回请求。
-pub(in crate::editor) struct EditorWriteRequest {
-    pub(in crate::editor) tab_id: TabId,
-    pub(in crate::editor) connection_id: ConnectionId,
-    pub(in crate::editor) op_id: TransferId,
-    pub(in crate::editor) remote_path: String,
-    pub(in crate::editor) content: Vec<u8>,
-    pub(in crate::editor) expected: Option<RemoteTextMeta>,
-    pub(in crate::editor) sudo: bool,
-    pub(in crate::editor) force: bool,
-    pub(in crate::editor) password: Option<String>,
+pub(in crate::app::editor) struct EditorWriteRequest {
+    pub(in crate::app::editor) tab_id: TabId,
+    pub(in crate::app::editor) connection_id: ConnectionId,
+    pub(in crate::app::editor) op_id: TransferId,
+    pub(in crate::app::editor) remote_path: String,
+    pub(in crate::app::editor) content: Vec<u8>,
+    pub(in crate::app::editor) expected: Option<RemoteTextMeta>,
+    pub(in crate::app::editor) sudo: bool,
+    pub(in crate::app::editor) force: bool,
+    pub(in crate::app::editor) password: Option<String>,
 }
 
 /// 实体改完状态后交给外壳投递的一次提权探测请求。
-pub(in crate::editor) struct SudoProbeRequest {
-    pub(in crate::editor) tab_id: TabId,
-    pub(in crate::editor) connection_id: ConnectionId,
-    pub(in crate::editor) op_id: TransferId,
+pub(in crate::app::editor) struct SudoProbeRequest {
+    pub(in crate::app::editor) tab_id: TabId,
+    pub(in crate::app::editor) connection_id: ConnectionId,
+    pub(in crate::app::editor) op_id: TransferId,
 }
 
 /// 实体清完状态后交给外壳打开口令弹窗所需的数据快照。
-pub(in crate::editor) struct SudoPasswordRequest {
-    pub(in crate::editor) editor: Entity<EditorState>,
-    pub(in crate::editor) tab_id: TabId,
-    pub(in crate::editor) file_name: String,
+pub(in crate::app::editor) struct SudoPasswordRequest {
+    pub(in crate::app::editor) editor: Entity<EditorState>,
+    pub(in crate::app::editor) tab_id: TabId,
+    pub(in crate::app::editor) file_name: String,
 }
 
 impl EditorPanels {
@@ -193,7 +193,7 @@ impl EditorPanels {
     }
 
     /// 写回准入闸门与载荷装配；返回 `None` 表示当前不允许写回。
-    pub(in crate::editor) fn prepare_editor_write(
+    pub(in crate::app::editor) fn prepare_editor_write(
         &mut self,
         editor: &Entity<EditorState>,
         mode: EditorWriteMode,
@@ -269,7 +269,7 @@ impl EditorPanels {
     }
 
     /// 探测投递失败：回到失败态，保留可原地重试的错误文本。
-    pub(in crate::editor) fn fail_sudo_probe_dispatch(
+    pub(in crate::app::editor) fn fail_sudo_probe_dispatch(
         &mut self,
         op_id: TransferId,
         cx: &mut Context<Self>,
@@ -288,7 +288,7 @@ impl EditorPanels {
     }
 
     /// 写回投递失败：回到失败态并取消"保存并关闭"意图。
-    pub(in crate::editor) fn fail_editor_write_dispatch(
+    pub(in crate::app::editor) fn fail_editor_write_dispatch(
         &mut self,
         op_id: TransferId,
         message: String,

@@ -180,11 +180,7 @@ fn render_body(
     response: Option<&ApiResponseSnapshot>,
 ) -> AnyElement {
     if params.protocol() == ApiProtocol::WebSocket {
-        return text_content(
-            "api-response-ws-log",
-            params.editors.websocket_log.clone(),
-            p,
-        );
+        return params.exec.ws_log.clone().into_any_element();
     }
     if let Some(_response) = response {
         return text_content("api-response-body", params.editors.response_body.clone(), p);

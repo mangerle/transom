@@ -10,6 +10,7 @@ use super::SidebarRow;
 use super::SidebarSlotSync;
 use gpui_kit::Entity;
 use gpui_kit::component::input::InputState;
+use gpui_kit::{Pixels, Size};
 use std::collections::HashSet;
 use std::rc::Rc;
 use transom_core::{SessionId, TabPosition};
@@ -108,6 +109,8 @@ pub(crate) struct SidebarRowsCache {
     pub(crate) revision: u64,
     pub(crate) query: String,
     pub(crate) rows: Rc<Vec<SidebarRow>>,
+    pub(crate) rem_size: Pixels,
+    pub(crate) item_sizes: Rc<Vec<Size<Pixels>>>,
 }
 
 /// 会话侧边栏状态。

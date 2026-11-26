@@ -4,6 +4,7 @@
 //! `build_resizable_group`，两者只依赖窗口尺寸、状态与调色板。
 
 use crate::app::*;
+use crate::monitor::MonitorPanelEvent;
 use crate::palette::Palette;
 use crate::sftp::SftpPanelState;
 use crate::sidebar::{SidebarSection, SidebarSlotLayout, sync_sidebar_slot};
@@ -280,13 +281,14 @@ impl AppShell {
                         .read(cx)
                         .value()
                         .to_string();
-                    let rows = self.state.sidebar_rows(&query);
+                    let (rows, item_sizes) = self.state.sidebar_rows(&query, window.rem_size());
                     let active_session = self.state.active_session_id();
                     crate::sidebar::render_sidebar(
                         crate::sidebar::SessionSidebarParams {
                             view: &self.state.session.session_sidebar,
                             search: &self.state.session.sidebar.search,
                             rows,
+                            item_sizes,
                             query: &query,
                             selection_mode: self.state.session.sidebar.selection_mode,
                             selected_sessions: &self.state.session.sidebar.selected_sessions,
@@ -454,10 +456,10 @@ impl AppShell {
                 && (self.state.features.monitor.read(cx).drawer_width() - actual_f32).abs() > 1.0
             {
                 self.state
-                    .features
-                    .monitor
-                    .update(cx, |view, _| view.set_drawer_width(actual_f32));
-                update_app_settings(cx, |s| s.monitor.drawer_width = actual_f32);
+                    .ui
+                    .window_requests
+                    .push_monitor(MonitorPanelEvent::DrawerWidthChanged(actual_f32));
+                return Some(actual_f32.clamp(360.0, max_drawer_width));
             }
         }
         Some(

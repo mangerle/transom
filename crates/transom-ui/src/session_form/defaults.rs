@@ -70,20 +70,7 @@ pub(super) fn seed_from_init(init: SessionFormInit) -> SessionFormSeed {
         Some(Connection::Rdp(_)) => ConnectionChoice::Rdp,
         _ => ConnectionChoice::Ssh,
     };
-    let local = base.as_ref().and_then(|session| match &session.connection {
-        Connection::Local(local) => Some(local),
-        _ => None,
-    });
-    let local_working_dir = local
-        .and_then(|l| l.working_dir.as_ref().map(|p| p.display().to_string()))
-        .unwrap_or_default();
-    let local_shell = local.and_then(|l| l.shell.clone()).unwrap_or_default();
-    let local_shell_args = local.map(|l| l.shell_args.join(" ")).unwrap_or_default();
-    let local_command = local
-        .and_then(|l| l.command.as_ref().map(|c| c.join(" ")))
-        .unwrap_or_default();
-    let local_run_as_admin = local.map(|l| l.run_as_admin).unwrap_or(false);
-    let local_env = local.map(|l| l.env_to_multiline()).unwrap_or_default();
+    let local = local_defaults(base.as_ref());
     let available_shells = transom_platform::shell::discover_shells();
     let serial = base.as_ref().and_then(|session| match &session.connection {
         Connection::Serial(serial) => Some(serial),
@@ -111,97 +98,13 @@ pub(super) fn seed_from_init(init: SessionFormInit) -> SessionFormSeed {
         .as_ref()
         .map(|session| session.forwards.clone())
         .unwrap_or_default();
-    let (connect_timeout, keepalive) = base
-        .as_ref()
-        .and_then(|session| match &session.connection {
-            Connection::Ssh(ssh) => {
-                Some((ssh.options.connect_timeout_secs, ssh.options.keepalive_secs))
-            }
-            Connection::Mosh(mosh) => Some((
-                mosh.options.connect_timeout_secs,
-                mosh.options.keepalive_secs,
-            )),
-            Connection::Telnet(telnet) => Some((
-                telnet.options.connect_timeout_secs,
-                telnet.options.keepalive_secs,
-            )),
-            _ => None,
-        })
-        .map(|(timeout, keepalive)| (timeout.to_string(), keepalive.to_string()))
-        .unwrap_or_else(|| ("15".to_string(), "30".to_string()));
+    let (connect_timeout, keepalive) = connection_timeouts(base.as_ref());
     let telnet_encoding = telnet
         .map(|telnet| telnet.encoding)
         .unwrap_or(TextEncoding::Utf8);
-    let (ftp_security, ftp_passive) = base
-        .as_ref()
-        .and_then(|session| match &session.connection {
-            Connection::Ftp(ftp) => Some((ftp.security, ftp.passive)),
-            _ => None,
-        })
-        .unwrap_or((FtpSecurity::Plain, true));
-    let (
-        rdp_domain,
-        rdp_security,
-        rdp_color_depth,
-        rdp_performance,
-        rdp_dynamic_resolution,
-        rdp_width,
-        rdp_height,
-        rdp_shared_dir,
-        rdp_audio,
-        rdp_clipboard,
-    ) = base
-        .as_ref()
-        .and_then(|session| match &session.connection {
-            Connection::Rdp(rdp) => Some((
-                rdp.domain.clone().unwrap_or_default(),
-                rdp.security,
-                rdp.color_depth,
-                rdp.performance,
-                rdp.dynamic_resolution,
-                rdp.desktop_size
-                    .map(|s| s.width)
-                    .unwrap_or(1920)
-                    .to_string(),
-                rdp.desktop_size
-                    .map(|s| s.height)
-                    .unwrap_or(1080)
-                    .to_string(),
-                rdp.shared_dir.clone().unwrap_or_default(),
-                rdp.audio,
-                rdp.clipboard,
-            )),
-            _ => None,
-        })
-        .unwrap_or((
-            String::new(),
-            RdpSecurity::Negotiate,
-            RdpColorDepth::Depth32,
-            RdpPerformance::Lan,
-            true,
-            "1920".to_string(),
-            "1080".to_string(),
-            String::new(),
-            true,
-            true,
-        ));
-    let serial_port = serial.map(|serial| serial.port.clone()).unwrap_or_default();
-    let serial_baud = serial
-        .map(|serial| serial.baud_rate)
-        .unwrap_or(115_200)
-        .to_string();
-    let serial_data_bits = serial
-        .map(|serial| serial.data_bits)
-        .unwrap_or(SerialDataBits::Eight);
-    let serial_parity = serial
-        .map(|serial| serial.parity)
-        .unwrap_or(SerialParity::None);
-    let serial_stop_bits = serial
-        .map(|serial| serial.stop_bits)
-        .unwrap_or(SerialStopBits::One);
-    let serial_flow_control = serial
-        .map(|serial| serial.flow_control)
-        .unwrap_or(SerialFlowControl::None);
+    let (ftp_security, ftp_passive) = ftp_defaults(base.as_ref());
+    let rdp = rdp_defaults(base.as_ref());
+    let serial = serial_defaults(serial);
     let target = target_defaults(&base, connection);
     SessionFormSeed {
         base,
@@ -216,31 +119,31 @@ pub(super) fn seed_from_init(init: SessionFormInit) -> SessionFormSeed {
         startup_commands,
         connect_timeout,
         keepalive,
-        serial_port,
-        serial_baud,
-        serial_data_bits,
-        serial_parity,
-        serial_stop_bits,
-        serial_flow_control,
+        serial_port: serial.port,
+        serial_baud: serial.baud,
+        serial_data_bits: serial.data_bits,
+        serial_parity: serial.parity,
+        serial_stop_bits: serial.stop_bits,
+        serial_flow_control: serial.flow_control,
         telnet_encoding,
         ftp_security,
         ftp_passive,
-        rdp_domain,
-        rdp_security,
-        rdp_color_depth,
-        rdp_performance,
-        rdp_dynamic_resolution,
-        rdp_width,
-        rdp_height,
-        rdp_shared_dir,
-        rdp_audio,
-        rdp_clipboard,
-        local_working_dir,
-        local_shell,
-        local_shell_args,
-        local_command,
-        local_run_as_admin,
-        local_env,
+        rdp_domain: rdp.domain,
+        rdp_security: rdp.security,
+        rdp_color_depth: rdp.color_depth,
+        rdp_performance: rdp.performance,
+        rdp_dynamic_resolution: rdp.dynamic_resolution,
+        rdp_width: rdp.width,
+        rdp_height: rdp.height,
+        rdp_shared_dir: rdp.shared_dir,
+        rdp_audio: rdp.audio,
+        rdp_clipboard: rdp.clipboard,
+        local_working_dir: local.working_dir,
+        local_shell: local.shell,
+        local_shell_args: local.shell_args,
+        local_command: local.command,
+        local_run_as_admin: local.run_as_admin,
+        local_env: local.env,
         available_shells,
         identities,
         forwards,
@@ -249,6 +152,154 @@ pub(super) fn seed_from_init(init: SessionFormInit) -> SessionFormSeed {
         global_proxy,
         block_view,
     }
+}
+
+struct LocalDefaults {
+    working_dir: String,
+    shell: String,
+    shell_args: String,
+    command: String,
+    run_as_admin: bool,
+    env: String,
+}
+
+struct SerialDefaults {
+    port: String,
+    baud: String,
+    data_bits: SerialDataBits,
+    parity: SerialParity,
+    stop_bits: SerialStopBits,
+    flow_control: SerialFlowControl,
+}
+
+struct RdpDefaults {
+    domain: String,
+    security: RdpSecurity,
+    color_depth: RdpColorDepth,
+    performance: RdpPerformance,
+    dynamic_resolution: bool,
+    width: String,
+    height: String,
+    shared_dir: String,
+    audio: bool,
+    clipboard: bool,
+}
+
+fn local_defaults(base: Option<&transom_core::Session>) -> LocalDefaults {
+    let local = base.and_then(|session| match &session.connection {
+        Connection::Local(local) => Some(local),
+        _ => None,
+    });
+    LocalDefaults {
+        working_dir: local
+            .and_then(|value| {
+                value
+                    .working_dir
+                    .as_ref()
+                    .map(|path| path.display().to_string())
+            })
+            .unwrap_or_default(),
+        shell: local
+            .and_then(|value| value.shell.clone())
+            .unwrap_or_default(),
+        shell_args: local
+            .map(|value| value.shell_args.join(" "))
+            .unwrap_or_default(),
+        command: local
+            .and_then(|value| value.command.as_ref().map(|command| command.join(" ")))
+            .unwrap_or_default(),
+        run_as_admin: local.is_some_and(|value| value.run_as_admin),
+        env: local
+            .map(|value| value.env_to_multiline())
+            .unwrap_or_default(),
+    }
+}
+
+fn serial_defaults(serial: Option<&transom_core::SerialConnection>) -> SerialDefaults {
+    SerialDefaults {
+        port: serial.map(|value| value.port.clone()).unwrap_or_default(),
+        baud: serial
+            .map(|value| value.baud_rate)
+            .unwrap_or(115_200)
+            .to_string(),
+        data_bits: serial
+            .map(|value| value.data_bits)
+            .unwrap_or(SerialDataBits::Eight),
+        parity: serial
+            .map(|value| value.parity)
+            .unwrap_or(SerialParity::None),
+        stop_bits: serial
+            .map(|value| value.stop_bits)
+            .unwrap_or(SerialStopBits::One),
+        flow_control: serial
+            .map(|value| value.flow_control)
+            .unwrap_or(SerialFlowControl::None),
+    }
+}
+
+fn connection_timeouts(base: Option<&transom_core::Session>) -> (String, String) {
+    base.and_then(|session| match &session.connection {
+        Connection::Ssh(ssh) => {
+            Some((ssh.options.connect_timeout_secs, ssh.options.keepalive_secs))
+        }
+        Connection::Mosh(mosh) => Some((
+            mosh.options.connect_timeout_secs,
+            mosh.options.keepalive_secs,
+        )),
+        Connection::Telnet(telnet) => Some((
+            telnet.options.connect_timeout_secs,
+            telnet.options.keepalive_secs,
+        )),
+        _ => None,
+    })
+    .map(|(timeout, keepalive)| (timeout.to_string(), keepalive.to_string()))
+    .unwrap_or_else(|| ("15".to_string(), "30".to_string()))
+}
+
+fn ftp_defaults(base: Option<&transom_core::Session>) -> (FtpSecurity, bool) {
+    base.and_then(|session| match &session.connection {
+        Connection::Ftp(ftp) => Some((ftp.security, ftp.passive)),
+        _ => None,
+    })
+    .unwrap_or((FtpSecurity::Plain, true))
+}
+
+fn rdp_defaults(base: Option<&transom_core::Session>) -> RdpDefaults {
+    base.and_then(|session| match &session.connection {
+        Connection::Rdp(rdp) => Some(RdpDefaults {
+            domain: rdp.domain.clone().unwrap_or_default(),
+            security: rdp.security,
+            color_depth: rdp.color_depth,
+            performance: rdp.performance,
+            dynamic_resolution: rdp.dynamic_resolution,
+            width: rdp
+                .desktop_size
+                .map(|size| size.width)
+                .unwrap_or(1920)
+                .to_string(),
+            height: rdp
+                .desktop_size
+                .map(|size| size.height)
+                .unwrap_or(1080)
+                .to_string(),
+            shared_dir: rdp.shared_dir.clone().unwrap_or_default(),
+            audio: rdp.audio,
+            clipboard: rdp.clipboard,
+        }),
+        _ => None,
+    })
+    .unwrap_or(RdpDefaults {
+        domain: String::new(),
+        security: RdpSecurity::Negotiate,
+        color_depth: RdpColorDepth::Depth32,
+        performance: RdpPerformance::Lan,
+        dynamic_resolution: true,
+        width: "1920".to_string(),
+        height: "1080".to_string(),
+        shared_dir: String::new(),
+        audio: true,
+        clipboard: true,
+    })
 }
 
 /// 由基础会话推导名称、地址、代理、外观与连接选项。

@@ -17,171 +17,16 @@ use transom_api::{ApiFolder, ApiRequest, ApiRequestId, method_for_request};
 use transom_ui_icons::{AppIcon, AppIconElement, CustomIcon, UiIcon};
 
 pub(crate) fn render_tree(params: &ApiWorkspaceParams<'_>, p: &Palette) -> AnyElement {
-    let view = params.view;
-    let mut request_rows = v_flex().w_full();
-    if let Some(editor) = &params.api_sidebar_state.editor {
-        request_rows = request_rows.child(crate::api_client::sidebar::view::render_editor(
-            params.api_sidebar,
-            editor,
-            p,
-        ));
-    }
-    if let Some(project_id) = params.api_sidebar_state.pending_delete
-        && let Some(project) = params.api_sidebar_state.registry.project(project_id)
-    {
-        request_rows = request_rows.child(crate::api_client::sidebar::view::render_delete_confirm(
-            params.api_sidebar,
-            project.display_name(),
-            p,
-        ));
-    }
-    if let Some(import) = &params.api_sidebar_state.pending_import {
-        request_rows = request_rows.child(crate::api_client::sidebar::view::render_import_state(
-            params.api_sidebar,
-            import,
-            p,
-        ));
-    }
-    if let Some(error) = &params.api_sidebar_state.load_error {
-        request_rows = request_rows.child(
-            div()
-                .mx(rems(space::XS))
-                .p(rems(space::SM))
-                .rounded(p.radius.md)
-                .bg(p.surface.control_selected)
-                .text_color(p.danger)
-                .child(error.clone()),
-        );
-    }
-    if let Some(editor) = params.ui.folder_editor.as_ref() {
-        request_rows = request_rows.child(super::folder::render_folder_editor(view, editor, p));
-    }
-    if let Some(folder_id) = params.ui.pending_folder_delete
-        && let Some(folder) = params
-            .project
-            .folders
-            .iter()
-            .find(|folder| folder.id == folder_id)
-    {
-        request_rows = request_rows.child(super::folder::render_folder_delete_confirm(
-            view,
-            folder,
-            params
-                .project
-                .requests
-                .iter()
-                .filter(|request| request.folder_id == Some(folder_id))
-                .count(),
-            p,
-        ));
-    }
-    for folder in &params.project.folders {
-        let count = params
-            .project
-            .requests
-            .iter()
-            .filter(|request| request.folder_id == Some(folder.id))
-            .count();
-        let collapsed = params.ui.collapsed_folders.contains(&folder.id);
-        request_rows = request_rows.child(render_folder_row(view, folder, collapsed, count, p));
-        if collapsed {
-            continue;
-        }
-        for request in params
-            .project
-            .requests
-            .iter()
-            .filter(|request| request.folder_id == Some(folder.id))
-        {
-            request_rows = request_rows.child(render_request_row(
-                view,
-                request,
-                params.selected_request,
-                p,
-                true,
-            ));
-        }
-    }
-    for request in params
-        .project
-        .requests
-        .iter()
-        .filter(|request| request.folder_id.is_none())
-    {
-        request_rows = request_rows.child(render_request_row(
-            view,
-            request,
-            params.selected_request,
-            p,
-            false,
-        ));
-    }
-
-    let body = if params.project.requests.is_empty() && params.project.folders.is_empty() {
-        div()
-            .p(rems(space::MD))
-            .child(empty_state(
-                AppIcon::Custom(CustomIcon::API),
-                rust_i18n::t!("api.request.empty_title").to_string(),
-                rust_i18n::t!("api.request.empty_hint").to_string(),
-                p,
-            ))
-            .into_any_element()
-    } else {
-        div()
-            .py(rems(space::XS))
-            .child(request_rows)
-            .into_any_element()
-    };
-
-    let view_for_new = view.clone();
-    let view_for_new_folder = view.clone();
-    let view_for_root_drop = view.clone();
+    let rows = render_tree_meta_rows(params, p);
+    let rows = render_project_rows(params, p, rows);
+    let body = render_tree_body(params, rows, p);
+    let view_for_root_drop = params.view.clone();
     v_flex()
         .size_full()
         .min_w_0()
         .overflow_hidden()
         .bg(p.background)
-        .child(
-            h_flex()
-                .h(rems(size::PANE_HEADER_HEIGHT))
-                .px(rems(space::SM))
-                .items_center()
-                .gap(rems(space::XS))
-                .border_color(p.divider(p.border))
-                .border_b_1()
-                .child(
-                    div()
-                        .flex_1()
-                        .min_w_0()
-                        .child(super::project_switcher::render_project_switcher(params, p)),
-                )
-                .child(
-                    IconButton::new(
-                        "api-folder-new",
-                        AppIcon::Ui(UiIcon::NEW_FOLDER),
-                        rust_i18n::t!("api.request.new_folder").to_string(),
-                    )
-                    .size(IconButtonSize::Compact)
-                    .render()
-                    .on_click(move |_, window, cx| {
-                        view_for_new_folder
-                            .update(cx, |this, cx| this.start_create_folder(window, cx));
-                    }),
-                )
-                .child(
-                    IconButton::new(
-                        "api-request-new",
-                        AppIcon::Ui(UiIcon::ADD),
-                        rust_i18n::t!("api.request.new").to_string(),
-                    )
-                    .size(IconButtonSize::Compact)
-                    .render()
-                    .on_click(move |_, _, cx| {
-                        view_for_new.update(cx, |this, cx| this.open_new_request_modal(cx));
-                    }),
-                ),
-        )
+        .child(render_tree_header(params, p))
         .child(
             div()
                 .id("api-tree-scroll-body")
@@ -196,6 +41,173 @@ pub(crate) fn render_tree(params: &ApiWorkspaceParams<'_>, p: &Palette) -> AnyEl
                     window.refresh();
                 })
                 .child(body),
+        )
+        .into_any_element()
+}
+
+/// 树顶部的内联编辑、导入与错误提示行。
+fn render_tree_meta_rows(params: &ApiWorkspaceParams<'_>, p: &Palette) -> Div {
+    let mut rows = v_flex().w_full();
+    if let Some(editor) = &params.api_sidebar_state.editor {
+        rows = rows.child(crate::api_client::sidebar::view::render_editor(
+            params.api_sidebar,
+            editor,
+            p,
+        ));
+    }
+    if let Some(project_id) = params.api_sidebar_state.pending_delete
+        && let Some(project) = params.api_sidebar_state.registry.project(project_id)
+    {
+        rows = rows.child(crate::api_client::sidebar::view::render_delete_confirm(
+            params.api_sidebar,
+            project.display_name(),
+            p,
+        ));
+    }
+    if let Some(import) = &params.api_sidebar_state.pending_import {
+        rows = rows.child(crate::api_client::sidebar::view::render_import_state(
+            params.api_sidebar,
+            import,
+            p,
+        ));
+    }
+    if let Some(error) = &params.api_sidebar_state.load_error {
+        rows = rows.child(
+            div()
+                .mx(rems(space::XS))
+                .p(rems(space::SM))
+                .rounded(p.radius.md)
+                .bg(p.surface.control_selected)
+                .text_color(p.danger)
+                .child(error.clone()),
+        );
+    }
+    if let Some(editor) = params.ui.folder_editor.as_ref() {
+        rows = rows.child(super::folder::render_folder_editor(params.view, editor, p));
+    }
+    if let Some(folder_id) = params.ui.pending_folder_delete
+        && let Some(folder) = params
+            .project
+            .folders
+            .iter()
+            .find(|folder| folder.id == folder_id)
+    {
+        rows = rows.child(super::folder::render_folder_delete_confirm(
+            params.view,
+            folder,
+            params
+                .project
+                .requests
+                .iter()
+                .filter(|request| request.folder_id == Some(folder_id))
+                .count(),
+            p,
+        ));
+    }
+    rows
+}
+
+/// 文件夹与接口的扁平树行。
+fn render_project_rows(params: &ApiWorkspaceParams<'_>, p: &Palette, mut rows: Div) -> Div {
+    for folder in &params.project.folders {
+        let count = params
+            .project
+            .requests
+            .iter()
+            .filter(|request| request.folder_id == Some(folder.id))
+            .count();
+        let collapsed = params.ui.collapsed_folders.contains(&folder.id);
+        rows = rows.child(render_folder_row(params.view, folder, collapsed, count, p));
+        if collapsed {
+            continue;
+        }
+        for request in params
+            .project
+            .requests
+            .iter()
+            .filter(|request| request.folder_id == Some(folder.id))
+        {
+            rows = rows.child(render_request_row(
+                params.view,
+                request,
+                params.selected_request,
+                p,
+                true,
+            ));
+        }
+    }
+    for request in params
+        .project
+        .requests
+        .iter()
+        .filter(|request| request.folder_id.is_none())
+    {
+        rows = rows.child(render_request_row(
+            params.view,
+            request,
+            params.selected_request,
+            p,
+            false,
+        ));
+    }
+    rows
+}
+
+fn render_tree_body(params: &ApiWorkspaceParams<'_>, rows: Div, p: &Palette) -> AnyElement {
+    if params.project.requests.is_empty() && params.project.folders.is_empty() {
+        div()
+            .p(rems(space::MD))
+            .child(empty_state(
+                AppIcon::Custom(CustomIcon::API),
+                rust_i18n::t!("api.request.empty_title").to_string(),
+                rust_i18n::t!("api.request.empty_hint").to_string(),
+                p,
+            ))
+            .into_any_element()
+    } else {
+        div().py(rems(space::XS)).child(rows).into_any_element()
+    }
+}
+
+fn render_tree_header(params: &ApiWorkspaceParams<'_>, p: &Palette) -> AnyElement {
+    let view_for_new = params.view.clone();
+    let view_for_new_folder = params.view.clone();
+    h_flex()
+        .h(rems(size::PANE_HEADER_HEIGHT))
+        .px(rems(space::SM))
+        .items_center()
+        .gap(rems(space::XS))
+        .border_color(p.divider(p.border))
+        .border_b_1()
+        .child(
+            div()
+                .flex_1()
+                .min_w_0()
+                .child(super::project_switcher::render_project_switcher(params, p)),
+        )
+        .child(
+            IconButton::new(
+                "api-folder-new",
+                AppIcon::Ui(UiIcon::NEW_FOLDER),
+                rust_i18n::t!("api.request.new_folder").to_string(),
+            )
+            .size(IconButtonSize::Compact)
+            .render()
+            .on_click(move |_, window, cx| {
+                view_for_new_folder.update(cx, |this, cx| this.start_create_folder(window, cx));
+            }),
+        )
+        .child(
+            IconButton::new(
+                "api-request-new",
+                AppIcon::Ui(UiIcon::ADD),
+                rust_i18n::t!("api.request.new").to_string(),
+            )
+            .size(IconButtonSize::Compact)
+            .render()
+            .on_click(move |_, _, cx| {
+                view_for_new.update(cx, |this, cx| this.open_new_request_modal(cx));
+            }),
         )
         .into_any_element()
 }

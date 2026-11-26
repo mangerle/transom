@@ -1,5 +1,100 @@
 //! GPUI 顶层应用外壳状态与生命周期主入口。
 
+#[path = "../activity_bar/mod.rs"]
+pub(crate) mod activity_bar;
+#[path = "../api_client/mod.rs"]
+pub(crate) mod api_client;
+#[path = "../audit.rs"]
+pub(crate) mod audit;
+#[path = "../audit_viewer/mod.rs"]
+pub(crate) mod audit_viewer;
+#[path = "../backup/mod.rs"]
+pub(crate) mod backup;
+#[path = "../batch/mod.rs"]
+pub(crate) mod batch;
+#[path = "../broadcast/mod.rs"]
+pub(crate) mod broadcast;
+#[path = "../cast_player.rs"]
+pub(crate) mod cast_player;
+#[path = "../cast_player_io.rs"]
+pub(crate) mod cast_player_io;
+#[path = "../chrome.rs"]
+pub(crate) mod chrome;
+#[path = "../cloud_sync/mod.rs"]
+pub(crate) mod cloud_sync;
+#[path = "../command_palette/mod.rs"]
+pub(crate) mod command_palette;
+#[path = "../connection/mod.rs"]
+pub(crate) mod connection;
+#[path = "../container/mod.rs"]
+pub(crate) mod container;
+#[path = "../dialog_host/mod.rs"]
+pub(crate) mod dialog_host;
+#[path = "../diff_pane/mod.rs"]
+pub(crate) mod diff_pane;
+#[path = "../diff_viewer/mod.rs"]
+pub(crate) mod diff_viewer;
+#[path = "../editor/mod.rs"]
+pub(crate) mod editor;
+#[path = "../forward/mod.rs"]
+pub(crate) mod forward;
+#[path = "../git/mod.rs"]
+pub(crate) mod git;
+#[path = "../identity/mod.rs"]
+pub(crate) mod identity;
+#[path = "../keys/mod.rs"]
+pub(crate) mod keys;
+#[path = "../known_hosts_modal.rs"]
+pub(crate) mod known_hosts_modal;
+#[path = "../monitor/mod.rs"]
+pub(crate) mod monitor;
+#[path = "../notify.rs"]
+pub(crate) mod notify;
+#[path = "../pane_tree/mod.rs"]
+pub(crate) mod pane_tree;
+#[path = "../performance/mod.rs"]
+pub(crate) mod performance;
+#[path = "../probe.rs"]
+pub(crate) mod probe;
+#[path = "../rdp/mod.rs"]
+pub(crate) mod rdp;
+#[path = "../record/mod.rs"]
+pub(crate) mod record;
+#[path = "../session_appearance.rs"]
+pub(crate) mod session_appearance;
+#[path = "../session_form/mod.rs"]
+pub(crate) mod session_form;
+#[path = "../settings/mod.rs"]
+pub(crate) mod settings;
+#[path = "../sftp/mod.rs"]
+pub(crate) mod sftp;
+#[path = "../shortcuts.rs"]
+pub(crate) mod shortcuts;
+#[path = "../sidebar/mod.rs"]
+pub(crate) mod sidebar;
+#[path = "../snippets/mod.rs"]
+pub(crate) mod snippets;
+#[path = "../sparkline.rs"]
+pub(crate) mod sparkline;
+#[path = "../split.rs"]
+pub(crate) mod split;
+#[path = "../startup.rs"]
+pub(crate) mod startup;
+#[path = "../status_bar/mod.rs"]
+pub(crate) mod status_bar;
+#[path = "../terminal_search.rs"]
+pub(crate) mod terminal_search;
+#[path = "../tiling/mod.rs"]
+pub(crate) mod tiling;
+#[path = "../trigger_panel/mod.rs"]
+pub(crate) mod trigger_panel;
+#[path = "../window_state.rs"]
+pub(crate) mod window_state;
+#[path = "../workspace/mod.rs"]
+pub(crate) mod workspace;
+#[path = "../zmodem.rs"]
+pub(crate) mod zmodem;
+
 mod backup_prompt;
 mod bootstrap;
 mod completion_source;
@@ -80,7 +175,7 @@ pub(crate) fn command_send_error_text(error: flume::TrySendError<AppCommand>) ->
 
 pub(crate) struct AppShell {
     /// 全部应用状态集中存放；外壳只负责渲染、事件路由与生命周期。
-    pub(crate) state: AppState,
+    state: AppState,
 }
 
 /// 提示通知的类型标记：只用于给 `Notification::id1` 与 `remove_notification1`

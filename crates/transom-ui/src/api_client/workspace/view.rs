@@ -20,32 +20,32 @@ use transom_api::{ApiEnvironmentId, ApiMethod, ApiProject, ApiProtocol, ApiReque
 pub(crate) struct ApiWorkspaceParams<'a> {
     pub(crate) view: &'a Entity<ApiWorkspace>,
     pub(crate) api_sidebar: &'a Entity<ApiSidebarView>,
-    pub(in crate::api_client) api_sidebar_state: &'a ApiSidebarState,
+    pub(in crate::app::api_client) api_sidebar_state: &'a ApiSidebarState,
     pub(crate) project: &'a ApiProject,
     pub(crate) request: Option<&'a ApiRequest>,
     pub(crate) selected_request: Option<ApiRequestId>,
-    pub(in crate::api_client) ui: &'a WorkspaceUiState,
-    pub(in crate::api_client) exec: &'a ExecutionState,
-    pub(in crate::api_client) editors: &'a ApiWorkspaceEditors,
-    pub(in crate::api_client) splits: &'a WorkspaceSplits,
+    pub(in crate::app::api_client) ui: &'a WorkspaceUiState,
+    pub(in crate::app::api_client) exec: &'a ExecutionState,
+    pub(in crate::app::api_client) editors: &'a ApiWorkspaceEditors,
+    pub(in crate::app::api_client) splits: &'a WorkspaceSplits,
     pub(crate) rem: Pixels,
 }
 
 impl ApiWorkspaceParams<'_> {
     /// 当前选中请求的 HTTP 方法；未选中时默认为 GET。
-    pub(in crate::api_client) fn method(&self) -> ApiMethod {
+    pub(in crate::app::api_client) fn method(&self) -> ApiMethod {
         self.request
             .map_or(ApiMethod::Get, |request| request.method)
     }
 
     /// 当前选中请求的协议；未选中时默认为 HTTP。
-    pub(in crate::api_client) fn protocol(&self) -> ApiProtocol {
+    pub(in crate::app::api_client) fn protocol(&self) -> ApiProtocol {
         self.request
             .map_or(ApiProtocol::Http, |request| request.protocol)
     }
 
     /// 当前激活环境 ID。
-    pub(in crate::api_client) fn environment_id(&self) -> Option<ApiEnvironmentId> {
+    pub(in crate::app::api_client) fn environment_id(&self) -> Option<ApiEnvironmentId> {
         self.project
             .active_environment_id
             .or_else(|| self.project.environments.first().map(|env| env.id))

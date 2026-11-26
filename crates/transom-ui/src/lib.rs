@@ -12,13 +12,8 @@ pub(crate) const APP_AUTHORS: &str = "wangle";
 
 mod app;
 mod app_assets;
-mod audit;
-mod backup;
 mod brand;
 mod bundled_fonts;
-mod cast_player;
-mod cast_player_io;
-mod diff_pane;
 pub(crate) mod divider {
     pub(crate) use transom_ui_kit::divider::*;
 }
@@ -28,58 +23,23 @@ pub(crate) mod format {
 }
 
 mod i18n;
-pub(crate) mod identity;
 mod keymap;
 mod palette;
-mod pane_tree;
+pub(crate) mod search;
 mod theme;
-pub(crate) mod trigger_panel;
 mod widgets;
 mod window_appearance;
 
-pub(crate) mod activity_bar;
-pub(crate) mod api_client;
-pub(crate) mod audit_viewer;
-pub(crate) mod batch;
-pub(crate) mod broadcast;
-pub(crate) mod chrome;
-pub(crate) mod cloud_sync;
-pub(crate) mod command_palette;
-pub(crate) mod connection;
-pub(crate) mod container;
-pub(crate) mod dialog_host;
-pub(crate) mod diff_viewer;
-pub(crate) mod editor;
-pub(crate) mod forward;
-pub(crate) mod git;
-pub(crate) mod keys;
-pub(crate) mod known_hosts_modal;
-pub(crate) mod monitor;
-pub(crate) mod notify;
-pub(crate) mod performance;
-pub(crate) mod probe;
-pub(crate) mod rdp;
-pub(crate) mod record;
-pub(crate) mod search;
-pub(crate) mod session_appearance;
-pub(crate) mod session_form;
-pub(crate) mod settings;
-pub(crate) mod sftp;
-pub(crate) mod shortcuts;
-pub(crate) mod sidebar;
-pub(crate) mod snippets;
-pub(crate) mod sparkline;
-pub(crate) mod split;
-pub(crate) mod startup;
-pub(crate) mod status_bar;
-pub(crate) mod terminal_search;
-pub(crate) mod tiling;
-pub(crate) mod window_state;
-pub(crate) mod workspace;
-pub(crate) mod zmodem;
-
 pub(crate) use app::AppShell;
-pub use workspace::WorkspaceState;
+pub use app::workspace::WorkspaceState;
+pub(crate) use app::{
+    activity_bar, api_client, audit, audit_viewer, backup, batch, broadcast, cast_player,
+    cast_player_io, chrome, cloud_sync, command_palette, connection, container, dialog_host,
+    diff_pane, diff_viewer, editor, forward, git, identity, keys, monitor, notify, pane_tree,
+    performance, probe, rdp, record, session_appearance, session_form, settings, sftp, shortcuts,
+    sidebar, snippets, sparkline, split, startup, status_bar, terminal_search, tiling,
+    trigger_panel, window_state, workspace, zmodem,
+};
 
 use app_assets::AppAssets;
 use gpui_kit::component as gpui_component;

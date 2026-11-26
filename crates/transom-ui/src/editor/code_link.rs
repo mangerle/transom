@@ -3,7 +3,10 @@
 /// 绝对路径原样使用；相对路径以远端当前目录为基准拼接。
 ///
 /// `..` 组件在终端侧已被拒绝，这里只需处理目录末尾斜杠与根目录拼接。
-pub(in crate::editor) fn resolve_code_path(path: &str, remote_dir: Option<&str>) -> Option<String> {
+pub(in crate::app::editor) fn resolve_code_path(
+    path: &str,
+    remote_dir: Option<&str>,
+) -> Option<String> {
     if path.starts_with('/') {
         return Some(path.to_string());
     }

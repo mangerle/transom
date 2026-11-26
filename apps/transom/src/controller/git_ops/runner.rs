@@ -51,7 +51,7 @@ pub(super) fn spawn_read<F, Fut>(
             return;
         }
         if let Some(event) = event {
-            send_event(&event_tx, event);
+            send_event(&event_tx, event).await;
         }
     });
 }
@@ -89,7 +89,8 @@ pub(super) fn spawn_write<F, Fut>(
                 action,
                 error,
             },
-        );
+        )
+        .await;
     });
 }
 
@@ -107,9 +108,16 @@ pub(super) fn to_app_error(error: GitError) -> AppError {
     AppError::from(error)
 }
 
-/// 事件投递：控制平面永不因界面背压而阻塞，队列满时丢弃并记录。
-pub(super) fn send_event(event_tx: &flume::Sender<AppEvent>, event: GitAppEvent) {
+/// 投递不可丢失的操作完成或失败事件；界面消费慢时对任务形成背压。
+pub(super) async fn send_event(event_tx: &flume::Sender<AppEvent>, event: GitAppEvent) {
+    if let Err(error) = event_tx.send_async(event.into()).await {
+        log::debug!("Git 完成事件投递失败，界面事件通道已关闭: {error}");
+    }
+}
+
+/// 投递可合并、可丢弃的进度事件；队列满时直接跳过本批。
+pub(super) fn send_progress(event_tx: &flume::Sender<AppEvent>, event: GitAppEvent) {
     if let Err(error) = event_tx.try_send(event.into()) {
-        log::warn!("Git 事件投递失败（界面处理过慢），原因: {error}");
+        log::debug!("Git 进度事件被丢弃，界面处理过慢: {error}");
     }
 }

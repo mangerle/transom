@@ -107,7 +107,7 @@ pub(crate) struct SftpPreviewState {
     pub(crate) op_id: Option<TransferId>,
     /// 仅用于持有延迟任务：替换/清理状态时 drop 即取消。
     pub(super) _delay_task: Option<Task<()>>,
-    /// 图片缩略图解码任务；切换目标时 drop 取消。
+    /// 本地图片缩略图或文本预览任务；切换目标时 drop 取消。
     pub(super) decode_task: Option<Task<()>>,
 }
 

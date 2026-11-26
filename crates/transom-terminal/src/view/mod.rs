@@ -37,6 +37,7 @@ pub use shell_directory::TerminalDirectoryError;
 use std::ops::Range;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
+use std::thread::JoinHandle;
 use transom_core::{
     BlockViewSettings, CompletionItem, SessionCleanup, TerminalControlHandle, TerminalInteraction,
     TerminalIo, TerminalProfile, TerminalSize,
@@ -60,7 +61,8 @@ pub struct TerminalView {
     profile: TerminalProfile,
     interaction: TerminalInteraction,
     focus_handle: FocusHandle,
-    input_tx: flume::Sender<Vec<u8>>,
+    /// 终端输入发送端；视图销毁或热替换 I/O 时显式置空以唤醒写线程退出。
+    input_tx: Option<flume::Sender<Vec<u8>>>,
     /// 待解析的终端输出通道接收端。视图与读取任务各持一份：粘贴前视图用它把
     /// 已到达但还没解析的输出先并入引擎，保证模式判定尽量贴近写入时刻。
     output_rx: flume::Receiver<Vec<u8>>,
@@ -129,6 +131,10 @@ pub struct TerminalView {
     /// （如本地 Shell 预装用的临时 rcfile 目录）。
     _cleanup: SessionCleanup,
     _reader_task: Task<()>,
+    /// 阻塞读取线程句柄；随视图存活，销毁或重连时交给全局回收器。
+    _reader_thread: Option<JoinHandle<()>>,
+    /// 阻塞写入线程句柄；输入端置空后应自然退出并交给回收器。
+    _writer_thread: Option<JoinHandle<()>>,
     _blink_task: Task<()>,
     /// Shell 集成轮询任务句柄；终态或视图回收后自行结束。
     _integration_task: Task<()>,
@@ -209,7 +215,7 @@ impl TerminalView {
                 ShellIntegration::new(shell_integration_enabled)
             }
         };
-        let (input_tx, output_rx, reader_task) = Self::spawn_io_tasks(
+        let io_runtime = Self::spawn_io_tasks(
             tasks::TerminalIoTaskParams {
                 reader,
                 writer,
@@ -261,8 +267,8 @@ impl TerminalView {
             profile,
             interaction,
             focus_handle,
-            input_tx,
-            output_rx,
+            input_tx: Some(io_runtime.input_tx),
+            output_rx: io_runtime.output_rx,
             control,
             event_tx,
             event_rx,
@@ -294,7 +300,9 @@ impl TerminalView {
             custom_keys,
             resize_tick: None,
             _cleanup: cleanup,
-            _reader_task: reader_task,
+            _reader_task: io_runtime.reader_task,
+            _reader_thread: io_runtime.threads.reader,
+            _writer_thread: io_runtime.threads.writer,
             _blink_task: blink_task,
             _integration_task: integration_task,
             _focus_subscriptions: vec![on_focus, on_blur],
@@ -318,8 +326,14 @@ impl TerminalView {
         } = params;
 
         self.control.close();
+        self.input_tx.take();
+        let (_, disconnected_output) = flume::bounded(1);
+        self.output_rx = disconnected_output;
+        tasks::reap_io_threads(tasks::TerminalIoThreads {
+            reader: self._reader_thread.take(),
+            writer: self._writer_thread.take(),
+        });
         while self.event_rx.try_recv().is_ok() {}
-        while self.output_rx.try_recv().is_ok() {}
         *self.state.silent_echo.lock() = Default::default();
 
         let TerminalIo {
@@ -364,7 +378,7 @@ impl TerminalView {
             engine.process(reconnect_notice.as_bytes());
         }
 
-        let (input_tx, output_rx, reader_task) = Self::spawn_io_tasks(
+        let io_runtime = Self::spawn_io_tasks(
             tasks::TerminalIoTaskParams {
                 reader,
                 writer,
@@ -375,9 +389,11 @@ impl TerminalView {
             },
             cx,
         );
-        self.input_tx = input_tx;
-        self.output_rx = output_rx;
-        self._reader_task = reader_task;
+        self.input_tx = Some(io_runtime.input_tx);
+        self.output_rx = io_runtime.output_rx;
+        self._reader_task = io_runtime.reader_task;
+        self._reader_thread = io_runtime.threads.reader;
+        self._writer_thread = io_runtime.threads.writer;
 
         let size = self.state.engine.lock().size();
         self.control.resize(size);
@@ -473,7 +489,10 @@ impl TerminalView {
         // 输入瞬间强制点亮光标，避免用户打字时恰好处于熄灭相位。
         self.cursor_blink_on = true;
         self.recorder.record_input(bytes);
-        match self.input_tx.try_send(bytes.to_vec()) {
+        let Some(input_tx) = self.input_tx.as_ref() else {
+            return false;
+        };
+        match input_tx.try_send(bytes.to_vec()) {
             Ok(()) => true,
             // 256 深度对人速按键与整批粘贴绰绰有余，打满只可能是写入线程
             // 卡死：此时丢掉本批输入并继续存活判定，比在 UI 线程阻塞等待好。
@@ -491,5 +510,10 @@ impl EventEmitter<TerminalEvent> for TerminalView {}
 impl Drop for TerminalView {
     fn drop(&mut self) {
         self.control.close();
+        self.input_tx.take();
+        tasks::reap_io_threads(tasks::TerminalIoThreads {
+            reader: self._reader_thread.take(),
+            writer: self._writer_thread.take(),
+        });
     }
 }

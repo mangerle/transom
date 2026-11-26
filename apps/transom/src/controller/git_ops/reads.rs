@@ -212,7 +212,8 @@ fn handle_repo_queries(
                             info,
                             error,
                         },
-                    );
+                    )
+                    .await;
                 }
             });
             true

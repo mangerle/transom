@@ -32,7 +32,7 @@ use transom_core::{ConnectionId, RemoteTextMeta, SftpCommand, SftpOperation, Tab
 ///
 /// 把"能不能开"与"怎么报错"分开：判定只读一次目录项，报错统一落到该栏错误位，
 /// 避免一条提示语为了冒泡而把整条调用链改成 `Result`。
-pub(in crate::editor) enum EditGate {
+pub(in crate::app::editor) enum EditGate {
     /// 目录项缺失（列表已刷新或路径不合法）。
     Missing,
     /// 目标是目录。
