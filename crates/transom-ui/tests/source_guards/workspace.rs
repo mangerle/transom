@@ -216,6 +216,22 @@ fn sftp_local_metadata_uses_blocking_pool() {
     }
 }
 
+/// Git 侧栏渲染只能读取实体缓存，禁止逐帧遍历项目并回查 Git 工作区。
+#[test]
+fn git_sidebar_render_uses_cached_badges() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let content = std::fs::read_to_string(root.join("crates/transom-ui/src/workspace/render.rs"))
+        .expect("读取工作区渲染文件失败");
+    assert!(
+        !content.contains("git_workspace_of_project"),
+        "Git 侧栏渲染不得逐帧回查工作区实体，分支应来自 GitHub.badges 缓存"
+    );
+    assert!(
+        !content.contains("active_branches"),
+        "Git 侧栏渲染不得每帧重建分支快照"
+    );
+}
+
 /// 窗口请求队列必须声明容量上限并支持可覆盖请求合并。
 #[test]
 fn window_requests_are_bounded_and_coalesced() {

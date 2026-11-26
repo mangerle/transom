@@ -24,7 +24,7 @@ use gpui_kit::component::button::ButtonVariants;
 use gpui_kit::component::menu::{ContextMenuExt, PopupMenu, PopupMenuItem};
 use gpui_kit::component::scroll::ScrollableElement;
 use gpui_kit::*;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use transom_core::{GitFolderId, GitProject, GitProjectId};
 use transom_ui_icons::DomainIcon;
 use transom_ui_icons::UiIcon;
@@ -34,7 +34,6 @@ pub(crate) struct GitSidebarParams<'a> {
     pub(crate) view: &'a Entity<GitSidebarView>,
     pub(crate) git: &'a GitHub,
     pub(crate) active_project: Option<GitProjectId>,
-    pub(crate) active_branches: &'a HashMap<GitProjectId, String>,
 }
 
 /// 侧栏的一行：分组标题或项目。
@@ -82,13 +81,11 @@ pub(crate) fn render_git_sidebar(params: GitSidebarParams<'_>, p: &Palette) -> A
                     SidebarRowState::Normal
                 };
                 let badge = params.git.badges.get(&id).cloned().unwrap_or_default();
-                let active_branch = params.active_branches.get(&id).map(String::as_str);
                 rows.child(rows::render_git_project_row(
                     rows::GitProjectRowProps {
                         view: params.view,
                         row: &row,
                         badge: &badge,
-                        active_branch,
                         row_state: state,
                         folders: &folders,
                     },

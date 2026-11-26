@@ -29,7 +29,6 @@ pub(super) struct GitProjectRowProps<'a> {
     pub(super) view: &'a Entity<GitSidebarView>,
     pub(super) row: &'a GitProjectRow,
     pub(super) badge: &'a GitBadge,
-    pub(super) active_branch: Option<&'a str>,
     pub(super) row_state: SidebarRowState,
     pub(super) folders: &'a [(GitFolderId, String)],
 }
@@ -109,7 +108,6 @@ pub(super) fn render_git_project_row(props: GitProjectRowProps<'_>, p: &Palette)
         view,
         row,
         badge,
-        active_branch,
         row_state,
         folders,
     } = props;
@@ -117,20 +115,15 @@ pub(super) fn render_git_project_row(props: GitProjectRowProps<'_>, p: &Palette)
     let id = project.id;
     let name = project.display_name();
 
-    let branch = badge
-        .branch
-        .as_deref()
-        .or(active_branch)
-        .map(str::to_string)
-        .unwrap_or_else(|| {
-            if badge.error.is_some() {
-                rust_i18n::t!("git.sidebar.unavailable").to_string()
-            } else if badge.loading {
-                rust_i18n::t!("git.sidebar.loading").to_string()
-            } else {
-                "-".to_string()
-            }
-        });
+    let branch = badge.branch.clone().unwrap_or_else(|| {
+        if badge.error.is_some() {
+            rust_i18n::t!("git.sidebar.unavailable").to_string()
+        } else if badge.loading {
+            rust_i18n::t!("git.sidebar.loading").to_string()
+        } else {
+            "-".to_string()
+        }
+    });
 
     let click_view = view.clone();
     let menu_view = view.clone();
