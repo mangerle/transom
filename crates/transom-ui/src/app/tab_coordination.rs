@@ -64,6 +64,23 @@ impl AppShell {
         Some(group_id)
     }
 
+    /// 取消当前正在等待的自动重连倒计时。
+    pub(crate) fn cancel_auto_reconnect(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
+        let Some(tab) = self.state.workspace.tab_mut(tab_id) else {
+            return;
+        };
+        if let Some(pane) = tab.session_pane_mut() {
+            pane.reconnect_task = None;
+            pane.reconnect_attempts = 0;
+            pane.reconnect_detail = None;
+        }
+        if matches!(tab.status, TabStatus::Failed(_)) {
+            tab.status = TabStatus::Disconnected;
+        }
+        log::info!("已取消自动重连，窗格: {tab_id}");
+        cx.notify();
+    }
+
     /// 重新发起指定标签的连接。
     pub(crate) fn reconnect_tab(
         &mut self,
@@ -82,6 +99,7 @@ impl AppShell {
             // 保留已有 TerminalView 实例以便重连就绪后热替换 I/O 并延续历史输出。
             pane.reconnect_attempts = 0;
             pane.reconnect_task = None;
+            pane.reconnect_detail = None;
             pane.zmodem = None;
             pane.system_stats = None;
         }

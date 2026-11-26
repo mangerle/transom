@@ -50,5 +50,7 @@ pub(crate) struct SessionPaneState {
     pub(crate) _subscription: Option<Subscription>,
     pub(crate) reconnect_attempts: u32,
     pub(crate) reconnect_task: Option<Task<()>>,
+    /// 等待自动重连期间展示在横幅上的倒计时说明。
+    pub(crate) reconnect_detail: Option<String>,
     pub(crate) zmodem: Option<ZmodemState>,
 }

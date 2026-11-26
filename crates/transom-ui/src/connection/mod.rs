@@ -12,9 +12,9 @@ mod secrets;
 
 pub(crate) use auth_dialog::flush_pending_credential;
 pub(crate) use local_and_quick::{
-    connect_quick_host, handle_deep_link, import_ssh_config, on_new_local_terminal, on_quick_open,
-    open_local_terminal, record_history_command, spawn_local_command, spawn_local_shell,
-    spawn_local_terminal, toggle_quick_open,
+    connect_quick_host, handle_deep_link, import_external_sessions, import_ssh_config,
+    on_new_local_terminal, on_quick_open, open_local_terminal, record_history_command,
+    spawn_local_command, spawn_local_shell, spawn_local_terminal, toggle_quick_open,
 };
 pub(crate) use local_shell_menu::build_local_terminal_menu;
 pub(crate) use presentation::{describe_target, display_compact, display_with_port, icon};
@@ -127,6 +127,22 @@ pub(crate) fn connect_session(
     crate::connection::start_connection(app_state, tab_id, session, cx);
 }
 
+/// 判断连接错误码是否属于可自动重连的瞬态网络/通道故障。
+///
+/// 认证失败、主机指纹校验不通过、配置错误或用户主动取消等确定性失败不应自动重连，
+/// 避免触发远端防爆破封锁或无效重复弹窗。
+pub(crate) fn is_auto_reconnectable(code: ErrorCode) -> bool {
+    matches!(
+        code,
+        ErrorCode::ConnectionFailed
+            | ErrorCode::Dns
+            | ErrorCode::Timeout
+            | ErrorCode::ChannelFailed
+            | ErrorCode::Io
+            | ErrorCode::Protocol
+    )
+}
+
 /// 意外断线或连接失败后的自动重连调度。
 pub(crate) fn schedule_auto_reconnect(
     app_state: &mut AppState,
@@ -134,11 +150,20 @@ pub(crate) fn schedule_auto_reconnect(
     failed_connection: ConnectionId,
     cx: &mut Context<AppShell>,
 ) {
-    const BACKOFF_SECS: [u64; 3] = [2, 5, 10];
+    const BACKOFF_SECS: [u64; 4] = [2, 5, 10, 20];
     let Some(tab) = app_state.workspace.tab_mut(tab_id) else {
         return;
     };
     if tab.connection_id() != Some(failed_connection) {
+        return;
+    }
+    if let TabStatus::Failed(error) = &tab.status
+        && !is_auto_reconnectable(error.code)
+    {
+        log::info!(
+            "跳过自动重连，窗格: {tab_id}，错误类型 {:?} 需人工干预",
+            error.code
+        );
         return;
     }
     let Some(session_id) = tab.session_id() else {
@@ -160,22 +185,25 @@ pub(crate) fn schedule_auto_reconnect(
         .map(|p| p.reconnect_attempts as usize)
         .unwrap_or(0);
     let Some(delay_secs) = BACKOFF_SECS.get(attempt).copied() else {
+        if let Some(pane) = tab.session_pane_mut() {
+            pane.reconnect_detail = None;
+            pane.reconnect_task = None;
+        }
         return;
     };
+    let total_attempts = BACKOFF_SECS.len();
     let (code, reason) = match &tab.status {
         TabStatus::Failed(error) => (error.code, error.to_string()),
         _ => (ErrorCode::ConnectionFailed, "连接已断开".to_string()),
     };
-    tab.status = TabStatus::Failed(AppError::with_detail(
-        code,
-        format!(
-            "{reason}，{delay_secs} 秒后自动重连（第 {}/3 次）",
-            attempt + 1
-        ),
-    ));
+    let detail = format!(
+        "{reason}，{delay_secs} 秒后自动重连（第 {}/{total_attempts} 次）",
+        attempt + 1
+    );
+    tab.status = TabStatus::Failed(AppError::with_detail(code, detail.clone()));
     let session_name = session.name.clone();
     log::warn!(
-        "已安排自动重连，窗格: {tab_id}，会话: {}，延迟 {delay_secs} 秒（第 {}/3 次），原因: {reason}",
+        "已安排自动重连，窗格: {tab_id}，会话: {}，延迟 {delay_secs} 秒（第 {}/{total_attempts} 次），原因: {reason}",
         session_name,
         attempt + 1
     );
@@ -184,6 +212,7 @@ pub(crate) fn schedule_auto_reconnect(
         return;
     };
     pane.reconnect_attempts += 1;
+    pane.reconnect_detail = Some(detail);
     pane.reconnect_task = Some(cx.spawn(async move |this, cx| {
         executor
             .timer(std::time::Duration::from_secs(delay_secs))
@@ -217,6 +246,8 @@ fn reset_tab_connection(app_state: &mut AppState, tab_id: TabId, connection_id: 
             pane.forward_statuses.clear();
             pane.network_traffic = None;
             pane._startup_task = None;
+            pane.reconnect_task = None;
+            pane.reconnect_detail = None;
         }
     }
 }
@@ -369,4 +400,40 @@ fn connection_supported(session: &Session) -> bool {
             | Connection::Ftp(_)
             | Connection::Rdp(_)
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_auto_reconnectable;
+    use transom_core::ErrorCode;
+
+    #[test]
+    fn transient_network_errors_are_reconnectable() {
+        for code in [
+            ErrorCode::ConnectionFailed,
+            ErrorCode::Dns,
+            ErrorCode::Timeout,
+            ErrorCode::ChannelFailed,
+            ErrorCode::Io,
+            ErrorCode::Protocol,
+        ] {
+            assert!(is_auto_reconnectable(code), "{code:?} 应当允许自动重连");
+        }
+    }
+
+    #[test]
+    fn deterministic_or_auth_errors_skip_auto_reconnect() {
+        for code in [
+            ErrorCode::Configuration,
+            ErrorCode::AuthFailed,
+            ErrorCode::KeyboardInteractiveFailed,
+            ErrorCode::HostKeyUnknown,
+            ErrorCode::HostKeyMismatch,
+            ErrorCode::Cancelled,
+            ErrorCode::NotSupported,
+            ErrorCode::PermissionDenied,
+        ] {
+            assert!(!is_auto_reconnectable(code), "{code:?} 不应自动重连");
+        }
+    }
 }

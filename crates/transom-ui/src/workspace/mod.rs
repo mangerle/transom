@@ -41,7 +41,13 @@ impl AppShell {
                 .workspace
                 .tabs
                 .iter()
-                .find(|tab| tab.id == tab_id && matches!(&tab.status, TabStatus::Disconnected))
+                .find(|tab| {
+                    tab.id == tab_id
+                        && (matches!(&tab.status, TabStatus::Disconnected)
+                            || tab
+                                .session_pane()
+                                .is_some_and(|pane| pane.reconnect_task.is_some()))
+                })
                 .map(|tab| tab.id)
         });
         let content = self.render_active_content(window, cx, p);
@@ -75,6 +81,43 @@ impl AppShell {
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
+        let (reconnecting, banner_text) = self
+            .state
+            .workspace
+            .tab(tab_id)
+            .and_then(|tab| tab.session_pane())
+            .and_then(|pane| {
+                pane.reconnect_task
+                    .is_some()
+                    .then(|| pane.reconnect_detail.clone())
+                    .flatten()
+            })
+            .map(|detail| (true, detail))
+            .unwrap_or_else(|| (false, rust_i18n::t!("tab.disconnected").to_string()));
+
+        let mut actions = h_flex().gap_2().items_center().child(
+            Button::new(ElementId::Name(format!("banner-reconnect-{tab_id}").into()))
+                .primary()
+                .xsmall()
+                .label(rust_i18n::t!("common.reconnect").to_string())
+                .on_click(
+                    cx.listener(move |this, _, window, cx| this.reconnect_tab(tab_id, window, cx)),
+                ),
+        );
+        if reconnecting {
+            actions = actions.child(
+                Button::new(ElementId::Name(
+                    format!("banner-cancel-reconnect-{tab_id}").into(),
+                ))
+                .ghost()
+                .xsmall()
+                .label(rust_i18n::t!("common.cancel").to_string())
+                .on_click(
+                    cx.listener(move |this, _, _, cx| this.cancel_auto_reconnect(tab_id, cx)),
+                ),
+            );
+        }
+
         h_flex()
             .px_3()
             .py_1()
@@ -83,20 +126,8 @@ impl AppShell {
             .justify_between()
             .bg(p.muted)
             .text_color(p.muted_foreground)
-            .child(
-                div()
-                    .text_xs()
-                    .child(rust_i18n::t!("tab.disconnected").to_string()),
-            )
-            .child(
-                Button::new(ElementId::Name(format!("banner-reconnect-{tab_id}").into()))
-                    .primary()
-                    .xsmall()
-                    .label(rust_i18n::t!("common.reconnect").to_string())
-                    .on_click(cx.listener(move |this, _, window, cx| {
-                        this.reconnect_tab(tab_id, window, cx)
-                    })),
-            )
+            .child(div().text_xs().child(banner_text))
+            .child(actions)
             .into_any_element()
     }
 

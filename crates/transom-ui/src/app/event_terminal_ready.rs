@@ -178,6 +178,8 @@ impl AppShell {
                 pane.terminal = Some(terminal);
             }
             pane.reconnect_attempts = 0;
+            pane.reconnect_task = None;
+            pane.reconnect_detail = None;
             pane.network_traffic = None;
             if let Some(subscription) = new_subscription {
                 pane._subscription = Some(subscription);
@@ -234,6 +236,8 @@ impl AppShell {
         tab.status = TabStatus::Connected;
         if let Some(pane) = tab.session_pane_mut() {
             pane.reconnect_attempts = 0;
+            pane.reconnect_task = None;
+            pane.reconnect_detail = None;
         }
         if let Some(target) = target {
             log::info!("FTP 会话就绪，窗格: {tab_id}，连接: {connection_id:?}，目标: {target}");
