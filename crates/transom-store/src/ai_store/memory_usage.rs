@@ -1,9 +1,9 @@
 //! AI 三层记忆、自定义技能目录、审计日志与 Token 用量统计持久化。
 
+use chrono::{DateTime, Local, TimeZone};
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 use transom_ai_contracts::{
@@ -165,31 +165,25 @@ impl AiUsageTotals {
 }
 
 fn current_day_and_month_keys() -> (String, String) {
-    let secs = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or(0);
-    let days = (secs / 86_400) as i64;
-    let z = days + 719_468;
-    let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
-    let doe = (z - era * 146_097) as u64;
-    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146_096) / 365;
-    let y = (yoe as i64) + era * 400;
-    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-    let mp = (5 * doy + 2) / 153;
-    let d = doy - (153 * mp + 2) / 5 + 1;
-    let m = if mp < 10 { mp + 3 } else { mp - 9 };
-    let year = y + i64::from(m <= 2);
+    day_and_month_keys_at(&Local::now())
+}
+
+fn day_and_month_keys_at<Tz>(now: &DateTime<Tz>) -> (String, String)
+where
+    Tz: TimeZone,
+    Tz::Offset: std::fmt::Display,
+{
     (
-        format!("{year:04}-{m:02}-{d:02}"),
-        format!("{year:04}-{m:02}"),
+        now.format("%Y-%m-%d").to_string(),
+        now.format("%Y-%m").to_string(),
     )
 }
 
 #[cfg(test)]
 mod tests {
     use super::super::AiStore;
-    use super::AiUsageTotals;
+    use super::{AiUsageTotals, day_and_month_keys_at};
+    use chrono::{FixedOffset, TimeZone};
 
     #[test]
     fn memory_save_and_load_isolates_hosts() {
@@ -239,6 +233,19 @@ mod tests {
             .mode()
             & 0o777;
         assert_eq!(mode, 0o600);
+    }
+
+    #[test]
+    fn day_and_month_keys_follow_local_offset() {
+        let offset = FixedOffset::east_opt(8 * 60 * 60).expect("固定时区应合法");
+        let local_midnight = offset
+            .with_ymd_and_hms(2026, 1, 1, 0, 30, 0)
+            .single()
+            .expect("本地时间应唯一");
+        assert_eq!(
+            day_and_month_keys_at(&local_midnight),
+            ("2026-01-01".to_owned(), "2026-01".to_owned())
+        );
     }
 
     #[test]

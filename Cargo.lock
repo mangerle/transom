@@ -10610,6 +10610,7 @@ dependencies = [
 name = "transom-store"
 version = "1.10.0"
 dependencies = [
+ "chrono",
  "keyring",
  "log",
  "parking_lot 0.13.0",
