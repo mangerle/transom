@@ -1,5 +1,13 @@
-//! Shell 命令阻塞检测与静态风险分级规则表。
+//! Shell 命令阻塞检测与失败关闭式风险分级。
+//!
+//! 设计原理（Why）：
+//! - 自动执行只允许“能够静态证明为只读”的命令；无法识别的命令必须进入人工确认，
+//!   不能因为风险枚举落为 `Write` 就在非生产主机自动执行；
+//! - 风险分级同时返回风险等级与“是否需要强制确认”，把未知性和破坏性分开表达；
+//! - 子命令与危险参数使用严格白名单校验，避免 `curl -o`、`journalctl --vacuum-*`
+//!   或 `awk 'BEGIN{system(...)}'` 被误判为只读。
 
+use crate::exec_policy::split_shell_segments;
 use crate::policy::ToolRisk;
 
 /// 命中的流式或交互式阻塞命令提示。
@@ -7,6 +15,38 @@ use crate::policy::ToolRisk;
 pub struct BlockingCommandHit {
     pub command: &'static str,
     pub suggestion: &'static str,
+}
+
+/// 单条 Shell 命令的风险评估结果。
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ShellCommandAssessment {
+    /// 静态风险等级。
+    pub risk: ToolRisk,
+    /// 即使执行模式允许常规写操作，也必须要求人工确认。
+    pub requires_confirmation: bool,
+}
+
+impl ShellCommandAssessment {
+    fn safe_read() -> Self {
+        Self {
+            risk: ToolRisk::SafeRead,
+            requires_confirmation: false,
+        }
+    }
+
+    fn known_write() -> Self {
+        Self {
+            risk: ToolRisk::Write,
+            requires_confirmation: false,
+        }
+    }
+
+    fn uncertain() -> Self {
+        Self {
+            risk: ToolRisk::Write,
+            requires_confirmation: true,
+        }
+    }
 }
 
 /// 检测会持续阻塞或进入全屏交互界面的远端命令，避免无效等待整个执行超时。
@@ -45,13 +85,38 @@ pub fn detect_blocking_command(command: &str) -> Option<BlockingCommandHit> {
                     suggestion: "请改用 `journalctl -n 200 --no-pager`（或加 `--since \"10 minutes ago\"`）",
                 });
             }
-            "docker" | "podman" | "kubectl"
+            "docker" | "podman"
                 if rest.first() == Some(&"logs")
                     && (has_short_flag('f') || has_flag("--follow")) =>
             {
                 return Some(BlockingCommandHit {
                     command: "container logs -f",
                     suggestion: "请去掉 `-f` 并改用 `--tail 200`（或使用 `container_ops` 工具）",
+                });
+            }
+            "docker" | "podman"
+                if rest.first() == Some(&"compose")
+                    && rest.contains(&"logs")
+                    && (has_short_flag('f') || has_flag("--follow")) =>
+            {
+                return Some(BlockingCommandHit {
+                    command: "docker compose logs -f",
+                    suggestion: "请去掉 `-f` 并改用 `--tail 200`",
+                });
+            }
+            "docker" | "podman" if rest.first() == Some(&"stats") && !has_flag("--no-stream") => {
+                return Some(BlockingCommandHit {
+                    command: "container stats",
+                    suggestion: "请增加 `--no-stream`，或使用 `container_ops` 的单次统计",
+                });
+            }
+            "kubectl"
+                if (rest.contains(&"logs") && (has_short_flag('f') || has_flag("--follow")))
+                    || (rest.contains(&"get") && has_flag("--watch")) =>
+            {
+                return Some(BlockingCommandHit {
+                    command: "kubectl follow/watch",
+                    suggestion: "请改用单次查询，必要时增加 `--tail=200`",
                 });
             }
             "top" if !has_short_flag('b') => {
@@ -98,41 +163,232 @@ pub fn format_blocking_command_hint(hit: &BlockingCommandHit) -> String {
     )
 }
 
-/// 对将要执行的远端 Shell 命令进行静态风险分级。
+/// 对将要执行的 Shell 命令执行失败关闭式静态风险评估。
 ///
-/// 采用保守原则：仅当所有管道/分号片段均为明确的只读探测命令时才判为 `SafeRead`；
-/// 出现重定向写入、反引号/命令替换或未知命令时至少按 `Write` 处理。
-pub fn classify_shell_command(command: &str) -> ToolRisk {
+/// 只有明确位于只读白名单且参数安全的命令才会返回 `SafeRead`。未知命令、命令替换、
+/// 输出重定向或无法解析的词法结构都会返回 `Write + requires_confirmation`。
+pub fn assess_shell_command(command: &str) -> ShellCommandAssessment {
     let normalized = command.trim();
     if normalized.is_empty() {
-        return ToolRisk::Write;
+        return ShellCommandAssessment::uncertain();
     }
 
     let lower = normalized.to_ascii_lowercase();
     if is_destructive_pattern(&lower) {
-        return ToolRisk::Destructive;
+        return ShellCommandAssessment {
+            risk: ToolRisk::Destructive,
+            requires_confirmation: false,
+        };
     }
-
-    if lower.contains('>') || lower.contains("$(") || lower.contains('`') {
-        return ToolRisk::Write;
+    if lower.contains("$(") || lower.contains('`') || lower.contains("<(") || lower.contains(">(") {
+        return ShellCommandAssessment::uncertain();
     }
-
     if accesses_sensitive_credential_path(&lower) {
-        return ToolRisk::SensitiveRead;
+        return ShellCommandAssessment {
+            risk: ToolRisk::SensitiveRead,
+            requires_confirmation: false,
+        };
     }
 
-    let segments: Vec<&str> = lower
-        .split([';', '|'])
-        .flat_map(|part| part.split("&&"))
-        .map(str::trim)
-        .filter(|part| !part.is_empty())
-        .collect();
-
-    if !segments.is_empty() && segments.iter().all(|seg| is_readonly_segment(seg)) {
-        return ToolRisk::SafeRead;
+    let segments = split_shell_segments(normalized);
+    if segments.is_empty() {
+        return ShellCommandAssessment::uncertain();
     }
 
-    ToolRisk::Write
+    let mut worst = ToolRisk::SafeRead;
+    let mut requires_confirmation = false;
+    for segment in &segments {
+        let assessment = assess_segment(segment);
+        if assessment.risk > worst {
+            worst = assessment.risk;
+        }
+        requires_confirmation |= assessment.requires_confirmation;
+    }
+
+    ShellCommandAssessment {
+        risk: worst,
+        requires_confirmation,
+    }
+}
+
+/// 对将执行的 Shell 命令进行静态风险分级，保留只返回风险等级的兼容入口。
+pub fn classify_shell_command(command: &str) -> ToolRisk {
+    assess_shell_command(command).risk
+}
+
+fn assess_segment(segment: &str) -> ShellCommandAssessment {
+    if segment.contains('>') {
+        return ShellCommandAssessment::uncertain();
+    }
+    let Some(tokens) = parse_shell_words(segment) else {
+        return ShellCommandAssessment::uncertain();
+    };
+    if tokens.iter().any(|token| is_shell_redirection(token)) {
+        return ShellCommandAssessment::uncertain();
+    }
+
+    let mut idx = 0usize;
+    while tokens.get(idx).is_some_and(|token| token == "sudo") {
+        idx += 1;
+    }
+    while tokens
+        .get(idx)
+        .is_some_and(|token| token.contains('=') && !token.starts_with('-'))
+    {
+        idx += 1;
+    }
+    let Some(command) = tokens.get(idx) else {
+        return ShellCommandAssessment::uncertain();
+    };
+    let args = &tokens[idx + 1..];
+    if is_destructive_tokens(command, args) {
+        return ShellCommandAssessment {
+            risk: ToolRisk::Destructive,
+            requires_confirmation: false,
+        };
+    }
+
+    match command.as_str() {
+        "ls" | "pwd" | "whoami" | "id" | "uname" | "uptime" | "df" | "free" | "ps" | "ss"
+        | "netstat" | "lsof" | "cat" | "head" | "tail" | "wc" | "stat" | "du" | "which"
+        | "whereis" | "printenv" | "grep" | "egrep" | "rg" | "ping" | "dig" | "nslookup"
+        | "host" => ShellCommandAssessment::safe_read(),
+        "date" if !has_date_write_arg(args) => ShellCommandAssessment::safe_read(),
+        "date" => ShellCommandAssessment::known_write(),
+        "dmesg" if !has_any_arg(args, &["-c", "-C", "--clear", "--read-clear"]) => {
+            ShellCommandAssessment::safe_read()
+        }
+        "dmesg" => ShellCommandAssessment::known_write(),
+        "journalctl" if !has_journal_write_flag(args) => ShellCommandAssessment::safe_read(),
+        "journalctl" => ShellCommandAssessment::known_write(),
+        "systemctl" => assess_systemctl(args),
+        "docker" | "podman" => assess_container_cli(args),
+        "ip" => assess_ip(args),
+        "ifconfig" => assess_ifconfig(args),
+        "rm" | "mv" | "cp" | "touch" | "mkdir" | "rmdir" | "chmod" | "chown" | "chgrp" | "ln"
+        | "truncate" | "tee" | "install" | "apt" | "apt-get" | "yum" | "dnf" | "pacman"
+        | "zypper" | "apk" | "cargo" | "npm" | "pnpm" | "yarn" | "pip" | "pip3" | "rsync"
+        | "tar" | "unzip" | "zip" => ShellCommandAssessment::known_write(),
+        _ => ShellCommandAssessment::uncertain(),
+    }
+}
+
+fn assess_systemctl(args: &[String]) -> ShellCommandAssessment {
+    let Some(subcommand) = args.iter().find(|arg| !arg.starts_with('-')) else {
+        return ShellCommandAssessment::uncertain();
+    };
+    match subcommand.as_str() {
+        "status" | "is-active" | "is-enabled" | "is-failed" | "list-units" | "list-unit-files"
+        | "show" | "cat" => ShellCommandAssessment::safe_read(),
+        "start" | "stop" | "restart" | "reload" | "enable" | "disable" | "mask" | "unmask"
+        | "daemon-reload" => ShellCommandAssessment::known_write(),
+        _ => ShellCommandAssessment::uncertain(),
+    }
+}
+
+fn assess_container_cli(args: &[String]) -> ShellCommandAssessment {
+    let Some(subcommand) = args.iter().find(|arg| !arg.starts_with('-')) else {
+        return ShellCommandAssessment::uncertain();
+    };
+    match subcommand.as_str() {
+        "ps" | "logs" | "inspect" | "stats" | "images" | "info" | "version" => {
+            ShellCommandAssessment::safe_read()
+        }
+        "run" | "create" | "start" | "stop" | "restart" | "rm" | "rmi" | "pull" | "push"
+        | "exec" | "compose" | "build" | "tag" | "login" | "logout" => {
+            ShellCommandAssessment::known_write()
+        }
+        _ => ShellCommandAssessment::uncertain(),
+    }
+}
+
+fn assess_ip(args: &[String]) -> ShellCommandAssessment {
+    const WRITE_VERBS: [&str; 10] = [
+        "add", "append", "change", "delete", "del", "flush", "replace", "set", "update", "exec",
+    ];
+    if has_any_arg(args, &WRITE_VERBS) {
+        return ShellCommandAssessment::known_write();
+    }
+    const READ_VERBS: [&str; 14] = [
+        "addr", "address", "a", "link", "l", "route", "r", "neigh", "neighbor", "n", "rule",
+        "tunnel", "maddr", "help",
+    ];
+    if args.is_empty() || has_any_arg(args, &READ_VERBS) {
+        ShellCommandAssessment::safe_read()
+    } else {
+        ShellCommandAssessment::uncertain()
+    }
+}
+
+fn has_journal_write_flag(args: &[String]) -> bool {
+    args.iter().any(|arg| {
+        matches!(
+            arg.as_str(),
+            "--vacuum-size"
+                | "--vacuum-time"
+                | "--vacuum-files"
+                | "--rotate"
+                | "--flush"
+                | "--sync"
+                | "--relinquish-var"
+                | "--setup-keys"
+                | "--update-catalog"
+        ) || arg.starts_with("--vacuum-size=")
+            || arg.starts_with("--vacuum-time=")
+            || arg.starts_with("--vacuum-files=")
+    })
+}
+
+fn has_date_write_arg(args: &[String]) -> bool {
+    args.iter().any(|arg| {
+        arg == "-s" || arg == "--set" || arg.starts_with("--set=") || arg.starts_with("-s")
+    })
+}
+
+fn assess_ifconfig(args: &[String]) -> ShellCommandAssessment {
+    const WRITE_ARGS: [&str; 13] = [
+        "up",
+        "down",
+        "add",
+        "del",
+        "delete",
+        "change",
+        "arp",
+        "mtu",
+        "netmask",
+        "address",
+        "broadcast",
+        "pointopoint",
+        "txqueuelen",
+    ];
+    let positional = args.iter().filter(|arg| !arg.starts_with('-')).count();
+    if has_any_arg(args, &WRITE_ARGS) || positional > 1 {
+        ShellCommandAssessment::known_write()
+    } else {
+        ShellCommandAssessment::safe_read()
+    }
+}
+
+fn has_any_arg(args: &[String], candidates: &[&str]) -> bool {
+    args.iter().any(|arg| candidates.contains(&arg.as_str()))
+}
+
+fn is_destructive_tokens(command: &str, args: &[String]) -> bool {
+    match command {
+        "rm" => args.iter().any(|arg| {
+            arg == "--recursive"
+                || (arg.starts_with('-')
+                    && !arg.starts_with("--")
+                    && (arg.contains('r') || arg.contains('R')))
+        }),
+        "chmod" => {
+            args.iter().any(|arg| arg == "-R" || arg == "--recursive")
+                && args.iter().any(|arg| arg == "777")
+        }
+        "dd" => args.iter().any(|arg| arg.starts_with("of=")),
+        "mkfs" | "shutdown" | "reboot" | "poweroff" => true,
+        _ => false,
+    }
 }
 
 fn accesses_sensitive_credential_path(lower: &str) -> bool {
@@ -144,7 +400,18 @@ fn accesses_sensitive_credential_path(lower: &str) -> bool {
         "/.env",
         " .env",
     ];
-    CREDENTIAL_MARKERS.iter().any(|m| lower.contains(m))
+    CREDENTIAL_MARKERS
+        .iter()
+        .any(|marker| lower.contains(marker))
+}
+
+fn is_shell_redirection(token: &str) -> bool {
+    token == ">"
+        || token == ">>"
+        || token == ">|"
+        || token == "&>"
+        || token == ">>&"
+        || token == "<>"
 }
 
 fn is_destructive_pattern(lower: &str) -> bool {
@@ -167,31 +434,185 @@ fn is_destructive_pattern(lower: &str) -> bool {
         .any(|marker| lower.contains(marker))
 }
 
-fn is_readonly_segment(seg: &str) -> bool {
-    let mut parts = seg.split_whitespace();
-    let Some(cmd) = parts.next() else {
-        return false;
-    };
-    let sub = parts.next().unwrap_or("");
+fn parse_shell_words(input: &str) -> Option<Vec<String>> {
+    let mut words = Vec::new();
+    let mut current = String::new();
+    let mut quote = None;
+    let mut escaped = false;
+    let mut has_token = false;
 
-    match cmd {
-        "ls" | "ll" | "pwd" | "whoami" | "id" | "uname" | "uptime" | "date" | "df" | "free"
-        | "ps" | "ss" | "netstat" | "lsof" | "cat" | "head" | "tail" | "less" | "wc" | "stat"
-        | "du" | "which" | "whereis" | "env" | "printenv" | "grep" | "egrep" | "rg" | "awk"
-        | "sort" | "uniq" | "journalctl" | "dmesg" | "ip" | "ifconfig" | "ping" | "dig"
-        | "nslookup" | "curl" => {
-            if cmd == "curl" {
-                return !seg.contains(" -x ")
-                    && !seg.contains("--request")
-                    && !seg.contains(" -d ")
-                    && !seg.contains("--data");
+    for ch in input.chars() {
+        if escaped {
+            current.push(ch);
+            has_token = true;
+            escaped = false;
+            continue;
+        }
+        match quote {
+            Some('\'') => {
+                if ch == '\'' {
+                    quote = None;
+                } else {
+                    current.push(ch);
+                }
+                has_token = true;
             }
-            true
+            Some('"') => match ch {
+                '"' => quote = None,
+                '\\' => escaped = true,
+                _ => current.push(ch),
+            },
+            _ => match ch {
+                '\'' | '"' => {
+                    quote = Some(ch);
+                    has_token = true;
+                }
+                '\\' => {
+                    escaped = true;
+                    has_token = true;
+                }
+                ch if ch.is_whitespace() => {
+                    if has_token {
+                        words.push(std::mem::take(&mut current));
+                        has_token = false;
+                    }
+                }
+                _ => {
+                    current.push(ch);
+                    has_token = true;
+                }
+            },
         }
-        "systemctl" => matches!(sub, "status" | "is-active" | "is-enabled" | "list-units"),
-        "docker" | "podman" => {
-            matches!(sub, "ps" | "logs" | "inspect" | "stats" | "images" | "info")
-        }
-        _ => false,
+    }
+
+    if escaped || quote.is_some() {
+        return None;
+    }
+    if has_token {
+        words.push(current);
+    }
+    Some(words)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{ShellCommandAssessment, assess_shell_command, detect_blocking_command};
+    use crate::policy::ToolRisk;
+
+    fn assert_safe(command: &str) {
+        assert_eq!(
+            assess_shell_command(command),
+            ShellCommandAssessment {
+                risk: ToolRisk::SafeRead,
+                requires_confirmation: false,
+            },
+            "命令应被识别为安全只读: {command}"
+        );
+    }
+
+    fn assert_uncertain(command: &str) {
+        let assessment = assess_shell_command(command);
+        assert_eq!(
+            assessment.risk,
+            ToolRisk::Write,
+            "未知命令必须按写风险处理: {command}"
+        );
+        assert!(
+            assessment.requires_confirmation,
+            "未知命令必须强制确认: {command}"
+        );
+    }
+
+    #[test]
+    fn safe_readonly_commands_are_strictly_allowlisted() {
+        assert_safe("df -h && free -m");
+        assert_safe("systemctl status nginx | head -n 20");
+        assert_safe("journalctl -n 200 --no-pager");
+        assert_safe("docker ps -a");
+        assert_safe("ip addr show");
+        assert_safe("date '+%F %T'");
+    }
+
+    #[test]
+    fn mutating_or_executable_commands_are_not_treated_as_safe_read() {
+        assert_uncertain("curl -o /tmp/body https://example.com");
+        assert_uncertain("awk 'BEGIN{system(\"touch /tmp/pwn\")}'");
+        assert_uncertain("sort -o /tmp/sorted /var/log/syslog");
+        assert_uncertain("env touch /tmp/pwn");
+        assert_uncertain("git status");
+        assert_uncertain("unknown-command --check");
+    }
+
+    #[test]
+    fn known_writes_remain_visible_but_do_not_require_extra_confirmation() {
+        assert_eq!(
+            assess_shell_command("systemctl restart nginx"),
+            ShellCommandAssessment {
+                risk: ToolRisk::Write,
+                requires_confirmation: false,
+            }
+        );
+        assert_eq!(
+            assess_shell_command("rm -rf /var/tmp/x").risk,
+            ToolRisk::Destructive
+        );
+    }
+
+    #[test]
+    fn sensitive_paths_are_not_treated_as_plain_safe_reads() {
+        assert_eq!(
+            assess_shell_command("cat ~/.ssh/id_ed25519").risk,
+            ToolRisk::SensitiveRead
+        );
+        assert_eq!(
+            assess_shell_command("cat /etc/shadow").risk,
+            ToolRisk::SensitiveRead
+        );
+    }
+
+    #[test]
+    fn encoded_destructive_commands_are_not_downgraded() {
+        assert_eq!(
+            assess_shell_command("r''m -rf /var/tmp/x").risk,
+            ToolRisk::Destructive
+        );
+        assert_eq!(
+            assess_shell_command("rm -r /var/tmp/x").risk,
+            ToolRisk::Destructive
+        );
+        assert_eq!(
+            assess_shell_command("dd of=/tmp/x if=/dev/zero").risk,
+            ToolRisk::Destructive
+        );
+    }
+
+    #[test]
+    fn dangerous_subcommands_and_flags_are_not_auto_allowed() {
+        assert_eq!(
+            assess_shell_command("journalctl --vacuum-time=1d").risk,
+            ToolRisk::Write
+        );
+        assert_eq!(
+            assess_shell_command("date -s '2026-01-01'").risk,
+            ToolRisk::Write
+        );
+        assert_eq!(
+            assess_shell_command("ip link set eth0 down").risk,
+            ToolRisk::Write
+        );
+        assert_eq!(
+            assess_shell_command("ifconfig eth0 down").risk,
+            ToolRisk::Write
+        );
+    }
+
+    #[test]
+    fn blocking_guard_catches_streams_and_container_stats() {
+        assert!(detect_blocking_command("tail -f /var/log/syslog").is_some());
+        assert!(detect_blocking_command("docker compose logs -f api").is_some());
+        assert!(detect_blocking_command("docker stats").is_some());
+        assert!(detect_blocking_command("kubectl get pods --watch").is_some());
+        assert!(detect_blocking_command("docker stats --no-stream").is_none());
+        assert!(detect_blocking_command("tail -n 200 /var/log/syslog").is_none());
     }
 }

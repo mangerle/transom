@@ -193,8 +193,8 @@ pub fn evaluate_bulk_policy(
 }
 
 pub use crate::policy_rules::{
-    BlockingCommandHit, classify_shell_command, detect_blocking_command,
-    format_blocking_command_hint,
+    BlockingCommandHit, ShellCommandAssessment, assess_shell_command, classify_shell_command,
+    detect_blocking_command, format_blocking_command_hint,
 };
 
 /// 统一策略裁决输入上下文（供内置 `Gate` 与外部 ACP 权限协商共用）。
@@ -241,7 +241,7 @@ pub fn evaluate_command_policy(ctx: &CommandPolicyContext<'_>) -> PolicyDecision
             effective_risk = chain.worst_risk;
         }
         chain_allowlisted = chain.all_allowlisted;
-        force_ask = force_ask || chain.force_ask;
+        force_ask = force_ask || chain.force_ask || chain.requires_confirmation;
         if ctx.plan_mode && matches!(effective_risk, ToolRisk::Write | ToolRisk::Destructive) {
             return PolicyDecision::Deny {
                 reason: "当前处于只读规划（Plan）模式，已拦截变更命令。".to_owned(),
@@ -466,5 +466,25 @@ mod tests {
             approval_grants: &grants,
         });
         assert_eq!(ask_wins, PolicyDecision::RequireApproval);
+    }
+
+    #[test]
+    fn unknown_commands_require_confirmation_even_in_auto_mode() {
+        use crate::approval::{ApprovalGrantStore, ApprovalScope};
+
+        let grants = ApprovalGrantStore::new();
+        let scope = ApprovalScope::new("chat-1", Some("host-1".to_owned()), HostProtection::Normal);
+        let decision = evaluate_command_policy(&CommandPolicyContext {
+            protection: HostProtection::Normal,
+            mode: ExecutionMode::Auto,
+            plan_mode: false,
+            base_risk: ToolRisk::Write,
+            force_confirm: false,
+            command: Some("curl -o /tmp/body https://example.com"),
+            exec_policy_rules: &[],
+            approval_scope: &scope,
+            approval_grants: &grants,
+        });
+        assert_eq!(decision, PolicyDecision::RequireApproval);
     }
 }

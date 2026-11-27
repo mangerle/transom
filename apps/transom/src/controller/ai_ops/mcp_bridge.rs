@@ -16,10 +16,10 @@ use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 use transom_ai::{
     AiAuditEntry, AppActionBridge, AppBridgeDomain, ExecutionMode, HostProtection, LockedSession,
-    McpServer, McpServerBackend, McpSessionInfo, RemoteExecutor, SessionPromptContext,
-    SessionScope, ToolOutputStore, ToolRuntimeContext, assess_tool_call, classify_shell_command,
-    detect_blocking_command, evaluate_bulk_policy, evaluate_policy, format_blocking_command_hint,
-    serve_local_socket,
+    McpServer, McpServerBackend, McpSessionInfo, PolicyDecision, RemoteExecutor,
+    SessionPromptContext, SessionScope, ToolOutputStore, ToolRuntimeContext, assess_shell_command,
+    assess_tool_call, detect_blocking_command, evaluate_bulk_policy, evaluate_policy,
+    format_blocking_command_hint, serve_local_socket,
 };
 use transom_core::{AiHostTargetDto, AppEvent};
 use transom_net::{SftpClient, SshRemote};
@@ -377,9 +377,14 @@ impl ControllerMcpBackend {
             selected.push(found.clone());
         }
         let protections: Vec<HostProtection> = selected.iter().map(|s| s.meta.protection).collect();
-        let risk = classify_shell_command(cmd);
-        let (decision, requires_fresh_approval) =
+        let assessment = assess_shell_command(cmd);
+        let risk = assessment.risk;
+        let (mut decision, mut requires_fresh_approval) =
             evaluate_bulk_policy(&protections, snap.execution_mode, risk);
+        if assessment.requires_confirmation && decision == PolicyDecision::Allow {
+            decision = PolicyDecision::RequireApproval;
+            requires_fresh_approval = true;
+        }
 
         let host_desc = selected
             .iter()

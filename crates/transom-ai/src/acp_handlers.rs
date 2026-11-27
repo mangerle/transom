@@ -13,7 +13,7 @@ use crate::acp_parse::{AcpStreamChunk, pick_acp_allow_option, write_json_line};
 use crate::error::AiError;
 use crate::exec_policy::{explain_command_impact, extract_command_prefix};
 use crate::policy::{
-    CommandPolicyContext, PolicyDecision, ToolRisk, classify_shell_command, evaluate_command_policy,
+    CommandPolicyContext, PolicyDecision, ToolRisk, assess_shell_command, evaluate_command_policy,
 };
 use crate::runner::{AgentEvent, ApprovalRequest, TurnOutput};
 use crate::tools::plan::PlanSnapshot;
@@ -170,13 +170,15 @@ pub(crate) async fn handle_acp_permission(
         .unwrap_or("");
     let option_id = pick_acp_allow_option(msg.pointer("/params/options"));
     let mode = *input.execution_mode.read();
-    let cmd_risk = classify_shell_command(&title);
-    let base_risk =
-        if matches!(tool_kind, "read" | "search" | "fetch") && cmd_risk == ToolRisk::Write {
-            ToolRisk::SafeRead
-        } else {
-            cmd_risk
-        };
+    let command_assessment = assess_shell_command(&title);
+    let base_risk = if matches!(tool_kind, "read" | "search" | "fetch")
+        && command_assessment.risk == ToolRisk::Write
+        && !command_assessment.requires_confirmation
+    {
+        ToolRisk::SafeRead
+    } else {
+        command_assessment.risk
+    };
     let decision = {
         let grants = input.approval_grants.read();
         evaluate_command_policy(&CommandPolicyContext {
@@ -184,7 +186,7 @@ pub(crate) async fn handle_acp_permission(
             mode,
             plan_mode: input.plan_mode,
             base_risk,
-            force_confirm: false,
+            force_confirm: command_assessment.requires_confirmation,
             command: Some(&title),
             exec_policy_rules: &input.exec_policy_rules,
             approval_scope: &input.approval_scope,

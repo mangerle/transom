@@ -2,7 +2,7 @@
 
 use super::assess_app::assess_app_tool;
 use super::{ApprovalSummary, ToolRiskAssessment, ToolRuntimeContext};
-use crate::policy::{HostProtection, ToolRisk, classify_shell_command};
+use crate::policy::{HostProtection, ToolRisk, assess_shell_command};
 
 /// 解析工具调用的目标显示标签（支持 `target = "local"` 或跨会话目标名）。
 pub(crate) fn resolve_target_label(parsed: &serde_json::Value, ctx: &ToolRuntimeContext) -> String {
@@ -41,7 +41,8 @@ pub fn assess_tool_call_value(
     match tool_name {
         "remote_exec" => {
             let cmd = parsed["command"].as_str().unwrap_or(args_json);
-            let risk = classify_shell_command(cmd);
+            let assessment = assess_shell_command(cmd);
+            let risk = assessment.risk;
             let is_local = parsed["target"]
                 .as_str()
                 .is_some_and(|t| t.trim().eq_ignore_ascii_case("local"));
@@ -56,7 +57,7 @@ pub fn assess_tool_call_value(
             };
             ToolRiskAssessment {
                 risk,
-                force_confirm: false,
+                force_confirm: assessment.requires_confirmation,
                 summary: ApprovalSummary {
                     tool_name: tool_name.to_owned(),
                     host_label,
@@ -288,7 +289,8 @@ fn assess_bulk_exec(
     ctx: &ToolRuntimeContext,
 ) -> ToolRiskAssessment {
     let cmd = parsed["command"].as_str().unwrap_or(args_json);
-    let risk = classify_shell_command(cmd);
+    let assessment = assess_shell_command(cmd);
+    let risk = assessment.risk;
     let requested_names: Option<Vec<&str>> = parsed["host_names"]
         .as_array()
         .map(|arr| arr.iter().filter_map(|v| v.as_str()).collect());
@@ -323,7 +325,7 @@ fn assess_bulk_exec(
 
     ToolRiskAssessment {
         risk,
-        force_confirm: is_write,
+        force_confirm: is_write || assessment.requires_confirmation,
         summary: ApprovalSummary {
             tool_name: "remote_exec_bulk".to_owned(),
             host_label: format!("批量 {} 台主机", targets.len()),
@@ -345,11 +347,10 @@ fn assess_compare_hosts(
     let host_b = parsed["host_b"].as_str().unwrap_or("");
     let kind = parsed["kind"].as_str().unwrap_or("file");
     let target = parsed["target"].as_str().unwrap_or("");
-    let risk = if kind.eq_ignore_ascii_case("command") {
-        classify_shell_command(target)
-    } else {
-        ToolRisk::SafeRead
-    };
+    let assessment = (kind.eq_ignore_ascii_case("command")).then(|| assess_shell_command(target));
+    let risk = assessment
+        .map(|assessment| assessment.risk)
+        .unwrap_or(ToolRisk::SafeRead);
     let protections: Vec<HostProtection> = ctx
         .bulk_hosts
         .iter()
@@ -366,7 +367,8 @@ fn assess_compare_hosts(
     let is_write = matches!(risk, ToolRisk::Write | ToolRisk::Destructive);
     ToolRiskAssessment {
         risk,
-        force_confirm: is_write,
+        force_confirm: is_write
+            || assessment.is_some_and(|assessment| assessment.requires_confirmation),
         summary: ApprovalSummary {
             tool_name: "compare_hosts".to_owned(),
             host_label: format!("{host_a} ↔ {host_b}"),
@@ -377,5 +379,35 @@ fn assess_compare_hosts(
             diff_preview: None,
             requires_fresh_approval: is_write,
         },
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use tokio::sync::mpsc;
+    use tokio_util::sync::CancellationToken;
+
+    use super::assess_tool_call_value;
+    use crate::policy::{ToolRisk, assess_shell_command};
+    use crate::session::SessionScope;
+    use crate::tools::ToolRuntimeContext;
+
+    fn dummy_ctx() -> ToolRuntimeContext {
+        let (card_tx, _card_rx) = mpsc::channel(4);
+        ToolRuntimeContext::minimal(SessionScope::Global, card_tx, CancellationToken::new())
+    }
+
+    #[test]
+    fn unknown_remote_commands_force_confirmation() {
+        let ctx = dummy_ctx();
+        let args = serde_json::json!({
+            "command": "curl -o /tmp/body https://example.com"
+        });
+        let assessment = assess_tool_call_value("remote_exec", &args, &args.to_string(), &ctx);
+        assert_eq!(assessment.risk, ToolRisk::Write);
+        assert!(assessment.force_confirm);
+        assert!(
+            assess_shell_command("curl -o /tmp/body https://example.com").requires_confirmation
+        );
     }
 }

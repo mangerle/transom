@@ -3,12 +3,13 @@
 //! 设计原理（Why）：
 //! - 单纯按空格或裸字符串匹配容易被 `ls && rm -rf /`、`;`、`$(...)`、反引号等链式结构绕过；
 //! - 本模块实现引号与转义感知的 Shell 片段拆解器 [`split_shell_segments`]，对每段独立定级并取最严风险；
+//! - 嵌套命令替换具有固定深度上限，超过上限时保留原始片段交给失败关闭策略处理。
 //! - 同时支持用户配置的命令前缀规则表（放行/拒绝/询问）、按作用域隔离的审批授权，以及高危命令执行前的影响摘要。
 
 use serde::{Deserialize, Serialize};
 
 use crate::approval::{ApprovalGrantStore, ApprovalScope};
-use crate::policy::{ToolRisk, classify_shell_command};
+use crate::policy::{ToolRisk, assess_shell_command};
 
 /// 用户自定义的命令策略动作。
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -64,13 +65,21 @@ pub struct ChainEvalResult {
     pub all_allowlisted: bool,
     /// 是否强制要求人工确认（命中 `Ask` 规则或存在不可自动放行片段）。
     pub force_ask: bool,
+    /// 是否存在无法证明安全的命令片段。
+    pub requires_confirmation: bool,
 }
 
 /// 引号与转义感知的 Shell 命令分段拆解器。
 ///
-/// 拆分 `&&`、`||`、`;`、`|`、换行，并递归提取 `$(...)` 与反引号中的内嵌命令，
-/// 彻底防止通过复合命令或命令替换绕过安全检查。
+/// 拆分 `&&`、`||`、`;`、`|`、换行，并提取 `$(...)` 与反引号中的内嵌命令。
+/// 嵌套深度超过上限时保留原始片段，由风险分级按未知命令强制确认。
 pub fn split_shell_segments(command: &str) -> Vec<String> {
+    split_shell_segments_inner(command, 0)
+}
+
+const MAX_SHELL_NESTING_DEPTH: usize = 16;
+
+fn split_shell_segments_inner(command: &str, depth: usize) -> Vec<String> {
     let mut segments = Vec::new();
     let mut current = String::new();
     let chars: Vec<char> = command.chars().collect();
@@ -115,7 +124,11 @@ pub fn split_shell_segments(command: &str) -> Vec<String> {
         if ch == '$' && i + 1 < len && chars[i + 1] == '(' {
             let (inner, next_idx) = extract_paren_subcommand(&chars, i + 2);
             if !inner.trim().is_empty() {
-                segments.extend(split_shell_segments(&inner));
+                if depth < MAX_SHELL_NESTING_DEPTH {
+                    segments.extend(split_shell_segments_inner(&inner, depth + 1));
+                } else {
+                    segments.push(inner);
+                }
             }
             current.push_str("$(...)");
             i = next_idx;
@@ -126,7 +139,11 @@ pub fn split_shell_segments(command: &str) -> Vec<String> {
         if ch == '`' {
             let (inner, next_idx) = extract_backtick_subcommand(&chars, i + 1);
             if !inner.trim().is_empty() {
-                segments.extend(split_shell_segments(&inner));
+                if depth < MAX_SHELL_NESTING_DEPTH {
+                    segments.extend(split_shell_segments_inner(&inner, depth + 1));
+                } else {
+                    segments.push(inner);
+                }
             }
             current.push_str("`...`");
             i = next_idx;
@@ -235,15 +252,19 @@ pub fn evaluate_command_chain(
             denied_reason: None,
             all_allowlisted: false,
             force_ask: false,
+            requires_confirmation: true,
         };
     }
 
     let mut worst_risk = ToolRisk::SafeRead;
     let mut all_allowlisted = true;
     let mut force_ask = false;
+    let mut requires_confirmation = false;
 
     for seg in &segments {
-        let seg_risk = classify_shell_command(seg);
+        let assessment = assess_shell_command(seg);
+        let seg_risk = assessment.risk;
+        requires_confirmation |= assessment.requires_confirmation;
         if seg_risk > worst_risk {
             worst_risk = seg_risk;
         }
@@ -269,6 +290,7 @@ pub fn evaluate_command_chain(
                             denied_reason: Some(reason),
                             all_allowlisted: false,
                             force_ask: false,
+                            requires_confirmation,
                         };
                     }
                     ExecPolicyAction::Ask => {
@@ -300,6 +322,7 @@ pub fn evaluate_command_chain(
         denied_reason: None,
         all_allowlisted,
         force_ask,
+        requires_confirmation,
     }
 }
 
@@ -311,8 +334,8 @@ pub fn extract_command_prefix(command: &str) -> Option<String> {
     if segments.len() != 1 {
         return None;
     }
-    let risk = classify_shell_command(&segments[0]);
-    if risk == ToolRisk::Destructive {
+    let assessment = assess_shell_command(&segments[0]);
+    if assessment.risk == ToolRisk::Destructive || assessment.requires_confirmation {
         return None;
     }
     let norm = normalize_segment_for_match(&segments[0]);
@@ -382,6 +405,14 @@ mod tests {
         assert!(segs.iter().any(|s| s == "ls -la"));
         assert!(segs.iter().any(|s| s == "rm -rf /tmp/x"));
         assert!(segs.iter().any(|s| s == "head"));
+    }
+
+    #[test]
+    fn deeply_nested_substitutions_are_bounded() {
+        let command = format!("{}echo ok{}", "$(".repeat(64), ")".repeat(64));
+        let segments = split_shell_segments(&command);
+        assert!(!segments.is_empty());
+        assert!(segments.len() <= 66);
     }
 
     #[test]
