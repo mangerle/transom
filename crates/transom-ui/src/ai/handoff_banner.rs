@@ -30,7 +30,7 @@ impl AiAssistantView {
         let Some(conv_id) = self.state.active_conversation_id.clone() else {
             return;
         };
-        if self.state.running_run_id.is_some() {
+        if self.state.has_active_run() {
             return;
         }
         let _ = self
@@ -381,7 +381,7 @@ impl AiAssistantView {
         render_composer(
             ComposerParams {
                 input: &self.composer_input,
-                is_running: self.state.running_run_id.is_some(),
+                is_running: self.state.has_active_run(),
                 model_label,
                 execution_mode: self.state.execution_mode,
                 session_badge,

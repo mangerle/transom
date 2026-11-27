@@ -163,8 +163,11 @@ impl AiAssistantView {
                 },
             ));
         } else {
-            let is_running = self.state.running_run_id.is_some();
-            let live_elapsed = self.state.run_started_at.map(|t| t.elapsed().as_secs());
+            let is_running = self.state.active_run_is_current();
+            let live_elapsed = self
+                .state
+                .current_run_started_at()
+                .map(|time| time.elapsed().as_secs());
             let blocks = group_chat_items(&self.state.items, is_running);
             nav_entries = collect_turn_nav_entries(&blocks);
             let has_active_wg = blocks.last().is_some_and(|b| {
@@ -346,7 +349,7 @@ impl AiAssistantView {
                     ),
             );
         }
-        let auto_following = self.state.running_run_id.is_some() && !self.auto_scroll_locked;
+        let auto_following = self.state.active_run_is_current() && !self.auto_scroll_locked;
         if auto_following {
             // 流式输出且用户未主动向上滚动时，每帧维持贴底，避免高度变化导致半路停住或按钮闪烁。
             self.msg_scroll_handle.scroll_to_bottom();

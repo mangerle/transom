@@ -269,7 +269,7 @@ impl AiAssistantView {
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> Option<AnyElement> {
-        if self.state.running_run_id.is_some() || !self.state.pending_approvals.is_empty() {
+        if self.state.has_active_run() || !self.state.pending_approvals.is_empty() {
             return None;
         }
         let UiChatItem::AssistantText {

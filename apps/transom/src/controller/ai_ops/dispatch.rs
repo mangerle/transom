@@ -218,6 +218,7 @@ pub(super) async fn start_ai_run(
             cancel: cancel.clone(),
             events: event_tx.clone(),
             subagent_cfg: Some(context_builder::SubagentConfig {
+                parent_run_id: &req.run_id,
                 target: &target,
                 fast_target: fast_target.as_ref(),
                 memory: &memory,

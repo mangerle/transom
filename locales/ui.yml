@@ -10334,6 +10334,15 @@ ai:
   load_local_data_failed:
     en: 'Failed to load local AI data: %{error}'
     zh-CN: '加载 AI 本地数据失败: %{error}'
+  background_run_active:
+    en: Another conversation is running. Wait for it to finish before sending here.
+    zh-CN: 另一个对话正在运行，请等待完成后再在此对话发送消息。
+  load_conversation_failed:
+    en: 'Failed to load the AI conversation: %{error}'
+    zh-CN: '加载 AI 对话失败: %{error}'
+  cancel_run_failed:
+    en: 'Failed to cancel the AI run: %{error}'
+    zh-CN: '取消 AI 运行失败: %{error}'
   connected:
     en: Connected
     zh-CN: 已连接

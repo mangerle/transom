@@ -32,6 +32,8 @@ pub(super) async fn enforce_decision(
             snap.approvals.lock().insert(request_id.clone(), tx);
             let dto = AiApprovalDto {
                 request_id: request_id.clone(),
+                owner_run_id: "mcp-external".to_owned(),
+                conversation_id: None,
                 run_id: "mcp-external".to_owned(),
                 tool_name: summary.tool_name,
                 host_label: summary.host_label,

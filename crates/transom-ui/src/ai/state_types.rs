@@ -1,6 +1,7 @@
 //! AI 助手面板的基础状态枚举、会话摘要与聊天消息项类型定义。
 
 use std::sync::Arc;
+use std::time::Instant;
 
 use transom_core::{HostProtection, SessionId, TabId};
 
@@ -16,6 +17,16 @@ pub(crate) struct ActiveAiSessionInfo {
     pub(crate) platform: String,
     pub(crate) protection: HostProtection,
     pub(crate) connected: bool,
+}
+
+/// 当前 AI 运行的显式身份与生命周期状态。
+#[derive(Clone, Debug)]
+pub(crate) struct ActiveAiRun {
+    pub(crate) run_id: String,
+    /// 新对话在收到 `RunStarted` 前尚不知道真实会话 ID。
+    pub(crate) conversation_id: Option<String>,
+    pub(crate) started_at: Instant,
+    pub(crate) cancel_requested: bool,
 }
 
 /// 面板右侧抽屉视图模式。

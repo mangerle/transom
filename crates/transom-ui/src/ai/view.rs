@@ -5,7 +5,7 @@ use std::sync::Arc;
 use gpui_kit::base::v_flex;
 use gpui_kit::component::input::{InputEvent, InputState, TextareaState};
 use gpui_kit::*;
-use transom_core::{AiAppEvent, AppCommand, SecretStore};
+use transom_core::{AppCommand, SecretStore};
 use transom_store::AiStore;
 
 use super::AiPanelEvent;
@@ -239,109 +239,6 @@ impl AiAssistantView {
         }
     }
 
-    /// 处理控制平面推送的 AI 事件。
-    pub(crate) fn handle_app_event(&mut self, event: AiAppEvent, cx: &mut Context<Self>) {
-        let refresh_index = matches!(
-            event,
-            AiAppEvent::RunStarted { .. } | AiAppEvent::RunFinished { .. }
-        );
-        let finished_cancelled = match &event {
-            AiAppEvent::RunFinished { cancelled, .. } => Some(*cancelled),
-            _ => None,
-        };
-        let reload_conv = match &event {
-            AiAppEvent::ConversationRolledBack {
-                conversation_id, ..
-            } => Some(conversation_id.clone()),
-            _ => None,
-        };
-        let subagent_wake = match &event {
-            AiAppEvent::SubagentCompleted {
-                conversation_id,
-                subagent_id,
-                title,
-                ok,
-                summary,
-            } if self.state.active_conversation_id.as_deref() == Some(conversation_id.as_str()) => {
-                let status = if *ok {
-                    rust_i18n::t!("ai.subagent_done_ok").to_string()
-                } else {
-                    rust_i18n::t!("ai.subagent_done_err").to_string()
-                };
-                let id_note = if subagent_id.is_empty() {
-                    String::new()
-                } else {
-                    format!(" (subagent_id: {subagent_id})")
-                };
-                Some(
-                    rust_i18n::t!(
-                        "ai.subagent_wake_notice",
-                        title = title.as_str(),
-                        id_note = id_note.as_str(),
-                        status = status.as_str(),
-                        summary = summary.as_str()
-                    )
-                    .to_string(),
-                )
-            }
-            _ => None,
-        };
-        let models_discovered = matches!(event, AiAppEvent::ModelsDiscovered { .. });
-        let should_scroll_bottom = matches!(
-            event,
-            AiAppEvent::RunStarted { .. }
-                | AiAppEvent::TextDelta { .. }
-                | AiAppEvent::ReasoningDelta { .. }
-                | AiAppEvent::TurnEnd { .. }
-                | AiAppEvent::ToolCard(_)
-                | AiAppEvent::RunFinished { .. }
-        );
-        if matches!(event, AiAppEvent::RunStarted { .. }) {
-            self.auto_scroll_locked = false;
-            self.active_nav_dot = None;
-        }
-        self.state.apply_app_event(event);
-        if should_scroll_bottom && !self.auto_scroll_locked {
-            self.msg_scroll_handle.scroll_to_bottom();
-        }
-        if models_discovered {
-            self.sync_picker_from_discovered(cx);
-        }
-        if let Some(cid) = reload_conv {
-            self.select_conversation(&cid);
-        }
-        if refresh_index {
-            let store = self.ai_store.clone();
-            let bg = cx.background_executor().clone();
-            self._refresh_index_task = Some(cx.spawn(async move |this, cx| {
-                let conversations = bg
-                    .spawn(async move { store.list_all_conversations().unwrap_or_default() })
-                    .await;
-                let _ = this.update(cx, |this, cx| {
-                    this.state.conversations = conversations;
-                    cx.notify();
-                });
-            }));
-        }
-        if let Some(cancelled) = finished_cancelled {
-            self.maybe_drain_queue_after_finish(cancelled, cx);
-        }
-        if let Some(wake_prompt) = subagent_wake {
-            if self.state.running_run_id.is_none() {
-                self.send_prompt_text(wake_prompt, cx);
-            } else {
-                self.state
-                    .queued_messages
-                    .push(super::queue_card::QueuedPrompt {
-                        id: uuid::Uuid::new_v4().to_string(),
-                        prompt: wake_prompt,
-                        attachments: Vec::new(),
-                    });
-            }
-        }
-        cx.notify();
-    }
-
     fn render_chat_body(&self, p: &Palette, rem: Pixels, cx: &mut Context<Self>) -> AnyElement {
         let mut container = v_flex()
             .flex_1()
@@ -375,7 +272,9 @@ impl AiAssistantView {
             ));
         }
 
-        if let Some((_, host, cmd)) = &self.state.handoff_pending {
+        if self.state.active_run_is_current()
+            && let Some((_, host, cmd)) = &self.state.handoff_pending
+        {
             let v_cont = cx.entity();
             let v_canc = cx.entity();
             container = container.child(div().px(rems(space::SM)).pb(rems(space::XS)).child(
@@ -430,14 +329,16 @@ impl AiAssistantView {
             container = container.child(q_card);
         }
 
-        if self.state.running_run_id.is_some()
+        if self.state.active_run_is_current()
             && let Some(focus_bar) = super::plan_card::render_running_focus_bar(
                 self.state.active_focus.as_deref(),
                 self.state
                     .active_plan
                     .as_ref()
                     .and_then(|pl| pl.focus.as_deref()),
-                self.state.run_started_at.map(|t| t.elapsed().as_secs()),
+                self.state
+                    .current_run_started_at()
+                    .map(|time| time.elapsed().as_secs()),
                 p,
             )
         {

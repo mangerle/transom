@@ -20,6 +20,7 @@ use crate::controller::state::{ControllerCtx, ControllerState};
 
 /// 子 Agent 继承父级上下文的配置对象。
 pub(super) struct SubagentConfig<'a> {
+    pub(super) parent_run_id: &'a str,
     pub(super) target: &'a transom_ai::ModelTarget,
     pub(super) fast_target: Option<&'a transom_ai::ModelTarget>,
     pub(super) memory: &'a transom_ai::MemorySnapshot,
@@ -151,6 +152,7 @@ pub(super) fn build_tool_context(
     bridge_deps.current_turn_entry_id = current_turn_entry_id;
     let subagent_runner: Option<Arc<dyn transom_ai::SubagentRunner>> = subagent_cfg.map(|cfg| {
         Arc::new(subagent::ControllerSubagentRunner {
+            parent_run_id: cfg.parent_run_id.to_owned(),
             target: cfg.target.clone(),
             fast_target: cfg.fast_target.cloned(),
             memory: cfg.memory.clone(),

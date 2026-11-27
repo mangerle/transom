@@ -25,6 +25,7 @@ use super::hooks_exec::ControllerHookExecutor;
 use super::task_runner::{ManagedTaskHandle, ManagedTaskRegistry};
 
 pub(in crate::controller) struct ControllerSubagentRunner {
+    pub(in crate::controller) parent_run_id: String,
     pub(in crate::controller) target: ModelTarget,
     pub(in crate::controller) fast_target: Option<ModelTarget>,
     pub(in crate::controller) memory: MemorySnapshot,
@@ -45,6 +46,8 @@ pub(in crate::controller) struct ControllerSubagentRunner {
 
 struct SubagentPumpSink {
     task_title: String,
+    parent_run_id: String,
+    conversation_id: Option<String>,
     is_readonly: bool,
     task_handle: ManagedTaskHandle,
     approvals: Arc<Mutex<HashMap<String, oneshot::Sender<AiApprovalDecision>>>>,
@@ -88,6 +91,8 @@ impl AgentPumpSink for SubagentPumpSink {
                         .insert(request_id.clone(), approval.respond);
                     let dto = AiApprovalDto {
                         request_id,
+                        owner_run_id: self.parent_run_id.clone(),
+                        conversation_id: self.conversation_id.clone(),
                         run_id: self.task_handle.task_id.clone(),
                         tool_name: approval.summary.tool_name,
                         host_label: approval.summary.host_label,
@@ -235,6 +240,8 @@ impl SubagentRunner for ControllerSubagentRunner {
 
         let mut sink = SubagentPumpSink {
             task_title: req.title.clone(),
+            parent_run_id: self.parent_run_id.clone(),
+            conversation_id: self.app_bridge_deps.conversation_id.clone(),
             is_readonly,
             task_handle,
             approvals: self.approvals.clone(),

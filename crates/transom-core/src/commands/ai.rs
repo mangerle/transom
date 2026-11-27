@@ -91,6 +91,11 @@ pub struct AiContextBreakdownDto {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AiApprovalDto {
     pub request_id: String,
+    /// 发起本次审批的工具运行 ID；子 Agent 使用父运行 ID 关联 UI。
+    pub owner_run_id: String,
+    /// 审批所属对话；外部 MCP 请求不绑定具体对话。
+    pub conversation_id: Option<String>,
+    /// 审批来源的运行/任务 ID，用于控制平面定位回调。
     pub run_id: String,
     pub tool_name: String,
     pub host_label: String,
@@ -122,6 +127,8 @@ pub struct AiHostTargetDto {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AiToolCardDto {
     pub conversation_id: String,
+    /// 产生该卡片的运行 ID；独立文件还原等非运行动作允许为空。
+    pub run_id: String,
     /// 同一次工具调用的唯一标识（用于进行中卡片原地刷新）。
     pub call_id: String,
     /// 工具是否仍在执行中（`true` 表示运行态预览，`false` 表示最终完成态）。

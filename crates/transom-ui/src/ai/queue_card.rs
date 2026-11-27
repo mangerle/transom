@@ -33,7 +33,9 @@ pub(super) fn render_queued_messages_card(
     p: &Palette,
     cx: &mut Context<AiAssistantView>,
 ) -> Option<AnyElement> {
-    if view.state.queued_messages.is_empty() {
+    if view.state.queued_messages.is_empty()
+        || (view.state.has_active_run() && !view.state.active_run_is_current())
+    {
         return None;
     }
     let count = view.state.queued_messages.len();
@@ -222,7 +224,7 @@ impl AiAssistantView {
                 cx.notify();
             }
             RunningMessageBehavior::Steer => {
-                if let Some(run_id) = self.state.running_run_id.clone() {
+                if let Some(run_id) = self.state.current_run_id().map(str::to_owned) {
                     let _ =
                         self.command_tx
                             .try_send(AppCommand::Ai(Box::new(AiCommand::SteerRun {
@@ -251,7 +253,7 @@ impl AiAssistantView {
         };
         let item = self.state.queued_messages.remove(pos);
         self.state.queue_paused_by_cancel = false;
-        if self.state.running_run_id.is_some() {
+        if self.state.active_run_is_current() {
             self.state.pending_interrupt_send = Some(item);
             self.cancel_running(cx);
         } else {
@@ -401,13 +403,18 @@ impl AiAssistantView {
     }
 
     pub(super) fn cancel_running(&mut self, cx: &mut Context<Self>) {
-        if let Some(run_id) = self.state.running_run_id.take() {
+        if let Some(run_id) = self.state.request_current_run_cancel() {
             if self.state.pending_interrupt_send.is_none() {
                 self.state.queue_paused_by_cancel = true;
             }
-            let _ = self
+            if let Err(err) = self
                 .command_tx
-                .try_send(AppCommand::Ai(Box::new(AiCommand::CancelRun { run_id })));
+                .try_send(AppCommand::Ai(Box::new(AiCommand::CancelRun { run_id })))
+            {
+                self.state.status_error = Some(
+                    rust_i18n::t!("ai.cancel_run_failed", error = err.to_string()).to_string(),
+                );
+            }
         }
         cx.notify();
     }

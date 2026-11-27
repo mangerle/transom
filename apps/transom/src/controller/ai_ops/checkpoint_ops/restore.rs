@@ -156,6 +156,7 @@ pub(in crate::controller::ai_ops) fn spawn_revert_remote_file(
 
         let dto = AiToolCardDto {
             conversation_id: conv_id,
+            run_id: String::new(),
             call_id: String::new(),
             running: false,
             tool_name: "remote_fs_revert".to_owned(),

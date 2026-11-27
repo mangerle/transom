@@ -23,9 +23,25 @@ impl AiAssistantView {
             .find(|c| c.id == conv_id)
             .map(|c| c.title.clone());
         self.state.metrics.reset_session();
-        if let Ok(tree) = self.ai_store.load_session_tree(conv_id) {
-            let branch: Vec<_> = tree.active_branch().into_iter().cloned().collect();
-            self.state.load_entries(branch);
+        if !self.state.active_run_is_current() {
+            self.state.active_plan = None;
+            self.state.active_focus = None;
+            self.state.status_error = None;
+        }
+        match self.ai_store.load_session_tree(conv_id) {
+            Ok(tree) => {
+                let branch: Vec<_> = tree.active_branch().into_iter().cloned().collect();
+                self.state.load_entries(branch);
+                self.state.status_error = self.state.background_run_errors.remove(conv_id);
+            }
+            Err(err) => {
+                self.state.items.clear();
+                self.state.background_run_errors.remove(conv_id);
+                self.state.status_error = Some(
+                    rust_i18n::t!("ai.load_conversation_failed", error = err.to_string())
+                        .to_string(),
+                );
+            }
         }
     }
 
@@ -114,7 +130,13 @@ impl AiAssistantView {
 
     pub(super) fn send_prompt_text(&mut self, raw_prompt: String, cx: &mut Context<Self>) {
         let mut prompt = raw_prompt.trim().to_owned();
-        if self.state.running_run_id.is_some() {
+        if self.state.has_active_run() {
+            if !self.state.active_run_is_current() {
+                self.state.status_error =
+                    Some(rust_i18n::t!("ai.background_run_active").to_string());
+                cx.notify();
+                return;
+            }
             if !prompt.is_empty() || !self.state.pending_attachments.is_empty() {
                 self.handle_running_message(prompt, cx);
             }
@@ -153,15 +175,14 @@ impl AiAssistantView {
             }
         }
         let run_id = uuid::Uuid::new_v4().to_string();
+        let local_item_id = format!("local-u-{run_id}");
         self.state.items.push(UiChatItem::UserText {
-            id: format!("local-u-{run_id}"),
+            id: local_item_id.clone(),
             text: prompt.clone(),
             timestamp: Some(chrono::Utc::now().to_rfc3339()),
         });
-        self.state.running_run_id = Some(run_id.clone());
         self.active_nav_dot = None;
         self.state.status_error = None;
-        self.state.run_started_at = Some(std::time::Instant::now());
         self.state.active_focus = Some(rust_i18n::t!("ai.working_default").to_string());
 
         let effective_model_id = if let Some(acp_id) = &self.state.active_acp_agent_id {
@@ -176,9 +197,10 @@ impl AiAssistantView {
             self.state.selected_model_id.clone()
         };
 
+        let conversation_id = self.state.active_conversation_id.clone();
         let req = AiPromptRequest {
-            run_id,
-            conversation_id: self.state.active_conversation_id.clone(),
+            run_id: run_id.clone(),
+            conversation_id,
             tab_id: self.state.active_session.as_ref().map(|s| s.tab_id),
             session_id: self.state.active_session.as_ref().map(|s| s.session_id),
             host_name: self
@@ -226,9 +248,15 @@ impl AiAssistantView {
                 req,
             )))))
         {
-            self.state.running_run_id = None;
+            self.state.items.retain(
+                |item| !matches!(item, UiChatItem::UserText { id, .. } if id == &local_item_id),
+            );
+            self.state.active_focus = None;
             self.state.status_error =
                 Some(rust_i18n::t!("ai.send_failed", error = err.to_string()).to_string());
+        } else {
+            self.state
+                .begin_run(run_id, self.state.active_conversation_id.clone());
         }
         cx.notify();
     }

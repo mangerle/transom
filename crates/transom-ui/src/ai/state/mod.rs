@@ -1,13 +1,13 @@
 //! AI 助手面板的本地状态模型。
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use super::attachments::ComposerAttachment;
 use super::markdown_blocks::parse_markdown_segments;
 use super::metrics_model::AiSessionMetrics;
 pub(crate) use super::state_types::{
-    ActiveAiSessionInfo, AiActivePopup, AiConfigSection, AiDrawerTab, UiChatItem,
+    ActiveAiRun, ActiveAiSessionInfo, AiActivePopup, AiConfigSection, AiDrawerTab, UiChatItem,
 };
 use transom_ai::{
     AiSettings, ConversationSummary, ExecutionMode, MemorySnapshot, ProviderProtocol, SessionEntry,
@@ -35,16 +35,17 @@ pub(crate) struct AiPanelState {
     pub(crate) selected_protocol: ProviderProtocol,
     pub(crate) items: Vec<UiChatItem>,
     pub(crate) expanded_cards: HashSet<String>,
-    pub(crate) running_run_id: Option<String>,
+    pub(crate) active_run: Option<ActiveAiRun>,
     pub(crate) pending_approvals: Vec<AiApprovalDto>,
     pub(crate) memory: MemorySnapshot,
     pub(crate) status_error: Option<String>,
+    /// 后台对话运行失败时暂存的通知，切换回该对话后展示。
+    pub(crate) background_run_errors: HashMap<String, String>,
     pub(crate) discovery_status: Option<String>,
     pub(crate) discovered_models: Vec<(String, Option<u32>)>,
     pub(crate) active_acp_agent_id: Option<String>,
     pub(crate) active_plan: Option<AiPlanDto>,
     pub(crate) active_focus: Option<String>,
-    pub(crate) run_started_at: Option<std::time::Instant>,
     pub(crate) active_popup: AiActivePopup,
     pub(crate) status_panel_expanded: bool,
     pub(crate) pending_attachments: Vec<ComposerAttachment>,
@@ -81,16 +82,16 @@ impl Default for AiPanelState {
             selected_protocol: ProviderProtocol::OpenAi,
             items: Vec::new(),
             expanded_cards: HashSet::new(),
-            running_run_id: None,
+            active_run: None,
             pending_approvals: Vec::new(),
             memory: MemorySnapshot::default(),
             status_error: None,
+            background_run_errors: HashMap::new(),
             discovery_status: None,
             discovered_models: Vec::new(),
             active_acp_agent_id: None,
             active_plan: None,
             active_focus: None,
-            run_started_at: None,
             active_popup: AiActivePopup::None,
             status_panel_expanded: true,
             pending_attachments: Vec::new(),
@@ -109,6 +110,10 @@ impl Default for AiPanelState {
         }
     }
 }
+
+mod run;
+#[cfg(test)]
+mod tests;
 
 impl AiPanelState {
     /// 当前对话的作用域。
@@ -210,6 +215,9 @@ impl AiPanelState {
 
     /// 消费来自控制平面的流式事件并更新界面消息流。
     pub(crate) fn apply_app_event(&mut self, event: AiAppEvent) {
+        if !self.accepts_event(&event) {
+            return;
+        }
         match event {
             AiAppEvent::RunStarted {
                 run_id,
@@ -217,11 +225,22 @@ impl AiPanelState {
                 title,
                 user_entry_id,
             } => {
-                self.running_run_id = Some(run_id.clone());
+                if self.active_run.is_none() {
+                    self.begin_run(run_id.clone(), Some(conversation_id.clone()));
+                } else {
+                    self.bind_run(&run_id, &conversation_id);
+                }
+                self.background_run_errors.remove(&conversation_id);
                 self.active_conversation_id = Some(conversation_id);
                 if !title.trim().is_empty() {
                     self.active_conversation_title = Some(title);
                 }
+                self.status_error = None;
+                self.active_plan = None;
+                self.active_focus = None;
+                self.status_panel_expanded = true;
+                self.tasks_drawer_expanded = false;
+                self.metrics.turns = self.metrics.turns.saturating_add(1);
                 if !user_entry_id.trim().is_empty() {
                     let temp_id = format!("local-u-{run_id}");
                     for item in &mut self.items {
@@ -231,14 +250,6 @@ impl AiPanelState {
                             *id = user_entry_id.clone();
                         }
                     }
-                } else {
-                    self.status_error = None;
-                    self.active_plan = None;
-                    self.active_focus = None;
-                    self.status_panel_expanded = true;
-                    self.tasks_drawer_expanded = false;
-                    self.run_started_at = Some(std::time::Instant::now());
-                    self.metrics.turns = self.metrics.turns.saturating_add(1);
                 }
             }
             AiAppEvent::ReasoningDelta { delta, .. } => {
@@ -303,39 +314,57 @@ impl AiPanelState {
             AiAppEvent::ApprovalRequested(dto) => {
                 self.pending_approvals.push(dto);
             }
-            AiAppEvent::RunFinished { error, .. } => {
-                self.running_run_id = None;
-                self.pending_approvals.clear();
-                self.active_focus = None;
-                if let Some(plan) = &mut self.active_plan {
-                    plan.focus = None;
+            AiAppEvent::RunFinished {
+                run_id,
+                conversation_id,
+                error,
+                ..
+            } => {
+                let visible = self.conversation_is_current(&conversation_id);
+                self.finish_run(&run_id);
+                self.pending_approvals
+                    .retain(|approval| approval.run_id != run_id);
+                if self
+                    .handoff_pending
+                    .as_ref()
+                    .is_some_and(|(pending_run_id, _, _)| pending_run_id == &run_id)
+                {
+                    self.handoff_pending = None;
                 }
-                self.run_started_at = None;
-                self.status_panel_expanded = false;
-                for item in &mut self.items {
-                    match item {
-                        UiChatItem::Reasoning { streaming, .. } => {
-                            *streaming = false;
-                        }
-                        UiChatItem::AssistantText {
-                            text,
-                            streaming,
-                            cached_segments,
-                            ..
-                        } => {
-                            *streaming = false;
-                            if cached_segments.is_none() {
-                                *cached_segments = Some(Arc::new(parse_markdown_segments(text)));
-                            }
-                        }
-                        UiChatItem::ToolCard { running, .. } => {
-                            *running = false;
-                        }
-                        _ => {}
+                if visible {
+                    self.active_focus = None;
+                    if let Some(plan) = &mut self.active_plan {
+                        plan.focus = None;
                     }
-                }
-                if let Some(err) = error {
-                    self.status_error = Some(err);
+                    self.status_panel_expanded = false;
+                    for item in &mut self.items {
+                        match item {
+                            UiChatItem::Reasoning { streaming, .. } => {
+                                *streaming = false;
+                            }
+                            UiChatItem::AssistantText {
+                                text,
+                                streaming,
+                                cached_segments,
+                                ..
+                            } => {
+                                *streaming = false;
+                                if cached_segments.is_none() {
+                                    *cached_segments =
+                                        Some(Arc::new(parse_markdown_segments(text)));
+                                }
+                            }
+                            UiChatItem::ToolCard { running, .. } => {
+                                *running = false;
+                            }
+                            _ => {}
+                        }
+                    }
+                    if let Some(err) = error {
+                        self.status_error = Some(err);
+                    }
+                } else if let Some(err) = error {
+                    self.background_run_errors.insert(conversation_id, err);
                 }
             }
             AiAppEvent::TerminalContextRequested { .. } | AiAppEvent::AppActionRequested { .. } => {
@@ -409,7 +438,15 @@ impl AiPanelState {
             other @ (AiAppEvent::ManagedTaskStarted(_)
             | AiAppEvent::ManagedTaskOutput { .. }
             | AiAppEvent::ManagedTaskFinished { .. }) => {
+                let finished_task = match &other {
+                    AiAppEvent::ManagedTaskFinished { task_id, .. } => Some(task_id.clone()),
+                    _ => None,
+                };
                 super::task_bar::apply_managed_task_event(self, other);
+                if let Some(task_id) = finished_task {
+                    self.pending_approvals
+                        .retain(|approval| approval.run_id != task_id);
+                }
             }
             AiAppEvent::TerminalHandoffRequested {
                 run_id,
@@ -425,67 +462,6 @@ impl AiPanelState {
                 self.active_focus = Some(summary);
             }
             AiAppEvent::InlineCommandResult { .. } | AiAppEvent::SubagentCompleted { .. } => {}
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::AiPanelState;
-    use crate::ai::state_types::UiChatItem;
-    use transom_core::{AiAppEvent, AiToolCardDto};
-
-    #[test]
-    fn tool_card_updates_in_place_by_call_id() {
-        let mut st = AiPanelState::default();
-        st.apply_app_event(AiAppEvent::ToolCard(AiToolCardDto {
-            conversation_id: "c1".to_owned(),
-            call_id: "call-1".to_owned(),
-            running: true,
-            tool_name: "remote_exec".to_owned(),
-            host_label: "web-01".to_owned(),
-            risk_label: "只读".to_owned(),
-            summary: "tail -n 5 /var/log/syslog".to_owned(),
-            output: "line 1".to_owned(),
-            ok: true,
-            duration_ms: 300,
-            diff_preview: None,
-            revert_target_path: None,
-            revert_backup_path: None,
-        }));
-        assert_eq!(st.items.len(), 1);
-        assert_eq!(st.metrics.steps, 0);
-
-        st.apply_app_event(AiAppEvent::ToolCard(AiToolCardDto {
-            conversation_id: "c1".to_owned(),
-            call_id: "call-1".to_owned(),
-            running: false,
-            tool_name: "remote_exec".to_owned(),
-            host_label: "web-01".to_owned(),
-            risk_label: "只读".to_owned(),
-            summary: "tail -n 5 /var/log/syslog".to_owned(),
-            output: "line 1\nline 2".to_owned(),
-            ok: true,
-            duration_ms: 820,
-            diff_preview: None,
-            revert_target_path: None,
-            revert_backup_path: None,
-        }));
-        assert_eq!(st.items.len(), 1);
-        assert_eq!(st.metrics.steps, 1);
-        assert_eq!(st.metrics.tool_duration_ms, 820);
-        match &st.items[0] {
-            UiChatItem::ToolCard {
-                running,
-                output,
-                duration_ms,
-                ..
-            } => {
-                assert!(!*running);
-                assert_eq!(output, "line 1\nline 2");
-                assert_eq!(*duration_ms, 820);
-            }
-            _ => panic!("期望为 ToolCard"),
         }
     }
 }

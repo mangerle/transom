@@ -52,6 +52,7 @@ mod tool_card;
 mod tool_card_body;
 mod turn_nav;
 mod view;
+mod view_events;
 mod work_group;
 mod work_group_summary;
 

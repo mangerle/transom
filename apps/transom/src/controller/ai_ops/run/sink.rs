@@ -110,6 +110,8 @@ impl AgentPumpSink for MainAgentPumpSink {
                     .insert(request_id.clone(), req.respond);
                 let dto = AiApprovalDto {
                     request_id,
+                    owner_run_id: self.ctx.run_id.clone(),
+                    conversation_id: Some(self.ctx.conversation_id.clone()),
                     run_id: self.ctx.run_id.clone(),
                     tool_name: req.summary.tool_name,
                     host_label: req.summary.host_label,
