@@ -80,8 +80,8 @@ impl ConfigFormState {
                 ConfigChoice::new("en", rust_i18n::t!("ai.cfg_lang_en").to_string()),
                 ConfigChoice::new("auto", rust_i18n::t!("ai.cfg_lang_auto").to_string()),
             ];
-            let mut s = SelectState::new(SearchableVec::new(items), None, window, cx)
-                .searchable(false);
+            let mut s =
+                SelectState::new(SearchableVec::new(items), None, window, cx).searchable(false);
             s.set_selected_value(&cur_lang, window, cx);
             s
         });
@@ -99,8 +99,8 @@ impl ConfigFormState {
                     rust_i18n::t!("ai.running_msg_interrupt").to_string(),
                 ),
             ];
-            let mut s = SelectState::new(SearchableVec::new(items), None, window, cx)
-                .searchable(false);
+            let mut s =
+                SelectState::new(SearchableVec::new(items), None, window, cx).searchable(false);
             s.set_selected_value(&cur_beh_val.to_owned(), window, cx);
             s
         });

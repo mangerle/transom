@@ -64,7 +64,7 @@ impl SkillDefinition {
     }
 }
 
-/// 内置预设与自定义目录聚合加载。
+// 内置预设与自定义目录聚合加载。
 
 /// 解析技能 Markdown（支持标准 YAML frontmatter：`name`、`title`、`description`、`command`、`tags`）。
 pub fn parse_skill_markdown(

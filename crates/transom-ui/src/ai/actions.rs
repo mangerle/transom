@@ -12,7 +12,6 @@ use super::state::{AiActivePopup, AiDrawerTab, UiChatItem};
 use super::view::AiAssistantView;
 
 impl AiAssistantView {
-
     pub(super) fn select_conversation(&mut self, conv_id: &str) {
         self.active_nav_dot = None;
         self.editing_title = false;
@@ -49,7 +48,12 @@ impl AiAssistantView {
         archived: bool,
         cx: &mut Context<Self>,
     ) {
-        if let Some(conv) = self.state.conversations.iter_mut().find(|c| c.id == conv_id) {
+        if let Some(conv) = self
+            .state
+            .conversations
+            .iter_mut()
+            .find(|c| c.id == conv_id)
+        {
             conv.archived = archived;
         }
         let _ = self.command_tx.try_send(AppCommand::Ai(Box::new(
@@ -91,12 +95,12 @@ impl AiAssistantView {
             if let Some(conv) = self.state.conversations.iter_mut().find(|c| c.id == cid) {
                 conv.title = next.clone();
             }
-            let _ = self.command_tx.try_send(AppCommand::Ai(Box::new(
-                AiCommand::RenameConversation {
-                    conversation_id: cid,
-                    title: next,
-                },
-            )));
+            let _ =
+                self.command_tx
+                    .try_send(AppCommand::Ai(Box::new(AiCommand::RenameConversation {
+                        conversation_id: cid,
+                        title: next,
+                    })));
         }
         cx.notify();
     }
@@ -289,16 +293,16 @@ impl AiAssistantView {
         cx: &mut Context<Self>,
     ) {
         self.state.drawer = AiDrawerTab::Chat;
-        self.state
-            .pending_attachments
-            .push(super::attachments::ComposerAttachment::TerminalContext {
+        self.state.pending_attachments.push(
+            super::attachments::ComposerAttachment::TerminalContext {
                 id: uuid::Uuid::new_v4().to_string(),
                 host,
                 cwd,
                 exit_code,
                 command,
                 output,
-            });
+            },
+        );
         cx.notify();
     }
 

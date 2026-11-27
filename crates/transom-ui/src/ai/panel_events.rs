@@ -170,8 +170,7 @@ pub(crate) fn on_ai_panel_event(
                 .tabs
                 .iter()
                 .find(|t| {
-                    t.terminal().is_some()
-                        && t.session().is_some_and(|s| s.name == *host_label)
+                    t.terminal().is_some() && t.session().is_some_and(|s| s.name == *host_label)
                 })
                 .map(|t| t.id);
             if let Some(tid) = target_tid {

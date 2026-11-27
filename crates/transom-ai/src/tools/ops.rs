@@ -113,7 +113,9 @@ impl Tool for RemoteFsTool {
                 "mode": args.mode,
                 "recursive": args.recursive,
             });
-            let res = bridge.invoke(AppBridgeDomain::RemoteFs, &args.action, payload).await;
+            let res = bridge
+                .invoke(AppBridgeDomain::RemoteFs, &args.action, payload)
+                .await;
             let elapsed = started.elapsed().as_millis() as u64;
             return match res {
                 Ok(text) => {
@@ -330,7 +332,8 @@ impl Tool for TransferFileTool {
             .filter(|s| !s.is_empty());
         let is_dir_upload = args.direction == TransferDirection::Upload
             && std::path::Path::new(&args.local_path).is_dir();
-        let use_bridge = target_trimmed.is_some() || is_dir_upload || self.ctx.caps.remote_fs.is_none();
+        let use_bridge =
+            target_trimmed.is_some() || is_dir_upload || self.ctx.caps.remote_fs.is_none();
         let started = Instant::now();
         let summary = format!("{} -> {}", args.local_path, args.remote_path);
         let host_label = target_trimmed.unwrap_or("").to_owned();
@@ -352,7 +355,9 @@ impl Tool for TransferFileTool {
                 "remote_path": args.remote_path,
                 "overwrite": args.overwrite,
             });
-            bridge.invoke(AppBridgeDomain::TransferFile, action, payload).await
+            bridge
+                .invoke(AppBridgeDomain::TransferFile, action, payload)
+                .await
         } else {
             let fs = self
                 .ctx

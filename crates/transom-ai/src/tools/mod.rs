@@ -355,30 +355,36 @@ impl ToolRuntimeContext {
         });
         call_id
     }
+}
 
+/// 工具执行过程中的实时进度推送参数。
+///
+/// 设计原理：收敛超过 5 个的平铺参数，避免触发 Clippy 参数数量告警并保持调用端可读性。
+pub struct ToolProgressParams<'a> {
+    pub call_id: &'a str,
+    pub tool_name: &'a str,
+    pub host_label: &'a str,
+    pub risk: ToolRisk,
+    pub summary: &'a str,
+    pub tail_output: &'a str,
+    pub elapsed_ms: u64,
+}
+
+impl ToolRuntimeContext {
     /// 推送工具执行过程中的实时末尾输出预览与已耗时（原地更新同 `call_id` 卡片）。
-    pub fn emit_tool_progress(
-        &self,
-        call_id: &str,
-        tool_name: &str,
-        host_label: &str,
-        risk: ToolRisk,
-        summary: &str,
-        tail_output: &str,
-        elapsed_ms: u64,
-    ) {
-        let preview = clip_tail_lines(tail_output, 5, 160);
+    pub fn emit_tool_progress(&self, params: ToolProgressParams<'_>) {
+        let preview = clip_tail_lines(params.tail_output, 5, 160);
         self.record_card(ToolExecutionCard {
-            call_id: call_id.to_owned(),
+            call_id: params.call_id.to_owned(),
             running: true,
-            tool_name: tool_name.to_owned(),
-            host_label: host_label.to_owned(),
-            risk,
-            summary: summary.to_owned(),
+            tool_name: params.tool_name.to_owned(),
+            host_label: params.host_label.to_owned(),
+            risk: params.risk,
+            summary: params.summary.to_owned(),
             output: preview,
             ok: true,
             approved: true,
-            duration_ms: elapsed_ms,
+            duration_ms: params.elapsed_ms,
             diff_preview: None,
             ..Default::default()
         });

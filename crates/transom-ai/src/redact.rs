@@ -43,7 +43,11 @@ pub fn redact_secrets_for_model(raw: &str) -> String {
     }
     let mut cur: Cow<'_, str> = Cow::Borrowed(raw);
     if cur.contains("-----BEGIN ") {
-        cur = Cow::Owned(PEM_KEY_RE.replace_all(&cur, "[REDACTED_PRIVATE_KEY]").into_owned());
+        cur = Cow::Owned(
+            PEM_KEY_RE
+                .replace_all(&cur, "[REDACTED_PRIVATE_KEY]")
+                .into_owned(),
+        );
     }
     if cur.contains("earer ") || cur.contains("EARER ") {
         cur = Cow::Owned(BEARER_RE.replace_all(&cur, "$1 [REDACTED]").into_owned());
@@ -52,10 +56,18 @@ pub fn redact_secrets_for_model(raw: &str) -> String {
         cur = Cow::Owned(URL_CRED_RE.replace_all(&cur, "$1[REDACTED]$3").into_owned());
     }
     if cur.contains('=') || cur.contains(':') {
-        cur = Cow::Owned(KV_SECRET_RE.replace_all(&cur, "$1$2[REDACTED]").into_owned());
+        cur = Cow::Owned(
+            KV_SECRET_RE
+                .replace_all(&cur, "$1$2[REDACTED]")
+                .into_owned(),
+        );
     }
     if cur.contains("sk-") || cur.contains("gh") || cur.contains("AKIA") {
-        cur = Cow::Owned(KNOWN_TOKEN_RE.replace_all(&cur, "[REDACTED_TOKEN]").into_owned());
+        cur = Cow::Owned(
+            KNOWN_TOKEN_RE
+                .replace_all(&cur, "[REDACTED_TOKEN]")
+                .into_owned(),
+        );
     }
     cur.into_owned()
 }

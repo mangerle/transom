@@ -59,7 +59,8 @@ impl AiAssistantView {
     /// 打开“选择模型”面板，并从当前草稿行初始化已勾选集合。
     pub(super) fn open_model_picker(&mut self, cx: &mut Context<Self>) {
         self.model_picker.checked_ids = self
-            .config_form.draft_models
+            .config_form
+            .draft_models
             .iter()
             .map(|r| r.request_model.read(cx).value().trim().to_owned())
             .filter(|id| !id.is_empty())
@@ -88,7 +89,8 @@ impl AiAssistantView {
         });
 
         let existing: HashSet<String> = self
-            .config_form.draft_models
+            .config_form
+            .draft_models
             .iter()
             .map(|r| r.request_model.read(cx).value().trim().to_owned())
             .collect();

@@ -73,10 +73,9 @@ pub(super) async fn execute_and_pump(
         let store = ctx.store.clone();
         let conv_id = ctx.conversation_id.clone();
         let entry_clone = user_entry.clone();
-        if let Ok(Err(err)) = tokio::task::spawn_blocking(move || {
-            store.append_session_entry(&conv_id, &entry_clone)
-        })
-        .await
+        if let Ok(Err(err)) =
+            tokio::task::spawn_blocking(move || store.append_session_entry(&conv_id, &entry_clone))
+                .await
         {
             log::warn!("追加 AI 用户提问条目失败: {err}");
         }

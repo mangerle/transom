@@ -260,7 +260,9 @@ pub(super) fn spawn_revert_remote_file(
         .or_else(|| (sessions.len() == 1).then(|| &sessions[0]))
         .map(|(_, r, s)| (r.clone(), s.clone()));
 
-    let allowed_root = store_ai_root(&ctx.ai_store).join("checkpoints").join("blobs");
+    let allowed_root = store_ai_root(&ctx.ai_store)
+        .join("checkpoints")
+        .join("blobs");
     let event_tx = ctx.event_tx.clone();
     let conv_id = conversation_id.unwrap_or_default();
 
@@ -275,8 +277,13 @@ pub(super) fn spawn_revert_remote_file(
                     )
                     .await
                     {
-                        Ok(Ok(())) => (true, format!("已成功将远端文件还原至修改前快照: {target_path}")),
-                        Ok(Err(err)) => (false, format!("还原远端文件失败（{target_path}）: {err}")),
+                        Ok(Ok(())) => (
+                            true,
+                            format!("已成功将远端文件还原至修改前快照: {target_path}"),
+                        ),
+                        Ok(Err(err)) => {
+                            (false, format!("还原远端文件失败（{target_path}）: {err}"))
+                        }
                         Err(_) => (false, format!("还原远端文件超时（{target_path}）")),
                     }
                 }

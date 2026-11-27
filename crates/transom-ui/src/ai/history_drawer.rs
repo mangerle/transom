@@ -231,11 +231,9 @@ pub(super) fn render_history_drawer(
                             .xsmall()
                             .accessibility_label(open_tip.clone())
                             .tooltip(open_tip)
-                            .child(
-                                div()
-                                    .text_color(p.text.muted)
-                                    .child(AppIconElement::new(AppIcon::Ui(UiIcon::EXTERNAL_LINK)).small()),
-                            )
+                            .child(div().text_color(p.text.muted).child(
+                                AppIconElement::new(AppIcon::Ui(UiIcon::EXTERNAL_LINK)).small(),
+                            ))
                             .on_click(move |_, w, cx| {
                                 cx.stop_propagation();
                                 select_btn(id_open.clone(), w, cx);
@@ -264,9 +262,9 @@ pub(super) fn render_history_drawer(
                             .accessibility_label(del_tip.clone())
                             .tooltip(del_tip)
                             .child(
-                                div()
-                                    .text_color(p.text.muted)
-                                    .child(AppIconElement::new(AppIcon::Ui(UiIcon::DELETE)).small()),
+                                div().text_color(p.text.muted).child(
+                                    AppIconElement::new(AppIcon::Ui(UiIcon::DELETE)).small(),
+                                ),
                             )
                             .on_click(move |_, w, cx| {
                                 cx.stop_propagation();

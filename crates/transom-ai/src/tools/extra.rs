@@ -174,12 +174,9 @@ impl Tool for RemoteExecBulkTool {
         let cancel = self.ctx.cancel.clone();
         let command = args.command.clone();
         let bulk_host_label = format!("批量 {} 台主机", targets.len());
-        let call_id = self.ctx.emit_tool_started(
-            Self::NAME,
-            &bulk_host_label,
-            risk,
-            &args.command,
-        );
+        let call_id = self
+            .ctx
+            .emit_tool_started(Self::NAME, &bulk_host_label, risk, &args.command);
 
         let results: Vec<(String, String, bool)> = futures::stream::iter(targets)
             .map(|target| {

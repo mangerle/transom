@@ -133,15 +133,15 @@ impl Tool for RemoteExecTool {
             let cmd_cb = args.command.clone();
             let on_progress: crate::tools::ExecProgressCallback =
                 std::sync::Arc::new(move |tail: &str| {
-                    ctx_cb.emit_tool_progress(
-                        &cid_cb,
-                        Self::NAME,
-                        &host_cb,
+                    ctx_cb.emit_tool_progress(crate::tools::ToolProgressParams {
+                        call_id: &cid_cb,
+                        tool_name: Self::NAME,
+                        host_label: &host_cb,
                         risk,
-                        &cmd_cb,
-                        tail,
-                        started.elapsed().as_millis() as u64,
-                    );
+                        summary: &cmd_cb,
+                        tail_output: tail,
+                        elapsed_ms: started.elapsed().as_millis() as u64,
+                    });
                 });
             executor
                 .exec_with_progress(&args.command, timeout, self.ctx.cancel.clone(), on_progress)

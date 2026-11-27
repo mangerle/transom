@@ -187,9 +187,7 @@ impl AppActionBridge for ControllerAppActionBridge {
             AppBridgeDomain::SftpTransfer => {
                 system::handle_sftp_transfer(self, action, &args).await
             }
-            AppBridgeDomain::ContainerWorkspace => {
-                dev::handle_container(self, action, &args).await
-            }
+            AppBridgeDomain::ContainerWorkspace => dev::handle_container(self, action, &args).await,
             AppBridgeDomain::GitWorkspace => dev::handle_git(self, action, &args).await,
             AppBridgeDomain::ApiClient => api_client::handle_api_client(self, action, &args).await,
             AppBridgeDomain::AppSettingsOps => system::handle_settings(self, action, &args).await,

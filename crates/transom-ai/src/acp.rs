@@ -250,7 +250,9 @@ async fn drive_acp_protocol(
 
             if msg.get("id").and_then(Value::as_i64) == Some(prompt_req_id) {
                 if let Some(err) = msg.get("error") {
-                    if !state.has_any_output() && attempt < MAX_RETRIES && is_retryable_acp_error(err)
+                    if !state.has_any_output()
+                        && attempt < MAX_RETRIES
+                        && is_retryable_acp_error(err)
                     {
                         attempt += 1;
                         prompt_req_id += 1;

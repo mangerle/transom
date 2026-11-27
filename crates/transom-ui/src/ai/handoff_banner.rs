@@ -224,18 +224,22 @@ impl AiAssistantView {
                     this.save_snippet_from_card(name, command, cx)
                 });
             }),
-            on_revert_remote_file: std::rc::Rc::new(move |host_label, target_path, backup_path, _, cx| {
-                v_rev.update(cx, |this, _| {
-                    let _ = this.command_tx.try_send(transom_core::AppCommand::Ai(Box::new(
-                        transom_core::AiCommand::RevertRemoteFile {
-                            host_label,
-                            target_path,
-                            backup_path,
-                            conversation_id: this.state.active_conversation_id.clone(),
-                        },
-                    )));
-                });
-            }),
+            on_revert_remote_file: std::rc::Rc::new(
+                move |host_label, target_path, backup_path, _, cx| {
+                    v_rev.update(cx, |this, _| {
+                        let _ = this
+                            .command_tx
+                            .try_send(transom_core::AppCommand::Ai(Box::new(
+                                transom_core::AiCommand::RevertRemoteFile {
+                                    host_label,
+                                    target_path,
+                                    backup_path,
+                                    conversation_id: this.state.active_conversation_id.clone(),
+                                },
+                            )));
+                    });
+                },
+            ),
             on_jump_to_terminal: std::rc::Rc::new(move |host_label, _, cx| {
                 v_jump.update(cx, |_, cx| {
                     cx.emit(super::AiPanelEvent::JumpToTerminalTab { host_label });
@@ -245,9 +249,11 @@ impl AiAssistantView {
                 v_sub.update(cx, |this, cx| {
                     match action.as_str() {
                         "stop" => {
-                            let _ = this.command_tx.try_send(transom_core::AppCommand::Ai(
-                                Box::new(transom_core::AiCommand::CancelManagedTask { task_id }),
-                            ));
+                            let _ =
+                                this.command_tx
+                                    .try_send(transom_core::AppCommand::Ai(Box::new(
+                                        transom_core::AiCommand::CancelManagedTask { task_id },
+                                    )));
                         }
                         "followup" => {
                             let msg = this.composer_input.read(cx).value().trim().to_owned();
@@ -308,9 +314,11 @@ impl AiAssistantView {
             self.state.memory = mem;
             let g_text = self.state.memory.global_markdown.clone();
             let h_text = self.state.memory.host_markdown.clone();
-            self.memory_form.global_mem_input
+            self.memory_form
+                .global_mem_input
                 .update(cx, |i, cx| i.set_value(g_text, window, cx));
-            self.memory_form.host_mem_input
+            self.memory_form
+                .host_mem_input
                 .update(cx, |i, cx| i.set_value(h_text, window, cx));
         }
         cx.notify();
@@ -394,17 +402,7 @@ impl AiAssistantView {
         };
 
         let view = cx.entity();
-        let (
-            v_stop,
-            v_popup,
-            v_extra,
-            v_builtin,
-            v_cfg,
-            v_install,
-            v_rm_att,
-            v_paste,
-            v_drop,
-        ) = (
+        let (v_stop, v_popup, v_extra, v_builtin, v_cfg, v_install, v_rm_att, v_paste, v_drop) = (
             view.clone(),
             view.clone(),
             view.clone(),

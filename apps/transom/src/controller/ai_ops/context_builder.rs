@@ -150,25 +150,24 @@ pub(super) fn build_tool_context(
     );
     bridge_deps.conversation_id = Some(conversation_id.to_owned());
     bridge_deps.current_turn_entry_id = current_turn_entry_id;
-    let subagent_runner: Option<Arc<dyn transom_ai::SubagentRunner>> =
-        subagent_cfg.map(|cfg| {
-            Arc::new(subagent::ControllerSubagentRunner {
-                target: cfg.target.clone(),
-                fast_target: cfg.fast_target.cloned(),
-                memory: cfg.memory.clone(),
-                response_language: cfg.response_language,
-                execution_mode: state.ai_execution_mode.clone(),
-                exec_policy_rules: cfg.exec_policy_rules.to_vec(),
-                hooks: cfg.hooks.to_vec(),
-                session_allow_prefixes: cfg.session_allow_prefixes,
-                app_bridge_deps: bridge_deps.clone(),
-                tasks: state.ai_tasks.clone(),
-                subagent_histories: state.ai_subagent_histories.clone(),
-                approvals: state.ai_approvals.clone(),
-                event_tx: ctx.event_tx.clone(),
-                parent_cancel: cancel.clone(),
-            }) as Arc<dyn transom_ai::SubagentRunner>
-        });
+    let subagent_runner: Option<Arc<dyn transom_ai::SubagentRunner>> = subagent_cfg.map(|cfg| {
+        Arc::new(subagent::ControllerSubagentRunner {
+            target: cfg.target.clone(),
+            fast_target: cfg.fast_target.cloned(),
+            memory: cfg.memory.clone(),
+            response_language: cfg.response_language,
+            execution_mode: state.ai_execution_mode.clone(),
+            exec_policy_rules: cfg.exec_policy_rules.to_vec(),
+            hooks: cfg.hooks.to_vec(),
+            session_allow_prefixes: cfg.session_allow_prefixes,
+            app_bridge_deps: bridge_deps.clone(),
+            tasks: state.ai_tasks.clone(),
+            subagent_histories: state.ai_subagent_histories.clone(),
+            approvals: state.ai_approvals.clone(),
+            event_tx: ctx.event_tx.clone(),
+            parent_cancel: cancel.clone(),
+        }) as Arc<dyn transom_ai::SubagentRunner>
+    });
     let app_bridge: Arc<dyn transom_ai::AppActionBridge> =
         Arc::new(app_bridge::ControllerAppActionBridge::new(bridge_deps));
 

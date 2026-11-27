@@ -60,7 +60,8 @@ impl AiSessionMetrics {
                                 self.last_tps = *tokens_per_sec;
                             }
                             if let Some(u) = usage {
-                                self.input_tokens = self.input_tokens.saturating_add(u.input_tokens);
+                                self.input_tokens =
+                                    self.input_tokens.saturating_add(u.input_tokens);
                                 self.cached_input_tokens = self
                                     .cached_input_tokens
                                     .saturating_add(u.cached_input_tokens);

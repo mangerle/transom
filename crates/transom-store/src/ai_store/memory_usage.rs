@@ -149,8 +149,8 @@ fn current_day_and_month_keys() -> (String, String) {
 
 #[cfg(test)]
 mod tests {
-    use super::AiUsageTotals;
     use super::super::AiStore;
+    use super::AiUsageTotals;
 
     #[test]
     fn memory_save_and_load_isolates_hosts() {

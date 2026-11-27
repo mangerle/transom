@@ -326,11 +326,8 @@ mod tests {
     #[tokio::test]
     async fn invokes_app_bridge_and_emits_card() {
         let (card_tx, mut card_rx) = mpsc::channel(8);
-        let mut ctx = ToolRuntimeContext::minimal(
-            SessionScope::Global,
-            card_tx,
-            CancellationToken::new(),
-        );
+        let mut ctx =
+            ToolRuntimeContext::minimal(SessionScope::Global, card_tx, CancellationToken::new());
         ctx.command_timeout = Duration::from_secs(30);
         ctx.caps.app_bridge = Some(Arc::new(FakeBridge));
 

@@ -3,10 +3,10 @@
 use std::collections::HashMap;
 use std::time::Instant;
 
+use serde_json::Value as JsonValue;
 use serde_json::{Value, json};
 use tokio::process::ChildStdin;
 use tokio::sync::oneshot;
-use serde_json::Value as JsonValue;
 
 use crate::acp::AcpRunInput;
 use crate::acp_parse::{AcpStreamChunk, pick_acp_allow_option, write_json_line};
@@ -171,12 +171,12 @@ pub(crate) async fn handle_acp_permission(
     let option_id = pick_acp_allow_option(msg.pointer("/params/options"));
     let mode = *input.execution_mode.read();
     let cmd_risk = classify_shell_command(&title);
-    let base_risk = if matches!(tool_kind, "read" | "search" | "fetch") && cmd_risk == ToolRisk::Write
-    {
-        ToolRisk::SafeRead
-    } else {
-        cmd_risk
-    };
+    let base_risk =
+        if matches!(tool_kind, "read" | "search" | "fetch") && cmd_risk == ToolRisk::Write {
+            ToolRisk::SafeRead
+        } else {
+            cmd_risk
+        };
     let decision = {
         let prefixes = input.session_allow_prefixes.read();
         evaluate_command_policy(&CommandPolicyContext {
@@ -264,9 +264,9 @@ pub(crate) async fn finalize_acp_turn(
         .first_delta
         .map(|f| f.saturating_duration_since(state.turn_started).as_millis() as u64);
     let est_in = ((input.prompt.chars().count() as u64) / 3).max(1);
-    let est_out =
-        (((state.text_buf.chars().count() + state.reasoning_buf.chars().count()) as u64) / 3)
-            .max(1);
+    let est_out = (((state.text_buf.chars().count() + state.reasoning_buf.chars().count()) as u64)
+        / 3)
+    .max(1);
     let (input_tokens, cached_input_tokens, output_tokens) = match state.usage_result {
         Some(ref u) => {
             let i = u

@@ -191,10 +191,8 @@ impl AiAssistantView {
                             b_idx > 0 && matches!(item, super::state::UiChatItem::UserText { .. });
                         let v_rb = cx.entity();
                         let v_full = cx.entity();
-                        let subagent_task = super::work_group::find_subagent_task(
-                            &self.state.managed_tasks,
-                            item,
-                        );
+                        let subagent_task =
+                            super::work_group::find_subagent_task(&self.state.managed_tasks, item);
                         let item_el = render_chat_item(
                             ChatItemRenderParams {
                                 item,
@@ -225,7 +223,8 @@ impl AiAssistantView {
                             },
                         );
                         if is_follow_user {
-                            msg_list = msg_list.child(div().w_full().pt(rems(space::SM)).child(item_el));
+                            msg_list =
+                                msg_list.child(div().w_full().pt(rems(space::SM)).child(item_el));
                         } else {
                             msg_list = msg_list.child(item_el);
                         }
@@ -276,36 +275,34 @@ impl AiAssistantView {
                     .map(|s| format_duration_zh(s.saturating_mul(1000)))
                     .unwrap_or_default();
                 let label = super::work_group::format_running_focus(&focus);
-                let mut row = h_flex()
-                    .w_full()
-                    .min_w_0()
-                    .py(px(4.0))
-                    .gap(rems(space::XS))
-                    .justify_between()
-                    .items_center()
-                    .child(
-                        h_flex()
-                            .flex_1()
-                            .min_w_0()
-                            .gap(px(6.0))
-                            .items_center()
-                            .overflow_hidden()
-                            .child(
-                                div()
-                                    .flex_shrink_0()
-                                    .text_color(p.primary)
-                                    .child(AppIconElement::new(AppIcon::Ui(UiIcon::REFRESH)).small()),
-                            )
-                            .child(
-                                div()
-                                    .flex_1()
-                                    .min_w_0()
-                                    .truncate()
-                                    .text_size(rems(typography::CAPTION))
-                                    .text_color(p.text.muted)
-                                    .child(label),
-                            ),
-                    );
+                let mut row =
+                    h_flex()
+                        .w_full()
+                        .min_w_0()
+                        .py(px(4.0))
+                        .gap(rems(space::XS))
+                        .justify_between()
+                        .items_center()
+                        .child(
+                            h_flex()
+                                .flex_1()
+                                .min_w_0()
+                                .gap(px(6.0))
+                                .items_center()
+                                .overflow_hidden()
+                                .child(div().flex_shrink_0().text_color(p.primary).child(
+                                    AppIconElement::new(AppIcon::Ui(UiIcon::REFRESH)).small(),
+                                ))
+                                .child(
+                                    div()
+                                        .flex_1()
+                                        .min_w_0()
+                                        .truncate()
+                                        .text_size(rems(typography::CAPTION))
+                                        .text_color(p.text.muted)
+                                        .child(label),
+                                ),
+                        );
                 if !elapsed_str.is_empty() {
                     row = row.child(
                         div()

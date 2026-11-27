@@ -10369,7 +10369,6 @@ dependencies = [
 name = "transom-ai"
 version = "1.9.0"
 dependencies = [
- "anyhow",
  "async-trait",
  "base64 0.23.1",
  "chrono",

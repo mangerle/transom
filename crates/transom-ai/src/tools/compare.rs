@@ -289,7 +289,8 @@ mod tests {
     #[tokio::test]
     async fn compares_two_hosts_and_emits_unified_diff() {
         let (tx, mut rx) = mpsc::channel(8);
-        let mut ctx = ToolRuntimeContext::minimal(SessionScope::Global, tx, CancellationToken::new());
+        let mut ctx =
+            ToolRuntimeContext::minimal(SessionScope::Global, tx, CancellationToken::new());
         ctx.bulk_hosts = vec![
             BulkHostTarget {
                 session_id: "s1".to_owned(),

@@ -391,4 +391,12 @@ pub enum AiAppEvent {
         host_label: String,
         command: String,
     },
+    /// 后台异步子 Agent 执行完成后推送通知，用于自动唤醒主会话继续汇总。
+    SubagentCompleted {
+        conversation_id: String,
+        subagent_id: String,
+        title: String,
+        ok: bool,
+        summary: String,
+    },
 }

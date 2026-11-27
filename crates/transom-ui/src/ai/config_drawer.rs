@@ -144,7 +144,12 @@ fn render_config_tabs(active: AiConfigSection, p: &Palette, on_select: SectionCb
         (AiConfigSection::General, "通用与 Agent"),
         (AiConfigSection::PolicyHooks, "策略与钩子"),
     ];
-    let mut bar = h_flex().w_full().p(px(3.0)).gap(px(3.0)).rounded(p.radius.md).bg(p.secondary);
+    let mut bar = h_flex()
+        .w_full()
+        .p(px(3.0))
+        .gap(px(3.0))
+        .rounded(p.radius.md)
+        .bg(p.secondary);
     for (idx, (section, label)) in items.into_iter().enumerate() {
         let cb = on_select.clone();
         let active_tab = section == active;
@@ -162,9 +167,13 @@ fn render_config_tabs(active: AiConfigSection, p: &Palette, on_select: SectionCb
             .on_click(move |_, w, cx| cb(section, w, cx))
             .child(div().truncate().child(label));
         tab = if active_tab {
-            tab.bg(p.surface.floating).shadow_xs().font_weight(FontWeight::SEMIBOLD).text_color(p.foreground)
+            tab.bg(p.surface.floating)
+                .shadow_xs()
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(p.foreground)
         } else {
-            tab.text_color(p.text.muted).hover(|s| s.text_color(p.foreground))
+            tab.text_color(p.text.muted)
+                .hover(|s| s.text_color(p.foreground))
         };
         bar = bar.child(tab);
     }
@@ -211,18 +220,38 @@ pub(super) fn render_config_drawer(
         }
     }
 
-    v_flex().flex_1().w_full().min_h_0().overflow_hidden().child(tabs).child(scroll_body).into_any_element()
+    v_flex()
+        .flex_1()
+        .w_full()
+        .min_h_0()
+        .overflow_hidden()
+        .child(tabs)
+        .child(scroll_body)
+        .into_any_element()
 }
 
-fn render_models_tab(params: ConfigDrawerParams<'_>, actions: ConfigDrawerActions) -> Vec<AnyElement> {
+fn render_models_tab(
+    params: ConfigDrawerParams<'_>,
+    actions: ConfigDrawerActions,
+) -> Vec<AnyElement> {
     let p = params.p;
-    let mut proto_row = h_flex().w_full().p(px(3.0)).gap(px(3.0)).rounded(p.radius.md).bg(p.secondary).flex_wrap();
+    let mut proto_row = h_flex()
+        .w_full()
+        .p(px(3.0))
+        .gap(px(3.0))
+        .rounded(p.radius.md)
+        .bg(p.secondary)
+        .flex_wrap();
     for proto in ProviderProtocol::ALL {
         let cb = actions.on_select_protocol.clone();
         let btn = Button::new(SharedString::from(format!("ai-proto-{}", proto.as_str())))
             .xsmall()
             .label(proto.label());
-        let btn = if proto == params.selected_protocol { btn.primary() } else { btn.ghost() };
+        let btn = if proto == params.selected_protocol {
+            btn.primary()
+        } else {
+            btn.ghost()
+        };
         proto_row = proto_row.child(btn.on_click(move |_, w, cx| cb(proto, w, cx)));
     }
 
@@ -230,9 +259,15 @@ fn render_models_tab(params: ConfigDrawerParams<'_>, actions: ConfigDrawerAction
         .w_full()
         .justify_between()
         .items_center()
-        .child(field_label(rust_i18n::t!("ai.cfg_api_url_label").to_string(), p))
+        .child(field_label(
+            rust_i18n::t!("ai.cfg_api_url_label").to_string(),
+            p,
+        ))
         .child(
-            Button::new("ai-test-conn").ghost().xsmall().label(rust_i18n::t!("ai.test_connection").to_string())
+            Button::new("ai-test-conn")
+                .ghost()
+                .xsmall()
+                .label(rust_i18n::t!("ai.test_connection").to_string())
                 .on_click(move |_, w, cx| (actions.on_test_connection)(w, cx)),
         );
 
@@ -240,48 +275,92 @@ fn render_models_tab(params: ConfigDrawerParams<'_>, actions: ConfigDrawerAction
         .w_full()
         .justify_between()
         .items_center()
-        .child(field_label(rust_i18n::t!("ai.cfg_models_title").to_string(), p))
+        .child(field_label(
+            rust_i18n::t!("ai.cfg_models_title").to_string(),
+            p,
+        ))
         .child(
             h_flex()
                 .gap(rems(space::XXS))
                 .child(if params.has_discovered_models {
-                    Button::new("ai-open-model-picker").ghost().xsmall()
+                    Button::new("ai-open-model-picker")
+                        .ghost()
+                        .xsmall()
                         .label(rust_i18n::t!("ai.picker_select_models").to_string())
                         .on_click(move |_, w, cx| (actions.on_open_model_picker)(w, cx))
                 } else {
-                    Button::new("ai-fetch-models").ghost().xsmall()
+                    Button::new("ai-fetch-models")
+                        .ghost()
+                        .xsmall()
                         .label(rust_i18n::t!("ai.fetch_models").to_string())
                         .on_click(move |_, w, cx| (actions.on_fetch_models)(w, cx))
                 })
                 .child(
-                    Button::new("ai-add-model-row").ghost().xsmall()
+                    Button::new("ai-add-model-row")
+                        .ghost()
+                        .xsmall()
                         .label(rust_i18n::t!("ai.cfg_add_manual").to_string())
                         .on_click(move |_, w, cx| (actions.on_add_model_row)(w, cx)),
                 ),
         );
 
     let mut form_card = section_card("供应商配置".to_owned(), None, p)
-        .child(field_group(rust_i18n::t!("ai.cfg_name_label").to_string(), Input::new(params.provider_name_input), p))
-        .child(field_group(rust_i18n::t!("ai.api_key_label").to_string(), Input::new(params.api_key_input), p))
-        .child(v_flex().w_full().gap(px(4.0)).child(url_header).child(Input::new(params.base_url_input)))
-        .child(field_group(rust_i18n::t!("ai.cfg_protocol_label").to_string(), proto_row, p))
+        .child(field_group(
+            rust_i18n::t!("ai.cfg_name_label").to_string(),
+            Input::new(params.provider_name_input),
+            p,
+        ))
+        .child(field_group(
+            rust_i18n::t!("ai.api_key_label").to_string(),
+            Input::new(params.api_key_input),
+            p,
+        ))
+        .child(
+            v_flex()
+                .w_full()
+                .gap(px(4.0))
+                .child(url_header)
+                .child(Input::new(params.base_url_input)),
+        )
+        .child(field_group(
+            rust_i18n::t!("ai.cfg_protocol_label").to_string(),
+            proto_row,
+            p,
+        ))
         .child(
             v_flex().w_full().gap(px(6.0)).child(models_header).child(
-                div().w_full().p(rems(space::XS)).rounded(p.radius.sm).bg(p.secondary).child(params.models_section),
+                div()
+                    .w_full()
+                    .p(rems(space::XS))
+                    .rounded(p.radius.sm)
+                    .bg(p.secondary)
+                    .child(params.models_section),
             ),
         );
 
     if let Some(status) = params.discovery_status {
-        let is_err = status.contains("失败") || status.contains("401") || status.contains("403") || status.contains("error") || status.contains("Error");
+        let is_err = status.contains("失败")
+            || status.contains("401")
+            || status.contains("403")
+            || status.contains("error")
+            || status.contains("Error");
         form_card = form_card.child(
             div()
                 .w_full()
                 .px(rems(space::SM))
                 .py(rems(space::XS))
                 .rounded(p.radius.sm)
-                .bg(if is_err { p.danger.opacity(0.08) } else { p.secondary })
+                .bg(if is_err {
+                    p.danger.opacity(0.08)
+                } else {
+                    p.secondary
+                })
                 .border_1()
-                .border_color(if is_err { p.danger.opacity(0.45) } else { p.divider(p.border) })
+                .border_color(if is_err {
+                    p.danger.opacity(0.45)
+                } else {
+                    p.divider(p.border)
+                })
                 .text_size(rems(typography::CAPTION))
                 .text_color(if is_err { p.danger } else { p.muted_foreground })
                 .child(status.to_owned()),
@@ -292,17 +371,26 @@ fn render_models_tab(params: ConfigDrawerParams<'_>, actions: ConfigDrawerAction
     }
     form_card = form_card.child(
         h_flex().w_full().justify_end().pt(px(2.0)).child(
-            Button::new("ai-save-provider").primary().label(rust_i18n::t!("ai.cfg_save").to_string())
+            Button::new("ai-save-provider")
+                .primary()
+                .label(rust_i18n::t!("ai.cfg_save").to_string())
                 .on_click(move |_, w, cx| (actions.on_save_provider)(w, cx)),
         ),
     );
 
     let mut cards = vec![form_card.into_any_element()];
     if !params.settings.providers.is_empty() {
-        let mut list_card = section_card(rust_i18n::t!("ai.configured_providers").to_string(), None, p);
+        let mut list_card = section_card(
+            rust_i18n::t!("ai.configured_providers").to_string(),
+            None,
+            p,
+        );
         for (idx, prov) in params.settings.providers.iter().enumerate() {
             let models: Vec<&str> = prov.models.iter().map(|m| m.display_label()).collect();
-            let (edit_cb, del_cb) = (actions.on_edit_provider.clone(), actions.on_delete_provider.clone());
+            let (edit_cb, del_cb) = (
+                actions.on_edit_provider.clone(),
+                actions.on_delete_provider.clone(),
+            );
             let (edit_id, del_id) = (prov.id.clone(), prov.id.clone());
             let del_tip = rust_i18n::t!("ai.delete_provider").to_string();
             list_card = list_card.child(
@@ -320,13 +408,47 @@ fn render_models_tab(params: ConfigDrawerParams<'_>, actions: ConfigDrawerAction
                     .hover(|s| s.bg(p.surface.hover))
                     .on_click(move |_, w, cx| edit_cb(edit_id.clone(), w, cx))
                     .child(
-                        h_flex().flex_1().min_w_0().gap(px(6.0)).items_center().overflow_hidden()
-                            .child(div().flex_shrink_0().text_size(rems(typography::CAPTION)).font_weight(FontWeight::SEMIBOLD).text_color(p.foreground).child(prov.name.clone()))
-                            .child(div().flex_shrink_0().px(px(6.0)).py(px(1.0)).rounded(p.radius.sm).bg(p.surface.floating).text_size(rems(typography::CAPTION)).text_color(p.text.muted).child(prov.protocol.label()))
-                            .child(div().flex_1().min_w_0().truncate().text_size(rems(typography::CAPTION)).text_color(p.text.muted).child(models.join(", "))),
+                        h_flex()
+                            .flex_1()
+                            .min_w_0()
+                            .gap(px(6.0))
+                            .items_center()
+                            .overflow_hidden()
+                            .child(
+                                div()
+                                    .flex_shrink_0()
+                                    .text_size(rems(typography::CAPTION))
+                                    .font_weight(FontWeight::SEMIBOLD)
+                                    .text_color(p.foreground)
+                                    .child(prov.name.clone()),
+                            )
+                            .child(
+                                div()
+                                    .flex_shrink_0()
+                                    .px(px(6.0))
+                                    .py(px(1.0))
+                                    .rounded(p.radius.sm)
+                                    .bg(p.surface.floating)
+                                    .text_size(rems(typography::CAPTION))
+                                    .text_color(p.text.muted)
+                                    .child(prov.protocol.label()),
+                            )
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .min_w_0()
+                                    .truncate()
+                                    .text_size(rems(typography::CAPTION))
+                                    .text_color(p.text.muted)
+                                    .child(models.join(", ")),
+                            ),
                     )
                     .child(
-                        Button::new(("ai-del-prov", idx)).ghost().xsmall().accessibility_label(del_tip.clone()).tooltip(del_tip)
+                        Button::new(("ai-del-prov", idx))
+                            .ghost()
+                            .xsmall()
+                            .accessibility_label(del_tip.clone())
+                            .tooltip(del_tip)
                             .child(AppIconElement::new(AppIcon::Ui(UiIcon::DELETE)).small())
                             .on_click(move |_, w, cx| {
                                 cx.stop_propagation();
@@ -365,22 +487,46 @@ fn render_preference_row(label: String, select: &Entity<ConfigSelect>, p: &Palet
         .into_any_element()
 }
 
-fn render_general_acp_tab(params: ConfigDrawerParams<'_>, actions: ConfigDrawerActions) -> Vec<AnyElement> {
+fn render_general_acp_tab(
+    params: ConfigDrawerParams<'_>,
+    actions: ConfigDrawerActions,
+) -> Vec<AnyElement> {
     let p = params.p;
     let pref_card = section_card("交互与偏好".to_owned(), None, p)
-        .child(render_preference_row(rust_i18n::t!("ai.cfg_language_label").to_string(), params.lang_select, p))
-        .child(div().w_full().border_t_1().border_color(p.divider(p.border)).pt(rems(space::XS)).child(
-            render_preference_row(rust_i18n::t!("ai.running_msg_title").to_string(), params.running_behavior_select, p),
-        ));
+        .child(render_preference_row(
+            rust_i18n::t!("ai.cfg_language_label").to_string(),
+            params.lang_select,
+            p,
+        ))
+        .child(
+            div()
+                .w_full()
+                .border_t_1()
+                .border_color(p.divider(p.border))
+                .pt(rems(space::XS))
+                .child(render_preference_row(
+                    rust_i18n::t!("ai.running_msg_title").to_string(),
+                    params.running_behavior_select,
+                    p,
+                )),
+        );
 
     let acp_presets = default_acp_presets();
     let mut acp_card = section_card(rust_i18n::t!("ai.acp_section_title").to_string(), None, p);
     for (idx, preset) in acp_presets.iter().enumerate() {
         let selected = idx == params.selected_acp_idx;
-        let saved_cmd = params.settings.acp_agents.iter().find(|a| a.id == preset.id).map(|a| a.command.as_str());
+        let saved_cmd = params
+            .settings
+            .acp_agents
+            .iter()
+            .find(|a| a.id == preset.id)
+            .map(|a| a.command.as_str());
         let effective_cmd = saved_cmd.unwrap_or(&preset.command);
         let installed = is_acp_command_available(effective_cmd);
-        let installing = params.acp_install_status.as_ref().is_some_and(|(id, run, _)| id == &preset.id && *run);
+        let installing = params
+            .acp_install_status
+            .as_ref()
+            .is_some_and(|(id, run, _)| id == &preset.id && *run);
         let cb_sel = actions.on_apply_acp_preset.clone();
         let cb_inst = actions.on_install_acp.clone();
         let pid = preset.id.clone();
@@ -394,16 +540,32 @@ fn render_general_acp_tab(params: ConfigDrawerParams<'_>, actions: ConfigDrawerA
                 .items_center()
                 .rounded(p.radius.sm)
                 .bg(p.success.opacity(0.12))
-                .child(div().text_color(p.success).child(AppIconElement::new(AppIcon::Ui(UiIcon::CHECK)).small()))
-                .child(div().text_size(rems(typography::CAPTION)).font_weight(FontWeight::MEDIUM).text_color(p.success).child("已安装"))
+                .child(
+                    div()
+                        .text_color(p.success)
+                        .child(AppIconElement::new(AppIcon::Ui(UiIcon::CHECK)).small()),
+                )
+                .child(
+                    div()
+                        .text_size(rems(typography::CAPTION))
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(p.success)
+                        .child("已安装"),
+                )
                 .into_any_element()
         } else {
-            let lbl = if installing { rust_i18n::t!("ai.acp_installing").to_string() } else { "下载安装".to_owned() };
+            let lbl = if installing {
+                rust_i18n::t!("ai.acp_installing").to_string()
+            } else {
+                "下载安装".to_owned()
+            };
             Button::new(("ai-acp-install", idx))
                 .outline()
                 .xsmall()
                 .child(
-                    h_flex().gap(px(4.0)).items_center()
+                    h_flex()
+                        .gap(px(4.0))
+                        .items_center()
                         .child(AppIconElement::new(AppIcon::Ui(UiIcon::DOWNLOAD)).small())
                         .child(lbl),
                 )
@@ -427,19 +589,57 @@ fn render_general_acp_tab(params: ConfigDrawerParams<'_>, actions: ConfigDrawerA
             .cursor_pointer()
             .on_click(move |_, w, cx| cb_sel(idx, w, cx))
             .child(
-                h_flex().flex_1().min_w_0().gap(rems(space::XS)).items_center().overflow_hidden()
-                    .child(div().flex_shrink_0().text_color(if selected { p.primary } else { p.text.muted }).child(AppIconElement::new(super::popups::backend_icon(Some(&preset.id))).small()))
+                h_flex()
+                    .flex_1()
+                    .min_w_0()
+                    .gap(rems(space::XS))
+                    .items_center()
+                    .overflow_hidden()
                     .child(
-                        v_flex().flex_1().min_w_0().gap(px(1.0)).overflow_hidden()
-                            .child(div().truncate().text_size(rems(typography::CAPTION)).font_weight(FontWeight::SEMIBOLD).text_color(p.foreground).child(preset.name.clone()))
-                            .child(div().truncate().font_family("monospace").text_size(rems(typography::CAPTION)).text_color(p.text.muted).child(if installed { format!("$ {effective_cmd}") } else { preset.install_command.clone() })),
+                        div()
+                            .flex_shrink_0()
+                            .text_color(if selected { p.primary } else { p.text.muted })
+                            .child(
+                                AppIconElement::new(super::popups::backend_icon(Some(&preset.id)))
+                                    .small(),
+                            ),
+                    )
+                    .child(
+                        v_flex()
+                            .flex_1()
+                            .min_w_0()
+                            .gap(px(1.0))
+                            .overflow_hidden()
+                            .child(
+                                div()
+                                    .truncate()
+                                    .text_size(rems(typography::CAPTION))
+                                    .font_weight(FontWeight::SEMIBOLD)
+                                    .text_color(p.foreground)
+                                    .child(preset.name.clone()),
+                            )
+                            .child(
+                                div()
+                                    .truncate()
+                                    .font_family("monospace")
+                                    .text_size(rems(typography::CAPTION))
+                                    .text_color(p.text.muted)
+                                    .child(if installed {
+                                        format!("$ {effective_cmd}")
+                                    } else {
+                                        preset.install_command.clone()
+                                    }),
+                            ),
                     ),
             )
             .child(status_el);
         row = if selected {
-            row.bg(p.primary.opacity(0.08)).border_color(p.primary.opacity(0.45))
+            row.bg(p.primary.opacity(0.08))
+                .border_color(p.primary.opacity(0.45))
         } else {
-            row.bg(p.secondary).border_color(p.divider(p.border)).hover(|s| s.bg(p.surface.hover))
+            row.bg(p.secondary)
+                .border_color(p.divider(p.border))
+                .hover(|s| s.bg(p.surface.hover))
         };
         acp_card = acp_card.child(row);
     }
@@ -451,13 +651,21 @@ fn render_general_acp_tab(params: ConfigDrawerParams<'_>, actions: ConfigDrawerA
             .gap(px(4.0))
             .border_t_1()
             .border_color(p.divider(p.border))
-            .child(field_label(rust_i18n::t!("ai.acp_cmd_label").to_string(), p))
+            .child(field_label(
+                rust_i18n::t!("ai.acp_cmd_label").to_string(),
+                p,
+            ))
             .child(
                 h_flex()
                     .w_full()
                     .gap(rems(space::XS))
                     .items_center()
-                    .child(div().flex_1().min_w_0().child(Input::new(params.acp_cmd_input).small()))
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .child(Input::new(params.acp_cmd_input).small()),
+                    )
                     .child(
                         Button::new("ai-save-acp")
                             .primary()
@@ -468,7 +676,12 @@ fn render_general_acp_tab(params: ConfigDrawerParams<'_>, actions: ConfigDrawerA
             ),
     );
     if let Some((_, _, detail)) = params.acp_install_status {
-        acp_card = acp_card.child(div().text_size(rems(typography::CAPTION)).text_color(p.primary).child(detail.clone()));
+        acp_card = acp_card.child(
+            div()
+                .text_size(rems(typography::CAPTION))
+                .text_color(p.primary)
+                .child(detail.clone()),
+        );
     }
 
     vec![pref_card.into_any_element(), acp_card.into_any_element()]

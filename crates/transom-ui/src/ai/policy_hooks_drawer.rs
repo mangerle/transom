@@ -65,65 +65,57 @@ pub(super) fn render_policy_hooks_section(
     let rules = &view.state.settings.exec_policy_rules;
     let hooks = &view.state.settings.hooks;
 
-    let mut policy_card = section_card(
-        rust_i18n::t!("ai.exec_policy_title").to_string(),
-        None,
-        p,
-    )
-    .child(field_label(
-        "按命令前缀快速放行或拦截 AI 的远端命令调用".to_owned(),
-        p,
-    ))
-    .child(
-        h_flex()
-            .w_full()
-            .gap(rems(space::XS))
-            .items_center()
+    let mut policy_card =
+        section_card(rust_i18n::t!("ai.exec_policy_title").to_string(), None, p)
+            .child(field_label(
+                "按命令前缀快速放行或拦截 AI 的远端命令调用".to_owned(),
+                p,
+            ))
             .child(
-                div()
-                    .flex_1()
-                    .min_w_0()
-                    .child(Input::new(&view.policy_hooks_form.policy_pattern_input).small()),
-            )
-            .child(
-                Button::new("ai-add-policy-allow")
-                    .outline()
-                    .small()
+                h_flex()
+                    .w_full()
+                    .gap(rems(space::XS))
+                    .items_center()
                     .child(
-                        h_flex()
-                            .gap(px(4.0))
-                            .items_center()
-                            .child(
-                                div()
-                                    .text_color(p.success)
-                                    .child(AppIconElement::new(AppIcon::Ui(UiIcon::CHECK)).small()),
-                            )
-                            .child("放行"),
+                        div().flex_1().min_w_0().child(
+                            Input::new(&view.policy_hooks_form.policy_pattern_input).small(),
+                        ),
                     )
-                    .on_click(cx.listener(|this, _, w, cx| {
-                        this.add_exec_policy_rule(ExecPolicyAction::Allow, w, cx);
-                    })),
-            )
-            .child(
-                Button::new("ai-add-policy-deny")
-                    .outline()
-                    .small()
                     .child(
-                        h_flex()
-                            .gap(px(4.0))
-                            .items_center()
+                        Button::new("ai-add-policy-allow")
+                            .outline()
+                            .small()
                             .child(
-                                div()
-                                    .text_color(p.danger)
-                                    .child(AppIconElement::new(AppIcon::Ui(UiIcon::CLOSE)).small()),
+                                h_flex()
+                                    .gap(px(4.0))
+                                    .items_center()
+                                    .child(div().text_color(p.success).child(
+                                        AppIconElement::new(AppIcon::Ui(UiIcon::CHECK)).small(),
+                                    ))
+                                    .child("放行"),
                             )
-                            .child("拦截"),
+                            .on_click(cx.listener(|this, _, w, cx| {
+                                this.add_exec_policy_rule(ExecPolicyAction::Allow, w, cx);
+                            })),
                     )
-                    .on_click(cx.listener(|this, _, w, cx| {
-                        this.add_exec_policy_rule(ExecPolicyAction::Deny, w, cx);
-                    })),
-            ),
-    );
+                    .child(
+                        Button::new("ai-add-policy-deny")
+                            .outline()
+                            .small()
+                            .child(
+                                h_flex()
+                                    .gap(px(4.0))
+                                    .items_center()
+                                    .child(div().text_color(p.danger).child(
+                                        AppIconElement::new(AppIcon::Ui(UiIcon::CLOSE)).small(),
+                                    ))
+                                    .child("拦截"),
+                            )
+                            .on_click(cx.listener(|this, _, w, cx| {
+                                this.add_exec_policy_rule(ExecPolicyAction::Deny, w, cx);
+                            })),
+                    ),
+            );
 
     if rules.is_empty() {
         policy_card = policy_card.child(
@@ -316,13 +308,9 @@ fn render_hooks_card(
                         Button::new("ai-hook-ev-cycle")
                             .outline()
                             .small()
-                            .child(
-                                h_flex()
-                                    .gap(px(4.0))
-                                    .items_center()
-                                    .child(ev_label)
-                                    .child(AppIconElement::new(AppIcon::Ui(UiIcon::CHEVRON_DOWN)).small()),
-                            )
+                            .child(h_flex().gap(px(4.0)).items_center().child(ev_label).child(
+                                AppIconElement::new(AppIcon::Ui(UiIcon::CHEVRON_DOWN)).small(),
+                            ))
                             .on_click(cx.listener(|this, _, _, cx| {
                                 this.cycle_custom_hook_event(cx);
                             })),

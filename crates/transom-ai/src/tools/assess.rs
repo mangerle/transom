@@ -337,7 +337,10 @@ fn assess_bulk_exec(
     }
 }
 
-fn assess_compare_hosts(parsed: &serde_json::Value, ctx: &ToolRuntimeContext) -> ToolRiskAssessment {
+fn assess_compare_hosts(
+    parsed: &serde_json::Value,
+    ctx: &ToolRuntimeContext,
+) -> ToolRiskAssessment {
     let host_a = parsed["host_a"].as_str().unwrap_or("");
     let host_b = parsed["host_b"].as_str().unwrap_or("");
     let kind = parsed["kind"].as_str().unwrap_or("file");

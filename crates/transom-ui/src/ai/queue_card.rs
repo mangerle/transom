@@ -335,10 +335,9 @@ impl AiAssistantView {
                 transom_core::AiApprovalDecision::AllowOnce => {
                     (true, format!("已允许执行：{}", approval.title))
                 }
-                transom_core::AiApprovalDecision::AllowPrefix { prefix } => (
-                    true,
-                    format!("已允许本会话同类前缀：{prefix}"),
-                ),
+                transom_core::AiApprovalDecision::AllowPrefix { prefix } => {
+                    (true, format!("已允许本会话同类前缀：{prefix}"))
+                }
                 transom_core::AiApprovalDecision::HandoffToTerminal => {
                     (true, format!("已移交终端手动执行：{}", approval.title))
                 }

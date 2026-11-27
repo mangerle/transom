@@ -220,10 +220,7 @@ impl AgentHook for Gate {
             return blocked;
         }
 
-        let decision = match self.decide_policy(tool_name, &parsed, cmd_str, &assessment) {
-            Ok(d) => d,
-            Err(skip_action) => return skip_action,
-        };
+        let decision = self.decide_policy(tool_name, &parsed, cmd_str, &assessment);
 
         match decision {
             PolicyDecision::Allow => DispatchAction::proceed(),
@@ -273,7 +270,7 @@ impl Gate {
         parsed: &serde_json::Value,
         cmd_str: Option<&str>,
         assessment: &ToolRiskAssessment,
-    ) -> Result<PolicyDecision, DispatchAction> {
+    ) -> PolicyDecision {
         let mode = *self.execution_mode.read();
         let command = matches!(tool_name, "remote_exec" | "remote_exec_bulk")
             .then_some(cmd_str)
@@ -285,7 +282,7 @@ impl Gate {
                 let prefixes = self.session_allow_prefixes.read();
                 let chain = evaluate_command_chain(cmd, &self.exec_policy_rules, &prefixes);
                 if let Some(denied) = chain.denied_reason {
-                    return Err(DispatchAction::skip(denied));
+                    return PolicyDecision::Deny { reason: denied };
                 }
                 if chain.worst_risk > effective_risk {
                     effective_risk = chain.worst_risk;
@@ -304,11 +301,11 @@ impl Gate {
                 })
                 .map(|h| h.protection)
                 .collect();
-            return Ok(evaluate_bulk_policy(&targets, mode, effective_risk).0);
+            return evaluate_bulk_policy(&targets, mode, effective_risk).0;
         }
 
         let prefixes = self.session_allow_prefixes.read();
-        Ok(evaluate_command_policy(&CommandPolicyContext {
+        evaluate_command_policy(&CommandPolicyContext {
             protection: self.tool_ctx.protection(),
             mode,
             plan_mode: self.plan_mode,
@@ -317,7 +314,7 @@ impl Gate {
             command,
             exec_policy_rules: &self.exec_policy_rules,
             session_allow_prefixes: &prefixes,
-        }))
+        })
     }
 
     /// 挂起等待用户审批决策；若用户选择移交终端，则进一步等待终端接管结果。

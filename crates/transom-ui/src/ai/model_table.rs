@@ -262,9 +262,11 @@ impl AiAssistantView {
             return;
         };
         self.state.selected_protocol = prov.protocol;
-        self.config_form.provider_name_input
+        self.config_form
+            .provider_name_input
             .update(cx, |i, cx| i.set_value(prov.name, window, cx));
-        self.config_form.base_url_input
+        self.config_form
+            .base_url_input
             .update(cx, |i, cx| i.set_value(prov.base_url, window, cx));
         let saved_key = self
             .ai_store
@@ -273,7 +275,8 @@ impl AiAssistantView {
             .flatten()
             .map(|s| s.to_string())
             .unwrap_or_default();
-        self.config_form.api_key_input
+        self.config_form
+            .api_key_input
             .update(cx, |i, cx| i.set_value(saved_key, window, cx));
         self.config_form.draft_models = prov
             .models

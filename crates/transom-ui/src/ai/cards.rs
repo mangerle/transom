@@ -183,7 +183,11 @@ fn render_user_bubble(
         .map(|ts| format_relative_timestamp(ts, chrono::Utc::now()))
         .unwrap_or_default();
 
-    let mut action_row = h_flex().pr(px(4.0)).justify_end().items_center().gap(px(4.0));
+    let mut action_row = h_flex()
+        .pr(px(4.0))
+        .justify_end()
+        .items_center()
+        .gap(px(4.0));
     if !time_label.is_empty() {
         action_row = action_row.child(
             div()
@@ -205,9 +209,7 @@ fn render_user_bubble(
                         .text_color(if is_copied { p.success } else { p.text.muted })
                         .child(AppIconElement::new(AppIcon::Ui(copy_icon)).small()),
                 )
-                .on_click(move |_, w, cx| {
-                    on_copy(copy_key.clone(), copied_text.clone(), w, cx)
-                }),
+                .on_click(move |_, w, cx| on_copy(copy_key.clone(), copied_text.clone(), w, cx)),
         )
         .child({
             let entry_id = id.to_owned();
@@ -268,30 +270,27 @@ fn render_reasoning_block(
         UiIcon::CHEVRON_RIGHT
     };
     let on_toggle = callbacks.on_toggle_expand;
-    let mut box_el = v_flex()
-        .w_full()
-        .gap(px(4.0))
-        .child(
-            h_flex()
-                .id(SharedString::from(format!("ai-reason-{id}")))
-                .py(px(2.0))
-                .gap(px(5.0))
-                .items_center()
-                .cursor_pointer()
-                .hover(|s| s.opacity(0.85))
-                .on_click(move |_, window, cx| on_toggle(window, cx))
-                .child(
-                    div()
-                        .text_color(p.text.muted)
-                        .child(AppIconElement::new(AppIcon::Ui(chevron)).small()),
-                )
-                .child(
-                    div()
-                        .text_size(rems(typography::CAPTION))
-                        .text_color(p.text.muted)
-                        .child(label),
-                ),
-        );
+    let mut box_el = v_flex().w_full().gap(px(4.0)).child(
+        h_flex()
+            .id(SharedString::from(format!("ai-reason-{id}")))
+            .py(px(2.0))
+            .gap(px(5.0))
+            .items_center()
+            .cursor_pointer()
+            .hover(|s| s.opacity(0.85))
+            .on_click(move |_, window, cx| on_toggle(window, cx))
+            .child(
+                div()
+                    .text_color(p.text.muted)
+                    .child(AppIconElement::new(AppIcon::Ui(chevron)).small()),
+            )
+            .child(
+                div()
+                    .text_size(rems(typography::CAPTION))
+                    .text_color(p.text.muted)
+                    .child(label),
+            ),
+    );
     if streaming || expanded {
         box_el = box_el.child(
             div()
@@ -400,7 +399,10 @@ mod tests {
     fn formats_relative_timestamps_across_ranges() {
         let now = Utc.with_ymd_and_hms(2026, 11, 27, 10, 0, 0).unwrap();
 
-        assert_eq!(format_relative_timestamp("2026-11-27T09:59:30Z", now), "刚刚");
+        assert_eq!(
+            format_relative_timestamp("2026-11-27T09:59:30Z", now),
+            "刚刚"
+        );
         assert_eq!(
             format_relative_timestamp("2026-11-27T09:45:00Z", now),
             "15 分钟前"

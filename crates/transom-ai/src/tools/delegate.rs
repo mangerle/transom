@@ -49,6 +49,9 @@ pub struct DelegateTaskRequest {
     /// 子 Agent 模型档位（`inherit` 继承主模型 / `fast` 优先轻量快模型）。
     #[serde(default)]
     pub model_tier: SubagentModelTier,
+    /// 是否转入后台异步执行（`true` 时立即返回 `subagent_id`，完成后自动唤醒主对话）。
+    #[serde(default)]
+    pub async_mode: bool,
 }
 
 /// 子 Agent 运行器抽象（由控制平面实现并注册至托管任务中心）。
@@ -71,6 +74,8 @@ pub struct DelegateTaskArgs {
     resume_id: Option<String>,
     #[serde(default)]
     model_tier: SubagentModelTier,
+    #[serde(default)]
+    async_mode: bool,
 }
 
 /// 在独立上下文中派发只读调研或独立部署子任务，并汇总结果回主对话。
@@ -128,6 +133,10 @@ impl Tool for DelegateTaskTool {
                     "type": "string",
                     "enum": ["inherit", "fast"],
                     "description": "模型档位：inherit（默认，继承主模型）或 fast（只读巡检/简单汇总优先用轻量快模型）"
+                },
+                "async_mode": {
+                    "type": "boolean",
+                    "description": "是否转为后台异步运行：false（默认，等待结果汇总）；true（适合耗时部署/长巡检，立即返回 subagent_id，完成后自动唤醒主对话）"
                 }
             },
             "required": ["title", "task"]
@@ -164,6 +173,7 @@ impl Tool for DelegateTaskTool {
             max_turns: args.max_turns.unwrap_or(8).clamp(2, 15),
             resume_id: args.resume_id.filter(|s| !s.trim().is_empty()),
             model_tier: args.model_tier,
+            async_mode: args.async_mode,
         };
         let call_id = self
             .ctx

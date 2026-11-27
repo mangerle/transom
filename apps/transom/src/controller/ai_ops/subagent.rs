@@ -55,8 +55,10 @@ struct SubagentPumpSink {
 impl AgentPumpSink for SubagentPumpSink {
     async fn on_card(&mut self, card: ToolExecutionCard) {
         let status = if card.ok { "OK" } else { "ERR" };
-        self.task_handle
-            .emit_chunk(&format!("[{}] {} ({status})\n", card.tool_name, card.summary));
+        self.task_handle.emit_chunk(&format!(
+            "[{}] {} ({status})\n",
+            card.tool_name, card.summary
+        ));
     }
 
     async fn on_event(&mut self, event: AgentEvent) {
@@ -71,9 +73,11 @@ impl AgentPumpSink for SubagentPumpSink {
             }
             AgentEvent::Approval(approval) => {
                 if self.is_readonly {
-                    let _ = approval.respond.send(AiApprovalDecision::RejectWithFeedback {
-                        reason: "只读子 Agent 不允许写操作".to_owned(),
-                    });
+                    let _ = approval
+                        .respond
+                        .send(AiApprovalDecision::RejectWithFeedback {
+                            reason: "只读子 Agent 不允许写操作".to_owned(),
+                        });
                     self.task_handle
                         .emit_chunk("[已拦截只读子 Agent 的写操作请求]\n");
                 } else {
@@ -188,7 +192,7 @@ impl SubagentRunner for ControllerSubagentRunner {
             .filter(|s| !s.is_empty())
             .map(str::to_owned)
             .unwrap_or_else(|| task_handle.task_id.clone());
-        let mut history_branch = self
+        let history_branch = self
             .subagent_histories
             .lock()
             .get(&subagent_id)
@@ -225,7 +229,6 @@ impl SubagentRunner for ControllerSubagentRunner {
             steer_queue,
         };
 
-        let runner = tokio::spawn(async move { transom_ai::run(input).await });
         let mut sink = SubagentPumpSink {
             task_title: req.title.clone(),
             is_readonly,
@@ -234,78 +237,135 @@ impl SubagentRunner for ControllerSubagentRunner {
             event_tx: self.event_tx.clone(),
             final_text: String::new(),
         };
-        let runner_err = drive_agent_pump(
-            Some(runner),
-            event_rx,
-            card_rx,
-            None,
-            None,
-            "子 Agent 任务异常中断",
-            &mut sink,
-        )
-        .await;
-        let SubagentPumpSink {
-            task_handle,
-            final_text,
-            ..
-        } = sink;
+        let subagent_histories = self.subagent_histories.clone();
+        let conv_id = self
+            .app_bridge_deps
+            .conversation_id
+            .clone()
+            .unwrap_or_default();
+        let notify_tx = self.event_tx.clone();
+        let task_title = req.title;
+        let async_mode = req.async_mode;
 
-        if child_cancel.is_cancelled() {
-            task_handle.finish(AiManagedTaskStatus::Cancelled, None, "子任务已取消");
-            return Err(ToolError::Cancelled);
-        }
-        if let Some(err) = runner_err {
-            task_handle.finish(AiManagedTaskStatus::Failed, None, &err);
-            return Err(ToolError::ExecutionFailed {
-                tool: "delegate_task",
-                reason: err,
-            });
-        }
-        task_handle.finish(AiManagedTaskStatus::Succeeded, Some(0), "子任务完成");
+        let exec_fut = async move {
+            let runner = tokio::spawn(async move { transom_ai::run(input).await });
+            let runner_err = drive_agent_pump(
+                Some(runner),
+                event_rx,
+                card_rx,
+                None,
+                None,
+                "子 Agent 任务异常中断",
+                &mut sink,
+            )
+            .await;
+            let SubagentPumpSink {
+                task_handle,
+                final_text,
+                ..
+            } = sink;
 
-        let reply_body = if final_text.trim().is_empty() {
-            "子任务已执行完成，但未产生文本汇总。".to_owned()
-        } else {
-            final_text
+            if child_cancel.is_cancelled() {
+                task_handle.finish(AiManagedTaskStatus::Cancelled, None, "子任务已取消");
+                return Err(ToolError::Cancelled);
+            }
+            if let Some(err) = runner_err {
+                task_handle.finish(AiManagedTaskStatus::Failed, None, &err);
+                return Err(ToolError::ExecutionFailed {
+                    tool: "delegate_task",
+                    reason: err,
+                });
+            }
+            task_handle.finish(AiManagedTaskStatus::Succeeded, Some(0), "子任务完成");
+
+            let reply_body = if final_text.trim().is_empty() {
+                "子任务已执行完成，但未产生文本汇总。".to_owned()
+            } else {
+                final_text
+            };
+
+            save_subagent_history(
+                &subagent_histories,
+                &subagent_id,
+                history_branch,
+                prompt,
+                reply_body.clone(),
+                used_model,
+            );
+
+            Ok((subagent_id, reply_body))
         };
 
-        // 将本轮子代理问答追加至缓存分支，供后续通过 resume_id 继续追问复用。
-        let parent_u = history_branch.last().map(|e| e.id.clone());
-        let user_entry = SessionEntry::new(
-            parent_u,
-            SessionEntryKind::Message {
-                role: ChatRole::User,
-                text: prompt,
-                images: Vec::new(),
-                model: None,
-                tokens_per_sec: None,
-                usage: None,
-            },
-        );
-        let assistant_entry = SessionEntry::new(
-            Some(user_entry.id.clone()),
-            SessionEntryKind::Message {
-                role: ChatRole::Assistant,
-                text: reply_body.clone(),
-                images: Vec::new(),
-                model: Some(used_model),
-                tokens_per_sec: None,
-                usage: None,
-            },
-        );
-        history_branch.push(user_entry);
-        history_branch.push(assistant_entry);
-        {
-            let mut cache = self.subagent_histories.lock();
-            if cache.len() >= 32
-                && !cache.contains_key(&subagent_id)
-                && let Some(oldest_key) = cache.keys().next().cloned()
-            {
-                cache.remove(&oldest_key);
-            }
-            cache.insert(subagent_id.clone(), history_branch);
+        if async_mode {
+            tokio::spawn(async move {
+                let res = exec_fut.await;
+                let (ok, sid, summary) = match res {
+                    Ok((id, text)) => (true, id, text),
+                    Err(err) => (false, String::new(), err.to_string()),
+                };
+                if !conv_id.is_empty() {
+                    let _ = notify_tx
+                        .send_async(AppEvent::Ai(Box::new(AiAppEvent::SubagentCompleted {
+                            conversation_id: conv_id,
+                            subagent_id: sid,
+                            title: task_title,
+                            ok,
+                            summary,
+                        })))
+                        .await;
+                }
+            });
+            return Ok(
+                "已将该子任务转入后台异步执行（可在底部任务栏实时查看或干预）。完成后将自动把结果回传并唤醒主对话继续汇总。"
+                    .to_owned(),
+            );
         }
 
-        Ok(format!("[subagent_id: {subagent_id}]\n{reply_body}"))
+        let (sid, reply_body) = exec_fut.await?;
+        Ok(format!("[subagent_id: {sid}]\n{reply_body}"))
     }
+}
+
+fn save_subagent_history(
+    cache_lock: &Mutex<HashMap<String, Vec<SessionEntry>>>,
+    subagent_id: &str,
+    mut history_branch: Vec<SessionEntry>,
+    prompt: String,
+    reply_body: String,
+    used_model: String,
+) {
+    let parent_u = history_branch.last().map(|e| e.id.clone());
+    let user_entry = SessionEntry::new(
+        parent_u,
+        SessionEntryKind::Message {
+            role: ChatRole::User,
+            text: prompt,
+            images: Vec::new(),
+            model: None,
+            tokens_per_sec: None,
+            usage: None,
+        },
+    );
+    let assistant_entry = SessionEntry::new(
+        Some(user_entry.id.clone()),
+        SessionEntryKind::Message {
+            role: ChatRole::Assistant,
+            text: reply_body,
+            images: Vec::new(),
+            model: Some(used_model),
+            tokens_per_sec: None,
+            usage: None,
+        },
+    );
+    history_branch.push(user_entry);
+    history_branch.push(assistant_entry);
+
+    let mut cache = cache_lock.lock();
+    if cache.len() >= 32
+        && !cache.contains_key(subagent_id)
+        && let Some(oldest_key) = cache.keys().next().cloned()
+    {
+        cache.remove(&oldest_key);
+    }
+    cache.insert(subagent_id.to_owned(), history_branch);
 }

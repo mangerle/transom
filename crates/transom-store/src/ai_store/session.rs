@@ -265,7 +265,10 @@ mod tests {
         store
             .rename_conversation(conv_id, "生产巡检记录")
             .expect("重命名失败");
-        assert_eq!(store.list_all_conversations().unwrap()[0].title, "生产巡检记录");
+        assert_eq!(
+            store.list_all_conversations().unwrap()[0].title,
+            "生产巡检记录"
+        );
 
         let tree = store.load_session_tree(conv_id).expect("加载会话树失败");
         assert_eq!(tree.all_entries().len(), 1);

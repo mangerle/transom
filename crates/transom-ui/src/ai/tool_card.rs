@@ -219,11 +219,8 @@ pub(super) fn render_tool_card(
                 output.clone()
             };
             if live_output.trim().is_empty() {
-                live_box = live_box.child(
-                    div()
-                        .text_color(p.text.muted)
-                        .child("正在执行，等待输出…"),
-                );
+                live_box =
+                    live_box.child(div().text_color(p.text.muted).child("正在执行，等待输出…"));
             } else {
                 live_box = live_box.child(div().text_color(p.foreground).child(live_output));
             }
@@ -490,11 +487,9 @@ pub(super) fn render_tool_card(
                         .on_click(move |_, w, cx| {
                             on_jump(jump_host.clone(), w, cx);
                         })
-                        .child(
-                            div()
-                                .text_color(p.text.muted)
-                                .child(AppIconElement::new(AppIcon::Domain(DomainIcon::TERMINAL)).small()),
-                        )
+                        .child(div().text_color(p.text.muted).child(
+                            AppIconElement::new(AppIcon::Domain(DomainIcon::TERMINAL)).small(),
+                        ))
                         .child(
                             div()
                                 .text_size(rems(typography::CAPTION))

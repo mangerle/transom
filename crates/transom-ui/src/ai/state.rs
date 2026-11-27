@@ -424,7 +424,8 @@ impl AiPanelState {
             AiAppEvent::ConversationRolledBack { summary, .. } => {
                 self.active_focus = Some(summary);
             }
-            AiAppEvent::InlineCommandResult { .. } => {}
+            AiAppEvent::InlineCommandResult { .. }
+            | AiAppEvent::SubagentCompleted { .. } => {}
         }
     }
 
@@ -483,9 +484,9 @@ impl AiPanelState {
                 revert_target_path,
                 revert_backup_path,
                 ..
-            }) = self.items.iter_mut().rev().find(|it| {
-                matches!(it, UiChatItem::ToolCard { call_id, .. } if call_id == &dto.call_id)
-            })
+            }) = self.items.iter_mut().rev().find(
+                |it| matches!(it, UiChatItem::ToolCard { call_id, .. } if call_id == &dto.call_id),
+            )
         {
             *running = dto.running;
             *tool_name = dto.tool_name;

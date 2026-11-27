@@ -264,20 +264,16 @@ impl AiAssistantView {
                     .w_full()
                     .gap(rems(space::SM))
                     .items_start()
-                    .child(
-                        div().flex_1().min_w_0().child(field_group(
-                            "技能 ID（斜杠命令）".to_owned(),
-                            Input::new(&self.skills_drawer.id_input).small(),
-                            p,
-                        )),
-                    )
-                    .child(
-                        div().flex_1().min_w_0().child(field_group(
-                            "技能名称".to_owned(),
-                            Input::new(&self.skills_drawer.title_input).small(),
-                            p,
-                        )),
-                    ),
+                    .child(div().flex_1().min_w_0().child(field_group(
+                        "技能 ID（斜杠命令）".to_owned(),
+                        Input::new(&self.skills_drawer.id_input).small(),
+                        p,
+                    )))
+                    .child(div().flex_1().min_w_0().child(field_group(
+                        "技能名称".to_owned(),
+                        Input::new(&self.skills_drawer.title_input).small(),
+                        p,
+                    ))),
             )
             .child(field_group(
                 "简短描述".to_owned(),

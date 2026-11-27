@@ -221,7 +221,9 @@ impl AiAssistantView {
         let inline = InlineToken::new(format!("mention:{label}"), label);
         let range = at_pos..current.len();
         self.composer_input.update(cx, |i, cx| {
-            if i.replace_range_with_token(range, inline, window, cx).is_ok() {
+            if i.replace_range_with_token(range, inline, window, cx)
+                .is_ok()
+            {
                 i.insert(" ", window, cx);
             }
         });

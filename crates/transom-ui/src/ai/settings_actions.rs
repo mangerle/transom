@@ -1,9 +1,7 @@
 //! AI 助手面板配置、供应商、ACP、记忆与模型发现动作。
 
 use gpui_kit::*;
-use transom_ai::{
-    ExecutionMode, ModelConfig, ProviderConfig, ThinkingEffort, default_acp_presets,
-};
+use transom_ai::{ExecutionMode, ModelConfig, ProviderConfig, ThinkingEffort, default_acp_presets};
 use transom_core::{AiCommand, AppCommand};
 
 use super::state::{AiActivePopup, AiDrawerTab};
@@ -26,7 +24,12 @@ impl AiAssistantView {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let name_val = self.config_form.provider_name_input.read(cx).value().to_string();
+        let name_val = self
+            .config_form
+            .provider_name_input
+            .read(cx)
+            .value()
+            .to_string();
         let base_url = self.config_form.base_url_input.read(cx).value().to_string();
         let api_key = self.config_form.api_key_input.read(cx).value().to_string();
 
@@ -141,7 +144,12 @@ impl AiAssistantView {
     }
 
     pub(super) fn save_memory_from_drawer(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        let global_md = self.memory_form.global_mem_input.read(cx).value().to_string();
+        let global_md = self
+            .memory_form
+            .global_mem_input
+            .read(cx)
+            .value()
+            .to_string();
         self.state.memory.global_markdown = global_md.clone();
         let (host_id, host_markdown) = if let Some(session) = &self.state.active_session {
             let host_md = self.memory_form.host_mem_input.read(cx).value().to_string();
@@ -236,18 +244,38 @@ impl AiAssistantView {
 
     /// 优先使用输入框当前填写的 API Key；为空时从系统密钥库回读匹配供应商的已保存密钥。
     fn resolve_drawer_api_key(&self, cx: &App) -> String {
-        let typed = self.config_form.api_key_input.read(cx).value().trim().to_owned();
+        let typed = self
+            .config_form
+            .api_key_input
+            .read(cx)
+            .value()
+            .trim()
+            .to_owned();
         if !typed.is_empty() {
             return typed;
         }
-        let name = self.config_form.provider_name_input.read(cx).value().trim().to_owned();
-        let url = self.config_form.base_url_input.read(cx).value().trim().to_owned();
+        let name = self
+            .config_form
+            .provider_name_input
+            .read(cx)
+            .value()
+            .trim()
+            .to_owned();
+        let url = self
+            .config_form
+            .base_url_input
+            .read(cx)
+            .value()
+            .trim()
+            .to_owned();
         let matched = self
             .state
             .settings
             .providers
             .iter()
-            .find(|p| (!name.is_empty() && p.name == name) || (!url.is_empty() && p.base_url == url))
+            .find(|p| {
+                (!name.is_empty() && p.name == name) || (!url.is_empty() && p.base_url == url)
+            })
             .or_else(|| self.state.settings.providers.first());
         if let Some(prov) = matched
             && let Ok(Some(saved)) = self
@@ -305,7 +333,8 @@ impl AiAssistantView {
         } else {
             format!("{} {}", agent.command, agent.args.join(" "))
         };
-        self.config_form.acp_cmd_input
+        self.config_form
+            .acp_cmd_input
             .update(cx, |i, cx| i.set_value(line, window, cx));
         cx.notify();
     }

@@ -12,7 +12,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use tokio::io::{AsyncBufRead, AsyncBufReadExt, AsyncWrite, AsyncWriteExt, BufReader};
+use tokio::io::{AsyncBufRead, AsyncBufReadExt, AsyncWrite, AsyncWriteExt};
 use tokio_util::sync::CancellationToken;
 
 use crate::error::AiError;
@@ -200,6 +200,7 @@ pub async fn serve_local_socket(
     cancel: CancellationToken,
 ) -> Result<(), AiError> {
     use std::os::unix::fs::PermissionsExt as _;
+    use tokio::io::BufReader;
 
     if let Some(parent) = socket_path.parent() {
         std::fs::create_dir_all(parent).map_err(|err| AiError::McpFailed {

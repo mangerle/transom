@@ -243,6 +243,26 @@ impl AiAssistantView {
             } => Some(conversation_id.clone()),
             _ => None,
         };
+        let subagent_wake = match &event {
+            AiAppEvent::SubagentCompleted {
+                conversation_id,
+                subagent_id,
+                title,
+                ok,
+                summary,
+            } if self.state.active_conversation_id.as_deref() == Some(conversation_id.as_str()) => {
+                let status = if *ok { "完成" } else { "失败" };
+                let id_note = if subagent_id.is_empty() {
+                    String::new()
+                } else {
+                    format!(" (subagent_id: {subagent_id})")
+                };
+                Some(format!(
+                    "[后台子代理完成通知]\n子任务「{title}」{id_note} 已{status}，结果如下：\n\n{summary}"
+                ))
+            }
+            _ => None,
+        };
         let models_discovered = matches!(event, AiAppEvent::ModelsDiscovered { .. });
         let should_scroll_bottom = matches!(
             event,
@@ -282,6 +302,19 @@ impl AiAssistantView {
         }
         if let Some(cancelled) = finished_cancelled {
             self.maybe_drain_queue_after_finish(cancelled, cx);
+        }
+        if let Some(wake_prompt) = subagent_wake {
+            if self.state.running_run_id.is_none() {
+                self.send_prompt_text(wake_prompt, cx);
+            } else {
+                self.state
+                    .queued_messages
+                    .push(super::queue_card::QueuedPrompt {
+                        id: uuid::Uuid::new_v4().to_string(),
+                        prompt: wake_prompt,
+                        attachments: Vec::new(),
+                    });
+            }
         }
         cx.notify();
     }

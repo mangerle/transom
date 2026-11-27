@@ -12,12 +12,12 @@ use transom_ai::ExecutionMode;
 use transom_core::TabId;
 use transom_ui_icons::{AppIcon, AppIconElement, CustomIcon, UiIcon};
 
+use super::acp_banner::{AcpBannerParams, render_acp_warning_banner};
 use super::attachments::{ComposerAttachment, render_attachment_chips};
 use super::composer_triggers::{
     mode_icon, render_icon_popup_trigger, render_metric_chip, render_popup_trigger,
 };
 use super::metrics::{AiSessionMetrics, anchor_toolbar_popover, format_compact_tokens};
-use super::acp_banner::{AcpBannerParams, render_acp_warning_banner};
 use super::state::AiActivePopup;
 use crate::palette::Palette;
 use crate::theme::tokens::{space, typography};
@@ -359,22 +359,20 @@ pub(super) fn render_composer(params: ComposerParams<'_>, actions: ComposerActio
                 .on_paste(move |item, w, cx| on_paste_item(item, w, cx)),
         );
 
-    card = card
-        .child(input_box)
-        .child(
-            h_flex()
-                .w_full()
-                .px(rems(space::XS))
-                .py(rems(space::XS))
-                .gap(rems(space::XXS))
-                .justify_between()
-                .items_center()
-                .border_t_1()
-                .border_color(p.divider(p.border))
-                .bg(p.secondary)
-                .child(left_controls)
-                .child(div().flex_shrink_0().child(action_btn)),
-        );
+    card = card.child(input_box).child(
+        h_flex()
+            .w_full()
+            .px(rems(space::XS))
+            .py(rems(space::XS))
+            .gap(rems(space::XXS))
+            .justify_between()
+            .items_center()
+            .border_t_1()
+            .border_color(p.divider(p.border))
+            .bg(p.secondary)
+            .child(left_controls)
+            .child(div().flex_shrink_0().child(action_btn)),
+    );
 
     let mut wrapper = div()
         .relative()

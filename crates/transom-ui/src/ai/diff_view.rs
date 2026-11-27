@@ -215,9 +215,19 @@ pub(super) fn render_diff_block(raw: &str, p: &Palette) -> AnyElement {
             DiffLineKind::FileHeader => (None, p.text.muted),
             DiffLineKind::Context => (None, p.foreground),
         };
-        let old_str = line.old_no.map(|n| format!("{n:>4}")).unwrap_or_else(|| "    ".to_owned());
-        let new_str = line.new_no.map(|n| format!("{n:>4}")).unwrap_or_else(|| "    ".to_owned());
-        let mut row = h_flex().w_full().px(rems(space::XS)).py(px(1.0)).gap(px(6.0));
+        let old_str = line
+            .old_no
+            .map(|n| format!("{n:>4}"))
+            .unwrap_or_else(|| "    ".to_owned());
+        let new_str = line
+            .new_no
+            .map(|n| format!("{n:>4}"))
+            .unwrap_or_else(|| "    ".to_owned());
+        let mut row = h_flex()
+            .w_full()
+            .px(rems(space::XS))
+            .py(px(1.0))
+            .gap(px(6.0));
         if let Some(bg_col) = bg {
             row = row.bg(bg_col);
         }
@@ -228,13 +238,7 @@ pub(super) fn render_diff_block(raw: &str, p: &Palette) -> AnyElement {
                     .text_color(p.text.muted.opacity(0.7))
                     .child(format!("{old_str} {new_str}")),
             )
-            .child(
-                div()
-                    .flex_1()
-                    .min_w_0()
-                    .text_color(fg)
-                    .child(line.text),
-            );
+            .child(div().flex_1().min_w_0().text_color(fg).child(line.text));
         rows = rows.child(row);
     }
 
@@ -347,9 +351,6 @@ mod tests {
             classify_log_line("[stderr] WARNING: low disk space"),
             LogLineLevel::Warning
         );
-        assert_eq!(
-            classify_log_line("nginx is running"),
-            LogLineLevel::Normal
-        );
+        assert_eq!(classify_log_line("nginx is running"), LogLineLevel::Normal);
     }
 }

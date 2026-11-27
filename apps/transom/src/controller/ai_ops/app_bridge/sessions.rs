@@ -346,15 +346,12 @@ async fn delete_folder(
             reason: "delete_folder 必须提供有效的 folder_id".to_owned(),
         })?;
     mutate_catalog_and_reload(bridge, move |catalog| {
-        catalog
-            .delete_folder(fid)
-            .map(|_| ())
-            .map_err(|e| {
-                transom_core::AppError::with_detail(
-                    transom_core::ErrorCode::Configuration,
-                    e.to_string(),
-                )
-            })
+        catalog.delete_folder(fid).map(|_| ()).map_err(|e| {
+            transom_core::AppError::with_detail(
+                transom_core::ErrorCode::Configuration,
+                e.to_string(),
+            )
+        })
     })
     .await?;
     Ok(format!("已删除分组目录: {fid}"))
