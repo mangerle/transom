@@ -13,6 +13,7 @@ mod bulk_matrix;
 mod cards;
 mod choice_card;
 mod chrome;
+mod chrome_header;
 mod composer;
 mod composer_triggers;
 mod config_drawer;

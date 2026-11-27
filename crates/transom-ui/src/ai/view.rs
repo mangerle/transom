@@ -1,6 +1,5 @@
 //! AI 助手主视图实体：装配顶栏、消息流、悬浮审批卡片、弹层菜单与输入卡片。
 
-use std::collections::HashSet;
 use std::sync::Arc;
 
 use gpui_kit::base::v_flex;
