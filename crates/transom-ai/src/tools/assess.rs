@@ -17,7 +17,7 @@ pub(crate) fn resolve_target_label(parsed: &serde_json::Value, ctx: &ToolRuntime
     }
 }
 
-/// 根据工具名与参数 JSON 动态判定本次调用的风险级别与审批卡片摘要。
+/// 根据工具名与参数 JSON 字符串动态判定本次调用的风险级别与审批卡片摘要。
 pub fn assess_tool_call(
     tool_name: &str,
     args_json: &str,
@@ -25,7 +25,17 @@ pub fn assess_tool_call(
 ) -> ToolRiskAssessment {
     let parsed: serde_json::Value =
         serde_json::from_str(args_json).unwrap_or(serde_json::Value::Null);
-    let host_label = resolve_target_label(&parsed, ctx);
+    assess_tool_call_value(tool_name, &parsed, args_json, ctx)
+}
+
+/// 基于已解析的参数 `Value` 动态判定工具风险与审批摘要（避免调用方重复解析 JSON）。
+pub fn assess_tool_call_value(
+    tool_name: &str,
+    parsed: &serde_json::Value,
+    args_json: &str,
+    ctx: &ToolRuntimeContext,
+) -> ToolRiskAssessment {
+    let host_label = resolve_target_label(parsed, ctx);
     let protection = ctx.protection();
 
     match tool_name {
@@ -59,7 +69,7 @@ pub fn assess_tool_call(
                 },
             }
         }
-        "remote_exec_bulk" => assess_bulk_exec(&parsed, args_json, ctx),
+        "remote_exec_bulk" => assess_bulk_exec(parsed, args_json, ctx),
         "delegate_task" => {
             let mode = parsed["mode"].as_str().unwrap_or("readonly");
             let risk = if mode == "deploy" {
@@ -250,7 +260,7 @@ pub fn assess_tool_call(
             }
         }
         other => {
-            if let Some(assessed) = assess_app_tool(other, &parsed, args_json, ctx) {
+            if let Some(assessed) = assess_app_tool(other, parsed, args_json, ctx) {
                 return assessed;
             }
             ToolRiskAssessment {

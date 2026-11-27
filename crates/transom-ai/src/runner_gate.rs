@@ -25,7 +25,7 @@ use crate::policy::{
     evaluate_bulk_policy, evaluate_policy, format_blocking_command_hint,
 };
 use crate::runner::{AgentEvent, ApprovalRequest, HandoffRequest, TurnOutput};
-use crate::tools::{ToolRuntimeContext, assess_tool_call};
+use crate::tools::{ToolRiskAssessment, ToolRuntimeContext, assess_tool_call_value};
 
 /// 运行期生命周期钩子：熔断、Plan 护栏、策略引擎、Hooks 与流式增量转发。
 pub(crate) struct Gate {
@@ -42,6 +42,7 @@ pub(crate) struct Gate {
     pub(crate) steer_queue: Arc<Mutex<VecDeque<String>>>,
     pub(crate) call_started: Mutex<Option<Instant>>,
     pub(crate) first_delta: Mutex<Option<Instant>>,
+    pub(crate) last_summary: Arc<Mutex<String>>,
 }
 
 impl Gate {
@@ -160,15 +161,8 @@ impl AgentHook for Gate {
             }))
             .await;
 
-        if let Some(exec) = &self.hook_executor {
-            let ctx = HookContext {
-                tool_name: None,
-                args_json: None,
-                target_label: self.tool_ctx.host_label(),
-                tool_ok: Some(true),
-                summary: text_parts.join("\n").chars().take(240).collect(),
-            };
-            let _ = exec.execute(HookEvent::Stop, &ctx).await;
+        if !text_parts.is_empty() {
+            *self.last_summary.lock() = text_parts.join("\n").chars().take(240).collect();
         }
         if let Some(steer) = self.drain_steer_notes() {
             return ModelTurnAction::retry_with_feedback(format!(
@@ -210,7 +204,7 @@ impl AgentHook for Gate {
             return DispatchAction::skip(format_blocking_command_hint(&hit));
         }
 
-        let assessment = assess_tool_call(tool_name, args_json, &self.tool_ctx);
+        let assessment = assess_tool_call_value(tool_name, &parsed, args_json, &self.tool_ctx);
         if tool_name != "update_plan" {
             let _ = self.events.try_send(AgentEvent::FocusUpdated(format!(
                 "正在执行 {}…",
@@ -218,14 +212,41 @@ impl AgentHook for Gate {
             )));
         }
 
-        // Plan 模式硬拦截：禁止任何写或高危变更工具
-        if self.plan_mode && matches!(assessment.risk, ToolRisk::Write | ToolRisk::Destructive) {
-            return DispatchAction::skip(
-                "当前处于只读规划（Plan）模式，已拦截变更操作。请仅执行只读探测，并通过 `update_plan` 输出完整方案等待用户确认后再执行。",
-            );
+        if let Some(blocked) = self
+            .check_preconditions(tool_name, args_json, &assessment)
+            .await
+        {
+            return blocked;
         }
 
-        // PreToolUse 生命周期钩子
+        let decision = match self.decide_policy(tool_name, &parsed, cmd_str, &assessment) {
+            Ok(d) => d,
+            Err(skip_action) => return skip_action,
+        };
+
+        match decision {
+            PolicyDecision::Allow => DispatchAction::proceed(),
+            PolicyDecision::Deny { reason } => DispatchAction::skip(reason),
+            PolicyDecision::RequireApproval => {
+                self.await_approval_or_handoff(assessment, cmd_str).await
+            }
+        }
+    }
+}
+
+impl Gate {
+    /// 检查 Plan 只读模式硬拦截与 `PreToolUse` 生命周期钩子。
+    async fn check_preconditions(
+        &self,
+        tool_name: &str,
+        args_json: &str,
+        assessment: &ToolRiskAssessment,
+    ) -> Option<DispatchAction> {
+        if self.plan_mode && matches!(assessment.risk, ToolRisk::Write | ToolRisk::Destructive) {
+            return Some(DispatchAction::skip(
+                "当前处于只读规划（Plan）模式，已拦截变更操作。请仅执行只读探测，并通过 `update_plan` 输出完整方案等待用户确认后再执行。",
+            ));
+        }
         if let Some(exec) = &self.hook_executor {
             let hook_ctx = HookContext {
                 tool_name: Some(tool_name.to_owned()),
@@ -236,10 +257,22 @@ impl AgentHook for Gate {
             };
             let outcome = exec.execute(HookEvent::PreToolUse, &hook_ctx).await;
             if let Some(reason) = outcome.blocked_reason {
-                return DispatchAction::skip(format!("PreToolUse 钩子拦截：{reason}"));
+                return Some(DispatchAction::skip(format!(
+                    "PreToolUse 钩子拦截：{reason}"
+                )));
             }
         }
+        None
+    }
 
+    /// 结合命令链策略、批量主机策略与基础保护级别计算最终裁决。
+    fn decide_policy(
+        &self,
+        tool_name: &str,
+        parsed: &serde_json::Value,
+        cmd_str: Option<&str>,
+        assessment: &ToolRiskAssessment,
+    ) -> Result<PolicyDecision, DispatchAction> {
         let mode = *self.execution_mode.read();
         let mut effective_risk = assessment.risk;
         let mut chain_allowlisted = false;
@@ -253,7 +286,7 @@ impl AgentHook for Gate {
                 evaluate_command_chain(cmd, &self.exec_policy_rules, &prefixes)
             };
             if let Some(denied) = chain.denied_reason {
-                return DispatchAction::skip(denied);
+                return Err(DispatchAction::skip(denied));
             }
             if chain.worst_risk > effective_risk {
                 effective_risk = chain.worst_risk;
@@ -262,7 +295,7 @@ impl AgentHook for Gate {
             force_ask = force_ask || chain.force_ask;
         }
 
-        let decision = if tool_name == "remote_exec_bulk" {
+        if tool_name == "remote_exec_bulk" {
             let requested: Option<Vec<&str>> = parsed["host_names"]
                 .as_array()
                 .map(|arr| arr.iter().filter_map(|v| v.as_str()).collect());
@@ -276,100 +309,109 @@ impl AgentHook for Gate {
                 })
                 .map(|h| h.protection)
                 .collect();
-            evaluate_bulk_policy(&targets, mode, effective_risk).0
+            return Ok(evaluate_bulk_policy(&targets, mode, effective_risk).0);
+        }
+
+        let base = evaluate_policy(self.tool_ctx.protection(), mode, effective_risk, force_ask);
+        if base == PolicyDecision::RequireApproval
+            && chain_allowlisted
+            && self.tool_ctx.protection() != HostProtection::ReadOnly
+            && effective_risk != ToolRisk::Destructive
+        {
+            Ok(PolicyDecision::Allow)
         } else {
-            let base = evaluate_policy(self.tool_ctx.protection(), mode, effective_risk, force_ask);
-            if base == PolicyDecision::RequireApproval
-                && chain_allowlisted
-                && self.tool_ctx.protection() != HostProtection::ReadOnly
-                && effective_risk != ToolRisk::Destructive
-            {
-                PolicyDecision::Allow
-            } else {
-                base
+            Ok(base)
+        }
+    }
+
+    /// 挂起等待用户审批决策；若用户选择移交终端，则进一步等待终端接管结果。
+    async fn await_approval_or_handoff(
+        &self,
+        assessment: ToolRiskAssessment,
+        cmd_str: Option<&str>,
+    ) -> DispatchAction {
+        let suggested_prefix = cmd_str.and_then(extract_command_prefix);
+        let impact_note = cmd_str.and_then(explain_command_impact);
+        let command_preview = cmd_str
+            .map(str::to_owned)
+            .unwrap_or_else(|| assessment.summary.detail.clone());
+        let host_label = assessment.summary.host_label.clone();
+
+        let (tx, rx) = oneshot::channel();
+        if self
+            .events
+            .send(AgentEvent::Approval(ApprovalRequest {
+                summary: assessment.summary,
+                suggested_prefix,
+                impact_note,
+                respond: tx,
+            }))
+            .await
+            .is_err()
+        {
+            return DispatchAction::stop("事件通道已关闭");
+        }
+        let reply = tokio::select! {
+            _ = self.cancel.cancelled() => return DispatchAction::stop("用户已取消"),
+            res = rx => match res {
+                Ok(val) => val,
+                Err(_) => return DispatchAction::stop("审批通道已断开"),
             }
         };
-
-        match decision {
-            PolicyDecision::Allow => DispatchAction::proceed(),
-            PolicyDecision::Deny { reason } => DispatchAction::skip(reason),
-            PolicyDecision::RequireApproval => {
-                let suggested_prefix = cmd_str.and_then(extract_command_prefix);
-                let impact_note = cmd_str.and_then(explain_command_impact);
-                let command_preview = cmd_str
-                    .map(str::to_owned)
-                    .unwrap_or_else(|| assessment.summary.detail.clone());
-                let host_label = assessment.summary.host_label.clone();
-
-                let (tx, rx) = oneshot::channel();
-                if self
-                    .events
-                    .send(AgentEvent::Approval(ApprovalRequest {
-                        summary: assessment.summary,
-                        suggested_prefix,
-                        impact_note,
-                        respond: tx,
-                    }))
-                    .await
-                    .is_err()
-                {
-                    return DispatchAction::stop("事件通道已关闭");
+        match reply {
+            AiApprovalDecision::AllowOnce => DispatchAction::proceed(),
+            AiApprovalDecision::AllowPrefix { prefix } => {
+                if !prefix.trim().is_empty() {
+                    self.session_allow_prefixes.write().insert(prefix);
                 }
-                let reply = tokio::select! {
-                    _ = self.cancel.cancelled() => return DispatchAction::stop("用户已取消"),
-                    res = rx => match res {
-                        Ok(val) => val,
-                        Err(_) => return DispatchAction::stop("审批通道已断开"),
-                    }
-                };
-                match reply {
-                    AiApprovalDecision::AllowOnce => DispatchAction::proceed(),
-                    AiApprovalDecision::AllowPrefix { prefix } => {
-                        if !prefix.trim().is_empty() {
-                            self.session_allow_prefixes.write().insert(prefix);
-                        }
-                        DispatchAction::proceed()
-                    }
-                    AiApprovalDecision::RejectWithFeedback { reason } => {
-                        let note = if reason.trim().is_empty() {
-                            "用户拒绝执行该操作，请调整方案或向用户确认后再试。".to_owned()
-                        } else {
-                            format!("用户拒绝了该操作，并附带修改意见：{reason}。请据此调整方案。")
-                        };
-                        DispatchAction::skip(note)
-                    }
-                    AiApprovalDecision::HandoffToTerminal => {
-                        let (htx, hrx) = oneshot::channel();
-                        if self
-                            .events
-                            .send(AgentEvent::TerminalHandoff(HandoffRequest {
-                                host_label,
-                                command: command_preview,
-                                respond: htx,
-                            }))
-                            .await
-                            .is_err()
-                        {
-                            return DispatchAction::stop("终端接管通道已关闭");
-                        }
-                        let handoff_res = tokio::select! {
-                            _ = self.cancel.cancelled() => return DispatchAction::stop("用户已取消"),
-                            res = hrx => res.ok(),
-                        };
-                        match handoff_res {
-                            Some(Ok(Some(out))) if !out.trim().is_empty() => {
-                                DispatchAction::skip(format!(
-                                    "该步骤已由用户在交互式终端手动完成，终端输出摘要如下：\n{out}\n请基于此结果继续后续步骤，勿重复执行该命令。"
-                                ))
-                            }
-                            Some(Ok(_)) => DispatchAction::skip(
-                                "该步骤已由用户在交互式终端手动完成，请直接继续后续步骤，勿重复执行该命令。",
-                            ),
-                            _ => DispatchAction::skip("用户取消了终端手动接管，请调整方案。"),
-                        }
-                    }
-                }
+                DispatchAction::proceed()
             }
+            AiApprovalDecision::RejectWithFeedback { reason } => {
+                let note = if reason.trim().is_empty() {
+                    "用户拒绝执行该操作，请调整方案或向用户确认后再试。".to_owned()
+                } else {
+                    format!("用户拒绝了该操作，并附带修改意见：{reason}。请据此调整方案。")
+                };
+                DispatchAction::skip(note)
+            }
+            AiApprovalDecision::HandoffToTerminal => {
+                self.await_terminal_handoff(host_label, command_preview)
+                    .await
+            }
+        }
+    }
+
+    /// 挂起等待用户在交互式终端中手动完成操作并回传结果。
+    async fn await_terminal_handoff(
+        &self,
+        host_label: String,
+        command_preview: String,
+    ) -> DispatchAction {
+        let (htx, hrx) = oneshot::channel();
+        if self
+            .events
+            .send(AgentEvent::TerminalHandoff(HandoffRequest {
+                host_label,
+                command: command_preview,
+                respond: htx,
+            }))
+            .await
+            .is_err()
+        {
+            return DispatchAction::stop("终端接管通道已关闭");
+        }
+        let handoff_res = tokio::select! {
+            _ = self.cancel.cancelled() => return DispatchAction::stop("用户已取消"),
+            res = hrx => res.ok(),
+        };
+        match handoff_res {
+            Some(Ok(Some(out))) if !out.trim().is_empty() => DispatchAction::skip(format!(
+                "该步骤已由用户在交互式终端手动完成，终端输出摘要如下：\n{out}\n请基于此结果继续后续步骤，勿重复执行该命令。"
+            )),
+            Some(Ok(_)) => DispatchAction::skip(
+                "该步骤已由用户在交互式终端手动完成，请直接继续后续步骤，勿重复执行该命令。",
+            ),
+            _ => DispatchAction::skip("用户取消了终端手动接管，请调整方案。"),
         }
     }
 }

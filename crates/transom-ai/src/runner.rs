@@ -31,7 +31,7 @@ use crate::compaction::{
 use crate::config::{ModelTarget, ProviderProtocol};
 use crate::error::AiError;
 use crate::exec_policy::ExecPolicyRule;
-use crate::hooks::HookExecutor;
+use crate::hooks::{HookContext, HookEvent, HookExecutor};
 use crate::memory::MemorySnapshot;
 use crate::policy::ExecutionMode;
 use crate::runner_gate::Gate;
@@ -235,6 +235,7 @@ async fn run_attempt(
         builder = builder.additional_params(params);
     }
 
+    let last_summary = Arc::new(Mutex::new(String::new()));
     let gate = Gate {
         events: input.events.clone(),
         tool_ctx: input.tool_ctx.clone(),
@@ -249,6 +250,7 @@ async fn run_attempt(
         steer_queue: input.steer_queue.clone(),
         call_started: Mutex::new(None),
         first_delta: Mutex::new(None),
+        last_summary: last_summary.clone(),
     };
 
     let agent = builder.add_hook(gate).build();
@@ -256,26 +258,45 @@ async fn run_attempt(
     let user_msg = build_user_message(&input.prompt, &input.images_base64, input.target.vision);
 
     let mut stream = agent.prompt(user_msg).history(history).stream();
+    let mut run_result = Ok(());
     while let Some(item) = stream.next().await {
         if input.cancel.is_cancelled() {
-            return Err(AiError::Cancelled);
+            run_result = Err(AiError::Cancelled);
+            break;
         }
         match item {
-            Ok(MultiTurnStreamItem::FinalResponse(_)) => return Ok(()),
+            Ok(MultiTurnStreamItem::FinalResponse(_)) => break,
             Ok(_) => {}
             Err(err) => {
                 if input.cancel.is_cancelled() {
-                    return Err(AiError::Cancelled);
+                    run_result = Err(AiError::Cancelled);
+                } else {
+                    run_result = Err(AiError::ModelCallFailed {
+                        protocol: input.target.protocol.as_str().to_owned(),
+                        model: input.target.model.clone(),
+                        reason: err.to_string(),
+                    });
                 }
-                return Err(AiError::ModelCallFailed {
-                    protocol: input.target.protocol.as_str().to_owned(),
-                    model: input.target.model.clone(),
-                    reason: err.to_string(),
-                });
+                break;
             }
         }
     }
-    Ok(())
+
+    if let Some(exec) = &input.hook_executor
+        && !input.cancel.is_cancelled()
+    {
+        let summary = last_summary.lock().clone();
+        let hook_ctx = HookContext {
+            tool_name: None,
+            args_json: None,
+            target_label: input.tool_ctx.host_label(),
+            tool_ok: Some(run_result.is_ok()),
+            summary,
+        };
+        let _ = exec.execute(HookEvent::Stop, &hook_ctx).await;
+    }
+
+    run_result
 }
 
 /// 生产环境标准入口：根据 [`ModelTarget`] 构造真实客户端并执行（支持 413 自动降级重试）。
