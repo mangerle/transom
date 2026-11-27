@@ -307,6 +307,9 @@ impl AiPanelState {
                 self.running_run_id = None;
                 self.pending_approvals.clear();
                 self.active_focus = None;
+                if let Some(plan) = &mut self.active_plan {
+                    plan.focus = None;
+                }
                 self.run_started_at = None;
                 self.status_panel_expanded = false;
                 for item in &mut self.items {

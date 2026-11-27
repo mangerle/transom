@@ -12,38 +12,20 @@ use crate::theme::tokens::{space, typography};
 /// 实时任务清单卡片渲染参数。
 pub(super) struct PlanCardParams<'a> {
     pub(super) plan: Option<&'a AiPlanDto>,
-    pub(super) focus: Option<&'a str>,
-    pub(super) elapsed_secs: Option<u64>,
     pub(super) expanded: bool,
     pub(super) p: &'a Palette,
 }
 
-/// 渲染实时原地更新的任务清单卡片（支持运行中/完成后随时折叠或展开）与当前活动状态行。
+/// 渲染实时原地更新的任务清单卡片（仅包含阶段进度与步骤清单；运行中焦点行已独立渲染）。
 pub(super) fn render_plan_card(
     params: PlanCardParams<'_>,
     on_toggle_expand: impl Fn(&mut Window, &mut App) + 'static,
 ) -> AnyElement {
-    let PlanCardParams {
-        plan,
-        focus,
-        elapsed_secs,
-        expanded,
-        p,
-    } = params;
+    let PlanCardParams { plan, expanded, p } = params;
     if !expanded {
         return div().into_any_element();
     }
     let mut container = v_flex().w_full().gap(rems(space::XS));
-
-    let dur_label = match elapsed_secs {
-        Some(secs) if secs >= 60 => format!("{}m {}s", secs / 60, secs % 60),
-        Some(secs) if secs > 0 => format!("{secs}s"),
-        _ => String::new(),
-    };
-    let status_text = focus
-        .or_else(|| plan.and_then(|pl| pl.focus.as_deref()))
-        .map(str::trim)
-        .filter(|s| !s.is_empty());
 
     if let Some(plan) = plan
         && !plan.steps.is_empty()
@@ -156,40 +138,57 @@ pub(super) fn render_plan_card(
         container = container.child(card);
     }
 
-    if let Some(text) = status_text {
-        let mut row = h_flex()
-            .w_full()
-            .px(rems(space::XS))
-            .justify_between()
-            .items_center()
-            .child(
-                h_flex()
-                    .flex_1()
-                    .gap(px(6.0))
-                    .items_center()
-                    .overflow_hidden()
-                    .child(div().w(px(6.0)).h(px(6.0)).rounded_full().bg(p.primary))
-                    .child(
-                        div()
-                            .flex_1()
-                            .truncate()
-                            .text_size(rems(typography::CAPTION))
-                            .text_color(p.text.muted)
-                            .child(text.to_owned()),
-                    ),
-            );
-        if !dur_label.is_empty() {
-            row = row.child(
-                div()
-                    .text_size(rems(typography::CAPTION))
-                    .text_color(p.text.muted)
-                    .child(dur_label),
-            );
-        }
-        container = container.child(row);
-    }
-
     container.into_any_element()
+}
+
+/// 渲染运行中的常驻实时活动状态行（独立于任务清单展开态，仅在运行中显示）。
+pub(super) fn render_running_focus_bar(
+    focus: Option<&str>,
+    plan_focus: Option<&str>,
+    elapsed_secs: Option<u64>,
+    p: &Palette,
+) -> Option<AnyElement> {
+    let status_text = focus
+        .or(plan_focus)
+        .map(str::trim)
+        .filter(|s| !s.is_empty())?;
+    let dur_label = match elapsed_secs {
+        Some(secs) if secs >= 60 => format!("{}m {}s", secs / 60, secs % 60),
+        Some(secs) if secs > 0 => format!("{secs}s"),
+        _ => String::new(),
+    };
+    let mut row = h_flex()
+        .w_full()
+        .px(rems(space::SM))
+        .py(px(4.0))
+        .justify_between()
+        .items_center()
+        .child(
+            h_flex()
+                .flex_1()
+                .gap(px(6.0))
+                .items_center()
+                .overflow_hidden()
+                .child(div().w(px(6.0)).h(px(6.0)).rounded_full().bg(p.primary))
+                .child(
+                    div()
+                        .flex_1()
+                        .truncate()
+                        .text_size(rems(typography::CAPTION))
+                        .text_color(p.text.muted)
+                        .child(status_text.to_owned()),
+                ),
+        );
+    if !dur_label.is_empty() {
+        row = row.child(
+            div()
+                .flex_shrink_0()
+                .text_size(rems(typography::CAPTION))
+                .text_color(p.text.muted)
+                .child(dur_label),
+        );
+    }
+    Some(row.into_any_element())
 }
 
 /// 渲染消息流底部居中的“滚动到最底部”悬浮圆形按钮。

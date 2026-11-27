@@ -295,17 +295,17 @@ impl AiAssistantView {
             .overflow_hidden()
             .child(self.render_message_stream(p, cx));
 
-        let has_status_panel =
-            self.state.active_plan.is_some() || self.state.active_focus.is_some();
-        if has_status_panel && self.state.status_panel_expanded {
-            let elapsed = self.state.run_started_at.map(|t| t.elapsed().as_secs());
+        let has_plan_steps = self
+            .state
+            .active_plan
+            .as_ref()
+            .is_some_and(|pl| !pl.steps.is_empty());
+        if has_plan_steps && self.state.status_panel_expanded {
             let v_toggle = cx.entity();
             container = container.child(div().px(rems(space::SM)).pb(rems(space::XS)).child(
                 render_plan_card(
                     PlanCardParams {
                         plan: self.state.active_plan.as_ref(),
-                        focus: self.state.active_focus.as_deref(),
-                        elapsed_secs: elapsed,
                         expanded: true,
                         p,
                     },
@@ -373,6 +373,21 @@ impl AiAssistantView {
         if let Some(q_card) = super::queue_card::render_queued_messages_card(self, p, cx) {
             container = container.child(q_card);
         }
+
+        if self.state.running_run_id.is_some()
+            && let Some(focus_bar) = super::plan_card::render_running_focus_bar(
+                self.state.active_focus.as_deref(),
+                self.state
+                    .active_plan
+                    .as_ref()
+                    .and_then(|pl| pl.focus.as_deref()),
+                self.state.run_started_at.map(|t| t.elapsed().as_secs()),
+                p,
+            )
+        {
+            container = container.child(focus_bar);
+        }
+
         container = container.child(self.render_chat_composer(p, cx));
 
         container.into_any_element()
