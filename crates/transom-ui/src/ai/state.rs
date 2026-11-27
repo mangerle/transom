@@ -424,8 +424,7 @@ impl AiPanelState {
             AiAppEvent::ConversationRolledBack { summary, .. } => {
                 self.active_focus = Some(summary);
             }
-            AiAppEvent::InlineCommandResult { .. }
-            | AiAppEvent::SubagentCompleted { .. } => {}
+            AiAppEvent::InlineCommandResult { .. } | AiAppEvent::SubagentCompleted { .. } => {}
         }
     }
 

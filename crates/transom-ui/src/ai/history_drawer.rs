@@ -35,13 +35,15 @@ pub(super) struct HistoryDrawerParams<'a> {
 }
 
 type HistoryIdCb = Rc<dyn Fn(String, &mut Window, &mut App)>;
+type HistoryArchiveCb = Rc<dyn Fn(String, bool, &mut Window, &mut App)>;
+type HistoryBoolCb = Rc<dyn Fn(bool, &mut Window, &mut App)>;
 
 /// 历史会话抽屉交互回调。
 pub(super) struct HistoryDrawerActions {
     pub(super) on_select: HistoryIdCb,
-    pub(super) on_toggle_archive: Rc<dyn Fn(String, bool, &mut Window, &mut App)>,
+    pub(super) on_toggle_archive: HistoryArchiveCb,
     pub(super) on_delete: HistoryIdCb,
-    pub(super) on_switch_archived: Rc<dyn Fn(bool, &mut Window, &mut App)>,
+    pub(super) on_switch_archived: HistoryBoolCb,
 }
 
 /// 渲染历史会话列表抽屉（支持活跃/已归档切换与打开、归档、取消归档、删除）。

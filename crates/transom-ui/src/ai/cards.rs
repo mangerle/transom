@@ -64,12 +64,14 @@ pub(super) fn render_chat_item(
             streaming,
             cached_segments,
         } => render_assistant_message(
-            id,
-            text,
-            cached_segments.as_deref().map(Vec::as_slice),
-            model.as_deref(),
-            *tokens_per_sec,
-            *streaming,
+            AssistantMessageParams {
+                id,
+                text,
+                cached_segments: cached_segments.as_deref().map(Vec::as_slice),
+                model: model.as_deref(),
+                tokens_per_sec: *tokens_per_sec,
+                streaming: *streaming,
+            },
             &params,
             &callbacks,
         ),
@@ -308,16 +310,29 @@ fn render_reasoning_block(
     box_el.into_any_element()
 }
 
-fn render_assistant_message(
-    id: &str,
-    text: &str,
-    cached_segments: Option<&[super::markdown_blocks::MarkdownSegment]>,
-    model: Option<&str>,
+/// 助手文本消息渲染参数。
+struct AssistantMessageParams<'a> {
+    id: &'a str,
+    text: &'a str,
+    cached_segments: Option<&'a [super::markdown_blocks::MarkdownSegment]>,
+    model: Option<&'a str>,
     tokens_per_sec: Option<f32>,
     streaming: bool,
+}
+
+fn render_assistant_message(
+    msg: AssistantMessageParams<'_>,
     params: &ChatItemRenderParams<'_>,
     callbacks: &ChatItemCallbacks,
 ) -> AnyElement {
+    let AssistantMessageParams {
+        id,
+        text,
+        cached_segments,
+        model,
+        tokens_per_sec,
+        streaming,
+    } = msg;
     let p = params.p;
     let mut col = v_flex()
         .w_full()
