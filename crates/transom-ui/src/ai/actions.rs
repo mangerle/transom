@@ -54,6 +54,7 @@ impl AiAssistantView {
                             let branch: Vec<_> =
                                 tree.active_branch().into_iter().cloned().collect();
                             this.state.load_entries(branch);
+                            this.refresh_message_block_cache();
                             this.state.view.status_error = this
                                 .state
                                 .run
@@ -62,6 +63,7 @@ impl AiAssistantView {
                         }
                         Err(err) => {
                             this.state.conversation.items.clear();
+                            this.refresh_message_block_cache();
                             this.state
                                 .run
                                 .background_run_errors
@@ -375,6 +377,7 @@ impl AiAssistantView {
         self.state.conversation.active_conversation_id = None;
         self.state.conversation.active_conversation_title = None;
         self.state.conversation.items.clear();
+        self.refresh_message_block_cache();
         self.state.conversation.metrics.reset_session();
         self.state.run.active_plan = None;
         self.state.run.active_focus = None;

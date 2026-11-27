@@ -11,6 +11,8 @@ impl AiPanelState {
     /// 把从 JSONL 加载的树状会话主分支还原为 UI 消息列表，并恢复该会话的推理指标。
     pub(crate) fn load_entries(&mut self, entries: Vec<SessionEntry>) {
         self.conversation.items.clear();
+        self.conversation.group_revision = self.conversation.group_revision.wrapping_add(1);
+        self.conversation.render_window_blocks = 160;
         self.conversation.metrics.restore_from_entries(&entries);
         for entry in entries {
             match entry.kind {

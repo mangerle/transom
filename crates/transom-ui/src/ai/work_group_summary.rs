@@ -4,7 +4,7 @@ use transom_ui_icons::{AppIcon, DomainIcon, UiIcon};
 
 use super::state::UiChatItem;
 
-pub(super) fn summarize_work_group_compact(items: &[&UiChatItem]) -> String {
+pub(super) fn summarize_work_group_compact(items: &[UiChatItem]) -> String {
     let mut cmd_count = 0usize;
     let mut file_count = 0usize;
     let mut sub_count = 0usize;
@@ -60,7 +60,7 @@ pub(super) fn summarize_work_group_compact(items: &[&UiChatItem]) -> String {
     parts.join(" · ")
 }
 
-pub(super) fn summarize_tool_activity(items: &[&UiChatItem]) -> Option<(AppIcon, String)> {
+pub(super) fn summarize_tool_activity(items: &[UiChatItem]) -> Option<(AppIcon, String)> {
     let mut has_cmd = false;
     let mut has_file = false;
     for item in items {

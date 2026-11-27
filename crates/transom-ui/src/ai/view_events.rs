@@ -4,6 +4,7 @@ use gpui_kit::*;
 use transom_core::AiAppEvent;
 
 use super::view::AiAssistantView;
+use super::work_group::{MessageBlockCache, group_chat_items};
 use crate::app::spawn_blocking_local;
 
 impl AiAssistantView {
@@ -92,6 +93,7 @@ impl AiAssistantView {
             self.active_nav_dot = None;
         }
         let outcome = self.state.apply_app_event(event);
+        self.refresh_message_block_cache();
         if let Some(settings) = outcome.settings_snapshot {
             if let Err(err) = self.config_form.apply_settings(
                 &settings,
@@ -166,5 +168,27 @@ impl AiAssistantView {
             }
         }
         cx.notify();
+    }
+
+    /// 在消息结构或运行态变化后重建分组区间缓存。
+    pub(super) fn refresh_message_block_cache(&mut self) {
+        let is_running = self.state.active_run_is_current();
+        let item_count = self.state.conversation.items.len();
+        let group_revision = self.state.conversation.group_revision;
+        let cache_is_valid = self.message_block_cache.as_ref().is_some_and(|cache| {
+            cache.item_count == item_count
+                && cache.is_running == is_running
+                && cache.group_revision == group_revision
+        });
+        if cache_is_valid {
+            return;
+        }
+        let blocks = group_chat_items(&self.state.conversation.items, is_running);
+        self.message_block_cache = Some(MessageBlockCache {
+            item_count,
+            is_running,
+            group_revision,
+            blocks,
+        });
     }
 }

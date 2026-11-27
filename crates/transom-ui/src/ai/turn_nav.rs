@@ -29,10 +29,15 @@ fn compact_preview(raw: &str, max_chars: usize) -> String {
 }
 
 /// 从已分组的展示块中提取所有用户提问锚点。
-pub(super) fn collect_turn_nav_entries(blocks: &[DisplayBlock<'_>]) -> Vec<TurnNavEntry> {
+pub(super) fn collect_turn_nav_entries(
+    items: &[UiChatItem],
+    blocks: &[DisplayBlock],
+) -> Vec<TurnNavEntry> {
     let mut entries = Vec::new();
     for (block_idx, block) in blocks.iter().enumerate() {
-        if let DisplayBlock::Single(UiChatItem::UserText { text, .. }) = block {
+        if let DisplayBlock::Single(item_index) = block
+            && let Some(UiChatItem::UserText { text, .. }) = items.get(*item_index)
+        {
             let turn_no = entries.len() + 1;
             entries.push(TurnNavEntry {
                 block_idx,
@@ -142,12 +147,13 @@ mod tests {
             text: long_text,
             timestamp: None,
         };
+        let items = vec![u1, a1, u2];
         let blocks = vec![
-            DisplayBlock::Single(&u1),
-            DisplayBlock::Single(&a1),
-            DisplayBlock::Single(&u2),
+            DisplayBlock::Single(0),
+            DisplayBlock::Single(1),
+            DisplayBlock::Single(2),
         ];
-        let nav = collect_turn_nav_entries(&blocks);
+        let nav = collect_turn_nav_entries(&items, &blocks);
         assert_eq!(nav.len(), 2);
         assert_eq!(nav[0].block_idx, 0);
         assert_eq!(nav[0].turn_no, 1);

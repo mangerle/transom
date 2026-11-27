@@ -52,7 +52,6 @@ pub(crate) struct AiConfigUiState {
 }
 
 /// 会话选择、消息流与统计状态。
-#[derive(Default)]
 pub(crate) struct AiConversationUiState {
     pub(crate) active_session: Option<ActiveAiSessionInfo>,
     pub(crate) connected_sessions: Vec<ActiveAiSessionInfo>,
@@ -68,6 +67,31 @@ pub(crate) struct AiConversationUiState {
     pub(crate) load_seq: u64,
     /// 记忆刷新序号，用于丢弃活动主机切换前发起的旧读取。
     pub(crate) memory_load_seq: u64,
+    /// 分组结构版本，流式文本变化不失效，终态或历史重载才更新。
+    pub(crate) group_revision: u64,
+    /// 消息流当前保留的末尾展示块数量。
+    pub(crate) render_window_blocks: usize,
+}
+
+impl Default for AiConversationUiState {
+    fn default() -> Self {
+        Self {
+            active_session: None,
+            connected_sessions: Vec::new(),
+            extra_scope_tabs: HashSet::new(),
+            conversations: Vec::new(),
+            show_archived_history: false,
+            active_conversation_id: None,
+            active_conversation_title: None,
+            items: Vec::new(),
+            expanded_cards: HashSet::new(),
+            metrics: AiSessionMetrics::default(),
+            load_seq: 0,
+            memory_load_seq: 0,
+            group_revision: 0,
+            render_window_blocks: 160,
+        }
+    }
 }
 
 /// 当前运行、审批、计划、任务与消息队列状态。
@@ -239,6 +263,7 @@ impl AiPanelState {
                 metrics,
                 ..
             } => {
+                self.conversation.group_revision = self.conversation.group_revision.wrapping_add(1);
                 self.conversation
                     .metrics
                     .record_turn(tokens_per_sec, &metrics);

@@ -18,6 +18,7 @@ use super::plan_card::{PlanCardParams, render_plan_card};
 use super::skills_drawer::SkillsDrawerState;
 use super::slash_menu::register_slash_key_interceptor;
 use super::state::{AiActivePopup, AiDrawerTab, AiPanelState};
+use super::work_group::MessageBlockCache;
 use crate::app::spawn_blocking_local;
 use crate::palette::Palette;
 use crate::theme::tokens::space;
@@ -46,6 +47,7 @@ pub(crate) struct AiAssistantView {
     pub(super) _conversation_load_task: Option<Task<()>>,
     pub(super) _memory_load_task: Option<Task<()>>,
     pub(super) _skills_load_task: Option<Task<()>>,
+    pub(super) message_block_cache: Option<MessageBlockCache>,
     pub(super) skills_drawer: SkillsDrawerState,
     pub(super) policy_hooks_form: super::policy_hooks_drawer::PolicyHooksFormState,
     pub(super) model_picker: super::model_picker::ModelPickerState,
@@ -230,6 +232,7 @@ impl AiAssistantView {
             _conversation_load_task: None,
             _memory_load_task: None,
             _skills_load_task: None,
+            message_block_cache: None,
             skills_drawer,
             policy_hooks_form,
             model_picker,

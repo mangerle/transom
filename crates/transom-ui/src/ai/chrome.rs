@@ -1,6 +1,8 @@
 //! AI 面板浮层、消息流与任务栏装配辅助方法。
 
 use gpui_kit::base::{h_flex, v_flex};
+use gpui_kit::component::Sizable as _;
+use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::*;
 use transom_ai::{AcpAgentConfig, default_acp_presets};
 use transom_ui_icons::{AppIcon, AppIconElement, UiIcon};
@@ -175,8 +177,27 @@ impl AiAssistantView {
                 .state
                 .current_run_started_at()
                 .map(|time| time.elapsed().as_secs());
-            let blocks = group_chat_items(&self.state.conversation.items, is_running);
-            nav_entries = collect_turn_nav_entries(&blocks);
+            let items = &self.state.conversation.items;
+            let blocks = self
+                .message_block_cache
+                .as_ref()
+                .filter(|cache| {
+                    cache.item_count == items.len()
+                        && cache.is_running == is_running
+                        && cache.group_revision == self.state.conversation.group_revision
+                })
+                .map(|cache| cache.blocks.clone())
+                .unwrap_or_else(|| group_chat_items(items, is_running));
+            let render_start = blocks
+                .len()
+                .saturating_sub(self.state.conversation.render_window_blocks);
+            let visible_blocks = &blocks[render_start..];
+            nav_entries = collect_turn_nav_entries(items, visible_blocks);
+            if render_start > 0 {
+                for entry in &mut nav_entries {
+                    entry.block_idx = entry.block_idx.saturating_add(1);
+                }
+            }
             let has_active_wg = blocks.last().is_some_and(|b| {
                 matches!(
                     b,
@@ -189,10 +210,30 @@ impl AiAssistantView {
             let code_callbacks = self.build_code_callbacks(cx);
             let copied_key = self.copied_key.as_deref();
             let has_active_terminal = self.state.conversation.active_session.is_some();
-            for (b_idx, block) in blocks.into_iter().enumerate() {
+            if render_start > 0 {
+                let v_older = cx.entity();
+                msg_list = msg_list.child(
+                    Button::new("ai-load-older-messages")
+                        .ghost()
+                        .xsmall()
+                        .label(rust_i18n::t!("ai.load_earlier_messages").to_string())
+                        .on_click(move |_, _, cx| {
+                            v_older.update(cx, |this, cx| {
+                                this.state.conversation.render_window_blocks = this
+                                    .state
+                                    .conversation
+                                    .render_window_blocks
+                                    .saturating_add(160);
+                                cx.notify();
+                            });
+                        }),
+                );
+            }
+            for (b_idx, block) in blocks.into_iter().enumerate().skip(render_start) {
                 let v_exp = cx.entity();
                 match block {
-                    DisplayBlock::Single(item) => {
+                    DisplayBlock::Single(item_index) => {
+                        let item = &items[item_index];
                         let cid = chat_item_id(item).to_owned();
                         let expanded = self.state.conversation.expanded_cards.contains(&cid);
                         let full_key = format!("full-out-{cid}");
@@ -244,19 +285,14 @@ impl AiAssistantView {
                     }
                     DisplayBlock::WorkGroup {
                         id,
-                        items,
-                        tool_steps,
-                        ok_steps,
-                        duration_ms,
+                        start,
+                        end,
                         in_progress,
                     } => {
                         msg_list = msg_list.child(render_work_group(
                             WorkGroupParams {
                                 id: &id,
-                                items: &items,
-                                tool_steps,
-                                ok_steps,
-                                duration_ms,
+                                items: &items[start..end],
                                 in_progress,
                                 expanded_cards: &self.state.conversation.expanded_cards,
                                 active_focus: self.state.run.active_focus.as_deref(),

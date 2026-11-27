@@ -14,17 +14,25 @@ use super::state::UiChatItem;
 use crate::palette::Palette;
 use crate::theme::tokens::{space, typography};
 
-/// 消息流分组块：用户消息与最终答复直接展示，中间思考/过渡说明/工具调用聚合为可折叠工作块。
-pub(super) enum DisplayBlock<'a> {
-    Single(&'a UiChatItem),
+/// 消息流分组块：仅保存消息区间，避免缓存持有可能失效的切片引用。
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(super) enum DisplayBlock {
+    Single(usize),
     WorkGroup {
         id: String,
-        items: Vec<&'a UiChatItem>,
-        tool_steps: usize,
-        ok_steps: usize,
-        duration_ms: u64,
+        start: usize,
+        end: usize,
         in_progress: bool,
     },
+}
+
+/// 消息分组缓存：只缓存稳定区间，流式文本更新不会使分组重新计算。
+#[derive(Clone, Debug)]
+pub(super) struct MessageBlockCache {
+    pub(super) item_count: usize,
+    pub(super) is_running: bool,
+    pub(super) group_revision: u64,
+    pub(super) blocks: Vec<DisplayBlock>,
 }
 
 /// 根据工具卡片匹配对应的子代理托管任务（用于实时进度流展示与追加/中断交互）。
@@ -70,12 +78,12 @@ pub(super) fn chat_item_id(item: &UiChatItem) -> &str {
 }
 
 /// 将扁平的消息流按对话轮次自动聚合为“中间工作块 + 最终输出”。
-pub(super) fn group_chat_items(items: &[UiChatItem], is_running: bool) -> Vec<DisplayBlock<'_>> {
+pub(super) fn group_chat_items(items: &[UiChatItem], is_running: bool) -> Vec<DisplayBlock> {
     let mut blocks = Vec::new();
     let mut idx = 0;
     while idx < items.len() {
         if matches!(items[idx], UiChatItem::UserText { .. }) {
-            blocks.push(DisplayBlock::Single(&items[idx]));
+            blocks.push(DisplayBlock::Single(idx));
             idx += 1;
             continue;
         }
@@ -85,25 +93,23 @@ pub(super) fn group_chat_items(items: &[UiChatItem], is_running: bool) -> Vec<Di
         }
         let slice = &items[start..idx];
         let at_tail = idx == items.len();
-        let has_work = slice.iter().any(|it| {
+        let has_work = slice.iter().any(|item| {
             matches!(
-                it,
+                item,
                 UiChatItem::Reasoning { .. }
                     | UiChatItem::ToolCard { .. }
                     | UiChatItem::AuditNotice { .. }
             )
         });
         if !has_work {
-            for item in slice {
-                blocks.push(DisplayBlock::Single(item));
-            }
+            blocks.extend((start..idx).map(DisplayBlock::Single));
             continue;
         }
         let final_pos = slice
             .iter()
-            .rposition(|it| {
+            .rposition(|item| {
                 matches!(
-                    it,
+                    item,
                     UiChatItem::AssistantText {
                         streaming: false,
                         ..
@@ -111,9 +117,9 @@ pub(super) fn group_chat_items(items: &[UiChatItem], is_running: bool) -> Vec<Di
                 )
             })
             .filter(|&pos| {
-                !slice[pos + 1..].iter().any(|it| {
+                !slice[pos + 1..].iter().any(|item| {
                     matches!(
-                        it,
+                        item,
                         UiChatItem::Reasoning { .. }
                             | UiChatItem::ToolCard { .. }
                             | UiChatItem::AuditNotice { .. }
@@ -121,40 +127,17 @@ pub(super) fn group_chat_items(items: &[UiChatItem], is_running: bool) -> Vec<Di
                 })
             });
         let split_at = final_pos.unwrap_or(slice.len());
-        let work_slice = &slice[..split_at];
-        if !work_slice.is_empty() {
-            let first_id = chat_item_id(&work_slice[0]);
-            let mut tool_steps = 0usize;
-            let mut ok_steps = 0usize;
-            let mut duration_ms = 0u64;
-            let mut work_items = Vec::with_capacity(work_slice.len());
-            for item in work_slice {
-                if let UiChatItem::ToolCard {
-                    running,
-                    ok,
-                    duration_ms: d,
-                    ..
-                } = item
-                {
-                    tool_steps += 1;
-                    if !*running && *ok {
-                        ok_steps += 1;
-                    }
-                    duration_ms = duration_ms.saturating_add(*d);
-                }
-                work_items.push(item);
-            }
+        if split_at > 0 {
+            let first_id = chat_item_id(&items[start]);
             blocks.push(DisplayBlock::WorkGroup {
                 id: format!("work-group-{first_id}"),
-                items: work_items,
-                tool_steps,
-                ok_steps,
-                duration_ms,
+                start,
+                end: start + split_at,
                 in_progress: is_running && at_tail && final_pos.is_none(),
             });
         }
         if let Some(pos) = final_pos {
-            blocks.push(DisplayBlock::Single(&slice[pos]));
+            blocks.push(DisplayBlock::Single(start + pos));
         }
     }
     blocks
@@ -163,10 +146,7 @@ pub(super) fn group_chat_items(items: &[UiChatItem], is_running: bool) -> Vec<Di
 /// 渲染工作块渲染参数。
 pub(super) struct WorkGroupParams<'a> {
     pub(super) id: &'a str,
-    pub(super) items: &'a [&'a UiChatItem],
-    pub(super) tool_steps: usize,
-    pub(super) ok_steps: usize,
-    pub(super) duration_ms: u64,
+    pub(super) items: &'a [UiChatItem],
     pub(super) in_progress: bool,
     pub(super) expanded_cards: &'a HashSet<String>,
     pub(super) active_focus: Option<&'a str>,
@@ -184,6 +164,24 @@ pub(super) fn render_work_group(
     code_callbacks: CodeBlockCallbacks,
 ) -> AnyElement {
     let p = params.p;
+    let mut tool_steps = 0usize;
+    let mut ok_steps = 0usize;
+    let mut duration_ms = 0u64;
+    for item in params.items {
+        if let UiChatItem::ToolCard {
+            running,
+            ok,
+            duration_ms: item_duration,
+            ..
+        } = item
+        {
+            tool_steps += 1;
+            if !running && *ok {
+                ok_steps += 1;
+            }
+            duration_ms = duration_ms.saturating_add(*item_duration);
+        }
+    }
     let expanded = params.expanded_cards.contains(params.id);
     let chevron = if expanded {
         UiIcon::CHEVRON_DOWN
@@ -209,8 +207,8 @@ pub(super) fn render_work_group(
             format!("{base}  {elapsed}")
         }
     } else {
-        let dur = if params.duration_ms >= 1000 {
-            format_duration_zh(params.duration_ms)
+        let dur = if duration_ms >= 1000 {
+            format_duration_zh(duration_ms)
         } else {
             "< 1s".to_owned()
         };
@@ -273,16 +271,12 @@ pub(super) fn render_work_group(
             ),
     );
 
-    if params.tool_steps > 0 {
-        let steps_label = rust_i18n::t!(
-            "ai.work_steps_summary",
-            done = params.ok_steps,
-            total = params.tool_steps
-        )
-        .to_string();
+    if tool_steps > 0 {
+        let steps_label =
+            rust_i18n::t!("ai.work_steps_summary", done = ok_steps, total = tool_steps).to_string();
         let (step_icon, step_color) = if params.in_progress {
             (UiIcon::REFRESH, p.primary)
-        } else if params.ok_steps < params.tool_steps {
+        } else if ok_steps < tool_steps {
             (UiIcon::ERROR, p.danger)
         } else {
             (UiIcon::CHECK, p.success)
@@ -369,7 +363,6 @@ pub(super) fn render_work_group(
         let surfaced_items: Vec<&UiChatItem> = params
             .items
             .iter()
-            .copied()
             .filter(|it| match it {
                 UiChatItem::ToolCard {
                     running, tool_name, ..
@@ -466,28 +459,13 @@ mod tests {
         ];
         let blocks = group_chat_items(&items, false);
         assert_eq!(blocks.len(), 3);
-        assert!(matches!(
-            blocks[0],
-            DisplayBlock::Single(UiChatItem::UserText { .. })
-        ));
+        assert!(matches!(blocks[0], DisplayBlock::Single(0)));
         match &blocks[1] {
-            DisplayBlock::WorkGroup {
-                tool_steps,
-                ok_steps,
-                duration_ms,
-                in_progress,
-                ..
-            } => {
-                assert_eq!(*tool_steps, 1);
-                assert_eq!(*ok_steps, 1);
-                assert_eq!(*duration_ms, 1200);
+            DisplayBlock::WorkGroup { in_progress, .. } => {
                 assert!(!*in_progress);
             }
             _ => panic!("期望中间过程聚合成 WorkGroup"),
         }
-        assert!(matches!(
-            blocks[2],
-            DisplayBlock::Single(UiChatItem::AssistantText { .. })
-        ));
+        assert!(matches!(blocks[2], DisplayBlock::Single(3)));
     }
 }

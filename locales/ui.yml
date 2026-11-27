@@ -10391,6 +10391,9 @@ ai:
   scroll_to_bottom:
     en: Scroll to bottom
     zh-CN: 滚动到最底部
+  load_earlier_messages:
+    en: Load earlier messages
+    zh-CN: 加载更早消息
   wg_ran_commands:
     en: Ran commands
     zh-CN: 运行了命令
