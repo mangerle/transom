@@ -1,6 +1,7 @@
 //! Transom 智能运维助手领域层：rig Agent 运行时、三层透明记忆、JSONL 树状会话与安全审批门。
 
 pub mod acp;
+pub(crate) mod acp_handlers;
 pub mod acp_parse;
 pub mod acp_probe;
 pub mod audit;
