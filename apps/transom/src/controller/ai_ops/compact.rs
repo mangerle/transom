@@ -39,16 +39,26 @@ pub(super) fn spawn_compact_conversation(
                 first_kept_entry_id: first_kept,
             },
         );
-        if let Err(err) = store.append_session_entry(&conversation_id, &entry) {
-            log::warn!("追加上下文压缩节点失败: {err}");
-            return;
-        }
-        if let Ok(mut index) = store.load_index()
-            && let Some(item) = index.iter_mut().find(|i| i.id == conversation_id)
-        {
-            item.active_leaf_id = Some(entry.id.clone());
-            item.updated_at = chrono::Utc::now().to_rfc3339();
-            let _ = store.upsert_conversation(item.clone());
+        let conv_id_write = conversation_id.clone();
+        let store_write = store.clone();
+        let leaf_id = entry.id.clone();
+        let append_res = tokio::task::spawn_blocking(move || {
+            store_write.append_session_entry(&conv_id_write, &entry)?;
+            let now = chrono::Utc::now().to_rfc3339();
+            let _ = store_write.update_conversation_leaf(&conv_id_write, Some(leaf_id), now);
+            Ok::<(), transom_ai::AiError>(())
+        })
+        .await;
+        match append_res {
+            Ok(Ok(())) => {}
+            Ok(Err(err)) => {
+                log::warn!("追加上下文压缩节点失败: {err}");
+                return;
+            }
+            Err(err) => {
+                log::warn!("上下文压缩落盘任务异常: {err}");
+                return;
+            }
         }
         let _ = event_tx
             .send_async(AppEvent::Ai(Box::new(AiAppEvent::ContextCompacted {

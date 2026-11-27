@@ -8,8 +8,10 @@
 use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 
 use transom_ai::{
@@ -26,6 +28,8 @@ use crate::paths::config_dir;
 #[derive(Clone, Debug)]
 pub struct AiStore {
     root: PathBuf,
+    index_lock: Arc<Mutex<()>>,
+    usage_lock: Arc<Mutex<()>>,
 }
 
 impl Default for AiStore {
@@ -37,14 +41,16 @@ impl Default for AiStore {
 impl AiStore {
     /// 使用平台默认配置目录下的 `ai/` 子目录构造存储实例。
     pub fn new() -> Self {
-        Self {
-            root: config_dir().join("ai"),
-        }
+        Self::with_root(config_dir().join("ai"))
     }
 
     /// 使用指定根目录构造存储实例（供单元测试隔离使用）。
     pub fn with_root(root: PathBuf) -> Self {
-        Self { root }
+        Self {
+            root,
+            index_lock: Arc::new(Mutex::new(())),
+            usage_lock: Arc::new(Mutex::new(())),
+        }
     }
 
     pub fn root(&self) -> &Path {
@@ -107,6 +113,11 @@ impl AiStore {
 
     /// 读取对话索引列表，按 `updated_at` 降序排列。
     pub fn load_index(&self) -> Result<Vec<ConversationSummary>, AiError> {
+        let _guard = self.index_lock.lock();
+        self.read_index_unlocked()
+    }
+
+    fn read_index_unlocked(&self) -> Result<Vec<ConversationSummary>, AiError> {
         let path = self.root.join("index.json");
         if !path.exists() {
             return Ok(Vec::new());
@@ -122,6 +133,29 @@ impl AiStore {
             })?;
         list.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
         Ok(list)
+    }
+
+    /// 在进程内互斥锁保护下执行 `index.json` 的读-改-原子写。
+    fn update_index(
+        &self,
+        mutator: impl FnOnce(&mut Vec<ConversationSummary>) -> bool,
+    ) -> Result<(), AiError> {
+        let _guard = self.index_lock.lock();
+        let mut list = self.read_index_unlocked()?;
+        if !mutator(&mut list) {
+            return Ok(());
+        }
+        list.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
+        let path = self.root.join("index.json");
+        let payload =
+            serde_json::to_string_pretty(&list).map_err(|err| AiError::StorageFailed {
+                target: path.display().to_string(),
+                reason: err.to_string(),
+            })?;
+        write_atomic(&path, payload.as_bytes()).map_err(|err| AiError::StorageFailed {
+            target: path.display().to_string(),
+            reason: err.to_string(),
+        })
     }
 
     /// 返回全局全部对话摘要列表（按更新时间倒序）。
@@ -143,22 +177,30 @@ impl AiStore {
 
     /// 插入或更新单个对话摘要到索引文件中。
     pub fn upsert_conversation(&self, summary: ConversationSummary) -> Result<(), AiError> {
-        let mut list = self.load_index()?;
-        if let Some(existing) = list.iter_mut().find(|item| item.id == summary.id) {
-            *existing = summary;
-        } else {
-            list.push(summary);
-        }
-        list.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
-        let path = self.root.join("index.json");
-        let payload =
-            serde_json::to_string_pretty(&list).map_err(|err| AiError::StorageFailed {
-                target: path.display().to_string(),
-                reason: err.to_string(),
-            })?;
-        write_atomic(&path, payload.as_bytes()).map_err(|err| AiError::StorageFailed {
-            target: path.display().to_string(),
-            reason: err.to_string(),
+        self.update_index(|list| {
+            if let Some(existing) = list.iter_mut().find(|item| item.id == summary.id) {
+                *existing = summary;
+            } else {
+                list.push(summary);
+            }
+            true
+        })
+    }
+
+    /// 原子更新指定对话的活动叶节点 ID 与更新时间。
+    pub fn update_conversation_leaf(
+        &self,
+        conversation_id: &str,
+        active_leaf_id: Option<String>,
+        updated_at: String,
+    ) -> Result<(), AiError> {
+        self.update_index(|list| {
+            let Some(item) = list.iter_mut().find(|item| item.id == conversation_id) else {
+                return false;
+            };
+            item.active_leaf_id = active_leaf_id;
+            item.updated_at = updated_at;
+            true
         })
     }
 
@@ -168,20 +210,12 @@ impl AiStore {
         conversation_id: &str,
         archived: bool,
     ) -> Result<(), AiError> {
-        let mut list = self.load_index()?;
-        let Some(item) = list.iter_mut().find(|item| item.id == conversation_id) else {
-            return Ok(());
-        };
-        item.archived = archived;
-        let path = self.root.join("index.json");
-        let payload =
-            serde_json::to_string_pretty(&list).map_err(|err| AiError::StorageFailed {
-                target: path.display().to_string(),
-                reason: err.to_string(),
-            })?;
-        write_atomic(&path, payload.as_bytes()).map_err(|err| AiError::StorageFailed {
-            target: path.display().to_string(),
-            reason: err.to_string(),
+        self.update_index(|list| {
+            let Some(item) = list.iter_mut().find(|item| item.id == conversation_id) else {
+                return false;
+            };
+            item.archived = archived;
+            true
         })
     }
 
@@ -191,36 +225,21 @@ impl AiStore {
         conversation_id: &str,
         new_title: &str,
     ) -> Result<(), AiError> {
-        let mut list = self.load_index()?;
-        let Some(item) = list.iter_mut().find(|item| item.id == conversation_id) else {
-            return Ok(());
-        };
-        item.title = new_title.to_owned();
-        let path = self.root.join("index.json");
-        let payload =
-            serde_json::to_string_pretty(&list).map_err(|err| AiError::StorageFailed {
-                target: path.display().to_string(),
-                reason: err.to_string(),
-            })?;
-        write_atomic(&path, payload.as_bytes()).map_err(|err| AiError::StorageFailed {
-            target: path.display().to_string(),
-            reason: err.to_string(),
+        self.update_index(|list| {
+            let Some(item) = list.iter_mut().find(|item| item.id == conversation_id) else {
+                return false;
+            };
+            item.title = new_title.to_owned();
+            true
         })
     }
 
     /// 删除指定对话索引及对应的 JSONL 会话文件。
     pub fn delete_conversation(&self, conversation_id: &str) -> Result<(), AiError> {
-        let mut list = self.load_index()?;
-        list.retain(|item| item.id != conversation_id);
-        let index_path = self.root.join("index.json");
-        let payload =
-            serde_json::to_string_pretty(&list).map_err(|err| AiError::StorageFailed {
-                target: index_path.display().to_string(),
-                reason: err.to_string(),
-            })?;
-        write_atomic(&index_path, payload.as_bytes()).map_err(|err| AiError::StorageFailed {
-            target: index_path.display().to_string(),
-            reason: err.to_string(),
+        self.update_index(|list| {
+            let before = list.len();
+            list.retain(|item| item.id != conversation_id);
+            list.len() != before
         })?;
 
         let session_path = self.session_file_path(conversation_id)?;
@@ -327,6 +346,7 @@ impl AiStore {
 
     /// 读取今日与本月累计 Token 用量（跨日/跨月自动归零）。
     pub fn load_usage_totals(&self) -> (u64, u64) {
+        let _guard = self.usage_lock.lock();
         let (day, month) = current_day_and_month_keys();
         let mut totals = self.read_usage_totals();
         totals.rollover(&day, &month);
@@ -335,6 +355,7 @@ impl AiStore {
 
     /// 累加本次推理消耗的 Token 并持久化到 `usage_totals.json`。
     pub fn record_token_usage(&self, added_tokens: u64) -> (u64, u64) {
+        let _guard = self.usage_lock.lock();
         let (day, month) = current_day_and_month_keys();
         let mut totals = self.read_usage_totals();
         totals.rollover(&day, &month);

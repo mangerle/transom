@@ -66,11 +66,17 @@ pub(super) async fn execute_and_pump(
     );
     last_leaf_id = Some(user_entry.id.clone());
     *ctx.current_turn_entry_id.write() = Some(user_entry.id.clone());
-    if let Err(err) = ctx
-        .store
-        .append_session_entry(&ctx.conversation_id, &user_entry)
     {
-        log::warn!("追加 AI 用户提问条目失败: {err}");
+        let store = ctx.store.clone();
+        let conv_id = ctx.conversation_id.clone();
+        let entry_clone = user_entry.clone();
+        if let Ok(Err(err)) = tokio::task::spawn_blocking(move || {
+            store.append_session_entry(&conv_id, &entry_clone)
+        })
+        .await
+        {
+            log::warn!("追加 AI 用户提问条目失败: {err}");
+        }
     }
     ctx.history_entries.push(user_entry.clone());
     let _ = ctx
@@ -247,12 +253,14 @@ pub(super) async fn execute_and_pump(
     }
 
     // 更新会话索引的 active_leaf_id 与时间戳
-    if let Ok(mut index) = ctx.store.load_index()
-        && let Some(item) = index.iter_mut().find(|i| i.id == ctx.conversation_id)
     {
-        item.updated_at = chrono::Utc::now().to_rfc3339();
-        item.active_leaf_id = last_leaf_id;
-        let _ = ctx.store.upsert_conversation(item.clone());
+        let store = ctx.store.clone();
+        let conv_id = ctx.conversation_id.clone();
+        let now = chrono::Utc::now().to_rfc3339();
+        let _ = tokio::task::spawn_blocking(move || {
+            store.update_conversation_leaf(&conv_id, last_leaf_id, now)
+        })
+        .await;
     }
 
     let cancelled = runner_cancel.is_cancelled()
@@ -302,6 +310,7 @@ async fn handle_turn_end(
     last_leaf_id: &mut Option<String>,
     turn: transom_ai::TurnOutput,
 ) {
+    let mut to_append = Vec::with_capacity(2);
     if !turn.reasoning.trim().is_empty() {
         let entry = SessionEntry::new(
             last_leaf_id.clone(),
@@ -310,7 +319,7 @@ async fn handle_turn_end(
             },
         );
         *last_leaf_id = Some(entry.id.clone());
-        let _ = ctx.store.append_session_entry(&ctx.conversation_id, &entry);
+        to_append.push(entry.clone());
         ctx.history_entries.push(entry);
     }
     if !turn.text.trim().is_empty() {
@@ -332,11 +341,20 @@ async fn handle_turn_end(
             },
         );
         *last_leaf_id = Some(entry.id.clone());
-        let _ = ctx.store.append_session_entry(&ctx.conversation_id, &entry);
+        to_append.push(entry.clone());
         ctx.history_entries.push(entry);
     }
     let added = turn.input_tokens.saturating_add(turn.output_tokens);
-    let (today_tokens, month_tokens) = ctx.store.record_token_usage(added);
+    let store = ctx.store.clone();
+    let conv_id = ctx.conversation_id.clone();
+    let (today_tokens, month_tokens) = tokio::task::spawn_blocking(move || {
+        for entry in &to_append {
+            let _ = store.append_session_entry(&conv_id, entry);
+        }
+        store.record_token_usage(added)
+    })
+    .await
+    .unwrap_or((0, 0));
     let refs: Vec<&SessionEntry> = ctx.history_entries.iter().collect();
     let breakdown =
         compute_context_breakdown(&ctx.preamble, &ctx.memory, &refs, ctx.context_window);
@@ -381,9 +399,6 @@ async fn handle_tool_card(
         },
     );
     *last_leaf_id = Some(entry.id.clone());
-    let _ = ctx.store.append_session_entry(&ctx.conversation_id, &entry);
-    ctx.history_entries.push(entry);
-
     let audit = AiAuditEntry {
         timestamp: chrono::Utc::now().to_rfc3339(),
         conversation_id: ctx.conversation_id.clone(),
@@ -395,7 +410,16 @@ async fn handle_tool_card(
         ok: card.ok,
         duration_ms: card.duration_ms,
     };
-    let _ = ctx.store.append_audit(&audit);
+    ctx.history_entries.push(entry.clone());
+    {
+        let store = ctx.store.clone();
+        let conv_id = ctx.conversation_id.clone();
+        let _ = tokio::task::spawn_blocking(move || {
+            let _ = store.append_session_entry(&conv_id, &entry);
+            let _ = store.append_audit(&audit);
+        })
+        .await;
+    }
 
     let card_tool_name = card.tool_name.clone();
     let card_summary_for_hook = card.summary.clone();
