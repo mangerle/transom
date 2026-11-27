@@ -3,7 +3,7 @@
 use std::collections::HashSet;
 
 use super::attachments::ComposerAttachment;
-use super::metrics::AiSessionMetrics;
+use super::metrics_model::AiSessionMetrics;
 use transom_ai::{
     AiSettings, ConversationSummary, ExecutionMode, MemorySnapshot, ProviderProtocol, SessionEntry,
     SessionEntryKind, SessionScope, ThinkingEffort,
