@@ -103,7 +103,7 @@ pub fn needs_compaction(entries: &[&SessionEntry], context_window: u32) -> bool 
             } => estimate_tokens(summary).saturating_add(estimate_tokens(output)),
             SessionEntryKind::Compaction { summary, .. } => estimate_tokens(summary),
             SessionEntryKind::Attachment { content, .. } => estimate_tokens(content),
-            SessionEntryKind::Header { .. } => 16,
+            SessionEntryKind::Header { .. } | SessionEntryKind::AuditNotice { .. } => 16,
         })
         .fold(0u32, u32::saturating_add);
 
@@ -314,7 +314,9 @@ pub fn extract_turn_pairs(entries: &[&SessionEntry]) -> Vec<(ChatRole, String)> 
             SessionEntryKind::Attachment { label, content } => {
                 turns.push((ChatRole::User, format!("[附加上下文: {label}]\n{content}")));
             }
-            SessionEntryKind::Header { .. } | SessionEntryKind::Reasoning { .. } => {}
+            SessionEntryKind::Header { .. }
+            | SessionEntryKind::Reasoning { .. }
+            | SessionEntryKind::AuditNotice { .. } => {}
         }
     }
     turns

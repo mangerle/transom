@@ -98,7 +98,9 @@ impl AiSessionMetrics {
                 SessionEntryKind::Compaction { summary, .. } => {
                     fallback_chars = fallback_chars.saturating_add(summary.chars().count());
                 }
-                SessionEntryKind::Header { .. } | SessionEntryKind::Attachment { .. } => {}
+                SessionEntryKind::Header { .. }
+                | SessionEntryKind::Attachment { .. }
+                | SessionEntryKind::AuditNotice { .. } => {}
             }
         }
         // 兼容老版本未记录 usage 的历史会话：按字符数粗略估算上下文占用，避免重开后显示 0%。

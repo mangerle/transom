@@ -72,7 +72,66 @@ pub(super) fn render_chat_item(
             &callbacks,
         ),
         UiChatItem::ToolCard { .. } => super::tool_card::render_tool_card(&params, callbacks),
+        UiChatItem::AuditNotice {
+            approved,
+            label,
+            host_label,
+            ..
+        } => render_audit_notice(*approved, label, host_label, p),
     }
+}
+
+fn render_audit_notice(approved: bool, label: &str, host_label: &str, p: &Palette) -> AnyElement {
+    let (icon, color) = if approved {
+        (UiIcon::CHECK, p.success)
+    } else {
+        (UiIcon::CLOSE, p.danger)
+    };
+    let mut row = h_flex()
+        .w_full()
+        .px(rems(space::XS))
+        .py(px(3.0))
+        .gap(px(6.0))
+        .items_center()
+        .justify_between()
+        .rounded(p.radius.sm)
+        .bg(p.secondary.opacity(0.6))
+        .child(
+            h_flex()
+                .flex_1()
+                .min_w_0()
+                .gap(px(6.0))
+                .items_center()
+                .child(
+                    div()
+                        .flex_shrink_0()
+                        .text_color(color)
+                        .child(AppIconElement::new(AppIcon::Ui(icon)).small()),
+                )
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .truncate()
+                        .text_size(rems(typography::CAPTION))
+                        .text_color(p.text.muted)
+                        .child(label.to_owned()),
+                ),
+        );
+    if !host_label.trim().is_empty() {
+        row = row.child(
+            div()
+                .flex_shrink_0()
+                .px(px(5.0))
+                .py(px(1.0))
+                .rounded(p.radius.sm)
+                .bg(p.background)
+                .text_size(rems(typography::CAPTION))
+                .text_color(p.text.muted)
+                .child(host_label.to_owned()),
+        );
+    }
+    row.into_any_element()
 }
 
 /// 将 RFC3339 时间戳格式化为简洁的中文相对时间；跨天时展示本地月日时分，解析失败返回空串。

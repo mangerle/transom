@@ -86,4 +86,11 @@ pub(crate) enum UiChatItem {
         duration_ms: u64,
         diff_preview: Option<String>,
     },
+    /// 审批决策或权限变更的轻量化单行审计锚点。
+    AuditNotice {
+        id: String,
+        approved: bool,
+        label: String,
+        host_label: String,
+    },
 }

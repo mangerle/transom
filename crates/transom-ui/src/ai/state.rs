@@ -185,6 +185,18 @@ impl AiPanelState {
                         diff_preview,
                     });
                 }
+                SessionEntryKind::AuditNotice {
+                    approved,
+                    label,
+                    host_label,
+                } => {
+                    self.items.push(UiChatItem::AuditNotice {
+                        id: entry.id,
+                        approved,
+                        label,
+                        host_label,
+                    });
+                }
                 SessionEntryKind::Header { .. }
                 | SessionEntryKind::Compaction { .. }
                 | SessionEntryKind::Attachment { .. } => {}

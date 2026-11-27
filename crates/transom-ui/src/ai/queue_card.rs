@@ -320,13 +320,46 @@ impl AiAssistantView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let handoff_cmd = self
+        let matched = self
             .state
             .pending_approvals
             .iter()
             .find(|a| a.request_id == request_id)
+            .cloned();
+        let handoff_cmd = matched
+            .as_ref()
             .map(|a| a.detail.clone())
             .unwrap_or_default();
+        if let Some(approval) = matched {
+            let (approved, label) = match &decision {
+                transom_core::AiApprovalDecision::AllowOnce => {
+                    (true, format!("已允许执行：{}", approval.title))
+                }
+                transom_core::AiApprovalDecision::AllowPrefix { prefix } => (
+                    true,
+                    format!("已允许本会话同类前缀：{prefix}"),
+                ),
+                transom_core::AiApprovalDecision::HandoffToTerminal => {
+                    (true, format!("已移交终端手动执行：{}", approval.title))
+                }
+                transom_core::AiApprovalDecision::RejectWithFeedback { reason } => {
+                    let r = reason.trim();
+                    if r.is_empty() {
+                        (false, format!("已拒绝：{}", approval.title))
+                    } else {
+                        (false, format!("已拒绝：{} · {r}", approval.title))
+                    }
+                }
+            };
+            self.state
+                .items
+                .push(super::state_types::UiChatItem::AuditNotice {
+                    id: format!("audit-{}", self.state.items.len()),
+                    approved,
+                    label,
+                    host_label: approval.host_label,
+                });
+        }
         self.state
             .pending_approvals
             .retain(|a| a.request_id != request_id);

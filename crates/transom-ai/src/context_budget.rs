@@ -46,7 +46,7 @@ pub fn compute_context_breakdown(
                     .saturating_add(estimate_tokens(summary))
                     .saturating_add(estimate_tokens(output));
             }
-            SessionEntryKind::Header { .. } => {
+            SessionEntryKind::Header { .. } | SessionEntryKind::AuditNotice { .. } => {
                 history_tokens = history_tokens.saturating_add(16);
             }
         }

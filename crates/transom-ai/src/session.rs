@@ -126,6 +126,13 @@ pub enum SessionEntryKind {
     },
     /// 附加的终端命令块或本地参考快照。
     Attachment { label: String, content: String },
+    /// 审批决策或权限变更的轻量化审计锚点。
+    AuditNotice {
+        approved: bool,
+        label: String,
+        #[serde(default)]
+        host_label: String,
+    },
 }
 
 /// 对话消息角色。

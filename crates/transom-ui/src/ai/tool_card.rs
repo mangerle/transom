@@ -118,6 +118,19 @@ pub(super) fn render_tool_card(
         );
 
     let mut right = h_flex().flex_shrink_0().gap(px(6.0)).items_center();
+    let trimmed_host = host_label.trim();
+    if !trimmed_host.is_empty() && trimmed_host != "通用会话" {
+        right = right.child(
+            div()
+                .px(px(5.0))
+                .py(px(1.0))
+                .rounded(p.radius.sm)
+                .bg(p.secondary)
+                .text_size(rems(typography::CAPTION))
+                .text_color(p.text.muted)
+                .child(trimmed_host.to_owned()),
+        );
+    }
     if *duration_ms > 0 {
         let dur_str = if *duration_ms >= 1000 {
             format!("{:.1}s", *duration_ms as f64 / 1000.0)

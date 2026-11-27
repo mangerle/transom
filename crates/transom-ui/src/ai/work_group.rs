@@ -32,7 +32,8 @@ pub(super) fn chat_item_id(item: &UiChatItem) -> &str {
         UiChatItem::UserText { id, .. }
         | UiChatItem::Reasoning { id, .. }
         | UiChatItem::AssistantText { id, .. }
-        | UiChatItem::ToolCard { id, .. } => id,
+        | UiChatItem::ToolCard { id, .. }
+        | UiChatItem::AuditNotice { id, .. } => id,
     }
 }
 
@@ -55,7 +56,9 @@ pub(super) fn group_chat_items(items: &[UiChatItem], is_running: bool) -> Vec<Di
         let has_work = slice.iter().any(|it| {
             matches!(
                 it,
-                UiChatItem::Reasoning { .. } | UiChatItem::ToolCard { .. }
+                UiChatItem::Reasoning { .. }
+                    | UiChatItem::ToolCard { .. }
+                    | UiChatItem::AuditNotice { .. }
             )
         });
         if !has_work {
@@ -79,7 +82,9 @@ pub(super) fn group_chat_items(items: &[UiChatItem], is_running: bool) -> Vec<Di
                 !slice[pos + 1..].iter().any(|it| {
                     matches!(
                         it,
-                        UiChatItem::Reasoning { .. } | UiChatItem::ToolCard { .. }
+                        UiChatItem::Reasoning { .. }
+                            | UiChatItem::ToolCard { .. }
+                            | UiChatItem::AuditNotice { .. }
                     )
                 })
             });
@@ -178,7 +183,13 @@ pub(super) fn render_work_group(
         } else {
             "< 1s".to_owned()
         };
-        rust_i18n::t!("ai.worked_for", duration = dur).to_string()
+        let base = rust_i18n::t!("ai.worked_for", duration = dur).to_string();
+        let compact = summarize_work_group_compact(params.items);
+        if compact.is_empty() {
+            base
+        } else {
+            format!("{base} · {compact}")
+        }
     };
 
     let gid = params.id.to_owned();
@@ -366,6 +377,53 @@ pub(super) fn render_work_group(
         }
     }
     wrapper.into_any_element()
+}
+
+fn summarize_work_group_compact(items: &[&UiChatItem]) -> String {
+    let mut cmd_count = 0usize;
+    let mut file_count = 0usize;
+    let mut sub_count = 0usize;
+    let mut hosts: Vec<&str> = Vec::new();
+
+    for item in items {
+        if let UiChatItem::ToolCard {
+            tool_name,
+            host_label,
+            ..
+        } = item
+        {
+            match tool_name.as_str() {
+                "remote_exec" | "remote_exec_bulk" | "container_ops" => cmd_count += 1,
+                "remote_fs" | "transfer_file" | "read_output" => file_count += 1,
+                "delegate_task" => sub_count += 1,
+                _ => {}
+            }
+            let h = host_label.trim();
+            if !h.is_empty() && h != "通用会话" && !hosts.contains(&h) {
+                hosts.push(h);
+            }
+        }
+    }
+
+    let mut parts = Vec::new();
+    if file_count > 0 {
+        parts.push(format!("文件操作 {file_count}"));
+    }
+    if cmd_count > 0 {
+        parts.push(format!("执行命令 {cmd_count}"));
+    }
+    if sub_count > 0 {
+        parts.push(format!("子任务 {sub_count}"));
+    }
+    if !hosts.is_empty() {
+        let host_text = if hosts.len() <= 2 {
+            hosts.join(", ")
+        } else {
+            format!("{}, {} 等 {} 台", hosts[0], hosts[1], hosts.len())
+        };
+        parts.push(host_text);
+    }
+    parts.join(" · ")
 }
 
 fn summarize_tool_activity(items: &[&UiChatItem]) -> Option<(AppIcon, String)> {
