@@ -150,6 +150,11 @@ pub trait RemoteExecutor: Send + Sync {
 #[async_trait]
 pub trait RemoteFsExecutor: Send + Sync {
     async fn list_dir(&self, path: &str) -> Result<String, ToolError>;
+    /// 探测远端路径是否存在。
+    ///
+    /// 与直接读取文件不同，调用方必须能区分“确认不存在”和“探测失败”，
+    /// 否则检查点可能把权限错误误记为待删除的新文件。
+    async fn file_exists(&self, path: &str) -> Result<bool, ToolError>;
     async fn read_file(&self, path: &str, max_bytes: usize) -> Result<String, ToolError>;
     async fn write_file(&self, path: &str, content: &str, backup: bool) -> Result<(), ToolError>;
     async fn mkdir(&self, path: &str) -> Result<(), ToolError>;

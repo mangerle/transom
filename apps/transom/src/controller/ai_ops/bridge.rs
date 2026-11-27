@@ -192,6 +192,10 @@ pub(super) struct SshRemoteFsBridge {
 
 #[async_trait]
 impl RemoteFsExecutor for SshRemoteFsBridge {
+    async fn file_exists(&self, path: &str) -> Result<bool, ToolError> {
+        super::remote_fs_probe::remote_file_exists(self, path).await
+    }
+
     async fn list_dir(&self, path: &str) -> Result<String, ToolError> {
         if let Some(sftp) = &self.sftp {
             let (_resolved, entries) =

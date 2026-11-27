@@ -68,7 +68,7 @@ pub(super) async fn handle_remote_fs(
     if is_local_target(args) {
         if action == "edit" {
             crate::controller::ai_ops::checkpoint_ops::record_local_backup(&bridge.deps, path)
-                .await;
+                .await?;
         }
         return handle_local_fs(action, path, args).await;
     }
@@ -100,7 +100,7 @@ pub(super) async fn handle_remote_fs(
                 path,
                 &fs,
             )
-            .await;
+            .await?;
             let content = args["content"].as_str().unwrap_or("");
             if let Some((parent, _)) = path.rsplit_once('/')
                 && !parent.is_empty()

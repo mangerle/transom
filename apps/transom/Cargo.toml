@@ -152,3 +152,6 @@ minimum-system-version = "11.0"
 # 每用户安装，更新时无需 UAC；安装器图标与窗口图标同源。
 installMode = "currentUser"
 installer-icon = "../../packaging/icons/icon.ico"
+
+[dev-dependencies]
+tempfile.workspace = true
