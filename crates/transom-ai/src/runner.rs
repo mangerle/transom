@@ -2,9 +2,9 @@
 //!
 //! 设计原理（Why）：
 //! - 全程使用有界通道（`tokio::sync::mpsc::channel(256)`）向控制平面泵送事件，杜绝内存无限积压；
-//! - 通过 [`Gate`] 实现 `AgentHook`：
+//! - 通过 `Gate` 实现 `AgentHook`：
 //!   - `on_completion_call`：动态刷新系统提示词并执行 `CancellationToken` 与 `max_turns` 熔断；
-//!   - `on_dispatch`：执行策略引擎 [`evaluate_policy`]，需要审批时挂起等待 UI `oneshot` 确认；
+//!   - `on_dispatch`：执行策略引擎 `evaluate_command_policy`，需要审批时挂起等待 UI `oneshot` 确认；
 //!   - `on_text_delta` / `on_reasoning_delta`：记录首字时刻并流式发送增量；
 //!   - `on_model_turn_finished`：计算 `tokens/s` 并发送 [`AgentEvent::TurnEnd`]，确保工具卡片与回答顺序不乱。
 

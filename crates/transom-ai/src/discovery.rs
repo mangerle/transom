@@ -1,7 +1,7 @@
 //! 模型列表自动发现、连通性测试与上下文窗口自动推断。
 //!
 //! 设计原理（Why）：
-//! - `reqwest::Client` 底层自带连接池与 `Arc` 封装，统一通过 [`HTTP_CLIENT`] 全局单例复用，
+//! - `reqwest::Client` 底层自带连接池与 `Arc` 封装，统一通过 `HTTP_CLIENT` 全局单例复用，
 //!   严禁在每次请求中临时创建 `Client::new()`；
 //! - 兼容 OpenAI（`/models`）、Anthropic（`/v1/models`）与 Ollama（`/api/tags`）三种响应格式，
 //!   并在缺少上下文窗口声明时依据模型名称自动推断。
