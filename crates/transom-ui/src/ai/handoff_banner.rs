@@ -209,6 +209,7 @@ impl AiAssistantView {
         let v_snip = cx.entity();
         let v_rev = cx.entity();
         let v_jump = cx.entity();
+        let v_sub = cx.entity();
         super::markdown_blocks::CodeBlockCallbacks {
             on_copy: std::rc::Rc::new(move |key, text, _, cx| {
                 v_copy.update(cx, |this, cx| this.copy_text_with_feedback(key, text, cx));
@@ -238,6 +239,33 @@ impl AiAssistantView {
             on_jump_to_terminal: std::rc::Rc::new(move |host_label, _, cx| {
                 v_jump.update(cx, |_, cx| {
                     cx.emit(super::AiPanelEvent::JumpToTerminalTab { host_label });
+                });
+            }),
+            on_subagent_action: std::rc::Rc::new(move |action, task_id, w, cx| {
+                v_sub.update(cx, |this, cx| {
+                    match action.as_str() {
+                        "stop" => {
+                            let _ = this.command_tx.try_send(transom_core::AppCommand::Ai(
+                                Box::new(transom_core::AiCommand::CancelManagedTask { task_id }),
+                            ));
+                        }
+                        "followup" => {
+                            let msg = this.composer_input.read(cx).value().trim().to_owned();
+                            if !msg.is_empty() {
+                                let _ = this.command_tx.try_send(transom_core::AppCommand::Ai(
+                                    Box::new(transom_core::AiCommand::SteerRun {
+                                        run_id: task_id,
+                                        message: msg,
+                                    }),
+                                ));
+                                this.composer_input
+                                    .update(cx, |i, cx| i.set_value(String::new(), w, cx));
+                                this.last_composer_len = 0;
+                            }
+                        }
+                        _ => {}
+                    }
+                    cx.notify();
                 });
             }),
         }

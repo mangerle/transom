@@ -264,10 +264,12 @@ pub(in crate::controller) async fn handle_ai_command(
             state.ai_tasks.detach_task(&task_id);
         }
         AiCommand::SteerRun { run_id, message } => {
-            if let Some(queue) = state.ai_steers.lock().get(&run_id)
-                && !message.trim().is_empty()
-            {
-                queue.lock().push_back(message);
+            if !message.trim().is_empty() {
+                if let Some(queue) = state.ai_steers.lock().get(&run_id) {
+                    queue.lock().push_back(message);
+                } else {
+                    state.ai_tasks.steer_task(&run_id, message);
+                }
             }
         }
     }

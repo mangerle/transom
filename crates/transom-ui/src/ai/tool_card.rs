@@ -209,14 +209,23 @@ pub(super) fn render_tool_card(
                 live_box =
                     live_box.child(div().text_color(p.text.muted).child(format!("$ {summary}")));
             }
-            if output.trim().is_empty() {
+            let live_output = if tool_name == "delegate_task"
+                && output.trim().is_empty()
+                && let Some(sub) = params.subagent_task
+            {
+                let tail: Vec<&str> = sub.log.lines().rev().take(4).collect();
+                tail.into_iter().rev().collect::<Vec<_>>().join("\n")
+            } else {
+                output.clone()
+            };
+            if live_output.trim().is_empty() {
                 live_box = live_box.child(
                     div()
                         .text_color(p.text.muted)
                         .child("正在执行，等待输出…"),
                 );
             } else {
-                live_box = live_box.child(div().text_color(p.foreground).child(output.clone()));
+                live_box = live_box.child(div().text_color(p.foreground).child(live_output));
             }
             root = root.child(live_box);
         }
@@ -284,6 +293,51 @@ pub(super) fn render_tool_card(
         .text_size(rems(typography::CAPTION));
     if is_cmd && !summary.trim().is_empty() {
         body = body.child(div().text_color(p.text.muted).child(format!("$ {summary}")));
+    }
+    if tool_name == "delegate_task"
+        && let Some(sub) = params.subagent_task
+    {
+        let (st_label, st_color) = match sub.dto.status {
+            transom_core::AiManagedTaskStatus::Running => ("子代理运行中", p.primary),
+            transom_core::AiManagedTaskStatus::Succeeded => ("子代理已完成", p.success),
+            transom_core::AiManagedTaskStatus::Failed => ("子代理失败", p.danger),
+            transom_core::AiManagedTaskStatus::Cancelled => ("子代理已停止", p.text.muted),
+        };
+        body = body.child(
+            h_flex()
+                .w_full()
+                .px(rems(space::XS))
+                .py(px(4.0))
+                .justify_between()
+                .items_center()
+                .rounded(p.radius.sm)
+                .bg(p.surface.floating)
+                .border_1()
+                .border_color(p.divider(p.border))
+                .child(
+                    div()
+                        .text_size(rems(typography::CAPTION))
+                        .text_color(st_color)
+                        .font_weight(FontWeight::MEDIUM)
+                        .child(format!("{st_label} · 目标: {}", sub.dto.target_label)),
+                )
+                .child(
+                    div()
+                        .text_size(rems(typography::CAPTION))
+                        .text_color(p.text.muted)
+                        .child(sub.dto.task_id.clone()),
+                ),
+        );
+        if !sub.log.trim().is_empty() {
+            let on_full = callbacks.on_toggle_full_output.clone();
+            body = body.child(super::diff_view::render_log_output(
+                &sub.dto.task_id,
+                &sub.log,
+                params.full_output_expanded,
+                p,
+                move |w, cx| on_full(w, cx),
+            ));
+        }
     }
     if let Some(diff) = diff_preview {
         body = body.child(super::diff_view::render_diff_block(diff, p));
@@ -448,6 +502,68 @@ pub(super) fn render_tool_card(
                                 .child("跳转终端"),
                         ),
                 );
+            }
+            if tool_name == "delegate_task"
+                && let Some(sub) = params.subagent_task
+                && sub.dto.status == transom_core::AiManagedTaskStatus::Running
+            {
+                let tid_f = sub.dto.task_id.clone();
+                let tid_s = sub.dto.task_id.clone();
+                let on_f = callbacks.code.on_subagent_action.clone();
+                let on_s = callbacks.code.on_subagent_action.clone();
+                left_actions = left_actions
+                    .child(
+                        h_flex()
+                            .id(SharedString::from(format!("ai-sub-steer-{id}")))
+                            .px(px(6.0))
+                            .py(px(2.0))
+                            .gap(px(4.0))
+                            .items_center()
+                            .rounded(p.radius.sm)
+                            .border_1()
+                            .border_color(p.primary.opacity(0.45))
+                            .bg(p.surface.floating)
+                            .cursor_pointer()
+                            .hover(|s| s.bg(p.surface.hover))
+                            .tooltip(|w, cx| {
+                                gpui_kit::component::tooltip::Tooltip::new(
+                                    "将下方输入框文本作为补充指令发送给子代理",
+                                )
+                                .build(w, cx)
+                            })
+                            .on_click(move |_, w, cx| {
+                                on_f("followup".to_owned(), tid_f.clone(), w, cx);
+                            })
+                            .child(
+                                div()
+                                    .text_size(rems(typography::CAPTION))
+                                    .text_color(p.primary)
+                                    .child("追加指令"),
+                            ),
+                    )
+                    .child(
+                        h_flex()
+                            .id(SharedString::from(format!("ai-sub-stop-{id}")))
+                            .px(px(6.0))
+                            .py(px(2.0))
+                            .gap(px(4.0))
+                            .items_center()
+                            .rounded(p.radius.sm)
+                            .border_1()
+                            .border_color(p.danger.opacity(0.45))
+                            .bg(p.surface.floating)
+                            .cursor_pointer()
+                            .hover(|s| s.bg(p.surface.hover))
+                            .on_click(move |_, w, cx| {
+                                on_s("stop".to_owned(), tid_s.clone(), w, cx);
+                            })
+                            .child(
+                                div()
+                                    .text_size(rems(typography::CAPTION))
+                                    .text_color(p.danger)
+                                    .child("停止子代理"),
+                            ),
+                    );
             }
             footer = footer.child(left_actions);
             footer.child(

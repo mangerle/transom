@@ -27,6 +27,26 @@ pub(super) enum DisplayBlock<'a> {
     },
 }
 
+/// 根据工具卡片匹配对应的子代理托管任务（用于实时进度流展示与追加/中断交互）。
+pub(super) fn find_subagent_task<'a>(
+    tasks: &'a [super::task_bar::UiManagedTask],
+    item: &UiChatItem,
+) -> Option<&'a super::task_bar::UiManagedTask> {
+    let UiChatItem::ToolCard {
+        tool_name, summary, ..
+    } = item
+    else {
+        return None;
+    };
+    if tool_name != "delegate_task" {
+        return None;
+    }
+    tasks
+        .iter()
+        .rev()
+        .find(|t| t.dto.kind == "subagent" && t.dto.title == *summary)
+}
+
 pub(super) fn chat_item_id(item: &UiChatItem) -> &str {
     match item {
         UiChatItem::UserText { id, .. }
@@ -141,6 +161,7 @@ pub(super) struct WorkGroupParams<'a> {
     pub(super) live_elapsed_secs: Option<u64>,
     pub(super) copied_key: Option<&'a str>,
     pub(super) has_active_terminal: bool,
+    pub(super) managed_tasks: &'a [super::task_bar::UiManagedTask],
     pub(super) p: &'a Palette,
 }
 
@@ -312,6 +333,7 @@ pub(super) fn render_work_group(
             let full_output_expanded = params.expanded_cards.contains(&full_key);
             let t = on_toggle_id.clone();
             let t_full = on_toggle_id.clone();
+            let subagent_task = find_subagent_task(params.managed_tasks, item);
             details = details.child(render_chat_item(
                 ChatItemRenderParams {
                     item,
@@ -319,6 +341,7 @@ pub(super) fn render_work_group(
                     full_output_expanded,
                     copied_key: params.copied_key,
                     has_active_terminal: params.has_active_terminal,
+                    subagent_task,
                     p,
                 },
                 ChatItemCallbacks {
@@ -354,6 +377,7 @@ pub(super) fn render_work_group(
                 let full_output_expanded = params.expanded_cards.contains(&full_key);
                 let t = on_toggle_id.clone();
                 let t_full = on_toggle_id.clone();
+                let subagent_task = find_subagent_task(params.managed_tasks, item);
                 live_list = live_list.child(render_chat_item(
                     ChatItemRenderParams {
                         item,
@@ -361,6 +385,7 @@ pub(super) fn render_work_group(
                         full_output_expanded,
                         copied_key: params.copied_key,
                         has_active_terminal: params.has_active_terminal,
+                        subagent_task,
                         p,
                     },
                     ChatItemCallbacks {

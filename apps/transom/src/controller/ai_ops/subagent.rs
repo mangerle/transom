@@ -174,6 +174,10 @@ impl SubagentRunner for ControllerSubagentRunner {
             }) as Arc<dyn HookExecutor>
         });
 
+        let steer_queue = Arc::new(Mutex::new(std::collections::VecDeque::new()));
+        self.tasks
+            .attach_steer_queue(&task_handle.task_id, steer_queue.clone());
+
         let input = RunInput {
             target: self.target.clone(),
             prompt,
@@ -192,7 +196,7 @@ impl SubagentRunner for ControllerSubagentRunner {
             tool_ctx,
             events: event_tx,
             cancel: child_cancel.clone(),
-            steer_queue: Arc::new(Mutex::new(std::collections::VecDeque::new())),
+            steer_queue,
         };
 
         let runner = tokio::spawn(async move { transom_ai::run(input).await });

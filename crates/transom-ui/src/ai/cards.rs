@@ -20,6 +20,8 @@ pub(super) struct ChatItemRenderParams<'a> {
     pub(super) full_output_expanded: bool,
     pub(super) copied_key: Option<&'a str>,
     pub(super) has_active_terminal: bool,
+    /// 若当前项是 `delegate_task`，则关联对应的实时子代理托管任务状态。
+    pub(super) subagent_task: Option<&'a super::task_bar::UiManagedTask>,
     pub(super) p: &'a Palette,
 }
 

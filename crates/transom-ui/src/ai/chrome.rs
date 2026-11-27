@@ -191,6 +191,10 @@ impl AiAssistantView {
                             b_idx > 0 && matches!(item, super::state::UiChatItem::UserText { .. });
                         let v_rb = cx.entity();
                         let v_full = cx.entity();
+                        let subagent_task = super::work_group::find_subagent_task(
+                            &self.state.managed_tasks,
+                            item,
+                        );
                         let item_el = render_chat_item(
                             ChatItemRenderParams {
                                 item,
@@ -198,6 +202,7 @@ impl AiAssistantView {
                                 full_output_expanded,
                                 copied_key,
                                 has_active_terminal,
+                                subagent_task,
                                 p,
                             },
                             ChatItemCallbacks {
@@ -246,6 +251,7 @@ impl AiAssistantView {
                                 live_elapsed_secs: live_elapsed,
                                 copied_key,
                                 has_active_terminal,
+                                managed_tasks: &self.state.managed_tasks,
                                 p,
                             },
                             move |tid, _, cx| {

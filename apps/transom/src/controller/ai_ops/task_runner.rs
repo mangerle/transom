@@ -5,7 +5,7 @@
 //! - 每个任务拥有独立 `task_id`、独立 `CancellationToken`、实时流式日志通道以及可选的远端进程组 PID；
 //! - 用户在 UI 上点击单个任务的“停止”按钮时，可精确中止该任务而不打断整轮主对话，并对远端进程组发信号清理。
 
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -21,6 +21,7 @@ struct ActiveTaskEntry {
     detach: CancellationToken,
     remote: Option<SshRemote>,
     remote_pid: Arc<AtomicU32>,
+    steer_queue: Option<Arc<Mutex<VecDeque<String>>>>,
 }
 
 /// 控制平面托管任务注册表。
@@ -57,6 +58,7 @@ impl ManagedTaskRegistry {
                 detach: detach.clone(),
                 remote,
                 remote_pid: remote_pid.clone(),
+                steer_queue: None,
             },
         );
         let dto = AiManagedTaskDto {
@@ -82,6 +84,41 @@ impl ManagedTaskRegistry {
             line_buf: Mutex::new(String::new()),
             pgid_parsed: std::sync::atomic::AtomicBool::new(false),
         }
+    }
+
+    /// 为子 Agent 等可交互任务绑定中途引导（Steer）指令队列。
+    pub(in crate::controller) fn attach_steer_queue(
+        &self,
+        task_id: &str,
+        queue: Arc<Mutex<VecDeque<String>>>,
+    ) {
+        if let Some(entry) = self.tasks.lock().get_mut(task_id) {
+            entry.steer_queue = Some(queue);
+        }
+    }
+
+    /// 向正在运行的子 Agent 注入追加指令，并同步推送一条日志标记。
+    pub(in crate::controller) fn steer_task(&self, task_id: &str, message: String) -> bool {
+        let queue = self
+            .tasks
+            .lock()
+            .get(task_id)
+            .and_then(|e| e.steer_queue.clone());
+        let Some(queue) = queue else {
+            return false;
+        };
+        let trimmed = message.trim().to_owned();
+        if trimmed.is_empty() {
+            return false;
+        }
+        queue.lock().push_back(trimmed.clone());
+        let _ = self
+            .event_tx
+            .try_send(AppEvent::Ai(Box::new(AiAppEvent::ManagedTaskOutput {
+                task_id: task_id.to_owned(),
+                chunk: format!("[追加指令] {trimmed}\n"),
+            })));
+        true
     }
 
     /// 触发单个任务“转入后台不阻塞主对话”。

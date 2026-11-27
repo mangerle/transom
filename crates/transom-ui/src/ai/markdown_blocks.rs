@@ -43,6 +43,7 @@ pub(super) struct CodeBlockCallbacks {
     pub(super) on_save_snippet: KeyTextCallback,
     pub(super) on_revert_remote_file: RevertFileCallback,
     pub(super) on_jump_to_terminal: TextCallback,
+    pub(super) on_subagent_action: KeyTextCallback,
 }
 
 /// 渲染 Markdown 正文的入参对象。
