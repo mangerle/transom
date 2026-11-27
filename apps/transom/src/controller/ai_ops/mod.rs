@@ -259,16 +259,6 @@ async fn start_ai_run(state: &mut ControllerState, ctx: &ControllerCtx, mut req:
     let (conversation_id, title, mut history_branch) =
         prepare_conversation(ctx, &req, &scope, &target.model).await;
 
-    let _ = ctx
-        .event_tx
-        .send_async(AppEvent::Ai(Box::new(AiAppEvent::RunStarted {
-            run_id: req.run_id.clone(),
-            conversation_id: conversation_id.clone(),
-            title: title.clone(),
-            user_entry_id: String::new(),
-        })))
-        .await;
-
     let host_id_str = req.session_id.map(|s| s.to_string());
     let memory = ctx
         .ai_store
@@ -328,12 +318,6 @@ async fn start_ai_run(state: &mut ControllerState, ctx: &ControllerCtx, mut req:
                 cancel: cancel.clone(),
             }) as Arc<dyn transom_ai::HookExecutor>
         });
-    let preamble_preview = transom_ai::build_system_preamble(
-        tool_ctx.locked_session.as_ref().map(|s| &s.prompt_ctx),
-        &memory,
-        active_skill_prompt.as_deref(),
-    );
-
     let input = RunInput {
         target: target.clone(),
         prompt: effective_prompt,
@@ -354,6 +338,7 @@ async fn start_ai_run(state: &mut ControllerState, ctx: &ControllerCtx, mut req:
         cancel: cancel.clone(),
         steer_queue,
     };
+    let preamble_preview = transom_ai::build_run_preamble(&input, None);
 
     let pump_ctx = PumpContext {
         run_id: req.run_id,

@@ -178,12 +178,8 @@ pub async fn run_with_model_factory(
     }
 }
 
-async fn run_attempt(
-    model: DynModel<Completion>,
-    input: &RunInput,
-    history_branch: &[SessionEntry],
-    working_state_md: Option<&str>,
-) -> Result<(), AiError> {
+/// 根据 [`RunInput`] 与可选的压缩工作状态构造完整的系统提示词（preamble）。
+pub fn build_run_preamble(input: &RunInput, working_state_md: Option<&str>) -> String {
     let bulk_ctxs: Vec<SessionPromptContext> = input
         .tool_ctx
         .bulk_hosts
@@ -195,7 +191,7 @@ async fn run_attempt(
             protection: h.protection,
         })
         .collect();
-    let preamble = build_system_preamble_with_extra(
+    build_system_preamble_with_extra(
         input
             .tool_ctx
             .locked_session
@@ -210,7 +206,16 @@ async fn run_attempt(
             available_skills: &input.available_skills,
             plan_mode: input.plan_mode,
         },
-    );
+    )
+}
+
+async fn run_attempt(
+    model: DynModel<Completion>,
+    input: &RunInput,
+    history_branch: &[SessionEntry],
+    working_state_md: Option<&str>,
+) -> Result<(), AiError> {
+    let preamble = build_run_preamble(input, working_state_md);
 
     let max_turns = input.max_turns.max(1);
     let mut builder = AgentBuilder::new(model)

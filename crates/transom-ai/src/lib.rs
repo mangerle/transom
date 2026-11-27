@@ -80,7 +80,8 @@ pub use policy::{
 pub use redact::redact_secrets_for_model;
 pub use runner::{
     AgentEvent, ApprovalRequest, EVENT_CHANNEL_CAPACITY, HandoffRequest, RunInput, TurnOutput,
-    generate_inline_command, run, run_with_model, run_with_model_factory, summarize_for_compaction,
+    build_run_preamble, generate_inline_command, run, run_with_model, run_with_model_factory,
+    summarize_for_compaction,
 };
 pub use session::{
     ChatRole, ConversationSummary, SessionEntry, SessionEntryKind, SessionScope, SessionTree,

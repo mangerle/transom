@@ -48,7 +48,7 @@ pub(super) async fn execute_and_pump(
     mut card_rx: mpsc::Receiver<ToolExecutionCard>,
     mut plan_rx: mpsc::Receiver<PlanSnapshot>,
     mut event_rx: mpsc::Receiver<AgentEvent>,
-    ctx: PumpContext,
+    mut ctx: PumpContext,
 ) {
     let mut last_leaf_id = input.history_branch.last().map(|entry| entry.id.clone());
 
@@ -72,6 +72,7 @@ pub(super) async fn execute_and_pump(
     {
         log::warn!("追加 AI 用户提问条目失败: {err}");
     }
+    ctx.history_entries.push(user_entry.clone());
     let _ = ctx
         .event_tx
         .send_async(AppEvent::Ai(Box::new(AiAppEvent::RunStarted {
@@ -131,7 +132,7 @@ pub(super) async fn execute_and_pump(
             }
             maybe_card = card_rx.recv() => {
                 if let Some(card) = maybe_card {
-                    handle_tool_card(&ctx, &mut last_leaf_id, card).await;
+                    handle_tool_card(&mut ctx, &mut last_leaf_id, card).await;
                 }
             }
             maybe_plan = plan_rx.recv() => {
@@ -178,7 +179,7 @@ pub(super) async fn execute_and_pump(
                     }
                     Some(AgentEvent::TurnEnd(turn)) => {
                         flush_deltas(&ctx, &mut text_buf, &mut reasoning_buf).await;
-                        handle_turn_end(&ctx, &mut last_leaf_id, turn).await;
+                        handle_turn_end(&mut ctx, &mut last_leaf_id, turn).await;
                     }
                     Some(AgentEvent::Approval(req)) => {
                         flush_deltas(&ctx, &mut text_buf, &mut reasoning_buf).await;
@@ -242,7 +243,7 @@ pub(super) async fn execute_and_pump(
 
     flush_deltas(&ctx, &mut text_buf, &mut reasoning_buf).await;
     while let Ok(card) = card_rx.try_recv() {
-        handle_tool_card(&ctx, &mut last_leaf_id, card).await;
+        handle_tool_card(&mut ctx, &mut last_leaf_id, card).await;
     }
 
     // 更新会话索引的 active_leaf_id 与时间戳
@@ -297,7 +298,7 @@ async fn flush_deltas(ctx: &PumpContext, text_buf: &mut String, reasoning_buf: &
 }
 
 async fn handle_turn_end(
-    ctx: &PumpContext,
+    ctx: &mut PumpContext,
     last_leaf_id: &mut Option<String>,
     turn: transom_ai::TurnOutput,
 ) {
@@ -310,6 +311,7 @@ async fn handle_turn_end(
         );
         *last_leaf_id = Some(entry.id.clone());
         let _ = ctx.store.append_session_entry(&ctx.conversation_id, &entry);
+        ctx.history_entries.push(entry);
     }
     if !turn.text.trim().is_empty() {
         let entry = SessionEntry::new(
@@ -331,6 +333,7 @@ async fn handle_turn_end(
         );
         *last_leaf_id = Some(entry.id.clone());
         let _ = ctx.store.append_session_entry(&ctx.conversation_id, &entry);
+        ctx.history_entries.push(entry);
     }
     let added = turn.input_tokens.saturating_add(turn.output_tokens);
     let (today_tokens, month_tokens) = ctx.store.record_token_usage(added);
@@ -361,7 +364,7 @@ async fn handle_turn_end(
 }
 
 async fn handle_tool_card(
-    ctx: &PumpContext,
+    ctx: &mut PumpContext,
     last_leaf_id: &mut Option<String>,
     card: ToolExecutionCard,
 ) {
@@ -379,6 +382,7 @@ async fn handle_tool_card(
     );
     *last_leaf_id = Some(entry.id.clone());
     let _ = ctx.store.append_session_entry(&ctx.conversation_id, &entry);
+    ctx.history_entries.push(entry);
 
     let audit = AiAuditEntry {
         timestamp: chrono::Utc::now().to_rfc3339(),
