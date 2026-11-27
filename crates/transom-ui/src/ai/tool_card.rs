@@ -22,6 +22,7 @@ fn tool_row_icon(tool_name: &str) -> AppIcon {
         "session_catalog" => AppIcon::Ui(UiIcon::WEB_SERVER),
         "workspace_control" => AppIcon::Ui(UiIcon::LAYOUT),
         "delegate_task" => AppIcon::Ui(UiIcon::DATAFLOW),
+        "compare_hosts" => AppIcon::Ui(UiIcon::DIFF),
         "search_knowledge" => AppIcon::Ui(UiIcon::SEARCH),
         _ => AppIcon::Ui(UiIcon::DEPENDENCIES),
     }
@@ -286,6 +287,30 @@ pub(super) fn render_tool_card(
     }
     if let Some(diff) = diff_preview {
         body = body.child(super::diff_view::render_diff_block(diff, p));
+    } else if tool_name == "compare_hosts" && *ok {
+        body = body.child(
+            h_flex()
+                .w_full()
+                .px(rems(space::SM))
+                .py(px(6.0))
+                .gap(px(6.0))
+                .items_center()
+                .rounded(p.radius.sm)
+                .bg(p.success.opacity(0.10))
+                .border_1()
+                .border_color(p.success.opacity(0.28))
+                .child(
+                    div()
+                        .text_color(p.success)
+                        .child(AppIconElement::new(AppIcon::Ui(UiIcon::CHECK)).small()),
+                )
+                .child(
+                    div()
+                        .text_size(rems(typography::CAPTION))
+                        .text_color(p.success)
+                        .child("两台主机配置/输出完全一致"),
+                ),
+        );
     }
     if !output.trim().is_empty() {
         let on_full = callbacks.on_toggle_full_output;

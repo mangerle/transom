@@ -70,6 +70,7 @@ pub fn assess_tool_call_value(
             }
         }
         "remote_exec_bulk" => assess_bulk_exec(parsed, args_json, ctx),
+        "compare_hosts" => assess_compare_hosts(parsed, ctx),
         "delegate_task" => {
             let mode = parsed["mode"].as_str().unwrap_or("readonly");
             let risk = if mode == "deploy" {
@@ -330,6 +331,46 @@ fn assess_bulk_exec(
             risk,
             title: "多主机批量执行 Shell 命令".to_owned(),
             detail: format!("目标主机: {host_list}\n命令: {cmd}"),
+            diff_preview: None,
+            requires_fresh_approval: is_write,
+        },
+    }
+}
+
+fn assess_compare_hosts(parsed: &serde_json::Value, ctx: &ToolRuntimeContext) -> ToolRiskAssessment {
+    let host_a = parsed["host_a"].as_str().unwrap_or("");
+    let host_b = parsed["host_b"].as_str().unwrap_or("");
+    let kind = parsed["kind"].as_str().unwrap_or("file");
+    let target = parsed["target"].as_str().unwrap_or("");
+    let risk = if kind.eq_ignore_ascii_case("command") {
+        classify_shell_command(target)
+    } else {
+        ToolRisk::SafeRead
+    };
+    let protections: Vec<HostProtection> = ctx
+        .bulk_hosts
+        .iter()
+        .filter(|h| h.host_name == host_a || h.host_name == host_b)
+        .map(|h| h.protection)
+        .collect();
+    let worst = if protections.contains(&HostProtection::ReadOnly) {
+        HostProtection::ReadOnly
+    } else if protections.contains(&HostProtection::Production) {
+        HostProtection::Production
+    } else {
+        HostProtection::Normal
+    };
+    let is_write = matches!(risk, ToolRisk::Write | ToolRisk::Destructive);
+    ToolRiskAssessment {
+        risk,
+        force_confirm: is_write,
+        summary: ApprovalSummary {
+            tool_name: "compare_hosts".to_owned(),
+            host_label: format!("{host_a} ↔ {host_b}"),
+            protection: worst,
+            risk,
+            title: "多主机横向对比".to_owned(),
+            detail: format!("对比主机: {host_a} 与 {host_b}\n模式: {kind}\n目标: {target}"),
             diff_preview: None,
             requires_fresh_approval: is_write,
         },

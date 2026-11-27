@@ -12,6 +12,7 @@ pub mod app_tools;
 pub mod app_tools_dev;
 pub mod assess;
 pub mod assess_app;
+pub mod compare;
 pub mod delegate;
 pub mod extra;
 pub mod ops;
@@ -429,6 +430,7 @@ pub(crate) fn export_mcp_tool_schemas() -> Vec<serde_json::Value> {
     let mut schemas = vec![
         mcp_schema_entry(&remote::RemoteExecTool::new(ctx.clone())),
         mcp_schema_entry(&extra::RemoteExecBulkTool::new(ctx.clone())),
+        mcp_schema_entry(&compare::CompareHostsTool::new(ctx.clone())),
         mcp_schema_entry(&ops::RemoteFsTool::new(ctx.clone())),
         mcp_schema_entry(&ops::TransferFileTool::new(ctx.clone())),
         mcp_schema_entry(&ops::InspectHostRuntimeTool::new(ctx.clone())),
@@ -497,7 +499,9 @@ pub fn attach_tools(
             .tool(extra::PortForwardTool::new(ctx.clone()));
     }
     if ctx.bulk_hosts.len() >= 2 {
-        builder = builder.tool(extra::RemoteExecBulkTool::new(ctx.clone()));
+        builder = builder
+            .tool(extra::RemoteExecBulkTool::new(ctx.clone()))
+            .tool(compare::CompareHostsTool::new(ctx.clone()));
     }
     builder
 }
