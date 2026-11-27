@@ -119,14 +119,7 @@ pub(super) async fn resolve_or_connect_target(
         platform: "linux".to_owned(),
         protection: ssh.protection,
     };
-    if let Some(cached) = bridge
-        .deps
-        .target
-        .headless_remotes
-        .lock()
-        .get(&session.id)
-        .cloned()
-    {
+    if let Some(cached) = bridge.deps.target.headless_remotes.get(&session.id) {
         return Ok(McpLiveSession {
             meta,
             remote: cached,
@@ -202,7 +195,6 @@ pub(super) async fn resolve_or_connect_target(
         .deps
         .target
         .headless_remotes
-        .lock()
         .insert(session.id, remote.clone());
     Ok(McpLiveSession {
         meta,

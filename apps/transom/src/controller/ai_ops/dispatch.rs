@@ -299,7 +299,7 @@ pub(in crate::controller) async fn shutdown_ai_runs(state: &mut ControllerState)
     state.ai_app_action_reqs.lock().clear();
     state.ai_output_stores.clear();
     state.ai_approval_grants.write().clear();
-    state.ai_headless_remotes.lock().clear();
+    state.ai_headless_remotes.clear();
     let _ = tokio::time::timeout(Duration::from_secs(2), async {
         while state.ai_set.join_next().await.is_some() {}
     })

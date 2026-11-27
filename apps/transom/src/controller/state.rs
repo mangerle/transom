@@ -17,6 +17,7 @@ use parking_lot::RwLock;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 use tokio::task::JoinSet;
 use tokio_util::sync::CancellationToken;
 use transom_core::{
@@ -29,8 +30,90 @@ use transom_store::AiStore;
 use super::ai_ops::AiConfigService;
 use transom_sync::CloudSyncService;
 
-/// AI 工具在后台静默建立的无标签页远端 SSH 连接缓存表（避免主动打开 UI 标签页）。
-pub(super) type AiHeadlessRemoteMap = Arc<parking_lot::Mutex<HashMap<SessionId, SshRemote>>>;
+/// AI 后台静默 SSH 连接的默认空闲 TTL。
+pub(super) const HEADLESS_REMOTE_TTL: Duration = Duration::from_secs(30 * 60);
+
+/// AI 后台静默 SSH 连接的最大缓存数量。
+pub(super) const MAX_HEADLESS_REMOTES: usize = 8;
+
+/// AI 工具在后台静默建立的无标签页远端 SSH 连接 LRU/TTL 缓存。
+pub(super) type AiHeadlessRemoteMap = Arc<AiHeadlessRemoteCache>;
+
+/// 有界、带空闲 TTL 的后台远端连接缓存。
+pub(super) struct AiHeadlessRemoteCache {
+    entries: parking_lot::Mutex<HashMap<SessionId, HeadlessRemoteEntry>>,
+    ttl: Duration,
+    max_entries: usize,
+}
+
+struct HeadlessRemoteEntry {
+    remote: SshRemote,
+    last_used: Instant,
+}
+
+impl Default for AiHeadlessRemoteCache {
+    fn default() -> Self {
+        Self::new(HEADLESS_REMOTE_TTL, MAX_HEADLESS_REMOTES)
+    }
+}
+
+impl AiHeadlessRemoteCache {
+    /// 创建指定 TTL 与容量上限的连接缓存。
+    pub(super) fn new(ttl: Duration, max_entries: usize) -> Self {
+        Self {
+            entries: parking_lot::Mutex::new(HashMap::with_capacity(max_entries.max(1))),
+            ttl,
+            max_entries: max_entries.max(1),
+        }
+    }
+
+    /// 取得仍有效的连接并刷新其 LRU/TTL 位置。
+    pub(super) fn get(&self, session_id: &SessionId) -> Option<SshRemote> {
+        let now = Instant::now();
+        let mut entries = self.entries.lock();
+        entries.retain(|_, entry| !self.expired(entry, now));
+        let entry = entries.get_mut(session_id)?;
+        if self.expired(entry, now) {
+            entries.remove(session_id);
+            return None;
+        }
+        entry.last_used = now;
+        Some(entry.remote.clone())
+    }
+
+    /// 插入连接；超容量时淘汰最久未使用的连接。
+    pub(super) fn insert(&self, session_id: SessionId, remote: SshRemote) {
+        let now = Instant::now();
+        let mut entries = self.entries.lock();
+        entries.retain(|_, entry| !self.expired(entry, now));
+        if !entries.contains_key(&session_id)
+            && entries.len() >= self.max_entries
+            && let Some(oldest) = entries
+                .iter()
+                .min_by_key(|(_, entry)| entry.last_used)
+                .map(|(id, _)| *id)
+        {
+            entries.remove(&oldest);
+        }
+        entries.insert(
+            session_id,
+            HeadlessRemoteEntry {
+                remote,
+                last_used: now,
+            },
+        );
+    }
+
+    /// 清空全部后台连接；连接句柄随 `SshRemote` 释放触发底层资源回收。
+    pub(super) fn clear(&self) {
+        self.entries.lock().clear();
+    }
+
+    fn expired(&self, entry: &HeadlessRemoteEntry, now: Instant) -> bool {
+        now.checked_duration_since(entry.last_used)
+            .is_some_and(|age| age >= self.ttl)
+    }
+}
 
 /// 在途 AI 运行的中途引导（Steer）注入队列映射表。
 pub(super) type SteerQueueMap = Arc<
@@ -146,7 +229,7 @@ impl ControllerState {
             )),
             ai_subagent_histories: Arc::new(parking_lot::Mutex::new(HashMap::new())),
             ai_output_stores: transom_ai::ToolOutputStorePool::default(),
-            ai_headless_remotes: Arc::new(parking_lot::Mutex::new(HashMap::new())),
+            ai_headless_remotes: Arc::new(AiHeadlessRemoteCache::default()),
             mcp_session_meta: HashMap::new(),
             mcp_cancel: CancellationToken::new(),
             mcp_task: None,
