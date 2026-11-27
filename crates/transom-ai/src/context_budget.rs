@@ -141,6 +141,8 @@ mod tests {
                 duration_ms: 0,
                 approved: Some(true),
                 diff_preview: None,
+                revert_target_path: None,
+                revert_backup_path: None,
             },
         );
         let mem = MemorySnapshot {

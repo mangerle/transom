@@ -80,6 +80,12 @@ pub struct ToolExecutionCard {
     pub duration_ms: u64,
     #[serde(default)]
     pub diff_preview: Option<String>,
+    /// 远端文件写操作的目标路径（用于一键还原）。
+    #[serde(default)]
+    pub revert_target_path: Option<String>,
+    /// 远端文件修改前在本机保存的快照路径（用于一键还原）。
+    #[serde(default)]
+    pub revert_backup_path: Option<String>,
 }
 
 impl Default for ToolExecutionCard {
@@ -96,6 +102,8 @@ impl Default for ToolExecutionCard {
             approved: true,
             duration_ms: 0,
             diff_preview: None,
+            revert_target_path: None,
+            revert_backup_path: None,
         }
     }
 }
@@ -257,6 +265,8 @@ pub struct ToolRuntimeContext {
     pub cancel: CancellationToken,
     pub card_tx: mpsc::Sender<ToolExecutionCard>,
     pub plan_tx: Option<mpsc::Sender<plan::PlanSnapshot>>,
+    /// 远端写操作前保存快照的本地目录。
+    pub snapshot_dir: Option<std::path::PathBuf>,
     pub caps: ToolCapabilities,
 }
 
@@ -276,7 +286,25 @@ impl ToolRuntimeContext {
             cancel,
             card_tx,
             plan_tx: None,
+            snapshot_dir: None,
             caps: ToolCapabilities::default(),
+        }
+    }
+
+    /// 将修改前的远端文件内容写入快照目录并返回快照文件路径。
+    pub fn save_revert_snapshot(&self, content: &str) -> Option<String> {
+        let dir = self.snapshot_dir.as_ref()?;
+        if let Err(err) = std::fs::create_dir_all(dir) {
+            log::warn!("创建远端快照目录失败（{}）: {err}", dir.display());
+            return None;
+        }
+        let path = dir.join(format!("{}.bak", uuid::Uuid::new_v4()));
+        match std::fs::write(&path, content.as_bytes()) {
+            Ok(()) => Some(path.display().to_string()),
+            Err(err) => {
+                log::warn!("保存远端配置变更快照失败（{}）: {err}", path.display());
+                None
+            }
         }
     }
 
@@ -322,6 +350,7 @@ impl ToolRuntimeContext {
             approved: true,
             duration_ms: 0,
             diff_preview: None,
+            ..Default::default()
         });
         call_id
     }
@@ -350,6 +379,7 @@ impl ToolRuntimeContext {
             approved: true,
             duration_ms: elapsed_ms,
             diff_preview: None,
+            ..Default::default()
         });
     }
 

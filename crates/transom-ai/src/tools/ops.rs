@@ -79,6 +79,8 @@ impl Tool for RemoteFsTool {
     ) -> Result<Self::Output, Self::Error> {
         let started = Instant::now();
         let mut diff_preview = None;
+        let mut revert_target_path = None;
+        let mut revert_backup_path = None;
         let risk = match args.action.as_str() {
             "delete" => ToolRisk::Destructive,
             "edit" | "mkdir" | "rename" | "chmod" => ToolRisk::Write,
@@ -202,18 +204,21 @@ impl Tool for RemoteFsTool {
             }
             "edit" => {
                 let content = args.content.as_deref().unwrap_or("");
-                let old_text = fs
-                    .read_file(&args.path, MAX_REMOTE_READ_BYTES)
-                    .await
-                    .unwrap_or_default();
-                let diff = TextDiff::from_lines(&old_text, content)
+                let old_read = fs.read_file(&args.path, MAX_REMOTE_READ_BYTES).await;
+                let old_text = old_read.as_deref().unwrap_or("");
+                let diff = TextDiff::from_lines(old_text, content)
                     .unified_diff()
                     .header("修改前", "修改后")
                     .to_string();
                 diff_preview = Some(truncate_tool_output(&diff, 3_000));
-                fs.write_file(&args.path, content, true)
-                    .await
-                    .map(|()| format!("已写入文件并完成备份: {}", args.path))
+                let write_res = fs.write_file(&args.path, content, true).await;
+                if write_res.is_ok()
+                    && let Ok(original) = old_read
+                {
+                    revert_target_path = Some(args.path.clone());
+                    revert_backup_path = self.ctx.save_revert_snapshot(&original);
+                }
+                write_res.map(|()| format!("已写入文件并完成备份: {}", args.path))
             }
             other => Err(ToolError::InvalidArguments {
                 tool: Self::NAME,
@@ -235,6 +240,8 @@ impl Tool for RemoteFsTool {
                     approved: true,
                     duration_ms: elapsed,
                     diff_preview,
+                    revert_target_path,
+                    revert_backup_path,
                     ..Default::default()
                 });
                 Ok(clipped)

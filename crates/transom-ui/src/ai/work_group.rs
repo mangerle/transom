@@ -485,6 +485,8 @@ mod tests {
                 ok: true,
                 duration_ms: 1200,
                 diff_preview: None,
+                revert_target_path: None,
+                revert_backup_path: None,
             },
             UiChatItem::AssistantText {
                 id: "a1".to_owned(),

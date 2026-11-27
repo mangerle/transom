@@ -134,6 +134,10 @@ pub struct AiToolCardDto {
     pub ok: bool,
     pub duration_ms: u64,
     pub diff_preview: Option<String>,
+    /// 远端文件写操作的目标路径（用于一键还原）。
+    pub revert_target_path: Option<String>,
+    /// 远端文件修改前在本机保存的快照路径（用于一键还原）。
+    pub revert_backup_path: Option<String>,
 }
 
 /// 发起提问的请求载荷（装箱以保持 `AiCommand` 体积紧凑）。
@@ -179,6 +183,13 @@ pub enum AiCommand {
     RollbackCheckpoint {
         conversation_id: String,
         entry_id: String,
+    },
+    /// 将远端指定文件一键还原至修改前快照。
+    RevertRemoteFile {
+        host_label: String,
+        target_path: String,
+        backup_path: String,
+        conversation_id: Option<String>,
     },
     /// 终端内联命令生成（Ctrl+K）。
     InlineCommandAssist {

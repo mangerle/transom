@@ -44,6 +44,8 @@ pub(super) fn render_tool_card(
         ok,
         duration_ms,
         diff_preview,
+        revert_target_path,
+        revert_backup_path,
         ..
     } = params.item
     else {
@@ -341,25 +343,69 @@ pub(super) fn render_tool_card(
                 .on_scroll(|_, _, cx| cx.stop_propagation())
                 .child(body),
         )
-        .child(
-            h_flex()
+        .child({
+            let mut footer = h_flex()
                 .w_full()
                 .px(rems(space::SM))
                 .py(px(4.0))
-                .justify_end()
+                .justify_between()
                 .items_center()
-                .gap(px(4.0))
-                .child(
-                    div()
-                        .text_color(status_color)
-                        .child(AppIconElement::new(AppIcon::Ui(status_icon)).small()),
-                )
-                .child(
-                    div()
-                        .text_size(rems(typography::CAPTION))
-                        .text_color(status_color)
-                        .child(status_label),
-                ),
-        );
+                .gap(px(6.0));
+            if *ok
+                && let (Some(target_path), Some(backup_path)) =
+                    (revert_target_path.as_ref(), revert_backup_path.as_ref())
+            {
+                let h_label = host_label.clone();
+                let t_path = target_path.clone();
+                let b_path = backup_path.clone();
+                let on_rev = callbacks.code.on_revert_remote_file.clone();
+                footer = footer.child(
+                    h_flex()
+                        .id(SharedString::from(format!("ai-tool-revert-{id}")))
+                        .px(px(6.0))
+                        .py(px(2.0))
+                        .gap(px(4.0))
+                        .items_center()
+                        .rounded(p.radius.sm)
+                        .border_1()
+                        .border_color(p.border)
+                        .bg(p.surface.floating)
+                        .cursor_pointer()
+                        .hover(|s| s.bg(p.surface.hover))
+                        .on_click(move |_, w, cx| {
+                            on_rev(h_label.clone(), t_path.clone(), b_path.clone(), w, cx);
+                        })
+                        .child(
+                            div()
+                                .text_color(p.text.muted)
+                                .child(AppIconElement::new(AppIcon::Ui(UiIcon::REFRESH)).small()),
+                        )
+                        .child(
+                            div()
+                                .text_size(rems(typography::CAPTION))
+                                .text_color(p.foreground)
+                                .child("还原远端文件"),
+                        ),
+                );
+            } else {
+                footer = footer.child(div());
+            }
+            footer.child(
+                h_flex()
+                    .items_center()
+                    .gap(px(4.0))
+                    .child(
+                        div()
+                            .text_color(status_color)
+                            .child(AppIconElement::new(AppIcon::Ui(status_icon)).small()),
+                    )
+                    .child(
+                        div()
+                            .text_size(rems(typography::CAPTION))
+                            .text_color(status_color)
+                            .child(status_label),
+                    ),
+            )
+        });
     root.child(shell_box).into_any_element()
 }

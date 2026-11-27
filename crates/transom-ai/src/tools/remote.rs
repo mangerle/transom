@@ -177,6 +177,7 @@ impl Tool for RemoteExecTool {
                     approved: true,
                     duration_ms: elapsed_ms,
                     diff_preview: None,
+                    ..Default::default()
                 });
                 match exit_code {
                     Some(code) => Ok(format!("退出码: {code}\n{clipped}")),
@@ -197,6 +198,7 @@ impl Tool for RemoteExecTool {
                     approved: true,
                     duration_ms: elapsed_ms,
                     diff_preview: None,
+                    ..Default::default()
                 });
                 Err(to_rig_err(err))
             }

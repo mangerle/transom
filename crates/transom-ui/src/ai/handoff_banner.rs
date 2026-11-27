@@ -207,6 +207,7 @@ impl AiAssistantView {
         let v_copy = cx.entity();
         let v_term = cx.entity();
         let v_snip = cx.entity();
+        let v_rev = cx.entity();
         super::markdown_blocks::CodeBlockCallbacks {
             on_copy: std::rc::Rc::new(move |key, text, _, cx| {
                 v_copy.update(cx, |this, cx| this.copy_text_with_feedback(key, text, cx));
@@ -219,6 +220,18 @@ impl AiAssistantView {
             on_save_snippet: std::rc::Rc::new(move |name, command, _, cx| {
                 v_snip.update(cx, |this, cx| {
                     this.save_snippet_from_card(name, command, cx)
+                });
+            }),
+            on_revert_remote_file: std::rc::Rc::new(move |host_label, target_path, backup_path, _, cx| {
+                v_rev.update(cx, |this, _| {
+                    let _ = this.command_tx.try_send(transom_core::AppCommand::Ai(Box::new(
+                        transom_core::AiCommand::RevertRemoteFile {
+                            host_label,
+                            target_path,
+                            backup_path,
+                            conversation_id: this.state.active_conversation_id.clone(),
+                        },
+                    )));
                 });
             }),
         }

@@ -178,6 +178,11 @@ pub(super) fn build_tool_context(
         cancel,
         card_tx,
         plan_tx,
+        snapshot_dir: Some(
+            super::checkpoint_ops::store_ai_root(&ctx.ai_store)
+                .join("checkpoints")
+                .join("blobs"),
+        ),
         caps: transom_ai::ToolCapabilities {
             remote_exec,
             remote_fs,

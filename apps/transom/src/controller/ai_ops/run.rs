@@ -411,6 +411,8 @@ async fn handle_tool_card(
             ok: card.ok,
             duration_ms: card.duration_ms,
             diff_preview: card.diff_preview,
+            revert_target_path: card.revert_target_path,
+            revert_backup_path: card.revert_backup_path,
         };
         let _ = ctx
             .event_tx
@@ -429,6 +431,8 @@ async fn handle_tool_card(
             duration_ms: card.duration_ms,
             approved: Some(card.approved),
             diff_preview: card.diff_preview.clone(),
+            revert_target_path: card.revert_target_path.clone(),
+            revert_backup_path: card.revert_backup_path.clone(),
         },
     );
     *last_leaf_id = Some(entry.id.clone());
@@ -472,6 +476,8 @@ async fn handle_tool_card(
         ok: card.ok,
         duration_ms: card.duration_ms,
         diff_preview: card.diff_preview,
+        revert_target_path: card.revert_target_path,
+        revert_backup_path: card.revert_backup_path,
     };
     let _ = ctx
         .event_tx

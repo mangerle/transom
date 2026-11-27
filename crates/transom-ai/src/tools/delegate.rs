@@ -156,6 +156,7 @@ impl Tool for DelegateTaskTool {
                     approved: true,
                     duration_ms: elapsed,
                     diff_preview: None,
+                    ..Default::default()
                 });
                 Ok(clipped)
             }
@@ -173,6 +174,7 @@ impl Tool for DelegateTaskTool {
                     approved: true,
                     duration_ms: elapsed,
                     diff_preview: None,
+                    ..Default::default()
                 });
                 Err(to_rig_err(err))
             }

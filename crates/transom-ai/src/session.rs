@@ -118,6 +118,10 @@ pub enum SessionEntryKind {
         approved: Option<bool>,
         #[serde(default)]
         diff_preview: Option<String>,
+        #[serde(default)]
+        revert_target_path: Option<String>,
+        #[serde(default)]
+        revert_backup_path: Option<String>,
     },
     /// 上下文压缩摘要边界：后续组装发送给模型时从该节点起算。
     Compaction {

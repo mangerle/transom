@@ -99,6 +99,19 @@ pub(in crate::controller) async fn handle_ai_command(
             conversation_id,
             entry_id,
         } => checkpoint_ops::spawn_rollback_checkpoint(state, ctx, conversation_id, entry_id),
+        AiCommand::RevertRemoteFile {
+            host_label,
+            target_path,
+            backup_path,
+            conversation_id,
+        } => checkpoint_ops::spawn_revert_remote_file(
+            state,
+            ctx,
+            host_label,
+            target_path,
+            backup_path,
+            conversation_id,
+        ),
         AiCommand::InlineCommandAssist {
             request_id,
             prompt,

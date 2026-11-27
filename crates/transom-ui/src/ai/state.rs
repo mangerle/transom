@@ -165,6 +165,8 @@ impl AiPanelState {
                     ok,
                     duration_ms,
                     diff_preview,
+                    revert_target_path,
+                    revert_backup_path,
                     ..
                 } => {
                     self.items.push(UiChatItem::ToolCard {
@@ -183,6 +185,8 @@ impl AiPanelState {
                         ok,
                         duration_ms,
                         diff_preview,
+                        revert_target_path,
+                        revert_backup_path,
                     });
                 }
                 SessionEntryKind::AuditNotice {
@@ -473,6 +477,8 @@ impl AiPanelState {
                 ok,
                 duration_ms,
                 diff_preview,
+                revert_target_path,
+                revert_backup_path,
                 ..
             }) = self.items.iter_mut().rev().find(|it| {
                 matches!(it, UiChatItem::ToolCard { call_id, .. } if call_id == &dto.call_id)
@@ -487,6 +493,8 @@ impl AiPanelState {
             *ok = dto.ok;
             *duration_ms = dto.duration_ms;
             *diff_preview = dto.diff_preview;
+            *revert_target_path = dto.revert_target_path;
+            *revert_backup_path = dto.revert_backup_path;
             return;
         }
         self.items.push(UiChatItem::ToolCard {
@@ -501,6 +509,8 @@ impl AiPanelState {
             ok: dto.ok,
             duration_ms: dto.duration_ms,
             diff_preview: dto.diff_preview,
+            revert_target_path: dto.revert_target_path,
+            revert_backup_path: dto.revert_backup_path,
         });
     }
 }
@@ -526,6 +536,8 @@ mod tests {
             ok: true,
             duration_ms: 300,
             diff_preview: None,
+            revert_target_path: None,
+            revert_backup_path: None,
         }));
         assert_eq!(st.items.len(), 1);
         assert_eq!(st.metrics.steps, 0);
@@ -542,6 +554,8 @@ mod tests {
             ok: true,
             duration_ms: 820,
             diff_preview: None,
+            revert_target_path: None,
+            revert_backup_path: None,
         }));
         assert_eq!(st.items.len(), 1);
         assert_eq!(st.metrics.steps, 1);

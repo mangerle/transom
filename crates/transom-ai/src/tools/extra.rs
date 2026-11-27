@@ -241,6 +241,7 @@ impl Tool for RemoteExecBulkTool {
             approved: true,
             duration_ms: started.elapsed().as_millis() as u64,
             diff_preview: None,
+            ..Default::default()
         });
         Ok(clipped)
     }

@@ -85,6 +85,8 @@ pub(crate) enum UiChatItem {
         ok: bool,
         duration_ms: u64,
         diff_preview: Option<String>,
+        revert_target_path: Option<String>,
+        revert_backup_path: Option<String>,
     },
     /// 审批决策或权限变更的轻量化单行审计锚点。
     AuditNotice {

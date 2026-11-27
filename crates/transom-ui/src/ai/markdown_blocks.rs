@@ -32,6 +32,8 @@ pub(super) enum MarkdownSegment {
 pub(super) type KeyTextCallback = Rc<dyn Fn(String, String, &mut Window, &mut App)>;
 /// 单文本参数回调类型（用于填入终端）。
 pub(super) type TextCallback = Rc<dyn Fn(String, &mut Window, &mut App)>;
+/// 远端文件快照还原回调类型（参数：主机名、目标路径、本机备份路径）。
+pub(super) type RevertFileCallback = Rc<dyn Fn(String, String, String, &mut Window, &mut App)>;
 
 /// 代码块渲染所需的回调集合。
 #[derive(Clone)]
@@ -39,6 +41,7 @@ pub(super) struct CodeBlockCallbacks {
     pub(super) on_copy: KeyTextCallback,
     pub(super) on_send_to_terminal: TextCallback,
     pub(super) on_save_snippet: KeyTextCallback,
+    pub(super) on_revert_remote_file: RevertFileCallback,
 }
 
 /// 渲染 Markdown 正文的入参对象。
