@@ -13,6 +13,7 @@ pub mod config_presets;
 pub mod error;
 pub mod exec_policy;
 pub mod hooks;
+pub mod ids;
 pub mod mcp;
 pub mod memory;
 pub mod policy;
@@ -37,6 +38,7 @@ pub use hooks::{
     HookAction, HookContext, HookEvent, HookExecutor, HookMatcher, HookOutcome, HookRule,
     rule_matches,
 };
+pub use ids::{ApprovalRequestId, ConversationId, RunId, ToolCallId};
 pub use mcp::{McpServerConfig, McpToolDescriptor, McpTransport};
 pub use memory::{
     MemoryProposal, MemorySnapshot, append_host_fact, read_memory_file_limited,

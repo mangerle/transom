@@ -134,7 +134,9 @@ pub(super) fn build_tool_context(
         }
     }
 
-    let output_store = state.ai_output_stores.get_or_create(conversation_id);
+    let output_store = state
+        .ai_output_stores
+        .get_or_create(&transom_ai::ConversationId::from(conversation_id));
 
     let command_timeout = Duration::from_secs(timeout_secs.max(5));
     let mut bridge_deps = app_bridge::AppBridgeDeps::from_controller(

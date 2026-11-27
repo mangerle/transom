@@ -182,7 +182,7 @@ impl Tool for CompareHostsTool {
             let err_text = errors.join("\n");
             self.ctx
                 .record_card(ToolExecutionCard {
-                    call_id,
+                    call_id: call_id.into(),
                     running: false,
                     tool_name: Self::NAME.to_owned(),
                     host_label,
@@ -238,7 +238,7 @@ impl Tool for CompareHostsTool {
 
         self.ctx
             .record_card(ToolExecutionCard {
-                call_id,
+                call_id: call_id.into(),
                 running: false,
                 tool_name: Self::NAME.to_owned(),
                 host_label,

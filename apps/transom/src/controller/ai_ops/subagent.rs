@@ -6,13 +6,13 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use parking_lot::{Mutex, RwLock};
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 use transom_ai::{
-    AgentEvent, ChatRole, DelegateMode, DelegateTaskRequest, EVENT_CHANNEL_CAPACITY,
-    ExecPolicyRule, ExecutionMode, HookExecutor, HookRule, MemorySnapshot, ModelTarget, RunInput,
-    SessionEntry, SessionEntryKind, SessionScope, SubagentModelTier, SubagentRunner, ToolError,
-    ToolRuntimeContext,
+    AgentEvent, ApprovalRequestId, ChatRole, DelegateMode, DelegateTaskRequest,
+    EVENT_CHANNEL_CAPACITY, ExecPolicyRule, ExecutionMode, HookExecutor, HookRule, MemorySnapshot,
+    ModelTarget, RunInput, SessionEntry, SessionEntryKind, SessionScope, SubagentModelTier,
+    SubagentRunner, ToolError, ToolRuntimeContext,
 };
 use transom_core::{AiAppEvent, AiApprovalDecision, AiApprovalDto, AiManagedTaskStatus, AppEvent};
 use uuid::Uuid;
@@ -23,6 +23,7 @@ use super::app_bridge::{
 use super::event_pump::{AgentPumpSink, drive_agent_pump};
 use super::hooks_exec::ControllerHookExecutor;
 use super::task_runner::{ManagedTaskHandle, ManagedTaskRegistry};
+use crate::controller::state::AiApprovalMap;
 
 pub(in crate::controller) struct ControllerSubagentRunner {
     pub(in crate::controller) parent_run_id: String,
@@ -38,8 +39,7 @@ pub(in crate::controller) struct ControllerSubagentRunner {
     pub(in crate::controller) app_bridge_deps: AppBridgeDeps,
     pub(in crate::controller) tasks: Arc<ManagedTaskRegistry>,
     pub(in crate::controller) subagent_histories: Arc<Mutex<HashMap<String, Vec<SessionEntry>>>>,
-    pub(in crate::controller) approvals:
-        Arc<Mutex<HashMap<String, oneshot::Sender<AiApprovalDecision>>>>,
+    pub(in crate::controller) approvals: AiApprovalMap,
     pub(in crate::controller) event_tx: flume::Sender<AppEvent>,
     pub(in crate::controller) parent_cancel: CancellationToken,
 }
@@ -50,7 +50,7 @@ struct SubagentPumpSink {
     conversation_id: Option<String>,
     is_readonly: bool,
     task_handle: ManagedTaskHandle,
-    approvals: Arc<Mutex<HashMap<String, oneshot::Sender<AiApprovalDecision>>>>,
+    approvals: AiApprovalMap,
     event_tx: flume::Sender<AppEvent>,
     final_text: String,
 }
@@ -86,9 +86,10 @@ impl AgentPumpSink for SubagentPumpSink {
                         .emit_chunk("[已拦截只读子 Agent 的写操作请求]\n");
                 } else {
                     let request_id = Uuid::new_v4().to_string();
-                    self.approvals
-                        .lock()
-                        .insert(request_id.clone(), approval.respond);
+                    self.approvals.lock().insert(
+                        ApprovalRequestId::from(request_id.as_str()),
+                        approval.respond,
+                    );
                     let dto = AiApprovalDto {
                         request_id,
                         owner_run_id: self.parent_run_id.clone(),

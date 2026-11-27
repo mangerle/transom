@@ -20,7 +20,9 @@ mod runtime_bridge;
 mod subagent;
 pub(in crate::controller) mod task_runner;
 
-use transom_ai::{SkillSummary, extract_skill_command, load_skills_with_disabled};
+use transom_ai::{
+    ApprovalRequestId, RunId, SkillSummary, extract_skill_command, load_skills_with_disabled,
+};
 use transom_core::AiCommand;
 
 use super::state::{ControllerCtx, ControllerState};
@@ -66,7 +68,7 @@ pub(in crate::controller) async fn handle_ai_command(
     match cmd {
         AiCommand::SendPrompt(req) => dispatch::start_ai_run(state, ctx, *req).await,
         AiCommand::CancelRun { run_id } => {
-            if let Some(token) = state.ai_runs.lock().get(&run_id) {
+            if let Some(token) = state.ai_runs.lock().get(&RunId::from(run_id.as_str())) {
                 token.cancel();
             }
         }
@@ -74,7 +76,11 @@ pub(in crate::controller) async fn handle_ai_command(
             request_id,
             decision,
         } => {
-            if let Some(sender) = state.ai_approvals.lock().remove(&request_id) {
+            if let Some(sender) = state
+                .ai_approvals
+                .lock()
+                .remove(&ApprovalRequestId::from(request_id.as_str()))
+            {
                 let _ = sender.send(decision);
             }
         }
@@ -143,7 +149,9 @@ pub(in crate::controller) async fn handle_ai_command(
             }
         }
         AiCommand::DeleteConversation { conversation_id } => {
-            state.ai_output_stores.remove(&conversation_id);
+            state
+                .ai_output_stores
+                .remove(&transom_ai::ConversationId::from(conversation_id.as_str()));
             state
                 .ai_approval_grants
                 .write()
@@ -286,7 +294,7 @@ pub(in crate::controller) async fn handle_ai_command(
         }
         AiCommand::SteerRun { run_id, message } => {
             if !message.trim().is_empty() {
-                if let Some(queue) = state.ai_steers.lock().get(&run_id) {
+                if let Some(queue) = state.ai_steers.lock().get(&RunId::from(run_id.as_str())) {
                     queue.lock().push_back(message);
                 } else {
                     state.ai_tasks.steer_task(&run_id, message);

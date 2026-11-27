@@ -112,6 +112,7 @@ pub use tools::{
     plan::{PlanSnapshot, PlanStep, PlanStepStatus},
     with_io_guard,
 };
+pub use transom_ai_contracts::ids::{ApprovalRequestId, ConversationId, RunId, ToolCallId};
 pub use working_state::{
     SessionWorkingState, aggressive_compact_history, is_context_overflow_error,
 };

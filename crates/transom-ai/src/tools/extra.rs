@@ -231,7 +231,7 @@ impl Tool for RemoteExecBulkTool {
         let clipped = self.ctx.format_tool_output(Self::NAME, &combined);
         self.ctx
             .record_card(ToolExecutionCard {
-                call_id,
+                call_id: call_id.into(),
                 running: false,
                 tool_name: Self::NAME.to_owned(),
                 host_label: bulk_host_label,

@@ -3,6 +3,7 @@
 //! 该模块只负责运行时状态与事件背压，不定义具体工具实现。
 
 use super::*;
+use crate::ToolCallId;
 
 /// 工具运行期挂载的可选后端能力句柄集合（全部默认 `None`，按作用域装配）。
 #[derive(Clone, Default)]
@@ -113,7 +114,7 @@ impl ToolRuntimeContext {
     ) -> String {
         let call_id = uuid::Uuid::new_v4().to_string();
         self.record_card(ToolExecutionCard {
-            call_id: call_id.clone(),
+            call_id: ToolCallId::new(call_id.clone()),
             running: true,
             tool_name: tool_name.to_owned(),
             host_label: host_label.to_owned(),
@@ -149,7 +150,7 @@ impl ToolRuntimeContext {
     pub fn emit_tool_progress(&self, params: ToolProgressParams<'_>) {
         let preview = clip_tail_lines(params.tail_output, 5, 160);
         let card = ToolExecutionCard {
-            call_id: params.call_id.to_owned(),
+            call_id: ToolCallId::from(params.call_id),
             running: true,
             tool_name: params.tool_name.to_owned(),
             host_label: params.host_label.to_owned(),

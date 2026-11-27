@@ -20,6 +20,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::task::JoinSet;
 use tokio_util::sync::CancellationToken;
+use transom_ai::{ApprovalRequestId, RunId};
 use transom_core::{
     AppEvent, ConnectionId, KnownHostsStore, SecretStore, SessionId, TabId, TransferId,
 };
@@ -38,6 +39,16 @@ pub(super) const MAX_HEADLESS_REMOTES: usize = 8;
 
 /// AI 工具在后台静默建立的无标签页远端 SSH 连接 LRU/TTL 缓存。
 pub(super) type AiHeadlessRemoteMap = Arc<AiHeadlessRemoteCache>;
+
+/// 在途 AI 运行取消令牌映射。
+pub(super) type AiRunMap = Arc<parking_lot::Mutex<HashMap<RunId, CancellationToken>>>;
+
+/// 待审批请求回传通道映射。
+pub(super) type AiApprovalMap = Arc<
+    parking_lot::Mutex<
+        HashMap<ApprovalRequestId, tokio::sync::oneshot::Sender<transom_core::AiApprovalDecision>>,
+    >,
+>;
 
 /// 有界、带空闲 TTL 的后台远端连接缓存。
 pub(super) struct AiHeadlessRemoteCache {
@@ -117,9 +128,7 @@ impl AiHeadlessRemoteCache {
 
 /// 在途 AI 运行的中途引导（Steer）注入队列映射表。
 pub(super) type SteerQueueMap = Arc<
-    parking_lot::Mutex<
-        HashMap<String, Arc<parking_lot::Mutex<std::collections::VecDeque<String>>>>,
-    >,
+    parking_lot::Mutex<HashMap<RunId, Arc<parking_lot::Mutex<std::collections::VecDeque<String>>>>>,
 >;
 
 /// 终端手动接管恢复回调映射表。
@@ -160,15 +169,11 @@ pub(super) struct ControllerState {
     /// Git 面板的一次性读写请求：全部子进程自带超时，停机统一限时等待。
     pub(super) git_set: JoinSet<()>,
     /// 在途 AI 运行的取消令牌。
-    pub(super) ai_runs: Arc<parking_lot::Mutex<HashMap<String, CancellationToken>>>,
+    pub(super) ai_runs: AiRunMap,
     /// 在途 AI 运行的中途引导（Steer）注入队列。
     pub(super) ai_steers: SteerQueueMap,
     /// 待用户审批的 AI 工具回调表。
-    pub(super) ai_approvals: Arc<
-        parking_lot::Mutex<
-            HashMap<String, tokio::sync::oneshot::Sender<transom_core::AiApprovalDecision>>,
-        >,
-    >,
+    pub(super) ai_approvals: AiApprovalMap,
     /// 待用户在交互式终端完成手动操作的恢复通道。
     pub(super) ai_handoffs: HandoffSenderMap,
     /// 已通过审批卡片“允许同类”放行的命令前缀，按对话、主机与保护级别隔离。

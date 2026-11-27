@@ -187,7 +187,7 @@ impl Tool for DelegateTaskTool {
                 let clipped = self.ctx.format_tool_output(Self::NAME, &out);
                 self.ctx
                     .record_card(ToolExecutionCard {
-                        call_id,
+                        call_id: call_id.into(),
                         running: false,
                         tool_name: Self::NAME.to_owned(),
                         host_label,
@@ -207,7 +207,7 @@ impl Tool for DelegateTaskTool {
                 let msg = err.to_string();
                 self.ctx
                     .record_card(ToolExecutionCard {
-                        call_id,
+                        call_id: call_id.into(),
                         running: false,
                         tool_name: Self::NAME.to_owned(),
                         host_label,

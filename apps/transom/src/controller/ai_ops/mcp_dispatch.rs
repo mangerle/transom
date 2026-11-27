@@ -6,8 +6,8 @@ use serde_json::Value;
 use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
 use transom_ai::{
-    PolicyDecision, RemoteExecutor, RemoteFsExecutor, RuntimeInspector, TerminalContextProvider,
-    ToolIoContext, ToolRisk,
+    ApprovalRequestId, PolicyDecision, RemoteExecutor, RemoteFsExecutor, RuntimeInspector,
+    TerminalContextProvider, ToolIoContext, ToolRisk,
 };
 use transom_core::{AiAppEvent, AiApprovalDto, AppEvent};
 use uuid::Uuid;
@@ -29,7 +29,9 @@ pub(super) async fn enforce_decision(
         PolicyDecision::RequireApproval => {
             let request_id = Uuid::new_v4().to_string();
             let (tx, rx) = oneshot::channel();
-            snap.approvals.lock().insert(request_id.clone(), tx);
+            snap.approvals
+                .lock()
+                .insert(ApprovalRequestId::from(request_id.as_str()), tx);
             let dto = AiApprovalDto {
                 request_id: request_id.clone(),
                 owner_run_id: "mcp-external".to_owned(),
@@ -53,12 +55,16 @@ pub(super) async fn enforce_decision(
                 .await
                 .is_err()
             {
-                snap.approvals.lock().remove(&request_id);
+                snap.approvals
+                    .lock()
+                    .remove(&ApprovalRequestId::from(request_id.as_str()));
                 return Err("UI 事件通道已关闭，无法请求人工审批".to_owned());
             }
             tokio::select! {
                 _ = cancel.cancelled() => {
-                    snap.approvals.lock().remove(&request_id);
+                    snap.approvals
+                        .lock()
+                        .remove(&ApprovalRequestId::from(request_id.as_str()));
                     Err("Transom 正在退出，审批已取消".to_owned())
                 }
                 res = tokio::time::timeout(MCP_APPROVAL_TIMEOUT, rx) => match res {
@@ -69,7 +75,9 @@ pub(super) async fn enforce_decision(
                     Ok(Ok(_)) => Err("用户拒绝了来自外部 MCP 的操作请求".to_owned()),
                     Ok(Err(_)) => Err("审批通道已断开".to_owned()),
                     Err(_) => {
-                        snap.approvals.lock().remove(&request_id);
+                        snap.approvals
+                            .lock()
+                            .remove(&ApprovalRequestId::from(request_id.as_str()));
                         Err("外部 MCP 审批等待超时（120 秒），用户未响应，已自动拒绝".to_owned())
                     }
                 }

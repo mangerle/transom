@@ -5,6 +5,7 @@ use std::time::Duration;
 
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
+use transom_ai::RunId;
 use transom_ai::{
     AcpAgentConfig, EVENT_CHANNEL_CAPACITY, RunInput, SessionEntry, SessionEntryKind, SessionScope,
     ThinkingEffort,
@@ -183,11 +184,11 @@ pub(super) async fn start_ai_run(
     state
         .ai_runs
         .lock()
-        .insert(req.run_id.clone(), cancel.clone());
+        .insert(RunId::from(req.run_id.as_str()), cancel.clone());
     state
         .ai_steers
         .lock()
-        .insert(req.run_id.clone(), steer_queue.clone());
+        .insert(RunId::from(req.run_id.as_str()), steer_queue.clone());
 
     let (event_tx, event_rx) = mpsc::channel(EVENT_CHANNEL_CAPACITY);
 

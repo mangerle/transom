@@ -168,7 +168,7 @@ impl Tool for RemoteExecTool {
                 let clipped = self.ctx.format_tool_output(Self::NAME, &raw);
                 self.ctx
                     .record_card(crate::tools::ToolExecutionCard {
-                        call_id,
+                        call_id: call_id.into(),
                         running: false,
                         tool_name: Self::NAME.to_owned(),
                         host_label,
@@ -191,7 +191,7 @@ impl Tool for RemoteExecTool {
                 let msg = err.to_string();
                 self.ctx
                     .record_card(crate::tools::ToolExecutionCard {
-                        call_id,
+                        call_id: call_id.into(),
                         running: false,
                         tool_name: Self::NAME.to_owned(),
                         host_label,

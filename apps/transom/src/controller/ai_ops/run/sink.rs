@@ -3,7 +3,7 @@
 use async_trait::async_trait;
 use uuid::Uuid;
 
-use transom_ai::{AgentEvent, PlanStepStatus, ToolRisk};
+use transom_ai::{AgentEvent, ApprovalRequestId, PlanStepStatus, ToolRisk};
 use transom_core::{AiAppEvent, AiApprovalDto, AiPlanDto, AiPlanStepDto, AiPlanStepStatus};
 
 use super::PumpContext;
@@ -107,7 +107,7 @@ impl AgentPumpSink for MainAgentPumpSink {
                 self.ctx
                     .approvals
                     .lock()
-                    .insert(request_id.clone(), req.respond);
+                    .insert(ApprovalRequestId::from(request_id.as_str()), req.respond);
                 let dto = AiApprovalDto {
                     request_id,
                     owner_run_id: self.ctx.run_id.clone(),

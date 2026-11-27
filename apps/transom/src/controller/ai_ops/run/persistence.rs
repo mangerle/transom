@@ -88,7 +88,7 @@ pub(super) async fn handle_tool_card(
         let dto = AiToolCardDto {
             conversation_id: ctx.conversation_id.clone(),
             run_id: ctx.run_id.clone(),
-            call_id: card.call_id,
+            call_id: card.call_id.to_string(),
             running: true,
             tool_name: card.tool_name,
             host_label: card.host_label,
@@ -149,7 +149,7 @@ pub(super) async fn handle_tool_card(
     let dto = AiToolCardDto {
         conversation_id: ctx.conversation_id.clone(),
         run_id: ctx.run_id.clone(),
-        call_id: card.call_id,
+        call_id: card.call_id.to_string(),
         running: false,
         tool_name: card.tool_name,
         host_label: card.host_label,

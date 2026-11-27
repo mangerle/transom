@@ -7,6 +7,7 @@ use std::time::Duration;
 use tokio::process::Command;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
+use transom_ai::RunId;
 use transom_ai::{
     AcpAgentConfig, EVENT_CHANNEL_CAPACITY, ProviderProtocol, RunInput, SessionScope,
     default_acp_presets, discover_models, probe_acp_models, test_provider_connection,
@@ -120,7 +121,7 @@ pub(super) async fn start_acp_only_run(
     state
         .ai_runs
         .lock()
-        .insert(req.run_id.clone(), cancel.clone());
+        .insert(RunId::from(req.run_id.as_str()), cancel.clone());
     let (event_tx, event_rx) = mpsc::channel(EVENT_CHANNEL_CAPACITY);
     let tool_ctx = build_tool_context(
         state,

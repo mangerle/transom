@@ -38,6 +38,7 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc::{self, error::TrySendError};
 use tokio_util::sync::CancellationToken;
 
+use crate::ToolCallId;
 use crate::compaction::{DEFAULT_TOOL_OUTPUT_LIMIT, SessionPromptContext};
 use crate::error::ToolError;
 use crate::memory::MemoryProposal;
@@ -79,7 +80,7 @@ pub struct ApprovalSummary {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ToolExecutionCard {
     #[serde(default)]
-    pub call_id: String,
+    pub call_id: ToolCallId,
     #[serde(default)]
     pub running: bool,
     pub tool_name: String,
@@ -103,7 +104,7 @@ pub struct ToolExecutionCard {
 impl Default for ToolExecutionCard {
     fn default() -> Self {
         Self {
-            call_id: String::new(),
+            call_id: ToolCallId::default(),
             running: false,
             tool_name: String::new(),
             host_label: String::new(),

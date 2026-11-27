@@ -11,6 +11,7 @@ use std::sync::Arc;
 use parking_lot::Mutex;
 use uuid::Uuid;
 
+use crate::ConversationId;
 use crate::compaction::{DEFAULT_TOOL_OUTPUT_LIMIT, clip_head_tail, strip_ansi};
 use crate::error::ToolError;
 use crate::redact::redact_secrets_for_model;
@@ -247,13 +248,17 @@ impl ToolOutputStorePool {
     }
 
     /// 获取或创建指定对话的输出池，并刷新其 LRU 位置。
-    pub fn get_or_create(&self, conversation_id: &str) -> Arc<ToolOutputStore> {
+    pub fn get_or_create(&self, conversation_id: &ConversationId) -> Arc<ToolOutputStore> {
         let mut guard = self.inner.lock();
-        if let Some(store) = guard.entries.get(conversation_id).cloned() {
-            if let Some(pos) = guard.order.iter().position(|id| id == conversation_id) {
+        if let Some(store) = guard.entries.get(conversation_id.as_str()).cloned() {
+            if let Some(pos) = guard
+                .order
+                .iter()
+                .position(|id| id == conversation_id.as_str())
+            {
                 guard.order.remove(pos);
             }
-            guard.order.push_back(conversation_id.to_owned());
+            guard.order.push_back(conversation_id.to_string());
             return store;
         }
 
@@ -266,16 +271,20 @@ impl ToolOutputStorePool {
         let store = Arc::new(ToolOutputStore::new());
         guard
             .entries
-            .insert(conversation_id.to_owned(), store.clone());
-        guard.order.push_back(conversation_id.to_owned());
+            .insert(conversation_id.to_string(), store.clone());
+        guard.order.push_back(conversation_id.to_string());
         store
     }
 
     /// 删除指定对话的输出池。
-    pub fn remove(&self, conversation_id: &str) {
+    pub fn remove(&self, conversation_id: &ConversationId) {
         let mut guard = self.inner.lock();
-        guard.entries.remove(conversation_id);
-        if let Some(pos) = guard.order.iter().position(|id| id == conversation_id) {
+        guard.entries.remove(conversation_id.as_str());
+        if let Some(pos) = guard
+            .order
+            .iter()
+            .position(|id| id == conversation_id.as_str())
+        {
             guard.order.remove(pos);
         }
     }
@@ -371,21 +380,21 @@ mod tests {
     #[test]
     fn conversation_pool_evicts_least_recently_used_entry() {
         let pool = ToolOutputStorePool::new(2);
-        let first = pool.get_or_create("conversation-a");
-        let second = pool.get_or_create("conversation-b");
+        let first = pool.get_or_create(&crate::ConversationId::from("conversation-a"));
+        let second = pool.get_or_create(&crate::ConversationId::from("conversation-b"));
         assert!(std::sync::Arc::ptr_eq(
             &first,
-            &pool.get_or_create("conversation-a")
+            &pool.get_or_create(&crate::ConversationId::from("conversation-a"))
         ));
-        let third = pool.get_or_create("conversation-c");
+        let third = pool.get_or_create(&crate::ConversationId::from("conversation-c"));
         assert!(!std::sync::Arc::ptr_eq(&first, &third));
         assert!(std::sync::Arc::ptr_eq(
             &first,
-            &pool.get_or_create("conversation-a")
+            &pool.get_or_create(&crate::ConversationId::from("conversation-a"))
         ));
         assert!(!std::sync::Arc::ptr_eq(
             &second,
-            &pool.get_or_create("conversation-b")
+            &pool.get_or_create(&crate::ConversationId::from("conversation-b"))
         ));
     }
 

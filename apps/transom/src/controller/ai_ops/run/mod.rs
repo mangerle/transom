@@ -1,17 +1,15 @@
 //! AI 运行时事件泵、增量节流合并与 JSONL / 审计落盘。
 
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
-use parking_lot::Mutex;
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 use transom_ai::{
-    AcpAgentConfig, AcpRunInput, AgentEvent, ChatRole, HookExecutor, MemorySnapshot, RunInput,
-    SessionEntry, SessionEntryKind, run_acp_turn,
+    AcpAgentConfig, AcpRunInput, AgentEvent, ChatRole, HookExecutor, MemorySnapshot, RunId,
+    RunInput, SessionEntry, SessionEntryKind, run_acp_turn,
 };
-use transom_core::{AiAppEvent, AiApprovalDecision, AppEvent};
+use transom_core::{AiAppEvent, AppEvent};
 
 mod events;
 mod persistence;
@@ -19,6 +17,7 @@ mod sink;
 
 use super::event_pump::drive_agent_pump;
 use super::run_recorder::RunRecorder;
+use crate::controller::state::{AiApprovalMap, AiRunMap, HandoffSenderMap, SteerQueueMap};
 use events::emit_ui_event;
 use sink::MainAgentPumpSink;
 
@@ -30,10 +29,10 @@ pub(super) struct PumpContext {
     pub(super) model_name: String,
     pub(super) recorder: RunRecorder,
     pub(super) event_tx: flume::Sender<AppEvent>,
-    pub(super) approvals: Arc<Mutex<HashMap<String, oneshot::Sender<AiApprovalDecision>>>>,
-    pub(super) handoffs: super::super::state::HandoffSenderMap,
-    pub(super) runs_map: Arc<Mutex<HashMap<String, CancellationToken>>>,
-    pub(super) steers_map: super::super::state::SteerQueueMap,
+    pub(super) approvals: AiApprovalMap,
+    pub(super) handoffs: HandoffSenderMap,
+    pub(super) runs_map: AiRunMap,
+    pub(super) steers_map: SteerQueueMap,
     pub(super) title: String,
     pub(super) acp_agent: Option<AcpAgentConfig>,
     pub(super) hook_executor: Option<Arc<dyn HookExecutor>>,
@@ -151,8 +150,9 @@ pub(super) async fn execute_and_pump(
                 .as_deref()
                 .is_some_and(|e| e.contains("已取消") || e.contains("Cancelled")));
     let runner_err = persistence_error.or(finalize_error).or(runner_err);
-    ctx.runs_map.lock().remove(&ctx.run_id);
-    ctx.steers_map.lock().remove(&ctx.run_id);
+    let run_id = RunId::from(ctx.run_id.as_str());
+    ctx.runs_map.lock().remove(&run_id);
+    ctx.steers_map.lock().remove(&run_id);
     emit_ui_event(
         &ctx,
         AiAppEvent::RunFinished {
@@ -167,8 +167,9 @@ pub(super) async fn execute_and_pump(
 }
 
 async fn finish_with_storage_error(ctx: &PumpContext, error: String) {
-    ctx.runs_map.lock().remove(&ctx.run_id);
-    ctx.steers_map.lock().remove(&ctx.run_id);
+    let run_id = RunId::from(ctx.run_id.as_str());
+    ctx.runs_map.lock().remove(&run_id);
+    ctx.steers_map.lock().remove(&run_id);
     events::emit_ui_event(
         ctx,
         AiAppEvent::RunFinished {

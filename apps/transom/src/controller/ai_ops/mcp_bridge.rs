@@ -29,7 +29,7 @@ use super::app_bridge::{AppBridgeDeps, ControllerAppActionBridge};
 use super::bridge::SshRemoteExecutor;
 use super::mcp_dispatch::{dispatch_single_tool, enforce_decision};
 use crate::controller::Internal;
-use crate::controller::state::{ControllerCtx, ControllerState};
+use crate::controller::state::{AiApprovalMap, ControllerCtx, ControllerState};
 
 /// 单个活跃 SSH 会话在 MCP 侧的轻量执行句柄。
 #[derive(Clone)]
@@ -45,8 +45,7 @@ pub(in crate::controller) struct McpControllerSnapshot {
     pub(super) execution_mode: ExecutionMode,
     pub(super) command_timeout: Duration,
     pub(super) output_store: Arc<ToolOutputStore>,
-    pub(super) approvals:
-        Arc<Mutex<HashMap<String, oneshot::Sender<transom_core::AiApprovalDecision>>>>,
+    pub(super) approvals: AiApprovalMap,
     pub(super) terminal_reqs: Arc<Mutex<HashMap<String, oneshot::Sender<Option<String>>>>>,
     pub(super) event_tx: flume::Sender<AppEvent>,
     pub(super) ai_store: Arc<AiStore>,
@@ -73,7 +72,9 @@ pub(in crate::controller) fn handle_mcp_snapshot(
         })
         .collect();
 
-    let store = state.ai_output_stores.get_or_create("mcp-external");
+    let store = state
+        .ai_output_stores
+        .get_or_create(&transom_ai::ConversationId::from("mcp-external"));
     let settings = ctx.ai_config.snapshot();
     let timeout_secs = settings.command_timeout_secs.max(5);
     let command_timeout = Duration::from_secs(timeout_secs);
