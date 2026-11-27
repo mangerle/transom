@@ -1,0 +1,40 @@
+[package]
+name = "transom-ai"
+description = "Transom 智能运维助手领域层：rig Agent 运行时、三层记忆、树状会话、审批门与工具集"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+documentation.workspace = true
+readme.workspace = true
+publish = false
+
+[dependencies]
+transom-core.workspace = true
+rig-core.workspace = true
+rig-agent.workspace = true
+reqwest.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+futures.workspace = true
+async-trait.workspace = true
+thiserror.workspace = true
+anyhow.workspace = true
+chrono.workspace = true
+log.workspace = true
+sha2.workspace = true
+hex.workspace = true
+base64.workspace = true
+image.workspace = true
+similar.workspace = true
+uuid.workspace = true
+regex.workspace = true
+parking_lot.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+rig-agent = { workspace = true, features = ["test-utils"] }
