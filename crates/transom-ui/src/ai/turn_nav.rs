@@ -105,6 +105,7 @@ mod tests {
         let u1 = UiChatItem::UserText {
             id: "u1".to_owned(),
             text: "检查磁盘\n并分析大文件".to_owned(),
+            timestamp: None,
         };
         let a1 = UiChatItem::AssistantText {
             id: "a1".to_owned(),
@@ -119,6 +120,7 @@ mod tests {
         let u2 = UiChatItem::UserText {
             id: "u2".to_owned(),
             text: long_text,
+            timestamp: None,
         };
         let blocks = vec![
             DisplayBlock::Single(&u1),

@@ -183,8 +183,8 @@ pub(super) fn render_work_group(
     let mut header = h_flex()
         .id(SharedString::from(format!("ai-wg-{}", params.id)))
         .w_full()
-        .px(rems(space::SM))
-        .py(rems(space::XS))
+        .px(px(2.0))
+        .py(px(3.0))
         .gap(rems(space::XS))
         .justify_between()
         .items_center()
@@ -192,16 +192,26 @@ pub(super) fn render_work_group(
         .cursor_pointer()
         .hover(|s| s.bg(p.surface.hover))
         .on_click(move |_, w, cx| toggle_self(gid.clone(), w, cx));
+
+    let mut left_head = h_flex()
+        .flex_1()
+        .min_w_0()
+        .gap(px(6.0))
+        .items_center()
+        .overflow_hidden();
     if params.in_progress {
-        header = header.bg(p.secondary);
+        left_head = left_head.child(
+            div()
+                .flex_shrink_0()
+                .text_color(p.primary)
+                .child(AppIconElement::new(AppIcon::Ui(UiIcon::REFRESH)).small()),
+        );
     }
     header = header.child(
-        h_flex()
-            .flex_1()
-            .gap(rems(space::XS))
-            .items_center()
+        left_head
             .child(
                 div()
+                    .truncate()
                     .text_size(rems(typography::CAPTION))
                     .text_color(if params.in_progress {
                         p.foreground
@@ -212,6 +222,7 @@ pub(super) fn render_work_group(
             )
             .child(
                 div()
+                    .flex_shrink_0()
                     .text_color(p.text.muted)
                     .child(AppIconElement::new(AppIcon::Ui(chevron)).small()),
             ),
@@ -224,14 +235,22 @@ pub(super) fn render_work_group(
             total = params.tool_steps
         )
         .to_string();
+        let (step_icon, step_color) = if params.in_progress {
+            (UiIcon::REFRESH, p.primary)
+        } else if params.ok_steps < params.tool_steps {
+            (UiIcon::ERROR, p.danger)
+        } else {
+            (UiIcon::CHECK, p.success)
+        };
         header = header.child(
             h_flex()
+                .flex_shrink_0()
                 .gap(px(4.0))
                 .items_center()
                 .child(
                     div()
-                        .text_color(p.success)
-                        .child(AppIconElement::new(AppIcon::Ui(UiIcon::CHECK)).small()),
+                        .text_color(step_color)
+                        .child(AppIconElement::new(AppIcon::Ui(step_icon)).small()),
                 )
                 .child(
                     div()
@@ -242,13 +261,15 @@ pub(super) fn render_work_group(
         );
     }
 
-    let mut wrapper = v_flex().w_full().gap(rems(space::XS)).child(header);
+    let mut wrapper = v_flex().w_full().gap(px(4.0)).child(header);
     if expanded {
         let mut details = v_flex()
             .w_full()
+            .ml(px(6.0))
             .pl(rems(space::SM))
-            .gap(px(2.0))
-            .border_l_2()
+            .py(px(2.0))
+            .gap(px(4.0))
+            .border_l_1()
             .border_color(p.divider(p.border));
         if let Some((wg_icon, wg_label)) = summarize_tool_activity(params.items) {
             details = details.child(
@@ -334,6 +355,7 @@ mod tests {
             UiChatItem::UserText {
                 id: "u1".to_owned(),
                 text: "检查负载".to_owned(),
+                timestamp: None,
             },
             UiChatItem::Reasoning {
                 id: "r1".to_owned(),

@@ -85,16 +85,6 @@ pub(super) fn render_handoff_banner(
 }
 
 impl AiAssistantView {
-    pub(super) fn toggle_plan_mode(&mut self, cx: &mut Context<Self>) {
-        self.state.plan_mode = !self.state.plan_mode;
-        cx.notify();
-    }
-
-    pub(super) fn execute_approved_plan(&mut self, cx: &mut Context<Self>) {
-        self.state.plan_mode = false;
-        self.send_prompt_text(rust_i18n::t!("ai.plan_execute_prompt").to_string(), cx);
-    }
-
     pub(super) fn compact_conversation(&mut self, focus: String, cx: &mut Context<Self>) {
         let Some(conv_id) = self.state.active_conversation_id.clone() else {
             return;
@@ -367,7 +357,6 @@ impl AiAssistantView {
             v_rm_att,
             v_paste,
             v_drop,
-            v_plan_mode,
         ) = (
             view.clone(),
             view.clone(),
@@ -378,7 +367,44 @@ impl AiAssistantView {
             view.clone(),
             view.clone(),
             view.clone(),
-            view.clone(),
+        );
+
+        let running_tasks_count = self
+            .state
+            .managed_tasks
+            .iter()
+            .filter(|t| t.dto.status == transom_core::AiManagedTaskStatus::Running)
+            .count();
+        let v_pill_plan = view.clone();
+        let v_pill_tasks = view.clone();
+        let v_rm_chip = view.clone();
+        let status_header = super::plan_card::render_status_pills_row(
+            super::plan_card::StatusPillsParams {
+                plan: self.state.active_plan.as_ref(),
+                focus: self.state.active_focus.as_deref(),
+                plan_expanded: self.state.status_panel_expanded,
+                running_tasks_count,
+                tasks_expanded: self.state.tasks_drawer_expanded,
+                p,
+            },
+            move |_, cx| {
+                v_pill_plan.update(cx, |this, cx| {
+                    this.state.status_panel_expanded = !this.state.status_panel_expanded;
+                    if this.state.status_panel_expanded {
+                        this.state.tasks_drawer_expanded = false;
+                    }
+                    cx.notify();
+                });
+            },
+            move |_, cx| {
+                v_pill_tasks.update(cx, |this, cx| {
+                    this.state.tasks_drawer_expanded = !this.state.tasks_drawer_expanded;
+                    if this.state.tasks_drawer_expanded {
+                        this.state.status_panel_expanded = false;
+                    }
+                    cx.notify();
+                });
+            },
         );
 
         render_composer(
@@ -394,11 +420,12 @@ impl AiAssistantView {
                 acp_install_status: self.state.acp_install_status.as_ref(),
                 active_popup: self.state.active_popup,
                 toolbar_popover: self.render_toolbar_popover(p, cx),
+                composer_chips: &self.state.composer_chips,
                 pending_attachments: &self.state.pending_attachments,
                 metrics: &self.state.metrics,
                 context_window: self.active_context_window(),
                 extra_host_options,
-                plan_mode: self.state.plan_mode,
+                status_header,
                 p,
             },
             ComposerActions {
@@ -430,14 +457,19 @@ impl AiAssistantView {
                 on_remove_attachment: Box::new(move |id, _, cx| {
                     v_rm_att.update(cx, |this, cx| this.remove_attachment(&id, cx));
                 }),
+                on_remove_chip: Box::new(move |idx, _, cx| {
+                    v_rm_chip.update(cx, |this, cx| {
+                        if idx < this.state.composer_chips.len() {
+                            this.state.composer_chips.remove(idx);
+                            cx.notify();
+                        }
+                    });
+                }),
                 on_paste_item: Box::new(move |item, w, cx| {
                     v_paste.update(cx, |this, cx| this.handle_paste_item(item, w, cx))
                 }),
                 on_drop_paths: Box::new(move |paths, w, cx| {
                     v_drop.update(cx, |this, cx| this.handle_dropped_paths(paths, w, cx));
-                }),
-                on_toggle_plan_mode: Box::new(move |_, cx| {
-                    v_plan_mode.update(cx, |this, cx| this.toggle_plan_mode(cx));
                 }),
             },
         )

@@ -5,6 +5,7 @@ use std::rc::Rc;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Sizable as _;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
+use gpui_kit::component::scroll::ScrollableElement;
 use gpui_kit::*;
 use transom_ui_icons::{AppIcon, AppIconElement, DomainIcon, UiIcon};
 
@@ -18,7 +19,11 @@ fn tool_row_icon(tool_name: &str) -> AppIcon {
             AppIcon::Domain(DomainIcon::TERMINAL)
         }
         "remote_fs" | "transfer_file" | "read_output" => AppIcon::Ui(UiIcon::LIST_FILES),
-        _ => AppIcon::Ui(UiIcon::RUN),
+        "session_catalog" => AppIcon::Ui(UiIcon::WEB_SERVER),
+        "workspace_control" => AppIcon::Ui(UiIcon::LAYOUT),
+        "delegate_task" => AppIcon::Ui(UiIcon::DATAFLOW),
+        "search_knowledge" => AppIcon::Ui(UiIcon::SEARCH),
+        _ => AppIcon::Ui(UiIcon::DEPENDENCIES),
     }
 }
 
@@ -79,8 +84,8 @@ pub(super) fn render_tool_card(
                         .text_color(if *ok { p.text.muted } else { p.danger })
                         .child(AppIconElement::new(tool_row_icon(tool_name)).small()),
                 )
-                .child(
-                    div()
+                .child({
+                    let mut title_el = div()
                         .flex_1()
                         .min_w_0()
                         .truncate()
@@ -89,12 +94,28 @@ pub(super) fn render_tool_card(
                             p.foreground
                         } else {
                             p.text.muted
-                        })
-                        .child(row_title),
-                ),
+                        });
+                    if is_cmd {
+                        title_el = title_el.font_family("monospace");
+                    }
+                    title_el.child(row_title)
+                }),
         );
 
-    let mut right = h_flex().flex_shrink_0().gap(px(4.0)).items_center();
+    let mut right = h_flex().flex_shrink_0().gap(px(6.0)).items_center();
+    if *duration_ms > 0 {
+        let dur_str = if *duration_ms >= 1000 {
+            format!("{:.1}s", *duration_ms as f64 / 1000.0)
+        } else {
+            format!("{duration_ms}ms")
+        };
+        right = right.child(
+            div()
+                .text_size(rems(typography::CAPTION))
+                .text_color(p.text.muted)
+                .child(dur_str),
+        );
+    }
     if !*ok {
         right = right.child(
             div()
@@ -181,8 +202,10 @@ pub(super) fn render_tool_card(
 
     let mut body = v_flex()
         .id(SharedString::from(format!("ai-tool-out-{id}")))
+        .w_full()
+        .min_h_0()
         .max_h(rems(18.0))
-        .overflow_y_scroll()
+        .overflow_y_scrollbar()
         .px(rems(space::SM))
         .py(rems(space::XS))
         .gap(px(4.0))
@@ -237,7 +260,12 @@ pub(super) fn render_tool_card(
                 )
                 .child(actions),
         )
-        .child(body)
+        .child(
+            div()
+                .w_full()
+                .on_scroll(|_, _, cx| cx.stop_propagation())
+                .child(body),
+        )
         .child(
             h_flex()
                 .w_full()

@@ -3,7 +3,6 @@
 use std::path::PathBuf;
 
 use gpui_kit::base::{h_flex, v_flex};
-use gpui_kit::component::Sizable as _;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::input::{Textarea, TextareaState};
 use gpui_kit::component::progress::ProgressCircle;
@@ -43,11 +42,12 @@ pub(super) struct ComposerParams<'a> {
     pub(super) acp_install_status: Option<&'a (String, bool, String)>,
     pub(super) active_popup: AiActivePopup,
     pub(super) toolbar_popover: Option<(AiActivePopup, AnyElement)>,
+    pub(super) composer_chips: &'a [super::state::ComposerChip],
     pub(super) pending_attachments: &'a [ComposerAttachment],
     pub(super) metrics: &'a AiSessionMetrics,
     pub(super) context_window: u32,
     pub(super) extra_host_options: Vec<ExtraHostOption>,
-    pub(super) plan_mode: bool,
+    pub(super) status_header: Option<AnyElement>,
     pub(super) p: &'a Palette,
 }
 
@@ -68,9 +68,9 @@ pub(super) struct ComposerActions {
     pub(super) on_open_config: ActionCb,
     pub(super) on_install_acp: IdCb,
     pub(super) on_remove_attachment: IdCb,
+    pub(super) on_remove_chip: Box<dyn Fn(usize, &mut Window, &mut App)>,
     pub(super) on_paste_item: PasteCb,
     pub(super) on_drop_paths: DropCb,
-    pub(super) on_toggle_plan_mode: ActionCb,
 }
 
 /// 渲染底部 CC-GUI 风格圆角提问卡片。
@@ -85,9 +85,9 @@ pub(super) fn render_composer(params: ComposerParams<'_>, actions: ComposerActio
         on_open_config,
         on_install_acp,
         on_remove_attachment,
+        on_remove_chip,
         on_paste_item,
         on_drop_paths,
-        on_toggle_plan_mode,
     } = actions;
     let toggle_popup_rc = std::rc::Rc::new(on_toggle_popup);
     let toggle_host_rc = std::rc::Rc::new(on_toggle_extra_host);
@@ -105,6 +105,10 @@ pub(super) fn render_composer(params: ComposerParams<'_>, actions: ComposerActio
         .on_drop::<ExternalPaths>(move |ext, w, cx| {
             on_drop_paths(ext.paths().to_vec(), w, cx);
         });
+
+    if let Some(status_header) = params.status_header {
+        card = card.child(status_header);
+    }
 
     if let Some((agent_id, agent, cmd)) = params.acp_missing_warning {
         let (installing, detail) = match params.acp_install_status {
@@ -206,7 +210,7 @@ pub(super) fn render_composer(params: ComposerParams<'_>, actions: ComposerActio
         .metrics
         .last_tps
         .map(|t| format!("{t:.0} tok/s"))
-        .unwrap_or_else(|| "-- tok/s".to_owned());
+        .unwrap_or_else(|| "0 tok/s".to_owned());
     let usage_label = rust_i18n::t!(
         "ai.usage_chip_cache",
         total = format_compact_tokens(params.metrics.total_tokens()),
@@ -221,6 +225,7 @@ pub(super) fn render_composer(params: ComposerParams<'_>, actions: ComposerActio
         .overflow_hidden()
         .gap(px(2.0))
         .items_center()
+        .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
         .child(render_icon_popup_trigger(
             "ai-popup-backend",
             backend_trigger_icon,
@@ -237,40 +242,6 @@ pub(super) fn render_composer(params: ComposerParams<'_>, actions: ComposerActio
             p,
             move |w, cx| t_mode(AiActivePopup::Mode, w, cx),
         ))
-        .child({
-            let plan_tip = if params.plan_mode {
-                rust_i18n::t!("ai.mode_plan").to_string()
-            } else {
-                rust_i18n::t!("ai.mode_exec").to_string()
-            };
-            let plan_icon = if params.plan_mode {
-                UiIcon::LIST_FILES
-            } else {
-                UiIcon::RUN
-            };
-            Button::new("ai-toggle-plan-mode")
-                .ghost()
-                .xsmall()
-                .accessibility_label(plan_tip.clone())
-                .tooltip(plan_tip)
-                .child(
-                    div()
-                        .p(px(2.0))
-                        .rounded(p.radius.sm)
-                        .bg(if params.plan_mode {
-                            p.primary.opacity(0.18)
-                        } else {
-                            gpui_kit::transparent_black()
-                        })
-                        .text_color(if params.plan_mode {
-                            p.primary
-                        } else {
-                            p.text.muted
-                        })
-                        .child(AppIconElement::new(AppIcon::Ui(plan_icon)).small()),
-                )
-                .on_click(move |_, w, cx| on_toggle_plan_mode(w, cx))
-        })
         .child(render_popup_trigger(
             "ai-popup-model",
             AppIcon::Custom(CustomIcon::CPU),
@@ -302,7 +273,7 @@ pub(super) fn render_composer(params: ComposerParams<'_>, actions: ComposerActio
                 } else {
                     p.text.muted
                 })
-                .child(AppIconElement::new(AppIcon::Custom(CustomIcon::DATABASE)).small())
+                .child(AppIconElement::new(AppIcon::Custom(CustomIcon::TOKENS)).small())
                 .into_any_element(),
             usage_label,
             params.active_popup == AiActivePopup::TokenUsage,
@@ -376,25 +347,75 @@ pub(super) fn render_composer(params: ComposerParams<'_>, actions: ComposerActio
             .into_any_element()
     };
 
+    let mut input_box = h_flex()
+        .w_full()
+        .px(rems(space::SM))
+        .py(rems(space::XS))
+        .gap(px(6.0))
+        .items_start()
+        .bg(p.background);
+    if !params.composer_chips.is_empty() {
+        let rm_chip_rc = std::rc::Rc::new(on_remove_chip);
+        let mut chips_row = h_flex()
+            .flex_shrink_0()
+            .max_w(relative(0.65))
+            .pt(px(2.0))
+            .gap(px(6.0))
+            .items_center()
+            .flex_wrap();
+        for (idx, chip) in params.composer_chips.iter().enumerate() {
+            let rm_cb = rm_chip_rc.clone();
+            let icon = match chip {
+                super::state::ComposerChip::SlashCommand(_) => UiIcon::LIGHTNING,
+                super::state::ComposerChip::Mention(_) => UiIcon::WEB_SERVER,
+            };
+            chips_row = chips_row.child(
+                h_flex()
+                    .px(px(8.0))
+                    .py(px(2.0))
+                    .gap(px(5.0))
+                    .items_center()
+                    .rounded(p.radius.sm)
+                    .bg(p.primary.opacity(0.12))
+                    .border_1()
+                    .border_color(p.primary.opacity(0.32))
+                    .child(
+                        div()
+                            .text_color(p.primary)
+                            .child(AppIconElement::new(AppIcon::Ui(icon)).small()),
+                    )
+                    .child(
+                        div()
+                            .text_size(rems(typography::CAPTION))
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(p.primary)
+                            .child(chip.label().to_owned()),
+                    )
+                    .child(
+                        div()
+                            .id(("ai-rm-chip", idx))
+                            .cursor_pointer()
+                            .text_color(p.primary.opacity(0.75))
+                            .hover(|s| s.text_color(p.primary))
+                            .on_click(move |_, w, cx| rm_cb(idx, w, cx))
+                            .child(AppIconElement::new(AppIcon::Ui(UiIcon::CLOSE)).small()),
+                    ),
+            );
+        }
+        input_box = input_box.child(chips_row);
+    }
+    input_box = input_box.child(
+        div().flex_1().min_w_0().child(
+            Textarea::new(params.input)
+                .appearance(false)
+                .bordered(false)
+                .h(rems(9.5))
+                .on_paste(move |item, w, cx| on_paste_item(item, w, cx)),
+        ),
+    );
+
     card = card
-        .child(
-            div()
-                .mx(rems(space::SM))
-                .my(rems(space::XS))
-                .px(rems(space::XS))
-                .py(rems(space::XXS))
-                .rounded(p.radius.sm)
-                .bg(p.background)
-                .border_1()
-                .border_color(p.divider(p.border))
-                .child(
-                    Textarea::new(params.input)
-                        .appearance(false)
-                        .bordered(false)
-                        .h(rems(9.5))
-                        .on_paste(move |item, w, cx| on_paste_item(item, w, cx)),
-                ),
-        )
+        .child(input_box)
         .child(
             h_flex()
                 .w_full()

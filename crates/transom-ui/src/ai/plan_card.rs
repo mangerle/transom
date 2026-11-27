@@ -1,8 +1,6 @@
 //! AI 实时任务清单卡片与底部实时活动状态行。
 
 use gpui_kit::base::{h_flex, v_flex};
-use gpui_kit::component::Sizable as _;
-use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::progress::ProgressCircle;
 use gpui_kit::*;
 use transom_core::{AiPlanDto, AiPlanStepStatus};
@@ -16,8 +14,6 @@ pub(super) struct PlanCardParams<'a> {
     pub(super) plan: Option<&'a AiPlanDto>,
     pub(super) focus: Option<&'a str>,
     pub(super) elapsed_secs: Option<u64>,
-    pub(super) plan_mode: bool,
-    pub(super) is_running: bool,
     pub(super) expanded: bool,
     pub(super) p: &'a Palette,
 }
@@ -26,14 +22,11 @@ pub(super) struct PlanCardParams<'a> {
 pub(super) fn render_plan_card(
     params: PlanCardParams<'_>,
     on_toggle_expand: impl Fn(&mut Window, &mut App) + 'static,
-    on_execute_plan: impl Fn(&mut Window, &mut App) + 'static,
 ) -> AnyElement {
     let PlanCardParams {
         plan,
         focus,
         elapsed_secs,
-        plan_mode,
-        is_running,
         expanded,
         p,
     } = params;
@@ -160,17 +153,6 @@ pub(super) fn render_plan_card(
                     ),
             );
         }
-        if plan_mode && !is_running {
-            card = card.child(
-                h_flex().w_full().justify_end().pt(px(2.0)).child(
-                    Button::new("ai-plan-start-exec")
-                        .primary()
-                        .xsmall()
-                        .label(rust_i18n::t!("ai.plan_start_execute").to_string())
-                        .on_click(move |_, w, cx| on_execute_plan(w, cx)),
-                ),
-            );
-        }
         container = container.child(card);
     }
 
@@ -282,11 +264,10 @@ pub(super) fn render_status_pills_row(
 
     let mut row = h_flex()
         .w_full()
-        .px(rems(space::SM))
-        .pb(rems(space::XS))
-        .gap(rems(space::XS))
-        .items_center()
-        .flex_wrap();
+        .bg(p.secondary)
+        .border_b_1()
+        .border_color(p.divider(p.border))
+        .items_center();
 
     if has_plan_pill {
         let (done, total, pct) = match plan.filter(|pl| !pl.steps.is_empty()) {
@@ -310,95 +291,169 @@ pub(super) fn render_status_pills_row(
                 .map(str::to_owned)
                 .unwrap_or_else(|| rust_i18n::t!("ai.plan_title").to_string())
         };
-        let mut pill = h_flex()
-            .id("ai-plan-pill")
-            .px(px(10.0))
-            .py(px(4.0))
+        let summary_text = if total > 0 {
+            plan.and_then(|pl| {
+                pl.steps
+                    .iter()
+                    .find(|s| s.status == AiPlanStepStatus::InProgress)
+                    .map(|s| s.text.as_str())
+                    .or(focus)
+                    .or(pl.title.as_deref())
+                    .or_else(|| {
+                        pl.steps
+                            .iter()
+                            .rev()
+                            .find(|s| s.status == AiPlanStepStatus::Done)
+                            .map(|s| s.text.as_str())
+                    })
+            })
+            .map(str::trim)
+            .filter(|s| !s.is_empty() && *s != label.as_str())
+            .map(str::to_owned)
+        } else {
+            None
+        };
+
+        let mut left_group = h_flex()
+            .flex_1()
+            .min_w_0()
             .gap(px(6.0))
             .items_center()
-            .rounded(p.radius.md)
-            .bg(p.secondary)
-            .border_1()
-            .border_color(if plan_expanded {
-                p.primary
-            } else {
-                p.divider(p.border)
-            })
-            .cursor_pointer()
-            .hover(|s| s.bg(p.surface.hover))
-            .on_click(move |_, w, cx| on_toggle_plan(w, cx))
+            .overflow_hidden()
             .child(
-                ProgressCircle::new("ai-plan-pill-ring")
-                    .value(pct)
-                    .size(px(14.0))
-                    .color(if total > 0 && done == total {
-                        p.success
-                    } else {
-                        p.primary
-                    }),
+                div().flex_shrink_0().child(
+                    ProgressCircle::new("ai-plan-pill-ring")
+                        .value(pct)
+                        .size(px(14.0))
+                        .color(if total > 0 && done == total {
+                            p.success
+                        } else {
+                            p.primary
+                        }),
+                ),
             )
             .child(
                 div()
-                    .max_w(px(180.0))
-                    .truncate()
+                    .flex_shrink_0()
                     .text_size(rems(typography::CAPTION))
-                    .text_color(if plan_expanded {
+                    .font_weight(if plan_expanded {
+                        FontWeight::SEMIBOLD
+                    } else {
+                        FontWeight::MEDIUM
+                    })
+                    .text_color(if plan_expanded || (total > 0 && done == total) {
                         p.foreground
                     } else {
                         p.text.muted
                     })
                     .child(label),
             );
-        pill = pill.child(
-            div().text_color(p.text.muted).child(
-                AppIconElement::new(AppIcon::Ui(if plan_expanded {
-                    UiIcon::CHEVRON_DOWN
-                } else {
-                    UiIcon::CHEVRON_RIGHT
-                }))
-                .small(),
-            ),
-        );
+        if let Some(summary) = summary_text {
+            left_group = left_group.child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .truncate()
+                    .text_size(rems(typography::CAPTION))
+                    .text_color(p.text.muted)
+                    .child(format!("· {summary}")),
+            );
+        }
+
+        let mut pill = h_flex()
+            .id("ai-plan-pill")
+            .flex_1()
+            .min_w_0()
+            .px(rems(space::SM))
+            .py(px(6.0))
+            .gap(rems(space::XS))
+            .justify_between()
+            .items_center()
+            .cursor_pointer()
+            .on_click(move |_, w, cx| on_toggle_plan(w, cx))
+            .child(left_group)
+            .child(
+                div().flex_shrink_0().text_color(p.text.muted).child(
+                    AppIconElement::new(AppIcon::Ui(if plan_expanded {
+                        UiIcon::CHEVRON_DOWN
+                    } else {
+                        UiIcon::CHEVRON_RIGHT
+                    }))
+                    .small(),
+                ),
+            );
+        if plan_expanded {
+            pill = pill.bg(p.border.opacity(0.42));
+        } else {
+            pill = pill.hover(|s| s.bg(p.surface.hover));
+        }
         row = row.child(pill);
+    }
+
+    if has_plan_pill && has_task_pill {
+        row = row.child(
+            div()
+                .w(px(1.0))
+                .h(px(14.0))
+                .flex_shrink_0()
+                .bg(p.divider(p.border)),
+        );
     }
 
     if has_task_pill {
         let label =
             rust_i18n::t!("ai.tasks_running_summary", count = running_tasks_count).to_string();
-        let pill = h_flex()
+        let mut pill = h_flex()
             .id("ai-tasks-pill")
-            .px(px(10.0))
-            .py(px(4.0))
+            .flex_1()
+            .min_w_0()
+            .px(rems(space::SM))
+            .py(px(6.0))
             .gap(px(6.0))
+            .justify_between()
             .items_center()
-            .rounded(p.radius.md)
-            .bg(p.secondary)
-            .border_1()
-            .border_color(if tasks_expanded {
-                p.primary
-            } else {
-                p.divider(p.border)
-            })
             .cursor_pointer()
-            .hover(|s| s.bg(p.surface.hover))
-            .on_click(move |_, w, cx| on_toggle_tasks(w, cx))
+            .on_click(move |_, w, cx| on_toggle_tasks(w, cx));
+        if tasks_expanded {
+            pill = pill.bg(p.border.opacity(0.42));
+        } else {
+            pill = pill.hover(|s| s.bg(p.surface.hover));
+        }
+        let pill = pill
             .child(
-                div()
-                    .text_color(p.primary)
-                    .child(AppIconElement::new(AppIcon::Ui(UiIcon::REFRESH)).small()),
+                h_flex()
+                    .flex_1()
+                    .min_w_0()
+                    .gap(px(6.0))
+                    .items_center()
+                    .overflow_hidden()
+                    .child(
+                        div()
+                            .flex_shrink_0()
+                            .text_color(p.primary)
+                            .child(AppIconElement::new(AppIcon::Ui(UiIcon::REFRESH)).small()),
+                    )
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .truncate()
+                            .text_size(rems(typography::CAPTION))
+                            .font_weight(if tasks_expanded {
+                                FontWeight::SEMIBOLD
+                            } else {
+                                FontWeight::MEDIUM
+                            })
+                            .text_color(if tasks_expanded {
+                                p.foreground
+                            } else {
+                                p.text.muted
+                            })
+                            .child(label),
+                    ),
             )
             .child(
-                div()
-                    .text_size(rems(typography::CAPTION))
-                    .text_color(if tasks_expanded {
-                        p.foreground
-                    } else {
-                        p.text.muted
-                    })
-                    .child(label),
-            )
-            .child(
-                div().text_color(p.text.muted).child(
+                div().flex_shrink_0().text_color(p.text.muted).child(
                     AppIconElement::new(AppIcon::Ui(if tasks_expanded {
                         UiIcon::CHEVRON_DOWN
                     } else {

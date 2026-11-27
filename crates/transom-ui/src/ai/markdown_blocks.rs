@@ -167,11 +167,13 @@ pub(super) fn render_markdown_content(params: MarkdownRenderParams<'_>) -> AnyEl
         match seg {
             MarkdownSegment::Prose(prose) => {
                 col = col.child(
-                    TextView::markdown(
-                        SharedString::from(format!("ai-md-{}-{idx}", params.msg_id)),
-                        prose,
-                    )
-                    .selectable(true),
+                    div().w_full().line_height(relative(1.5)).child(
+                        TextView::markdown(
+                            SharedString::from(format!("ai-md-{}-{idx}", params.msg_id)),
+                            prose,
+                        )
+                        .selectable(true),
+                    ),
                 );
             }
             MarkdownSegment::CodeBlock {
@@ -238,7 +240,7 @@ fn render_code_card(
     } else {
         UiIcon::COPY
     };
-    let copy_label = if is_copied {
+    let copy_tip = if is_copied {
         rust_i18n::t!("ai.copied").to_string()
     } else {
         rust_i18n::t!("ai.copy").to_string()
@@ -282,12 +284,12 @@ fn render_code_card(
         Button::new(SharedString::from(format!("ai-copy-code-{block_key}")))
             .ghost()
             .xsmall()
+            .accessibility_label(copy_tip.clone())
+            .tooltip(copy_tip)
             .child(
-                h_flex()
-                    .gap(px(4.0))
-                    .items_center()
-                    .child(AppIconElement::new(AppIcon::Ui(copy_icon)).small())
-                    .child(copy_label),
+                div()
+                    .text_color(if is_copied { p.success } else { p.text.muted })
+                    .child(AppIconElement::new(AppIcon::Ui(copy_icon)).small()),
             )
             .on_click(move |_, w, cx| on_copy(copy_key.clone(), copy_code.clone(), w, cx)),
     );

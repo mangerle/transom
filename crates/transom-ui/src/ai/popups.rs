@@ -444,28 +444,42 @@ pub(super) fn render_model_popup(
         (Some(ThinkingEffort::Medium), "medium".to_owned()),
         (Some(ThinkingEffort::High), "high".to_owned()),
     ];
-    let mut effort_bar = h_flex()
+    let mut effort_bar = v_flex()
         .w_full()
         .px(rems(space::SM))
         .py(rems(space::XS))
-        .justify_between()
-        .items_center()
+        .gap(px(6.0))
         .child(
             div()
                 .text_size(rems(typography::CAPTION))
                 .text_color(p.text.muted)
                 .child(rust_i18n::t!("ai.popup_thinking_effort").to_string()),
         );
-    let mut btns = h_flex().gap(rems(space::XXS));
+    let mut btns = h_flex().w_full().gap(px(4.0));
     for (idx, (eff, label)) in efforts.into_iter().enumerate() {
         let pick_eff = on_select_effort.clone();
-        let btn = Button::new(("ai-effort-opt", idx)).label(label);
-        let btn = if selected_effort == eff {
-            btn.primary()
+        let active = selected_effort == eff;
+        let mut opt = h_flex()
+            .id(("ai-effort-opt", idx))
+            .flex_1()
+            .min_w_0()
+            .py(px(4.0))
+            .items_center()
+            .justify_center()
+            .rounded(p.radius.sm)
+            .cursor_pointer()
+            .text_size(rems(typography::CAPTION))
+            .on_click(move |_, w, cx| pick_eff(eff, w, cx))
+            .child(div().truncate().child(label));
+        opt = if active {
+            opt.bg(p.border.opacity(0.42))
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(p.foreground)
         } else {
-            btn.ghost()
+            opt.text_color(p.text.muted)
+                .hover(|s| s.bg(p.surface.hover).text_color(p.foreground))
         };
-        btns = btns.child(btn.on_click(move |_, w, cx| pick_eff(eff, w, cx)));
+        btns = btns.child(opt);
     }
     effort_bar = effort_bar.child(btns);
 

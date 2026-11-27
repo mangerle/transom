@@ -1,9 +1,12 @@
 //! AI 面板顶栏、浮层与历史/配置抽屉装配辅助方法。
 
 use gpui_kit::base::{h_flex, v_flex};
+use gpui_kit::component::Sizable as _;
+use gpui_kit::component::input::Input;
+use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::*;
 use transom_ai::{AcpAgentConfig, default_acp_presets};
-use transom_ui_icons::{AppIcon, AppIconElement, CustomIcon, UiIcon};
+use transom_ui_icons::{AppIcon, AppIconElement, UiIcon};
 
 use super::AiPanelEvent;
 use super::cards::{ChatItemCallbacks, ChatItemRenderParams, render_chat_item};
@@ -42,6 +45,49 @@ impl AiAssistantView {
             .unwrap_or_else(|| rust_i18n::t!("ai.title").to_string());
 
         let engine_icon = super::popups::backend_icon(self.state.active_acp_agent_id.as_deref());
+        let has_active_conv = self.state.active_conversation_id.is_some();
+        let v_title = cx.entity();
+        let title_el: AnyElement = if self.editing_title {
+            div()
+                .flex_1()
+                .min_w_0()
+                .child(Input::new(&self.title_input).small())
+                .into_any_element()
+        } else if has_active_conv {
+            div()
+                .id("ai-conv-title")
+                .flex_1()
+                .min_w_0()
+                .px(px(4.0))
+                .py(px(2.0))
+                .rounded(p.radius.sm)
+                .cursor_pointer()
+                .hover(|s| s.bg(p.surface.hover))
+                .tooltip(|w, cx| Tooltip::new("点击修改会话名称").build(w, cx))
+                .on_click(move |_, w, cx| {
+                    v_title.update(cx, |this, cx| this.start_editing_title(w, cx));
+                })
+                .child(
+                    div()
+                        .truncate()
+                        .text_size(rems(typography::BODY))
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .text_color(p.foreground)
+                        .child(title),
+                )
+                .into_any_element()
+        } else {
+            div()
+                .flex_1()
+                .min_w_0()
+                .truncate()
+                .text_size(rems(typography::BODY))
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(p.foreground)
+                .child(title)
+                .into_any_element()
+        };
+
         h_flex()
             .w_full()
             .h(rems(size::TAB_BAR_HEIGHT))
@@ -65,16 +111,7 @@ impl AiAssistantView {
                             .text_color(p.primary)
                             .child(AppIconElement::new(engine_icon).small()),
                     )
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w_0()
-                            .truncate()
-                            .text_size(rems(typography::BODY))
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(p.foreground)
-                            .child(title),
-                    ),
+                    .child(title_el),
             )
             .child(
                 h_flex()
@@ -108,7 +145,7 @@ impl AiAssistantView {
                     ))
                     .child(header_icon_btn(
                         "ai-mem-btn",
-                        AppIcon::Custom(CustomIcon::MEMORY),
+                        AppIcon::Ui(UiIcon::REAL_INTENTION_BULB),
                         rust_i18n::t!("ai.memory").to_string(),
                         self.state.drawer == AiDrawerTab::Memory,
                         p,
@@ -126,7 +163,7 @@ impl AiAssistantView {
                     ))
                     .child(header_icon_btn(
                         "ai-skills-btn",
-                        AppIcon::Ui(UiIcon::RUN_ANYTHING),
+                        AppIcon::Ui(UiIcon::LIGHTNING),
                         rust_i18n::t!("ai.skills_title").to_string(),
                         self.state.drawer == AiDrawerTab::Skills,
                         p,
@@ -274,10 +311,12 @@ impl AiAssistantView {
             .flex_1()
             .w_full()
             .min_w_0()
+            .min_h_0()
             .h_full()
-            .px(rems(space::MD))
-            .py(rems(space::SM))
-            .gap(rems(0.75))
+            .px(rems(space::LG))
+            .pt(rems(space::MD))
+            .pb(rems(space::LG))
+            .gap(rems(0.65))
             .overflow_y_scroll()
             .track_scroll(&self.msg_scroll_handle);
 
@@ -310,14 +349,16 @@ impl AiAssistantView {
             let code_callbacks = self.build_code_callbacks(cx);
             let copied_key = self.copied_key.as_deref();
             let has_active_terminal = self.state.active_session.is_some();
-            for block in blocks {
+            for (b_idx, block) in blocks.into_iter().enumerate() {
                 let v_exp = cx.entity();
                 match block {
                     DisplayBlock::Single(item) => {
                         let cid = chat_item_id(item).to_owned();
                         let expanded = self.state.expanded_cards.contains(&cid);
+                        let is_follow_user =
+                            b_idx > 0 && matches!(item, super::state::UiChatItem::UserText { .. });
                         let v_rb = cx.entity();
-                        msg_list = msg_list.child(render_chat_item(
+                        let item_el = render_chat_item(
                             ChatItemRenderParams {
                                 item,
                                 expanded,
@@ -338,7 +379,12 @@ impl AiAssistantView {
                                 }),
                                 code: code_callbacks.clone(),
                             },
-                        ));
+                        );
+                        if is_follow_user {
+                            msg_list = msg_list.child(div().w_full().pt(rems(space::SM)).child(item_el));
+                        } else {
+                            msg_list = msg_list.child(item_el);
+                        }
                     }
                     DisplayBlock::WorkGroup {
                         id,
@@ -384,39 +430,47 @@ impl AiAssistantView {
                     .filter(|&s| s > 0)
                     .map(|s| format_duration_zh(s.saturating_mul(1000)))
                     .unwrap_or_default();
-                let label = if elapsed_str.is_empty() {
-                    rust_i18n::t!("ai.working_running", focus = focus).to_string()
-                } else {
-                    format!(
-                        "{}  {elapsed_str}",
-                        rust_i18n::t!("ai.working_running", focus = focus)
-                    )
-                };
-                msg_list = msg_list.child(
-                    h_flex()
-                        .w_full()
-                        .min_w_0()
-                        .px(rems(space::SM))
-                        .py(rems(space::XS))
-                        .gap(rems(space::XS))
-                        .items_center()
-                        .rounded(p.radius.sm)
-                        .bg(p.secondary)
-                        .child(
-                            div()
-                                .flex_shrink_0()
-                                .text_color(p.primary)
-                                .child(AppIconElement::new(AppIcon::Ui(UiIcon::REFRESH)).small()),
-                        )
-                        .child(
-                            div()
-                                .flex_1()
-                                .min_w_0()
-                                .text_size(rems(typography::CAPTION))
-                                .text_color(p.foreground)
-                                .child(label),
-                        ),
-                );
+                let label = rust_i18n::t!("ai.working_running", focus = focus).to_string();
+                let mut row = h_flex()
+                    .w_full()
+                    .min_w_0()
+                    .py(px(4.0))
+                    .gap(rems(space::XS))
+                    .justify_between()
+                    .items_center()
+                    .child(
+                        h_flex()
+                            .flex_1()
+                            .min_w_0()
+                            .gap(px(6.0))
+                            .items_center()
+                            .overflow_hidden()
+                            .child(
+                                div()
+                                    .flex_shrink_0()
+                                    .text_color(p.primary)
+                                    .child(AppIconElement::new(AppIcon::Ui(UiIcon::REFRESH)).small()),
+                            )
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .min_w_0()
+                                    .truncate()
+                                    .text_size(rems(typography::CAPTION))
+                                    .text_color(p.text.muted)
+                                    .child(label),
+                            ),
+                    );
+                if !elapsed_str.is_empty() {
+                    row = row.child(
+                        div()
+                            .flex_shrink_0()
+                            .text_size(rems(typography::CAPTION))
+                            .text_color(p.text.muted)
+                            .child(elapsed_str),
+                    );
+                }
+                msg_list = msg_list.child(row);
             }
         }
 
@@ -454,7 +508,13 @@ impl AiAssistantView {
         let off_y = -self.msg_scroll_handle.offset().y;
         let show_scroll_bottom = max_y > px(40.0) && (max_y - off_y) > px(40.0);
 
-        let mut body_row = h_flex().flex_1().w_full().min_w_0().overflow_hidden();
+        let mut body_row = h_flex()
+            .flex_1()
+            .w_full()
+            .h_full()
+            .min_w_0()
+            .min_h_0()
+            .overflow_hidden();
         if !nav_entries.is_empty() {
             let view = cx.entity();
             let rail = render_turn_nav_rail(
@@ -473,11 +533,12 @@ impl AiAssistantView {
         }
         body_row = body_row.child(msg_list);
 
-        let mut wrapper = div()
+        let mut wrapper = v_flex()
             .relative()
             .flex_1()
             .w_full()
             .min_w_0()
+            .min_h_0()
             .overflow_hidden()
             .child(body_row);
         if show_scroll_bottom {

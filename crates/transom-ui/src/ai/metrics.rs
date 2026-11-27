@@ -3,6 +3,7 @@
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::progress::ProgressCircle;
 use gpui_kit::*;
+use transom_ai::{ChatRole, SessionEntry, SessionEntryKind};
 use transom_core::AiTurnMetricsDto;
 use transom_ui_icons::{AppIcon, AppIconElement, CustomIcon};
 
@@ -41,6 +42,73 @@ impl AiSessionMetrics {
         *self = Self::default();
         self.today_tokens = today;
         self.month_tokens = month;
+    }
+
+    /// 从持久化的 JSONL 历史条目恢复会话级推理指标（兼容无 `usage` 的旧会话）。
+    pub(crate) fn restore_from_entries(&mut self, entries: &[SessionEntry]) {
+        self.reset_session();
+        let mut fallback_chars = 0usize;
+        for entry in entries {
+            match &entry.kind {
+                SessionEntryKind::Message {
+                    role,
+                    text,
+                    tokens_per_sec,
+                    usage,
+                    ..
+                } => {
+                    fallback_chars = fallback_chars.saturating_add(text.chars().count());
+                    match role {
+                        ChatRole::User => {
+                            self.turns = self.turns.saturating_add(1);
+                        }
+                        ChatRole::Assistant => {
+                            self.steps = self.steps.saturating_add(1);
+                            if tokens_per_sec.is_some() {
+                                self.last_tps = *tokens_per_sec;
+                            }
+                            if let Some(u) = usage {
+                                self.input_tokens = self.input_tokens.saturating_add(u.input_tokens);
+                                self.cached_input_tokens = self
+                                    .cached_input_tokens
+                                    .saturating_add(u.cached_input_tokens);
+                                self.output_tokens =
+                                    self.output_tokens.saturating_add(u.output_tokens);
+                                self.model_duration_ms =
+                                    self.model_duration_ms.saturating_add(u.model_duration_ms);
+                                if let Some(ttft) = u.ttft_ms {
+                                    self.ttft_ms_sum = self.ttft_ms_sum.saturating_add(ttft);
+                                    self.ttft_samples = self.ttft_samples.saturating_add(1);
+                                }
+                                let turn_ctx = u.input_tokens.saturating_add(u.output_tokens);
+                                if turn_ctx > 0 {
+                                    self.last_context_tokens = turn_ctx;
+                                }
+                            }
+                        }
+                    }
+                }
+                SessionEntryKind::Reasoning { text } => {
+                    fallback_chars = fallback_chars.saturating_add(text.chars().count());
+                }
+                SessionEntryKind::ToolRecord {
+                    summary, output, ..
+                } => {
+                    self.steps = self.steps.saturating_add(1);
+                    fallback_chars = fallback_chars
+                        .saturating_add(summary.chars().count())
+                        .saturating_add(output.chars().count());
+                }
+                SessionEntryKind::Compaction { summary, .. } => {
+                    fallback_chars = fallback_chars.saturating_add(summary.chars().count());
+                }
+                SessionEntryKind::Header { .. } | SessionEntryKind::Attachment { .. } => {}
+            }
+        }
+        // 兼容老版本未记录 usage 的历史会话：按字符数粗略估算上下文占用，避免重开后显示 0%。
+        if self.last_context_tokens == 0 && fallback_chars > 0 {
+            self.last_context_tokens = ((fallback_chars / 3).max(1)) as u64;
+        }
     }
 
     pub(crate) fn record_turn(&mut self, tps: Option<f32>, dto: &AiTurnMetricsDto) {
@@ -451,9 +519,16 @@ pub(super) fn anchor_toolbar_popover(kind: AiActivePopup, pop: AnyElement) -> An
         AiActivePopup::ContextUsage => div().right(px(52.0)).w(px(250.0)),
         AiActivePopup::None => div(),
     };
-    deferred(anchor.absolute().bottom(px(48.0)).child(pop))
-        .with_priority(1)
-        .into_any_element()
+    deferred(
+        anchor
+            .absolute()
+            .bottom(px(48.0))
+            .occlude()
+            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+            .child(pop),
+    )
+    .with_priority(1)
+    .into_any_element()
 }
 
 #[cfg(test)]
@@ -495,5 +570,71 @@ mod tests {
         assert_eq!(m.total_tokens(), 0);
         assert_eq!(m.today_tokens, 5_000);
         assert_eq!(m.month_tokens, 20_000);
+    }
+
+    #[test]
+    fn restores_metrics_from_persisted_entries_and_legacy_fallback() {
+        use transom_ai::{ChatRole, SessionEntry, SessionEntryKind, TurnUsageRecord};
+
+        let mut m = AiSessionMetrics::default();
+        m.set_stored_totals((9_000, 30_000));
+
+        let entries = vec![
+            SessionEntry::new(
+                None,
+                SessionEntryKind::Message {
+                    role: ChatRole::User,
+                    text: "巡检一下".to_owned(),
+                    images: vec![],
+                    model: None,
+                    tokens_per_sec: None,
+                    usage: None,
+                },
+            ),
+            SessionEntry::new(
+                None,
+                SessionEntryKind::Message {
+                    role: ChatRole::Assistant,
+                    text: "已完成只读巡检。".to_owned(),
+                    images: vec![],
+                    model: Some("deepseek-v4.1-flash".to_owned()),
+                    tokens_per_sec: Some(193.3),
+                    usage: Some(TurnUsageRecord {
+                        input_tokens: 10_000,
+                        cached_input_tokens: 7_900,
+                        output_tokens: 1_000,
+                        model_duration_ms: 1_600,
+                        ttft_ms: Some(240),
+                    }),
+                },
+            ),
+        ];
+
+        m.restore_from_entries(&entries);
+        assert_eq!(m.turns, 1);
+        assert_eq!(m.steps, 1);
+        assert_eq!(m.last_tps, Some(193.3));
+        assert_eq!(m.total_tokens(), 11_000);
+        assert_eq!(m.cache_hit_percent(), 79);
+        assert_eq!(m.last_context_tokens, 11_000);
+        assert_eq!(m.avg_ttft_ms(), Some(240));
+        assert_eq!(m.today_tokens, 9_000);
+        assert_eq!(m.month_tokens, 30_000);
+
+        // 旧会话无 usage 时也能恢复 tps 与估算的上下文 token
+        let legacy_entries = vec![SessionEntry::new(
+            None,
+            SessionEntryKind::Message {
+                role: ChatRole::Assistant,
+                text: "这是一段没有 usage 字段的老历史消息".to_owned(),
+                images: vec![],
+                model: None,
+                tokens_per_sec: Some(120.0),
+                usage: None,
+            },
+        )];
+        m.restore_from_entries(&legacy_entries);
+        assert_eq!(m.last_tps, Some(120.0));
+        assert!(m.last_context_tokens > 0);
     }
 }

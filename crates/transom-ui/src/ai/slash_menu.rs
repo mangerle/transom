@@ -5,9 +5,9 @@ use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::input::Position;
 use gpui_kit::*;
 use transom_ai::{SkillDefinition, load_skills_with_disabled};
-use transom_ui_icons::{AppIcon, AppIconElement, UiIcon};
+use transom_ui_icons::{AppIcon, AppIconElement, CustomIcon, UiIcon};
 
-use super::state::AiDrawerTab;
+use super::state::{AiDrawerTab, ComposerChip};
 use super::view::AiAssistantView;
 use crate::palette::Palette;
 use crate::theme::tokens::{space, typography};
@@ -90,6 +90,16 @@ pub(super) fn step_slash_index(current: usize, len: usize, delta: isize) -> usiz
     (cur + delta).rem_euclid(total) as usize
 }
 
+fn slash_item_icon(command: &str) -> AppIcon {
+    match command {
+        "/clear" => AppIcon::Ui(UiIcon::RESET),
+        "/compact" => AppIcon::Ui(UiIcon::COLLAPSE_ALL),
+        "/disk" => AppIcon::Custom(CustomIcon::DISK),
+        "/docker" => AppIcon::Custom(CustomIcon::DOCKER),
+        _ => AppIcon::Ui(UiIcon::LIGHTNING),
+    }
+}
+
 /// 渲染输入框正上方的斜杠命令补全弹层。
 pub(super) fn render_slash_popover(
     items: &[SlashItem],
@@ -128,7 +138,7 @@ pub(super) fn render_slash_popover(
                     .child(
                         div()
                             .text_color(if is_selected { p.primary } else { p.text.muted })
-                            .child(AppIconElement::new(AppIcon::Ui(UiIcon::RUN_ANYTHING)).small()),
+                            .child(AppIconElement::new(slash_item_icon(&item.command)).small()),
                     )
                     .child(
                         div()
@@ -313,7 +323,7 @@ impl AiAssistantView {
         filter_slash_items(&current_input, &skills)
     }
 
-    /// 将选中的斜杠命令应用到输入框（开头的 `/clear` 直接清空并新建会话，否则替换末尾 `/query`）。
+    /// 将选中的斜杠命令转为浅蓝胶囊芯片（开头的 `/clear` 且无前置芯片时直接清空会话）。
     pub(super) fn apply_slash_command(
         &mut self,
         cmd: &str,
@@ -325,21 +335,22 @@ impl AiAssistantView {
         let slash_pos = extract_active_slash(&current)
             .map(|(pos, _)| pos)
             .unwrap_or(0);
-        if cmd == "/clear" && slash_pos == 0 {
+        if cmd == "/clear" && slash_pos == 0 && self.state.composer_chips.is_empty() {
             self.composer_input
                 .update(cx, |i, cx| i.set_value(String::new(), window, cx));
             self.last_composer_len = 0;
             self.clear_conversation(cx);
         } else {
-            let mut filled = String::with_capacity(slash_pos + cmd.len() + 1);
-            filled.push_str(&current[..slash_pos]);
-            filled.push_str(cmd);
-            filled.push(' ');
-            let line = filled.lines().count().saturating_sub(1) as u32;
-            let col = filled.lines().last().unwrap_or("").chars().count() as u32;
-            self.last_composer_len = filled.len();
+            let remaining = current[..slash_pos].trim_end().to_owned();
+            let line = remaining.lines().count().saturating_sub(1) as u32;
+            let col = remaining.lines().last().unwrap_or("").chars().count() as u32;
+            let chip = ComposerChip::SlashCommand(cmd.to_owned());
+            if !self.state.composer_chips.contains(&chip) {
+                self.state.composer_chips.push(chip);
+            }
+            self.last_composer_len = remaining.len();
             self.composer_input.update(cx, |i, cx| {
-                i.set_value(filled, window, cx);
+                i.set_value(remaining, window, cx);
                 i.set_cursor_position(Position::new(line, col), window, cx);
             });
             cx.notify();
@@ -372,7 +383,7 @@ pub(super) fn register_slash_key_interceptor(cx: &mut Context<AiAssistantView>) 
             return;
         }
         let key = event.keystroke.key.as_str();
-        if !matches!(key, "up" | "down" | "tab" | "enter") {
+        if !matches!(key, "up" | "down" | "tab" | "enter" | "backspace") {
             return;
         }
         let Some(entity) = weak_keys.upgrade() else {
@@ -386,6 +397,16 @@ pub(super) fn register_slash_key_interceptor(cx: &mut Context<AiAssistantView>) 
                     .focus_handle(cx)
                     .is_focused(window)
             {
+                return false;
+            }
+            if key == "backspace" {
+                if this.composer_input.read(cx).value().is_empty()
+                    && !this.state.composer_chips.is_empty()
+                {
+                    this.state.composer_chips.pop();
+                    cx.notify();
+                    return true;
+                }
                 return false;
             }
             let slash_items = this.current_slash_items(cx);

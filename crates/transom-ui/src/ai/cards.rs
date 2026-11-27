@@ -42,7 +42,11 @@ pub(super) fn render_chat_item(
 ) -> AnyElement {
     let p = params.p;
     match params.item {
-        UiChatItem::UserText { id, text } => render_user_bubble(id, text, &params, &callbacks),
+        UiChatItem::UserText {
+            id,
+            text,
+            timestamp,
+        } => render_user_bubble(id, text, timestamp.as_deref(), &params, &callbacks),
         UiChatItem::Reasoning {
             id,
             text,
@@ -67,9 +71,30 @@ pub(super) fn render_chat_item(
     }
 }
 
+/// 将 RFC3339 时间戳格式化为简洁的中文相对时间；跨天时展示本地月日时分，解析失败返回空串。
+fn format_relative_timestamp(raw: &str, now: chrono::DateTime<chrono::Utc>) -> String {
+    let Ok(dt) = chrono::DateTime::parse_from_rfc3339(raw) else {
+        return String::new();
+    };
+    let utc = dt.with_timezone(&chrono::Utc);
+    let secs = now.signed_duration_since(utc).num_seconds();
+    if secs < 60 {
+        "刚刚".to_owned()
+    } else if secs < 3600 {
+        format!("{} 分钟前", secs / 60)
+    } else if secs < 86_400 {
+        format!("{} 小时前", secs / 3600)
+    } else {
+        dt.with_timezone(&chrono::Local)
+            .format("%m-%d %H:%M")
+            .to_string()
+    }
+}
+
 fn render_user_bubble(
     id: &str,
     text: &str,
+    timestamp: Option<&str>,
     params: &ChatItemRenderParams<'_>,
     callbacks: &ChatItemCallbacks,
 ) -> AnyElement {
@@ -81,8 +106,59 @@ fn render_user_bubble(
     } else {
         UiIcon::COPY
     };
+    let copy_tip = if is_copied {
+        rust_i18n::t!("ai.copied").to_string()
+    } else {
+        rust_i18n::t!("ai.copy").to_string()
+    };
+    let rb_tip = rust_i18n::t!("ai.rollback_turn").to_string();
     let on_copy = Rc::clone(&callbacks.code.on_copy);
     let copied_text = text.to_owned();
+    let time_label = timestamp
+        .map(|ts| format_relative_timestamp(ts, chrono::Utc::now()))
+        .unwrap_or_default();
+
+    let mut action_row = h_flex().pr(px(4.0)).justify_end().items_center().gap(px(4.0));
+    if !time_label.is_empty() {
+        action_row = action_row.child(
+            div()
+                .mr(px(4.0))
+                .text_size(rems(typography::CAPTION))
+                .text_color(p.text.muted)
+                .child(time_label),
+        );
+    }
+    action_row = action_row
+        .child(
+            Button::new(SharedString::from(format!("ai-copy-user-{id}")))
+                .ghost()
+                .xsmall()
+                .accessibility_label(copy_tip.clone())
+                .tooltip(copy_tip)
+                .child(
+                    div()
+                        .text_color(if is_copied { p.success } else { p.text.muted })
+                        .child(AppIconElement::new(AppIcon::Ui(copy_icon)).small()),
+                )
+                .on_click(move |_, w, cx| {
+                    on_copy(copy_key.clone(), copied_text.clone(), w, cx)
+                }),
+        )
+        .child({
+            let entry_id = id.to_owned();
+            let on_rb = Rc::clone(&callbacks.on_rollback);
+            Button::new(SharedString::from(format!("ai-rb-user-{id}")))
+                .ghost()
+                .xsmall()
+                .accessibility_label(rb_tip.clone())
+                .tooltip(rb_tip)
+                .child(
+                    div()
+                        .text_color(p.text.muted)
+                        .child(AppIconElement::new(AppIcon::Ui(UiIcon::UNDO)).small()),
+                )
+                .on_click(move |_, w, cx| on_rb(entry_id.clone(), w, cx))
+        });
 
     v_flex()
         .w_full()
@@ -91,49 +167,18 @@ fn render_user_bubble(
         .child(
             div()
                 .max_w(rems(28.0))
-                .px(rems(space::SM))
-                .py(rems(space::XS))
-                .rounded(p.radius.md)
+                .px(px(14.0))
+                .py(px(9.0))
+                .rounded(px(16.0))
                 .bg(p.secondary)
                 .border_1()
-                .border_color(p.divider(p.border))
+                .border_color(p.divider(p.border).opacity(0.6))
                 .text_size(rems(typography::BODY))
+                .line_height(relative(1.45))
                 .text_color(p.foreground)
                 .child(text.to_owned()),
         )
-        .child(
-            h_flex()
-                .justify_end()
-                .gap(px(6.0))
-                .child({
-                    let entry_id = id.to_owned();
-                    let on_rb = Rc::clone(&callbacks.on_rollback);
-                    Button::new(SharedString::from(format!("ai-rb-user-{id}")))
-                        .ghost()
-                        .xsmall()
-                        .label(rust_i18n::t!("ai.rollback_turn").to_string())
-                        .on_click(move |_, w, cx| on_rb(entry_id.clone(), w, cx))
-                })
-                .child(
-                    Button::new(SharedString::from(format!("ai-copy-user-{id}")))
-                        .ghost()
-                        .xsmall()
-                        .child(
-                            h_flex()
-                                .gap(px(4.0))
-                                .items_center()
-                                .child(AppIconElement::new(AppIcon::Ui(copy_icon)).small())
-                                .child(if is_copied {
-                                    rust_i18n::t!("ai.copied").to_string()
-                                } else {
-                                    rust_i18n::t!("ai.copy").to_string()
-                                }),
-                        )
-                        .on_click(move |_, w, cx| {
-                            on_copy(copy_key.clone(), copied_text.clone(), w, cx)
-                        }),
-                ),
-        )
+        .child(action_row)
         .into_any_element()
 }
 
@@ -160,18 +205,15 @@ fn render_reasoning_block(
     let on_toggle = callbacks.on_toggle_expand;
     let mut box_el = v_flex()
         .w_full()
-        .px(rems(space::SM))
-        .py(rems(space::XS))
-        .rounded(p.radius.sm)
-        .bg(p.secondary)
-        .border_1()
-        .border_color(p.divider(p.border))
+        .gap(px(4.0))
         .child(
             h_flex()
                 .id(SharedString::from(format!("ai-reason-{id}")))
-                .gap(px(4.0))
+                .py(px(2.0))
+                .gap(px(5.0))
                 .items_center()
                 .cursor_pointer()
+                .hover(|s| s.opacity(0.85))
                 .on_click(move |_, window, cx| on_toggle(window, cx))
                 .child(
                     div()
@@ -188,11 +230,13 @@ fn render_reasoning_block(
     if streaming || expanded {
         box_el = box_el.child(
             div()
-                .mt(rems(space::XS))
+                .ml(px(6.0))
                 .pl(rems(space::SM))
+                .py(px(2.0))
                 .border_l_2()
                 .border_color(p.divider(p.border))
                 .text_size(rems(typography::CAPTION))
+                .line_height(relative(1.45))
                 .text_color(p.muted_foreground)
                 .child(text.to_owned()),
         );
@@ -238,17 +282,23 @@ fn render_assistant_message(
         } else {
             UiIcon::COPY
         };
+        let copy_tip = if is_copied {
+            rust_i18n::t!("ai.copied").to_string()
+        } else {
+            rust_i18n::t!("ai.copy").to_string()
+        };
         let on_copy = Rc::clone(&callbacks.code.on_copy);
         let full_text = text.to_owned();
 
         col = col.child(
             h_flex()
                 .w_full()
-                .pt(px(2.0))
+                .pt(px(4.0))
                 .justify_between()
                 .items_center()
                 .child(
                     div()
+                        .opacity(0.85)
                         .text_size(rems(typography::CAPTION))
                         .text_color(p.text.muted)
                         .child(footer_parts.join(" · ")),
@@ -257,16 +307,12 @@ fn render_assistant_message(
                     Button::new(SharedString::from(format!("ai-copy-asst-{id}")))
                         .ghost()
                         .xsmall()
+                        .accessibility_label(copy_tip.clone())
+                        .tooltip(copy_tip)
                         .child(
-                            h_flex()
-                                .gap(px(4.0))
-                                .items_center()
-                                .child(AppIconElement::new(AppIcon::Ui(copy_icon)).small())
-                                .child(if is_copied {
-                                    rust_i18n::t!("ai.copied").to_string()
-                                } else {
-                                    rust_i18n::t!("ai.copy").to_string()
-                                }),
+                            div()
+                                .text_color(if is_copied { p.success } else { p.text.muted })
+                                .child(AppIconElement::new(AppIcon::Ui(copy_icon)).small()),
                         )
                         .on_click(move |_, w, cx| {
                             on_copy(copy_key.clone(), full_text.clone(), w, cx);
@@ -275,4 +321,29 @@ fn render_assistant_message(
         );
     }
     col.into_any_element()
+}
+
+#[cfg(test)]
+mod tests {
+    use chrono::{TimeZone as _, Utc};
+
+    use super::format_relative_timestamp;
+
+    #[test]
+    fn formats_relative_timestamps_across_ranges() {
+        let now = Utc.with_ymd_and_hms(2026, 11, 27, 10, 0, 0).unwrap();
+
+        assert_eq!(format_relative_timestamp("2026-11-27T09:59:30Z", now), "刚刚");
+        assert_eq!(
+            format_relative_timestamp("2026-11-27T09:45:00Z", now),
+            "15 分钟前"
+        );
+        assert_eq!(
+            format_relative_timestamp("2026-11-27T07:00:00Z", now),
+            "3 小时前"
+        );
+        let older = format_relative_timestamp("2026-11-25T08:30:00Z", now);
+        assert!(!older.is_empty() && older.contains(':'));
+        assert_eq!(format_relative_timestamp("not-a-timestamp", now), "");
+    }
 }

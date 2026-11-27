@@ -6,6 +6,7 @@ use gpui_kit::*;
 use transom_ui_icons::{AppIcon, AppIconElement, CustomIcon, DomainIcon, UiIcon};
 
 use super::slash_menu::step_slash_index;
+use super::state::ComposerChip;
 use super::view::AiAssistantView;
 use crate::palette::Palette;
 use crate::search::any_field_matches;
@@ -196,7 +197,7 @@ impl AiAssistantView {
         filter_mention_items(&current_input, &self.state.mention_candidates)
     }
 
-    /// 将选中的 `@` 目标插入输入框末尾，替换掉正在输入的 `@query`。
+    /// 将选中的 `@` 目标转为浅蓝胶囊芯片，替换掉输入框末尾正在输入的 `@query`。
     pub(super) fn apply_mention_candidate(
         &mut self,
         token: &str,
@@ -208,16 +209,16 @@ impl AiAssistantView {
         let Some((at_pos, _)) = extract_active_mention(&current) else {
             return;
         };
-        let mut next = String::with_capacity(at_pos + token.len() + 2);
-        next.push_str(&current[..at_pos]);
-        next.push('@');
-        next.push_str(token);
-        next.push(' ');
-        let col = next.chars().count() as u32;
-        let line = next.lines().count().saturating_sub(1) as u32;
-        self.last_composer_len = next.len();
+        let remaining = current[..at_pos].trim_end().to_owned();
+        let col = remaining.lines().last().unwrap_or("").chars().count() as u32;
+        let line = remaining.lines().count().saturating_sub(1) as u32;
+        let chip = ComposerChip::Mention(format!("@{token}"));
+        if !self.state.composer_chips.contains(&chip) {
+            self.state.composer_chips.push(chip);
+        }
+        self.last_composer_len = remaining.len();
         self.composer_input.update(cx, |i, cx| {
-            i.set_value(next, window, cx);
+            i.set_value(remaining, window, cx);
             i.set_cursor_position(Position::new(line, col), window, cx);
         });
         cx.notify();
