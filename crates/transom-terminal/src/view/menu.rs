@@ -37,11 +37,22 @@ impl TerminalView {
                             .item(PopupMenuItem::separator());
                     }
                     let app = menu_entity.clone();
+                    let app_ai = menu_entity.clone();
                     let app_prev = menu_entity.clone();
                     let app_next = menu_entity.clone();
                     // 菜单项不写死键位：提示符跳跃是工作区动作，用户可在快捷键设置里
                     // 改绑，标签里嵌一个"(Cmd+Up)"会变成第二套口径。
                     menu.item(
+                        PopupMenuItem::new("引用选区/报错块到 AI".to_owned())
+                            .icon(AppIcon::Ui(UiIcon::SEARCH))
+                            .on_click(move |_, _, cx| {
+                                app_ai.update(cx, |view, cx| {
+                                    view.emit_send_context_to_ai(cx);
+                                });
+                            }),
+                    )
+                    .item(PopupMenuItem::separator())
+                    .item(
                         PopupMenuItem::new(
                             rust_i18n::t!("terminal.menu.previous_prompt").to_string(),
                         )

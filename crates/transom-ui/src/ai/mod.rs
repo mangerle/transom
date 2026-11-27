@@ -139,4 +139,6 @@ pub(crate) enum AiPanelEvent {
     FocusTerminalForHandoff { command: String },
     /// 请求在采集活动终端最新输出后恢复或取消终端接管。
     ResumeHandoffRequested { run_id: String, cancelled: bool },
+    /// 请求工作区切换到指定主机名关联的终端 Tab。
+    JumpToTerminalTab { host_label: String },
 }

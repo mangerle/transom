@@ -278,6 +278,30 @@ impl AiAssistantView {
         self.send_prompt_text(prompt, cx);
     }
 
+    /// 供终端右键菜单调用：将选区或失败命令块作为紧凑上下文芯片挂载到 AI 输入区。
+    pub(crate) fn attach_terminal_context(
+        &mut self,
+        host: String,
+        cwd: Option<String>,
+        exit_code: Option<i32>,
+        command: Option<String>,
+        output: String,
+        cx: &mut Context<Self>,
+    ) {
+        self.state.drawer = AiDrawerTab::Chat;
+        self.state
+            .pending_attachments
+            .push(super::attachments::ComposerAttachment::TerminalContext {
+                id: uuid::Uuid::new_v4().to_string(),
+                host,
+                cwd,
+                exit_code,
+                command,
+                output,
+            });
+        cx.notify();
+    }
+
     pub(super) fn save_snippet_from_card(
         &mut self,
         name: String,

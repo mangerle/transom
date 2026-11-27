@@ -46,12 +46,24 @@ pub(crate) enum ComposerAttachment {
         width: u32,
         height: u32,
     },
+    /// 来自终端选区或报错命令块的紧凑上下文芯片（携带主机、目录与退出码）。
+    TerminalContext {
+        id: String,
+        host: String,
+        cwd: Option<String>,
+        exit_code: Option<i32>,
+        command: Option<String>,
+        output: String,
+    },
 }
 
 impl ComposerAttachment {
     pub(crate) fn id(&self) -> &str {
         match self {
-            Self::PastedDoc { id, .. } | Self::File { id, .. } | Self::Image { id, .. } => id,
+            Self::PastedDoc { id, .. }
+            | Self::File { id, .. }
+            | Self::Image { id, .. }
+            | Self::TerminalContext { id, .. } => id,
         }
     }
 
@@ -70,6 +82,24 @@ impl ComposerAttachment {
                 height,
                 ..
             } => format!("{name} · {width}x{height}"),
+            Self::TerminalContext {
+                host,
+                exit_code,
+                command,
+                ..
+            } => {
+                let mut parts = vec![host.clone()];
+                if let Some(code) = exit_code {
+                    parts.push(format!("exit {code}"));
+                }
+                if let Some(cmd) = command.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+                    let short: String = cmd.chars().take(24).collect();
+                    parts.push(short);
+                } else {
+                    parts.push("终端上下文".to_owned());
+                }
+                parts.join(" · ")
+            }
         }
     }
 
@@ -77,6 +107,7 @@ impl ComposerAttachment {
         match self {
             Self::PastedDoc { .. } | Self::File { .. } => AppIcon::Ui(UiIcon::LIST_FILES),
             Self::Image { .. } => AppIcon::Custom(CustomIcon::IMAGE),
+            Self::TerminalContext { .. } => AppIcon::Domain(transom_ui_icons::DomainIcon::TERMINAL),
         }
     }
 }
@@ -188,6 +219,28 @@ pub(super) fn pack_attachments_for_request(
             ComposerAttachment::File { name, content, .. } => {
                 titles.push(name.clone());
                 docs.push(format!("--- {name} ---\n{content}"));
+            }
+            ComposerAttachment::TerminalContext {
+                host,
+                cwd,
+                exit_code,
+                command,
+                output,
+                ..
+            } => {
+                let title = format!("终端上下文 ({host})");
+                titles.push(title.clone());
+                let mut meta = vec![format!("host: {host}")];
+                if let Some(c) = cwd.as_deref().filter(|s| !s.is_empty()) {
+                    meta.push(format!("cwd: {c}"));
+                }
+                if let Some(code) = exit_code {
+                    meta.push(format!("exit_code: {code}"));
+                }
+                if let Some(cmd) = command.as_deref().filter(|s| !s.is_empty()) {
+                    meta.push(format!("command: {cmd}"));
+                }
+                docs.push(format!("--- {title} [{}] ---\n{output}", meta.join(", ")));
             }
         }
     }

@@ -230,4 +230,28 @@ impl TerminalView {
     pub fn last_failed_block(&self) -> Option<(u64, i32, String)> {
         self.state.engine.lock().last_failed_block()
     }
+
+    /// 采集当前选区、最近失败命令块或末尾屏幕内容，向宿主发出 `SendContextToAi` 事件。
+    pub(super) fn emit_send_context_to_ai(&mut self, cx: &mut Context<Self>) {
+        let (command, exit_code, output) = {
+            let engine = self.state.engine.lock();
+            let sel = engine.selection_text().filter(|s| !s.trim().is_empty());
+            if let Some(selected) = sel {
+                (None, None, selected)
+            } else if let Some((_id, code, summary)) = engine.last_failed_block() {
+                let tail = engine.screen_tail_text(35);
+                (Some(summary), Some(code), tail)
+            } else {
+                (None, None, engine.screen_tail_text(35))
+            }
+        };
+        if output.trim().is_empty() && command.is_none() {
+            return;
+        }
+        cx.emit(crate::TerminalEvent::SendContextToAi {
+            command,
+            exit_code,
+            output,
+        });
+    }
 }

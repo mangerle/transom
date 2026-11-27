@@ -208,6 +208,7 @@ impl AiAssistantView {
         let v_term = cx.entity();
         let v_snip = cx.entity();
         let v_rev = cx.entity();
+        let v_jump = cx.entity();
         super::markdown_blocks::CodeBlockCallbacks {
             on_copy: std::rc::Rc::new(move |key, text, _, cx| {
                 v_copy.update(cx, |this, cx| this.copy_text_with_feedback(key, text, cx));
@@ -232,6 +233,11 @@ impl AiAssistantView {
                             conversation_id: this.state.active_conversation_id.clone(),
                         },
                     )));
+                });
+            }),
+            on_jump_to_terminal: std::rc::Rc::new(move |host_label, _, cx| {
+                v_jump.update(cx, |_, cx| {
+                    cx.emit(super::AiPanelEvent::JumpToTerminalTab { host_label });
                 });
             }),
         }

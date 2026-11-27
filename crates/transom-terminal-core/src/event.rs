@@ -89,6 +89,12 @@ pub enum TerminalEvent {
         line: u32,
         column: Option<u32>,
     },
+    /// 用户请求将选区、最近失败命令块或终端末尾输出引用为 AI 上下文芯片。
+    SendContextToAi {
+        command: Option<String>,
+        exit_code: Option<i32>,
+        output: String,
+    },
 }
 
 /// Bridges alacritty terminal events into a bounded channel consumed by the view.

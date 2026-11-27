@@ -444,6 +444,30 @@ impl AppShell {
                     cx,
                 );
             }
+            TerminalEvent::SendContextToAi {
+                command,
+                exit_code,
+                output,
+            } => {
+                let tab = self.state.workspace.tab(tab_id);
+                let host = tab
+                    .and_then(|t| t.session())
+                    .map(|s| s.name.clone())
+                    .unwrap_or_else(|| "本机".to_owned());
+                let cwd = tab.and_then(|t| t.cwd().map(ToOwned::to_owned));
+                self.state.features.ai_panel_open = true;
+                self.state.features.ai_panel.update(cx, |panel, cx| {
+                    panel.attach_terminal_context(
+                        host,
+                        cwd,
+                        *exit_code,
+                        command.clone(),
+                        output.clone(),
+                        cx,
+                    );
+                });
+                cx.notify();
+            }
             TerminalEvent::TriggerFired { rule_name, action } => match action {
                 transom_core::TriggerAction::AutoResponse(reply) => {
                     self.state.ui.status = Some(

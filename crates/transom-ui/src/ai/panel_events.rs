@@ -164,6 +164,29 @@ pub(crate) fn on_ai_panel_event(
                     .push_toast(rust_i18n::t!("ai.sent_to_terminal").to_string(), true);
             }
         }
+        AiPanelEvent::JumpToTerminalTab { host_label } => {
+            let target_tid = state
+                .workspace
+                .tabs
+                .iter()
+                .find(|t| {
+                    t.terminal().is_some()
+                        && t.session().is_some_and(|s| s.name == *host_label)
+                })
+                .map(|t| t.id);
+            if let Some(tid) = target_tid {
+                state.workspace.active_tab = Some(tid);
+                state
+                    .ui
+                    .window_requests
+                    .push_toast(format!("已跳转至「{host_label}」终端标签页"), true);
+            } else {
+                state
+                    .ui
+                    .window_requests
+                    .push_toast(format!("未找到「{host_label}」的活跃终端标签页"), false);
+            }
+        }
         AiPanelEvent::FocusTerminalForHandoff { command } => {
             if let Some(view) = state
                 .workspace

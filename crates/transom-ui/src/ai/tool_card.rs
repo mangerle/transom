@@ -376,6 +376,7 @@ pub(super) fn render_tool_card(
                 .justify_between()
                 .items_center()
                 .gap(px(6.0));
+            let mut left_actions = h_flex().items_center().gap(px(6.0));
             if *ok
                 && let (Some(target_path), Some(backup_path)) =
                     (revert_target_path.as_ref(), revert_backup_path.as_ref())
@@ -384,7 +385,7 @@ pub(super) fn render_tool_card(
                 let t_path = target_path.clone();
                 let b_path = backup_path.clone();
                 let on_rev = callbacks.code.on_revert_remote_file.clone();
-                footer = footer.child(
+                left_actions = left_actions.child(
                     h_flex()
                         .id(SharedString::from(format!("ai-tool-revert-{id}")))
                         .px(px(6.0))
@@ -412,9 +413,43 @@ pub(super) fn render_tool_card(
                                 .child("还原远端文件"),
                         ),
                 );
-            } else {
-                footer = footer.child(div());
             }
+            if !host_label.trim().is_empty()
+                && !matches!(host_label.as_str(), "通用会话" | "本机 (Local)")
+                && !host_label.contains('↔')
+            {
+                let jump_host = host_label.clone();
+                let on_jump = callbacks.code.on_jump_to_terminal.clone();
+                left_actions = left_actions.child(
+                    h_flex()
+                        .id(SharedString::from(format!("ai-tool-jump-{id}")))
+                        .px(px(6.0))
+                        .py(px(2.0))
+                        .gap(px(4.0))
+                        .items_center()
+                        .rounded(p.radius.sm)
+                        .border_1()
+                        .border_color(p.border)
+                        .bg(p.surface.floating)
+                        .cursor_pointer()
+                        .hover(|s| s.bg(p.surface.hover))
+                        .on_click(move |_, w, cx| {
+                            on_jump(jump_host.clone(), w, cx);
+                        })
+                        .child(
+                            div()
+                                .text_color(p.text.muted)
+                                .child(AppIconElement::new(AppIcon::Domain(DomainIcon::TERMINAL)).small()),
+                        )
+                        .child(
+                            div()
+                                .text_size(rems(typography::CAPTION))
+                                .text_color(p.foreground)
+                                .child("跳转终端"),
+                        ),
+                );
+            }
+            footer = footer.child(left_actions);
             footer.child(
                 h_flex()
                     .items_center()
