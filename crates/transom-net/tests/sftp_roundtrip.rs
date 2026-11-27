@@ -795,28 +795,41 @@ async fn upload_interrupted_does_not_corrupt_existing_remote_file() {
     } = session;
     let client = SftpClient::open(&remote).await.expect("open sftp");
 
-    // 准备一个较大的本地新文件用于覆盖上传
+    // 准备一个足够大的本地新文件用于覆盖上传，确保在收到首个进度通知后有充足窗口在完成前取消
     let local_file = dir.path().join("new_config.conf");
-    let new_content = vec![0x58u8; 512 * 1024]; // 512 KiB
+    let new_content = vec![0x58u8; 4 * 1024 * 1024]; // 4 MiB
     std::fs::write(&local_file, &new_content).unwrap();
 
-    // 启动上传并在中途直接 abort 取消（模拟用户点击取消或 SftpCancel）
+    let chunk_sent = Arc::new(tokio::sync::Notify::new());
+    let notified = Arc::new(std::sync::atomic::AtomicBool::new(false));
+
+    // 启动上传并在首个分块传输后立即 abort 取消（模拟用户点击取消或 SftpCancel）
     let upload_task = tokio::spawn({
         let client = client.clone();
         let local_file = local_file.clone();
+        let chunk_sent = Arc::clone(&chunk_sent);
+        let notified = Arc::clone(&notified);
         async move {
             client
-                .upload(&local_file, "/critical_config.conf", |transferred, _| {
-                    if transferred >= 32 * 1024 {
-                        // 传了一小部分
-                    }
-                })
+                .upload(
+                    &local_file,
+                    "/critical_config.conf",
+                    move |transferred, _| {
+                        if transferred > 0
+                            && !notified.swap(true, std::sync::atomic::Ordering::SeqCst)
+                        {
+                            chunk_sent.notify_one();
+                        }
+                    },
+                )
                 .await
         }
     });
 
-    // 给予一定执行时间后强制 abort 取消
-    tokio::time::sleep(Duration::from_millis(20)).await;
+    // 等待首个数据块开始写入临时文件后立即强制 abort 取消，消除固定 sleep 在高速宿主上的竞态
+    tokio::time::timeout(Duration::from_secs(5), chunk_sent.notified())
+        .await
+        .expect("等待上传进度通知超时");
     upload_task.abort();
     let _ = upload_task.await;
 
@@ -833,7 +846,7 @@ async fn upload_interrupted_does_not_corrupt_existing_remote_file() {
         .upload(&local_file, "/critical_config.conf", |_, _| {})
         .await
         .expect("覆盖上传成功");
-    assert_eq!(transferred, 512 * 1024);
+    assert_eq!(transferred, new_content.len() as u64);
 
     // 验证完成全量传输后，远端文件被原子替换为新内容
     let final_content = std::fs::read(&remote_file).expect("读取覆盖后的远端文件");
