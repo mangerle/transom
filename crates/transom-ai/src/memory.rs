@@ -6,9 +6,11 @@
 //! - 所有文件系统读写均校验沙箱根路径与单文件大小上限，杜绝目录穿越与大文件 OOM。
 
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
+
+use transom_platform::private_fs;
 
 use crate::error::AiError;
 
@@ -45,7 +47,7 @@ pub fn resolve_sandbox_path(root: &Path, relative: &Path) -> Result<PathBuf, AiE
     for component in relative.components() {
         if matches!(
             component,
-            std::path::Component::ParentDir | std::path::Component::RootDir
+            Component::ParentDir | Component::RootDir | Component::Prefix(_)
         ) {
             return Err(AiError::PathViolation {
                 path: relative.display().to_string(),
@@ -54,7 +56,13 @@ pub fn resolve_sandbox_path(root: &Path, relative: &Path) -> Result<PathBuf, AiE
         }
     }
 
-    fs::create_dir_all(root).map_err(|err| AiError::StorageFailed {
+    if fs::symlink_metadata(root).is_ok_and(|metadata| metadata.file_type().is_symlink()) {
+        return Err(AiError::PathViolation {
+            path: root.display().to_string(),
+            reason: "沙箱根目录不得为符号链接".to_owned(),
+        });
+    }
+    private_fs::ensure_private_dir(root).map_err(|err| AiError::StorageFailed {
         target: root.display().to_string(),
         reason: err.to_string(),
     })?;
@@ -68,6 +76,30 @@ pub fn resolve_sandbox_path(root: &Path, relative: &Path) -> Result<PathBuf, AiE
             path: candidate.display().to_string(),
             reason: "解析后路径超出受控沙箱根目录".to_owned(),
         });
+    }
+
+    let mut probe = canonical_root.clone();
+    for component in relative.components() {
+        let Component::Normal(name) = component else {
+            continue;
+        };
+        probe.push(name);
+        match fs::symlink_metadata(&probe) {
+            Ok(metadata) if metadata.file_type().is_symlink() => {
+                return Err(AiError::PathViolation {
+                    path: probe.display().to_string(),
+                    reason: "沙箱路径不得包含符号链接".to_owned(),
+                });
+            }
+            Ok(_) => {}
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
+            Err(err) => {
+                return Err(AiError::StorageFailed {
+                    target: probe.display().to_string(),
+                    reason: err.to_string(),
+                });
+            }
+        }
     }
     Ok(candidate)
 }
@@ -115,6 +147,7 @@ pub fn append_host_fact(existing: &str, fact: &str, category: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::{append_host_fact, resolve_sandbox_path};
+
     use crate::error::AiError;
     use std::path::Path;
 
@@ -123,6 +156,49 @@ mod tests {
         let dir = tempfile::tempdir().expect("创建临时目录失败");
         let err = resolve_sandbox_path(dir.path(), Path::new("../../etc/passwd"))
             .expect_err("越权路径必须被拦截");
+        assert!(matches!(err, AiError::PathViolation { .. }));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn sandbox_creates_owner_only_root() {
+        use std::os::unix::fs::PermissionsExt as _;
+
+        let base = tempfile::tempdir().expect("创建临时目录失败");
+        let root = base.path().join("ai-private");
+        resolve_sandbox_path(&root, Path::new("entry.txt")).expect("解析沙箱路径失败");
+        let mode = std::fs::metadata(root)
+            .expect("读取沙箱属性失败")
+            .permissions()
+            .mode()
+            & 0o777;
+        assert_eq!(mode, 0o700);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn sandbox_rejects_symlink_root() {
+        use std::os::unix::fs::symlink;
+
+        let base = tempfile::tempdir().expect("创建临时目录失败");
+        let outside = tempfile::tempdir().expect("创建外部目录失败");
+        let root = base.path().join("linked-root");
+        symlink(outside.path(), &root).expect("创建符号链接失败");
+        let err = resolve_sandbox_path(&root, Path::new("entry.txt"))
+            .expect_err("符号链接根目录必须被拦截");
+        assert!(matches!(err, AiError::PathViolation { .. }));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn sandbox_rejects_symlink_escape() {
+        use std::os::unix::fs::symlink;
+
+        let root = tempfile::tempdir().expect("创建沙箱目录失败");
+        let outside = tempfile::tempdir().expect("创建外部目录失败");
+        symlink(outside.path(), root.path().join("link")).expect("创建符号链接失败");
+        let err = resolve_sandbox_path(root.path(), Path::new("link/secret"))
+            .expect_err("符号链接逃逸必须被拦截");
         assert!(matches!(err, AiError::PathViolation { .. }));
     }
 

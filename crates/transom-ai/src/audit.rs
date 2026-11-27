@@ -4,10 +4,6 @@
 //! - 记录谁在什么时间、针对哪台主机、经 AI 提议并批准/拒绝了什么动作及退出结果；
 //! - 绝不记录明文 API Key、密码或完整敏感输出，与 Transom 的安全与可观测性规范对齐。
 
-use std::fs::OpenOptions;
-use std::io::Write;
-use std::path::Path;
-
 use serde::{Deserialize, Serialize};
 
 use crate::error::AiError;
@@ -28,30 +24,11 @@ pub struct AiAuditEntry {
 }
 
 impl AiAuditEntry {
-    /// 追加写入审计 JSONL 文件。
-    pub fn append_to_file(&self, path: &Path) -> Result<(), AiError> {
-        if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent).map_err(|err| AiError::StorageFailed {
-                target: parent.display().to_string(),
-                reason: err.to_string(),
-            })?;
-        }
-        let line = serde_json::to_string(self).map_err(|err| AiError::StorageFailed {
-            target: path.display().to_string(),
+    /// 序列化为单行 JSONL 文本；磁盘权限与落盘由存储层负责。
+    pub fn to_json_line(&self) -> Result<String, AiError> {
+        serde_json::to_string(self).map_err(|err| AiError::StorageFailed {
+            target: "序列化 AI 审计记录".to_owned(),
             reason: err.to_string(),
-        })?;
-        let mut file = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(path)
-            .map_err(|err| AiError::StorageFailed {
-                target: path.display().to_string(),
-                reason: err.to_string(),
-            })?;
-        writeln!(file, "{line}").map_err(|err| AiError::StorageFailed {
-            target: path.display().to_string(),
-            reason: err.to_string(),
-        })?;
-        Ok(())
+        })
     }
 }

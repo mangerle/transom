@@ -15,6 +15,8 @@ use serde_json::{Value, json};
 use tokio::io::{AsyncBufRead, AsyncBufReadExt, AsyncWrite, AsyncWriteExt};
 use tokio_util::sync::CancellationToken;
 
+use transom_platform::private_fs;
+
 use crate::error::AiError;
 use crate::policy::HostProtection;
 
@@ -199,17 +201,29 @@ pub async fn serve_local_socket(
     socket_path: &Path,
     cancel: CancellationToken,
 ) -> Result<(), AiError> {
-    use std::os::unix::fs::PermissionsExt as _;
+    use std::os::unix::fs::{FileTypeExt as _, PermissionsExt as _};
     use tokio::io::BufReader;
 
     if let Some(parent) = socket_path.parent() {
-        std::fs::create_dir_all(parent).map_err(|err| AiError::McpFailed {
+        private_fs::ensure_private_dir(parent).map_err(|err| AiError::McpFailed {
             server: "transom-mcp".to_owned(),
-            reason: err.to_string(),
+            reason: format!("创建 MCP Socket 目录失败（{}）: {err}", parent.display()),
         })?;
     }
-    if socket_path.exists() {
-        let _ = std::fs::remove_file(socket_path);
+    if let Ok(metadata) = std::fs::symlink_metadata(socket_path) {
+        if !metadata.file_type().is_socket() {
+            return Err(AiError::McpFailed {
+                server: "transom-mcp".to_owned(),
+                reason: format!(
+                    "MCP Socket 路径已存在且不是 Socket: {}",
+                    socket_path.display()
+                ),
+            });
+        }
+        std::fs::remove_file(socket_path).map_err(|err| AiError::McpFailed {
+            server: "transom-mcp".to_owned(),
+            reason: format!("清理旧 MCP Socket 失败（{}）: {err}", socket_path.display()),
+        })?;
     }
 
     let listener =
@@ -220,7 +234,17 @@ pub async fn serve_local_socket(
                 socket_path.display()
             ),
         })?;
-    let _ = std::fs::set_permissions(socket_path, std::fs::Permissions::from_mode(0o600));
+    if let Err(err) = std::fs::set_permissions(socket_path, std::fs::Permissions::from_mode(0o600))
+    {
+        let _ = std::fs::remove_file(socket_path);
+        return Err(AiError::McpFailed {
+            server: "transom-mcp".to_owned(),
+            reason: format!(
+                "收紧 MCP Socket 权限失败（{}）: {err}",
+                socket_path.display()
+            ),
+        });
+    }
     log::info!("Transom 本地 MCP Socket 已就绪: {}", socket_path.display());
 
     let mut conn_tasks = tokio::task::JoinSet::new();
@@ -320,6 +344,39 @@ mod tests {
                 Err(format!("未知工具: {name}"))
             }
         }
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn local_socket_is_owner_only() {
+        use std::os::unix::fs::PermissionsExt as _;
+
+        let dir = tempfile::tempdir().expect("创建临时目录失败");
+        let socket_path = dir.path().join("mcp.sock");
+        let server = Arc::new(McpServer::new(Arc::new(FakeBackend)));
+        let cancel = tokio_util::sync::CancellationToken::new();
+        let task_socket = socket_path.clone();
+        let task_cancel = cancel.clone();
+        let serve = tokio::spawn(async move {
+            super::serve_local_socket(server, &task_socket, task_cancel).await
+        });
+        for _ in 0..100 {
+            if socket_path.exists() {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+        let mode = std::fs::metadata(&socket_path)
+            .expect("读取 Socket 属性失败")
+            .permissions()
+            .mode()
+            & 0o777;
+        assert_eq!(mode, 0o600);
+        cancel.cancel();
+        serve
+            .await
+            .expect("MCP 服务任务异常")
+            .expect("MCP 服务失败");
     }
 
     #[tokio::test]

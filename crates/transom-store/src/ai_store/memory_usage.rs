@@ -1,6 +1,7 @@
 //! AI 三层记忆、自定义技能目录、审计日志与 Token 用量统计持久化。
 
 use std::fs;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -11,6 +12,7 @@ use transom_ai::{
 
 use super::{AiStore, sanitize_id_filename};
 use crate::file_io::write_atomic;
+use transom_platform::private_fs;
 
 impl AiStore {
     /// 读取三层记忆中的全局记忆与指定主机记忆。
@@ -56,8 +58,21 @@ impl AiStore {
 
     /// 审计日志文件路径。
     pub fn append_audit(&self, entry: &AiAuditEntry) -> Result<(), AiError> {
+        private_fs::ensure_private_dir(&self.root).map_err(|err| AiError::StorageFailed {
+            target: self.root.display().to_string(),
+            reason: err.to_string(),
+        })?;
         let path = self.root.join("audit.jsonl");
-        entry.append_to_file(&path)
+        let line = entry.to_json_line()?;
+        let mut file =
+            private_fs::open_private_append(&path).map_err(|err| AiError::StorageFailed {
+                target: path.display().to_string(),
+                reason: err.to_string(),
+            })?;
+        writeln!(file, "{line}").map_err(|err| AiError::StorageFailed {
+            target: path.display().to_string(),
+            reason: err.to_string(),
+        })
     }
 
     /// 用户自定义技能目录。
@@ -171,6 +186,35 @@ mod tests {
             .load_memory(Some("host-2"))
             .expect("读取空主机记忆失败");
         assert!(other.host_markdown.is_empty());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn audit_log_is_owner_only() {
+        use std::os::unix::fs::PermissionsExt as _;
+        use transom_ai::{AiAuditEntry, ToolRisk};
+
+        let dir = tempfile::tempdir().expect("创建临时目录失败");
+        let store = AiStore::with_root(dir.path().to_path_buf());
+        store
+            .append_audit(&AiAuditEntry {
+                timestamp: "2026-11-27T00:00:00Z".to_owned(),
+                conversation_id: "conv-1".to_owned(),
+                host_label: "host-1".to_owned(),
+                tool_name: "remote_exec".to_owned(),
+                risk: ToolRisk::SafeRead,
+                summary: "uptime".to_owned(),
+                approved: true,
+                ok: true,
+                duration_ms: 1,
+            })
+            .expect("写入审计失败");
+        let mode = std::fs::metadata(dir.path().join("audit.jsonl"))
+            .expect("读取审计文件属性失败")
+            .permissions()
+            .mode()
+            & 0o777;
+        assert_eq!(mode, 0o600);
     }
 
     #[test]

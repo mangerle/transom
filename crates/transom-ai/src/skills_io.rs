@@ -1,7 +1,10 @@
 //! 技能文件沙箱读写、资源加载与本地 `SKILL.md` 文件夹一键导入。
 
 use std::fs;
+use std::io::Write;
 use std::path::{Path, PathBuf};
+
+use transom_platform::private_fs;
 
 use crate::error::AiError;
 use crate::memory::resolve_sandbox_path;
@@ -27,12 +30,8 @@ pub fn save_custom_skill(
             reason: "技能标识与正文均不能为空（标识仅支持字母、数字、-、_）".to_owned(),
         });
     }
-    fs::create_dir_all(skills_dir).map_err(|e| AiError::StorageFailed {
-        target: skills_dir.display().to_string(),
-        reason: e.to_string(),
-    })?;
     let skill_dir = resolve_sandbox_path(skills_dir, Path::new(&clean))?;
-    fs::create_dir_all(&skill_dir).map_err(|e| AiError::StorageFailed {
+    private_fs::ensure_private_dir(&skill_dir).map_err(|e| AiError::StorageFailed {
         target: skill_dir.display().to_string(),
         reason: e.to_string(),
     })?;
@@ -56,10 +55,16 @@ pub fn save_custom_skill(
         "---\nname: {clean}\ntitle: \"{title_val}\"\ncommand: /{clean}\ndescription: \"{desc_val}\"\n{tags_line}---\n\n{}\n",
         body.trim()
     );
-    fs::write(&path, md).map_err(|e| AiError::StorageFailed {
-        target: path.display().to_string(),
-        reason: e.to_string(),
-    })?;
+    let mut file =
+        private_fs::open_private_truncate(&path).map_err(|e| AiError::StorageFailed {
+            target: path.display().to_string(),
+            reason: e.to_string(),
+        })?;
+    file.write_all(md.as_bytes())
+        .map_err(|e| AiError::StorageFailed {
+            target: path.display().to_string(),
+            reason: e.to_string(),
+        })?;
     Ok(path)
 }
 
@@ -163,7 +168,7 @@ pub fn import_skill_from_path(src: &Path, skills_dir: &Path) -> Result<SkillDefi
 }
 
 fn copy_skill_dir(src: &Path, dst: &Path) -> Result<(), AiError> {
-    fs::create_dir_all(dst).map_err(|e| AiError::StorageFailed {
+    private_fs::ensure_private_dir(dst).map_err(|e| AiError::StorageFailed {
         target: dst.display().to_string(),
         reason: e.to_string(),
     })?;
@@ -178,16 +183,27 @@ fn copy_skill_dir(src: &Path, dst: &Path) -> Result<(), AiError> {
             if name.to_string_lossy() == ".git" {
                 continue;
             }
+            let file_type = entry.file_type().map_err(|e| AiError::StorageFailed {
+                target: entry.path().display().to_string(),
+                reason: e.to_string(),
+            })?;
+            if file_type.is_symlink() {
+                continue;
+            }
             let s_path = entry.path();
             let d_path = cur_dst.join(&name);
-            if s_path.is_dir() {
-                fs::create_dir_all(&d_path).map_err(|e| AiError::StorageFailed {
+            if file_type.is_dir() {
+                private_fs::ensure_private_dir(&d_path).map_err(|e| AiError::StorageFailed {
                     target: d_path.display().to_string(),
                     reason: e.to_string(),
                 })?;
                 stack.push((s_path, d_path));
-            } else if s_path.is_file() && entry.metadata().is_ok_and(|m| m.len() <= 256 * 1024) {
+            } else if file_type.is_file() && entry.metadata().is_ok_and(|m| m.len() <= 256 * 1024) {
                 fs::copy(&s_path, &d_path).map_err(|e| AiError::StorageFailed {
+                    target: d_path.display().to_string(),
+                    reason: e.to_string(),
+                })?;
+                private_fs::open_private_append(&d_path).map_err(|e| AiError::StorageFailed {
                     target: d_path.display().to_string(),
                     reason: e.to_string(),
                 })?;

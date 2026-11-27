@@ -1,6 +1,6 @@
 //! AI 会话索引（`index.json`）与树状 JSONL（`sessions/<id>.jsonl`）读写管理。
 
-use std::fs::{self, OpenOptions};
+use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
@@ -10,6 +10,7 @@ use transom_ai::{
 
 use super::{AiStore, sanitize_id_filename};
 use crate::file_io::write_atomic;
+use transom_platform::private_fs;
 
 impl AiStore {
     /// 读取对话索引列表，按 `updated_at` 降序排列（优先命中进程内索引缓存）。
@@ -181,17 +182,14 @@ impl AiStore {
     ) -> Result<(), AiError> {
         let path = self.session_file_path(conversation_id)?;
         if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent).map_err(|err| AiError::StorageFailed {
+            private_fs::ensure_private_dir(parent).map_err(|err| AiError::StorageFailed {
                 target: parent.display().to_string(),
                 reason: err.to_string(),
             })?;
         }
         let line = SessionTree::encode_entry(entry)?;
-        let mut file = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&path)
-            .map_err(|err| AiError::StorageFailed {
+        let mut file =
+            private_fs::open_private_append(&path).map_err(|err| AiError::StorageFailed {
                 target: path.display().to_string(),
                 reason: err.to_string(),
             })?;
@@ -212,6 +210,31 @@ impl AiStore {
 mod tests {
     use super::super::AiStore;
     use transom_ai::{ChatRole, ConversationSummary, SessionEntry, SessionEntryKind, SessionScope};
+
+    #[cfg(unix)]
+    #[test]
+    fn session_jsonl_is_owner_only() {
+        use std::os::unix::fs::PermissionsExt as _;
+
+        let dir = tempfile::tempdir().expect("创建临时目录失败");
+        let store = AiStore::with_root(dir.path().to_path_buf());
+        let entry = transom_ai::SessionEntry::new(
+            None,
+            transom_ai::SessionEntryKind::Reasoning {
+                text: "私有会话内容".to_owned(),
+            },
+        );
+        store
+            .append_session_entry("private-conv", &entry)
+            .expect("追加会话失败");
+        let path = dir.path().join("sessions").join("private-conv.jsonl");
+        let mode = std::fs::metadata(path)
+            .expect("读取会话文件属性失败")
+            .permissions()
+            .mode()
+            & 0o777;
+        assert_eq!(mode, 0o600);
+    }
 
     #[test]
     fn session_index_and_jsonl_roundtrip() {

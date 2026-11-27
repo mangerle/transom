@@ -10391,6 +10391,7 @@ dependencies = [
  "tokio",
  "tokio-util",
  "transom-core",
+ "transom-platform",
  "uuid",
 ]
 
