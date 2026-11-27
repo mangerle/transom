@@ -5,6 +5,7 @@
 //!   **严禁持有 `WeakEntity<AppShell>`**，严格遵守数据向下、意图向上的单向数据流；
 //! - 按 `state` / `cards` / `approval` / `composer` / `config_drawer` / `view` 拆分为小文件。
 
+mod acp_banner;
 mod actions;
 mod app_actions;
 mod approval;
@@ -23,6 +24,7 @@ mod handoff_banner;
 mod history_drawer;
 pub(crate) mod inline_assist;
 mod markdown_blocks;
+mod memory_drawer;
 mod mention_menu;
 mod metrics;
 mod metrics_model;
@@ -30,13 +32,16 @@ mod model_picker;
 mod model_table;
 pub(crate) mod panel_events;
 mod plan_card;
+mod policy_hooks_actions;
 mod policy_hooks_drawer;
 mod popups;
 mod queue_card;
 mod settings_actions;
 mod skills_drawer;
+mod skills_drawer_render;
 mod slash_menu;
 mod state;
+mod state_types;
 mod task_bar;
 mod tool_card;
 mod turn_nav;

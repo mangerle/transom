@@ -17,7 +17,7 @@ use super::composer_triggers::{
     mode_icon, render_icon_popup_trigger, render_metric_chip, render_popup_trigger,
 };
 use super::metrics::{AiSessionMetrics, anchor_toolbar_popover, format_compact_tokens};
-use super::slash_menu::{AcpBannerParams, render_acp_warning_banner};
+use super::acp_banner::{AcpBannerParams, render_acp_warning_banner};
 use super::state::AiActivePopup;
 use crate::palette::Palette;
 use crate::theme::tokens::{space, typography};
