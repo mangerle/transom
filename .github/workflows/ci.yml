@@ -71,10 +71,10 @@ jobs:
         run: cargo check --locked --workspace --all-targets
 
       - name: 配置最低支持 Rust 工具链
-        run: rustup toolchain install 1.96.0 --profile minimal
+        run: rustup toolchain install 1.97.1 --profile minimal
 
       - name: 验证最低支持 Rust 版本
-        run: cargo +1.96.0 check --locked --workspace --all-targets
+        run: cargo +1.97.1 check --locked --workspace --all-targets
 
   # 平台作业不只编译：Windows/macOS 条件编译的单测与无头 GPUI 集成测试必须在
   # 对应宿主上真实执行，否则平台分支和 Job Object/LaunchServices 路径会长期失守。
