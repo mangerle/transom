@@ -235,10 +235,10 @@ pub fn extract_host_mentions(prompt: &str, available_hosts: &[&str]) -> Vec<Stri
             continue;
         }
         let after = &prompt[idx + 1..];
-        let after_lower = after.to_ascii_lowercase();
         for &candidate in &sorted_hosts {
-            let cand_lower = candidate.to_ascii_lowercase();
-            if after_lower.starts_with(&cand_lower) {
+            if let Some(prefix) = after.get(..candidate.len())
+                && prefix.eq_ignore_ascii_case(candidate)
+            {
                 let next_ch = after[candidate.len()..].chars().next();
                 let boundary_ok =
                     next_ch.is_none_or(|c| !c.is_ascii_alphanumeric() && !matches!(c, '_' | '-'));
