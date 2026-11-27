@@ -1,6 +1,6 @@
 //! 按需子 Agent 运行器实现：在独立上下文中执行 `delegate_task` 并接入托管任务中心。
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -32,7 +32,8 @@ pub(in crate::controller) struct ControllerSubagentRunner {
     pub(in crate::controller) execution_mode: Arc<RwLock<ExecutionMode>>,
     pub(in crate::controller) exec_policy_rules: Vec<ExecPolicyRule>,
     pub(in crate::controller) hooks: Vec<HookRule>,
-    pub(in crate::controller) session_allow_prefixes: Arc<RwLock<HashSet<String>>>,
+    pub(in crate::controller) approval_scope: transom_ai::ApprovalScope,
+    pub(in crate::controller) approval_grants: Arc<RwLock<transom_ai::ApprovalGrantStore>>,
     pub(in crate::controller) app_bridge_deps: AppBridgeDeps,
     pub(in crate::controller) tasks: Arc<ManagedTaskRegistry>,
     pub(in crate::controller) subagent_histories: Arc<Mutex<HashMap<String, Vec<SessionEntry>>>>,
@@ -220,7 +221,8 @@ impl SubagentRunner for ControllerSubagentRunner {
             execution_mode: exec_mode,
             plan_mode: is_readonly,
             exec_policy_rules: self.exec_policy_rules.clone(),
-            session_allow_prefixes: self.session_allow_prefixes.clone(),
+            approval_scope: self.approval_scope.child(&task_handle.task_id),
+            approval_grants: self.approval_grants.clone(),
             hook_executor,
             max_turns: req.max_turns,
             tool_ctx,

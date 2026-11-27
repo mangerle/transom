@@ -8,7 +8,7 @@
 //!   - `on_text_delta` / `on_reasoning_delta`：记录首字时刻并流式发送增量；
 //!   - `on_model_turn_finished`：计算 `tokens/s` 并发送 [`AgentEvent::TurnEnd`]，确保工具卡片与回答顺序不乱。
 
-use std::collections::{HashSet, VecDeque};
+use std::collections::VecDeque;
 use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
 
@@ -24,6 +24,7 @@ use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 use transom_core::AiApprovalDecision;
 
+use crate::approval::{ApprovalGrantStore, ApprovalScope};
 use crate::compaction::{
     PreambleExtra, SessionPromptContext, build_system_preamble_with_extra, extract_turn_pairs,
     needs_compaction,
@@ -96,7 +97,8 @@ pub struct RunInput {
     pub execution_mode: Arc<RwLock<ExecutionMode>>,
     pub plan_mode: bool,
     pub exec_policy_rules: Vec<ExecPolicyRule>,
-    pub session_allow_prefixes: Arc<RwLock<HashSet<String>>>,
+    pub approval_scope: ApprovalScope,
+    pub approval_grants: Arc<RwLock<ApprovalGrantStore>>,
     pub hook_executor: Option<Arc<dyn HookExecutor>>,
     pub max_turns: usize,
     pub tool_ctx: ToolRuntimeContext,
@@ -248,7 +250,8 @@ async fn run_attempt(
         execution_mode: input.execution_mode.clone(),
         plan_mode: input.plan_mode,
         exec_policy_rules: input.exec_policy_rules.clone(),
-        session_allow_prefixes: input.session_allow_prefixes.clone(),
+        approval_scope: input.approval_scope.clone(),
+        approval_grants: input.approval_grants.clone(),
         hook_executor: input.hook_executor.clone(),
         max_turns,
         turns_used: AtomicUsize::new(0),

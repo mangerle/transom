@@ -4,6 +4,7 @@ pub mod acp;
 pub(crate) mod acp_handlers;
 pub mod acp_parse;
 pub mod acp_probe;
+pub mod approval;
 pub mod audit;
 pub mod bm25;
 pub mod checkpoint;
@@ -37,6 +38,7 @@ pub mod working_state;
 
 pub use acp::{AcpRunInput, is_acp_command_available, run_acp_turn};
 pub use acp_probe::{AcpModelProbeResult, probe_acp_models};
+pub use approval::{ApprovalGrantStore, ApprovalScope};
 pub use audit::AiAuditEntry;
 pub use bm25::{Bm25Document, Bm25Hit, Bm25Index};
 pub use checkpoint::{CheckpointManifest, FileBackupRecord, TurnCheckpoint};

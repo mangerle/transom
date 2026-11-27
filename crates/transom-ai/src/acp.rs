@@ -6,7 +6,6 @@
 //! - 子进程统一配置 `kill_on_drop(true)`，并在取消、完成或异常退出时显式执行 `kill` + `wait`
 //!   收割进程控制块，杜绝僵尸进程与脱缰孤儿进程。
 
-use std::collections::HashSet;
 use std::env;
 use std::io::ErrorKind;
 use std::process::Stdio;
@@ -27,6 +26,7 @@ use crate::acp_parse::{
 };
 use crate::acp_probe::augmented_path_env;
 pub use crate::acp_probe::{acp_tools_bin_dir, is_acp_command_available};
+use crate::approval::{ApprovalGrantStore, ApprovalScope};
 use crate::config::AcpAgentConfig;
 use crate::error::AiError;
 use crate::exec_policy::ExecPolicyRule;
@@ -52,7 +52,8 @@ pub struct AcpRunInput {
     pub protection: HostProtection,
     pub plan_mode: bool,
     pub exec_policy_rules: Vec<ExecPolicyRule>,
-    pub session_allow_prefixes: Arc<parking_lot::RwLock<HashSet<String>>>,
+    pub approval_scope: ApprovalScope,
+    pub approval_grants: Arc<parking_lot::RwLock<ApprovalGrantStore>>,
     pub cancel: CancellationToken,
 }
 

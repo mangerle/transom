@@ -120,7 +120,8 @@ pub(super) async fn execute_and_pump(
             protection: input.tool_ctx.protection(),
             plan_mode: input.plan_mode,
             exec_policy_rules: input.exec_policy_rules.clone(),
-            session_allow_prefixes: input.session_allow_prefixes.clone(),
+            approval_scope: input.approval_scope.clone(),
+            approval_grants: input.approval_grants.clone(),
             cancel: input.cancel.clone(),
         };
         tokio::spawn(async move { run_acp_turn(acp_input).await })

@@ -3,12 +3,11 @@
 //! 设计原理（Why）：
 //! - 单纯按空格或裸字符串匹配容易被 `ls && rm -rf /`、`;`、`$(...)`、反引号等链式结构绕过；
 //! - 本模块实现引号与转义感知的 Shell 片段拆解器 [`split_shell_segments`]，对每段独立定级并取最严风险；
-//! - 同时支持用户配置的命令前缀规则表（放行/拒绝/询问）、会话级前缀白名单，以及高危命令执行前的影响摘要。
-
-use std::collections::HashSet;
+//! - 同时支持用户配置的命令前缀规则表（放行/拒绝/询问）、按作用域隔离的审批授权，以及高危命令执行前的影响摘要。
 
 use serde::{Deserialize, Serialize};
 
+use crate::approval::{ApprovalGrantStore, ApprovalScope};
 use crate::policy::{ToolRisk, classify_shell_command};
 
 /// 用户自定义的命令策略动作。
@@ -61,7 +60,7 @@ pub struct ChainEvalResult {
     pub worst_risk: ToolRisk,
     /// 若任意片段命中了 Deny 规则，返回拦截原因。
     pub denied_reason: Option<String>,
-    /// 所有片段是否均命中用户 `Allow` 规则或当前会话前缀白名单（且无 `Destructive` 片段）。
+    /// 所有片段是否均命中用户 `Allow` 规则或当前审批作用域授权（且无 `Destructive` 片段）。
     pub all_allowlisted: bool,
     /// 是否强制要求人工确认（命中 `Ask` 规则或存在不可自动放行片段）。
     pub force_ask: bool,
@@ -226,7 +225,8 @@ fn matches_prefix(normalized_seg: &str, pattern: &str) -> bool {
 pub fn evaluate_command_chain(
     command: &str,
     rules: &[ExecPolicyRule],
-    session_prefixes: &HashSet<String>,
+    approval_grants: &ApprovalGrantStore,
+    approval_scope: &ApprovalScope,
 ) -> ChainEvalResult {
     let segments = split_shell_segments(command);
     if segments.is_empty() {
@@ -249,7 +249,8 @@ pub fn evaluate_command_chain(
         }
 
         let norm = normalize_segment_for_match(seg);
-        let mut seg_allowed = false;
+        let mut allow_rule = false;
+        let mut segment_ask = false;
 
         for rule in rules.iter().filter(|r| r.enabled) {
             if matches_prefix(&norm, &rule.pattern) {
@@ -272,21 +273,18 @@ pub fn evaluate_command_chain(
                     }
                     ExecPolicyAction::Ask => {
                         force_ask = true;
-                        seg_allowed = false;
+                        segment_ask = true;
                     }
                     ExecPolicyAction::Allow => {
-                        seg_allowed = seg_risk != ToolRisk::Destructive;
+                        allow_rule = true;
                     }
                 }
             }
         }
 
-        if !seg_allowed
-            && seg_risk != ToolRisk::Destructive
-            && session_prefixes.iter().any(|p| matches_prefix(&norm, p))
-        {
-            seg_allowed = true;
-        }
+        let granted = approval_grants.permits(approval_scope, &norm);
+        let seg_allowed =
+            !segment_ask && seg_risk != ToolRisk::Destructive && (allow_rule || granted);
 
         if !seg_allowed {
             all_allowlisted = false;
@@ -371,6 +369,11 @@ pub fn explain_command_impact(command: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::approval::{ApprovalGrantStore, ApprovalScope, HostProtection};
+
+    fn global_scope() -> ApprovalScope {
+        ApprovalScope::new("chat-1", None, HostProtection::Normal)
+    }
 
     #[test]
     fn split_segments_handles_quotes_and_subshells() {
@@ -383,7 +386,12 @@ mod tests {
 
     #[test]
     fn chained_destructive_command_is_caught() {
-        let res = evaluate_command_chain("ls -la && rm -rf /var/tmp/test", &[], &HashSet::new());
+        let res = evaluate_command_chain(
+            "ls -la && rm -rf /var/tmp/test",
+            &[],
+            &ApprovalGrantStore::new(),
+            &global_scope(),
+        );
         assert_eq!(res.worst_risk, ToolRisk::Destructive);
         assert!(!res.all_allowlisted);
     }
@@ -406,11 +414,21 @@ mod tests {
                 enabled: true,
             },
         ];
-        let ok = evaluate_command_chain("docker ps -a", &rules, &HashSet::new());
+        let ok = evaluate_command_chain(
+            "docker ps -a",
+            &rules,
+            &ApprovalGrantStore::new(),
+            &global_scope(),
+        );
         assert!(ok.denied_reason.is_none());
         assert!(ok.all_allowlisted);
 
-        let blocked = evaluate_command_chain("docker ps && rm -rf /tmp/a", &rules, &HashSet::new());
+        let blocked = evaluate_command_chain(
+            "docker ps && rm -rf /tmp/a",
+            &rules,
+            &ApprovalGrantStore::new(),
+            &global_scope(),
+        );
         assert!(blocked.denied_reason.is_some());
     }
 

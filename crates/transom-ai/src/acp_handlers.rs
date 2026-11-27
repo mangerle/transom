@@ -178,7 +178,7 @@ pub(crate) async fn handle_acp_permission(
             cmd_risk
         };
     let decision = {
-        let prefixes = input.session_allow_prefixes.read();
+        let grants = input.approval_grants.read();
         evaluate_command_policy(&CommandPolicyContext {
             protection: input.protection,
             mode,
@@ -187,7 +187,8 @@ pub(crate) async fn handle_acp_permission(
             force_confirm: false,
             command: Some(&title),
             exec_policy_rules: &input.exec_policy_rules,
-            session_allow_prefixes: &prefixes,
+            approval_scope: &input.approval_scope,
+            approval_grants: &grants,
         })
     };
     let approved = match decision {
@@ -223,8 +224,11 @@ pub(crate) async fn handle_acp_permission(
             match reply {
                 Some(transom_core::AiApprovalDecision::AllowOnce) => true,
                 Some(transom_core::AiApprovalDecision::AllowPrefix { prefix }) => {
-                    if !prefix.trim().is_empty() {
-                        input.session_allow_prefixes.write().insert(prefix);
+                    if let Some(prefix) = extract_command_prefix(&prefix) {
+                        input
+                            .approval_grants
+                            .write()
+                            .grant_prefix(&input.approval_scope, &prefix);
                     }
                     true
                 }

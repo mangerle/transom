@@ -134,6 +134,11 @@ pub(super) async fn start_ai_run(
 
     let (conversation_id, title, mut history_branch) =
         prepare_conversation(ctx, &req, &scope, &target.model).await;
+    let approval_scope = transom_ai::ApprovalScope::new(
+        conversation_id.clone(),
+        req.session_id.map(|session_id| session_id.to_string()),
+        req.protection,
+    );
 
     let host_id_str = req.session_id.map(|s| s.to_string());
     let memory = ctx
@@ -186,7 +191,8 @@ pub(super) async fn start_ai_run(
                 response_language: Some(settings.response_language.clone()),
                 exec_policy_rules: &settings.exec_policy_rules,
                 hooks: &settings.hooks,
-                session_allow_prefixes: state.ai_session_prefixes.clone(),
+                approval_scope: &approval_scope,
+                approval_grants: state.ai_approval_grants.clone(),
             }),
             current_turn_entry_id: current_turn_entry_id.clone(),
         },
@@ -212,7 +218,8 @@ pub(super) async fn start_ai_run(
         execution_mode: state.ai_execution_mode.clone(),
         plan_mode: req.plan_mode,
         exec_policy_rules: settings.exec_policy_rules.clone(),
-        session_allow_prefixes: state.ai_session_prefixes.clone(),
+        approval_scope,
+        approval_grants: state.ai_approval_grants.clone(),
         hook_executor: hook_executor.clone(),
         max_turns: settings.max_turns,
         tool_ctx,
@@ -269,6 +276,7 @@ pub(in crate::controller) async fn shutdown_ai_runs(state: &mut ControllerState)
     state.ai_terminal_reqs.lock().clear();
     state.ai_app_action_reqs.lock().clear();
     state.ai_output_stores.clear();
+    state.ai_approval_grants.write().clear();
     state.ai_headless_remotes.lock().clear();
     let _ = tokio::time::timeout(Duration::from_secs(2), async {
         while state.ai_set.join_next().await.is_some() {}

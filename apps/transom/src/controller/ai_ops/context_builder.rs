@@ -26,7 +26,8 @@ pub(super) struct SubagentConfig<'a> {
     pub(super) response_language: Option<String>,
     pub(super) exec_policy_rules: &'a [transom_ai::ExecPolicyRule],
     pub(super) hooks: &'a [transom_ai::HookRule],
-    pub(super) session_allow_prefixes: Arc<parking_lot::RwLock<std::collections::HashSet<String>>>,
+    pub(super) approval_scope: &'a transom_ai::ApprovalScope,
+    pub(super) approval_grants: Arc<parking_lot::RwLock<transom_ai::ApprovalGrantStore>>,
 }
 
 /// 装配 [`ToolRuntimeContext`] 所需的参数对象。
@@ -159,7 +160,8 @@ pub(super) fn build_tool_context(
             execution_mode: state.ai_execution_mode.clone(),
             exec_policy_rules: cfg.exec_policy_rules.to_vec(),
             hooks: cfg.hooks.to_vec(),
-            session_allow_prefixes: cfg.session_allow_prefixes,
+            approval_scope: cfg.approval_scope.clone(),
+            approval_grants: cfg.approval_grants,
             app_bridge_deps: bridge_deps.clone(),
             tasks: state.ai_tasks.clone(),
             subagent_histories: state.ai_subagent_histories.clone(),

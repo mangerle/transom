@@ -15,7 +15,7 @@ pub struct ProxyJumpConfig {
 }
 
 /// 主机 AI 保护级别：控制智能助手在该主机上的最大操作权限。
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum HostProtection {
     /// 常规主机：遵循全局或会话执行模式。

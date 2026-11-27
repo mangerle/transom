@@ -148,6 +148,10 @@ pub(in crate::controller) async fn handle_ai_command(
         }
         AiCommand::DeleteConversation { conversation_id } => {
             state.ai_output_stores.remove(&conversation_id);
+            state
+                .ai_approval_grants
+                .write()
+                .remove_namespace(&conversation_id);
             let store = ctx.ai_store.clone();
             state.ai_set.spawn(async move {
                 let _ = tokio::task::spawn_blocking(move || {

@@ -86,8 +86,8 @@ pub(super) struct ControllerState {
     >,
     /// 待用户在交互式终端完成手动操作的恢复通道。
     pub(super) ai_handoffs: HandoffSenderMap,
-    /// 当前会话中已通过审批卡片“允许同类”放行的命令前缀集合。
-    pub(super) ai_session_prefixes: Arc<parking_lot::RwLock<std::collections::HashSet<String>>>,
+    /// 已通过审批卡片“允许同类”放行的命令前缀，按对话、主机与保护级别隔离。
+    pub(super) ai_approval_grants: Arc<parking_lot::RwLock<transom_ai::ApprovalGrantStore>>,
     /// 待 UI 回传的终端上下文请求表。
     pub(super) ai_terminal_reqs:
         Arc<parking_lot::Mutex<HashMap<String, tokio::sync::oneshot::Sender<Option<String>>>>>,
@@ -135,8 +135,8 @@ impl ControllerState {
             ai_steers: Arc::new(parking_lot::Mutex::new(HashMap::new())),
             ai_approvals: Arc::new(parking_lot::Mutex::new(HashMap::new())),
             ai_handoffs: Arc::new(parking_lot::Mutex::new(HashMap::new())),
-            ai_session_prefixes: Arc::new(parking_lot::RwLock::new(
-                std::collections::HashSet::new(),
+            ai_approval_grants: Arc::new(parking_lot::RwLock::new(
+                transom_ai::ApprovalGrantStore::new(),
             )),
             ai_terminal_reqs: Arc::new(parking_lot::Mutex::new(HashMap::new())),
             ai_app_action_reqs: Arc::new(parking_lot::Mutex::new(HashMap::new())),

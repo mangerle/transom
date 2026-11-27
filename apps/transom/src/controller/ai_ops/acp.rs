@@ -95,6 +95,11 @@ pub(super) async fn start_acp_only_run(
     };
     let (conversation_id, title, history_branch) =
         prepare_conversation(ctx, &req, &scope, &agent.name).await;
+    let approval_scope = transom_ai::ApprovalScope::new(
+        conversation_id.clone(),
+        req.session_id.map(|session_id| session_id.to_string()),
+        req.protection,
+    );
 
     let cancel = CancellationToken::new();
     state
@@ -163,7 +168,8 @@ pub(super) async fn start_acp_only_run(
         execution_mode: state.ai_execution_mode.clone(),
         plan_mode: req.plan_mode,
         exec_policy_rules: settings.exec_policy_rules.clone(),
-        session_allow_prefixes: state.ai_session_prefixes.clone(),
+        approval_scope,
+        approval_grants: state.ai_approval_grants.clone(),
         hook_executor: None,
         max_turns: 15,
         tool_ctx,

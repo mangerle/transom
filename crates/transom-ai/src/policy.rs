@@ -7,6 +7,8 @@
 use serde::{Deserialize, Serialize};
 pub use transom_core::HostProtection;
 
+use crate::approval::{ApprovalGrantStore, ApprovalScope};
+
 /// 运行中发送新消息的默认行为。
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -204,7 +206,8 @@ pub struct CommandPolicyContext<'a> {
     pub force_confirm: bool,
     pub command: Option<&'a str>,
     pub exec_policy_rules: &'a [crate::exec_policy::ExecPolicyRule],
-    pub session_allow_prefixes: &'a std::collections::HashSet<String>,
+    pub approval_scope: &'a ApprovalScope,
+    pub approval_grants: &'a ApprovalGrantStore,
 }
 
 /// 统一计算单次工具/命令调用的策略裁决结果。
@@ -228,7 +231,8 @@ pub fn evaluate_command_policy(ctx: &CommandPolicyContext<'_>) -> PolicyDecision
         let chain = crate::exec_policy::evaluate_command_chain(
             cmd,
             ctx.exec_policy_rules,
-            ctx.session_allow_prefixes,
+            ctx.approval_grants,
+            ctx.approval_scope,
         );
         if let Some(denied) = chain.denied_reason {
             return PolicyDecision::Deny { reason: denied };
@@ -245,7 +249,11 @@ pub fn evaluate_command_policy(ctx: &CommandPolicyContext<'_>) -> PolicyDecision
         }
     }
 
-    let base = evaluate_policy(ctx.protection, ctx.mode, effective_risk, force_ask);
+    if force_ask {
+        return PolicyDecision::RequireApproval;
+    }
+
+    let base = evaluate_policy(ctx.protection, ctx.mode, effective_risk, false);
     if base == PolicyDecision::RequireApproval
         && chain_allowlisted
         && ctx.protection != HostProtection::ReadOnly
@@ -260,8 +268,9 @@ pub fn evaluate_command_policy(ctx: &CommandPolicyContext<'_>) -> PolicyDecision
 #[cfg(test)]
 mod tests {
     use super::{
-        ExecutionMode, HostProtection, PolicyDecision, ToolRisk, classify_shell_command,
-        detect_blocking_command, evaluate_bulk_policy, evaluate_policy,
+        CommandPolicyContext, ExecutionMode, HostProtection, PolicyDecision, ToolRisk,
+        classify_shell_command, detect_blocking_command, evaluate_bulk_policy,
+        evaluate_command_policy, evaluate_policy,
     };
 
     #[test]
@@ -395,5 +404,67 @@ mod tests {
             ),
             PolicyDecision::Deny { .. }
         ));
+    }
+
+    #[test]
+    fn approval_grants_are_scoped_and_ask_rules_win() {
+        use crate::approval::{ApprovalGrantStore, ApprovalScope};
+        use crate::exec_policy::{ExecPolicyAction, ExecPolicyRule};
+
+        let mut grants = ApprovalGrantStore::new();
+        let normal_scope =
+            ApprovalScope::new("chat-1", Some("host-1".to_owned()), HostProtection::Normal);
+        assert!(grants.grant_prefix(&normal_scope, "systemctl restart"));
+
+        let allowed = evaluate_command_policy(&CommandPolicyContext {
+            protection: HostProtection::Normal,
+            mode: ExecutionMode::Auto,
+            plan_mode: false,
+            base_risk: ToolRisk::Write,
+            force_confirm: false,
+            command: Some("systemctl restart nginx"),
+            exec_policy_rules: &[],
+            approval_scope: &normal_scope,
+            approval_grants: &grants,
+        });
+        assert_eq!(allowed, PolicyDecision::Allow);
+
+        let production_scope = ApprovalScope::new(
+            "chat-1",
+            Some("host-1".to_owned()),
+            HostProtection::Production,
+        );
+        let cross_protection = evaluate_command_policy(&CommandPolicyContext {
+            protection: HostProtection::Production,
+            mode: ExecutionMode::Auto,
+            plan_mode: false,
+            base_risk: ToolRisk::Write,
+            force_confirm: false,
+            command: Some("systemctl restart nginx"),
+            exec_policy_rules: &[],
+            approval_scope: &production_scope,
+            approval_grants: &grants,
+        });
+        assert_eq!(cross_protection, PolicyDecision::RequireApproval);
+
+        let ask_rules = [ExecPolicyRule {
+            id: "ask-restart".to_owned(),
+            pattern: "systemctl restart".to_owned(),
+            action: ExecPolicyAction::Ask,
+            note: "生产服务重启需要人工确认".to_owned(),
+            enabled: true,
+        }];
+        let ask_wins = evaluate_command_policy(&CommandPolicyContext {
+            protection: HostProtection::Normal,
+            mode: ExecutionMode::AllowAll,
+            plan_mode: false,
+            base_risk: ToolRisk::Write,
+            force_confirm: false,
+            command: Some("systemctl restart nginx"),
+            exec_policy_rules: &ask_rules,
+            approval_scope: &normal_scope,
+            approval_grants: &grants,
+        });
+        assert_eq!(ask_wins, PolicyDecision::RequireApproval);
     }
 }

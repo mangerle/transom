@@ -1,6 +1,6 @@
 //! Agent 运行期生命周期钩子 [`Gate`]：Plan 拦截、链式命令策略、生命周期 Hooks 与终端接管。
 
-use std::collections::{HashSet, VecDeque};
+use std::collections::VecDeque;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
@@ -16,6 +16,7 @@ use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 use transom_core::AiApprovalDecision;
 
+use crate::approval::{ApprovalGrantStore, ApprovalScope};
 use crate::exec_policy::{
     ExecPolicyRule, evaluate_command_chain, explain_command_impact, extract_command_prefix,
 };
@@ -35,7 +36,8 @@ pub(crate) struct Gate {
     pub(crate) execution_mode: Arc<RwLock<ExecutionMode>>,
     pub(crate) plan_mode: bool,
     pub(crate) exec_policy_rules: Vec<ExecPolicyRule>,
-    pub(crate) session_allow_prefixes: Arc<RwLock<HashSet<String>>>,
+    pub(crate) approval_scope: ApprovalScope,
+    pub(crate) approval_grants: Arc<RwLock<ApprovalGrantStore>>,
     pub(crate) hook_executor: Option<Arc<dyn HookExecutor>>,
     pub(crate) max_turns: usize,
     pub(crate) turns_used: AtomicUsize,
@@ -279,8 +281,13 @@ impl Gate {
         if tool_name == "remote_exec_bulk" {
             let mut effective_risk = assessment.risk;
             if let Some(cmd) = command {
-                let prefixes = self.session_allow_prefixes.read();
-                let chain = evaluate_command_chain(cmd, &self.exec_policy_rules, &prefixes);
+                let grants = self.approval_grants.read();
+                let chain = evaluate_command_chain(
+                    cmd,
+                    &self.exec_policy_rules,
+                    &grants,
+                    &self.approval_scope,
+                );
                 if let Some(denied) = chain.denied_reason {
                     return PolicyDecision::Deny { reason: denied };
                 }
@@ -304,7 +311,7 @@ impl Gate {
             return evaluate_bulk_policy(&targets, mode, effective_risk).0;
         }
 
-        let prefixes = self.session_allow_prefixes.read();
+        let grants = self.approval_grants.read();
         evaluate_command_policy(&CommandPolicyContext {
             protection: self.tool_ctx.protection(),
             mode,
@@ -313,7 +320,8 @@ impl Gate {
             force_confirm: assessment.force_confirm,
             command,
             exec_policy_rules: &self.exec_policy_rules,
-            session_allow_prefixes: &prefixes,
+            approval_scope: &self.approval_scope,
+            approval_grants: &grants,
         })
     }
 
@@ -354,8 +362,10 @@ impl Gate {
         match reply {
             AiApprovalDecision::AllowOnce => DispatchAction::proceed(),
             AiApprovalDecision::AllowPrefix { prefix } => {
-                if !prefix.trim().is_empty() {
-                    self.session_allow_prefixes.write().insert(prefix);
+                if let Some(prefix) = extract_command_prefix(&prefix) {
+                    self.approval_grants
+                        .write()
+                        .grant_prefix(&self.approval_scope, &prefix);
                 }
                 DispatchAction::proceed()
             }
