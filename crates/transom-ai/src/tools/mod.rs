@@ -287,10 +287,28 @@ fn mcp_schema_entry<T: rig_agent::tool::Tool>(tool: &T) -> serde_json::Value {
     })
 }
 
+/// 软件领域全局工具统一清单（`attach_tools` 与 `export_mcp_tool_schemas` 共用，杜绝双份维护漂移）。
+macro_rules! for_each_app_bridge_tool {
+    ($cb:ident) => {
+        $cb!(
+            app_tools::SessionCatalogTool,
+            app_tools::WorkspaceControlTool,
+            app_tools::SftpTransferTool,
+            app_tools::HostMonitorTool,
+            app_tools::PortForwardOpsTool,
+            app_tools_dev::ContainerWorkspaceTool,
+            app_tools_dev::GitWorkspaceTool,
+            app_tools_dev::ApiClientTool,
+            app_tools_dev::AppSettingsOpsTool,
+            app_tools_dev::AiMemorySkillsTool,
+        )
+    };
+}
+
 /// 从真实 `Tool` 实现中统一导出反向 MCP Server 暴露的工具 Schema 清单，杜绝双份维护漂移。
 pub(crate) fn export_mcp_tool_schemas() -> Vec<serde_json::Value> {
     let ctx = ToolRuntimeContext::dummy_for_schema();
-    vec![
+    let mut schemas = vec![
         mcp_schema_entry(&remote::RemoteExecTool::new(ctx.clone())),
         mcp_schema_entry(&extra::RemoteExecBulkTool::new(ctx.clone())),
         mcp_schema_entry(&ops::RemoteFsTool::new(ctx.clone())),
@@ -300,17 +318,14 @@ pub(crate) fn export_mcp_tool_schemas() -> Vec<serde_json::Value> {
         mcp_schema_entry(&remote::GetRecentBlocksTool::new(ctx.clone())),
         mcp_schema_entry(&remote::ReadTerminalTool::new(ctx.clone())),
         mcp_schema_entry(&extra::ReadToolOutputTool::new(ctx.clone())),
-        mcp_schema_entry(&app_tools::SessionCatalogTool::new(ctx.clone())),
-        mcp_schema_entry(&app_tools::WorkspaceControlTool::new(ctx.clone())),
-        mcp_schema_entry(&app_tools::SftpTransferTool::new(ctx.clone())),
-        mcp_schema_entry(&app_tools::HostMonitorTool::new(ctx.clone())),
-        mcp_schema_entry(&app_tools::PortForwardOpsTool::new(ctx.clone())),
-        mcp_schema_entry(&app_tools_dev::ContainerWorkspaceTool::new(ctx.clone())),
-        mcp_schema_entry(&app_tools_dev::GitWorkspaceTool::new(ctx.clone())),
-        mcp_schema_entry(&app_tools_dev::ApiClientTool::new(ctx.clone())),
-        mcp_schema_entry(&app_tools_dev::AppSettingsOpsTool::new(ctx.clone())),
-        mcp_schema_entry(&app_tools_dev::AiMemorySkillsTool::new(ctx)),
-    ]
+    ];
+    macro_rules! push_app_schemas {
+        ($($tool_ty:path),+ $(,)?) => {
+            $(schemas.push(mcp_schema_entry(&<$tool_ty>::new(ctx.clone())));)+
+        };
+    }
+    for_each_app_bridge_tool!(push_app_schemas);
+    schemas
 }
 
 /// 动态风险评估结果（供审批门 `Gate::on_dispatch` 使用）。
@@ -339,17 +354,12 @@ pub fn attach_tools(
         builder = builder.tool(skill_tool::LoadSkillTool::new(ctx.clone()));
     }
     if ctx.caps.app_bridge.is_some() {
-        builder = builder
-            .tool(app_tools::SessionCatalogTool::new(ctx.clone()))
-            .tool(app_tools::WorkspaceControlTool::new(ctx.clone()))
-            .tool(app_tools::SftpTransferTool::new(ctx.clone()))
-            .tool(app_tools::HostMonitorTool::new(ctx.clone()))
-            .tool(app_tools::PortForwardOpsTool::new(ctx.clone()))
-            .tool(app_tools_dev::ContainerWorkspaceTool::new(ctx.clone()))
-            .tool(app_tools_dev::GitWorkspaceTool::new(ctx.clone()))
-            .tool(app_tools_dev::ApiClientTool::new(ctx.clone()))
-            .tool(app_tools_dev::AppSettingsOpsTool::new(ctx.clone()))
-            .tool(app_tools_dev::AiMemorySkillsTool::new(ctx.clone()));
+        macro_rules! attach_app_tools {
+            ($($tool_ty:path),+ $(,)?) => {
+                $(builder = builder.tool(<$tool_ty>::new(ctx.clone()));)+
+            };
+        }
+        for_each_app_bridge_tool!(attach_app_tools);
     }
     if ctx.caps.app_bridge.is_some() || ctx.caps.remote_exec.is_some() {
         builder = builder.tool(remote::RemoteExecTool::new(ctx.clone()));
