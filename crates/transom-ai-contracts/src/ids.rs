@@ -62,3 +62,25 @@ string_id!(RunId);
 string_id!(ConversationId);
 string_id!(ToolCallId);
 string_id!(ApprovalRequestId);
+
+#[cfg(test)]
+mod tests {
+    use super::{ApprovalRequestId, ConversationId, RunId, ToolCallId};
+
+    #[test]
+    fn identifiers_are_transparent_and_distinct_types() {
+        let run = RunId::from("run-1");
+        let conversation = ConversationId::from("conv-1");
+        let call = ToolCallId::from("call-1");
+        let approval = ApprovalRequestId::from("approval-1");
+
+        assert_eq!(run.as_str(), "run-1");
+        assert_eq!(conversation.to_string(), "conv-1");
+        assert_eq!(call.as_ref(), "call-1");
+        assert_eq!(approval.into_string(), "approval-1");
+        assert_eq!(
+            serde_json::to_string(&RunId::from("run-2")).expect("序列化 ID 失败"),
+            "\"run-2\""
+        );
+    }
+}

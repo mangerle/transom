@@ -204,4 +204,32 @@ mod tests {
         assert!(snapshot.load_error.is_some());
         assert!(snapshot.settings_json.contains("\"default_model\":\"\""));
     }
+
+    #[tokio::test]
+    async fn concurrent_saves_keep_snapshot_consistent_with_disk() {
+        let dir = tempfile::tempdir().expect("创建临时目录失败");
+        let store = Arc::new(AiStore::with_root(dir.path().join("ai")));
+        let service = AiConfigService::new(store.clone(), AiSettings::default());
+        let first = AiSettings {
+            default_model: "model-a".to_owned(),
+            ..AiSettings::default()
+        };
+        let second = AiSettings {
+            default_model: "model-b".to_owned(),
+            ..AiSettings::default()
+        };
+
+        let (first_result, second_result) =
+            tokio::join!(service.replace(first), service.replace(second));
+        first_result.expect("第一次并发保存失败");
+        second_result.expect("第二次并发保存失败");
+
+        let snapshot = service.snapshot_json().expect("读取并发快照失败");
+        let disk = store.load_settings().expect("读取并发配置失败");
+        assert_eq!(snapshot.revision, 2);
+        assert_eq!(
+            snapshot.settings_json,
+            serde_json::to_string(&disk).expect("序列化磁盘配置失败")
+        );
+    }
 }

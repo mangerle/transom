@@ -35,6 +35,9 @@ where
     F: Future<Output = Result<T, ToolError>> + Send,
 {
     let timeout_secs = context.timeout.as_secs().max(1);
+    if context.cancel.is_cancelled() {
+        return Err(ToolError::Cancelled);
+    }
     tokio::pin!(future);
     tokio::select! {
         _ = context.cancel.cancelled() => Err(ToolError::Cancelled),
