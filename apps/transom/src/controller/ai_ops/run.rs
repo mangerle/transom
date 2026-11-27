@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
+use async_trait::async_trait;
 use parking_lot::Mutex;
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
@@ -19,6 +20,8 @@ use transom_core::{
 };
 use transom_store::AiStore;
 use uuid::Uuid;
+
+use super::event_pump::{AgentPumpSink, drive_agent_pump};
 
 /// 控制平面启动一次 AI 运行后的事件泵参数。
 pub(super) struct PumpContext {
@@ -45,9 +48,9 @@ pub(super) struct PumpContext {
 /// 驱动 `transom_ai::run` 并同步泵送事件回 UI，同时负责 JSONL 与审计落盘。
 pub(super) async fn execute_and_pump(
     input: RunInput,
-    mut card_rx: mpsc::Receiver<ToolExecutionCard>,
-    mut plan_rx: mpsc::Receiver<PlanSnapshot>,
-    mut event_rx: mpsc::Receiver<AgentEvent>,
+    card_rx: mpsc::Receiver<ToolExecutionCard>,
+    plan_rx: mpsc::Receiver<PlanSnapshot>,
+    event_rx: mpsc::Receiver<AgentEvent>,
     mut ctx: PumpContext,
 ) {
     let mut last_leaf_id = input.history_branch.last().map(|entry| entry.id.clone());
@@ -122,135 +125,26 @@ pub(super) async fn execute_and_pump(
         tokio::spawn(async move { transom_ai::run(input).await })
     };
 
-    let mut text_buf = String::new();
-    let mut reasoning_buf = String::new();
-    let mut flush_tick = tokio::time::interval(Duration::from_millis(25));
-    flush_tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+    let mut sink = MainAgentPumpSink {
+        ctx,
+        last_leaf_id,
+        text_buf: String::new(),
+        reasoning_buf: String::new(),
+    };
+    let runner_err = drive_agent_pump(
+        Some(runner_handle),
+        event_rx,
+        card_rx,
+        Some(plan_rx),
+        Some(Duration::from_millis(25)),
+        "AI 运行任务异常中断",
+        &mut sink,
+    )
+    .await;
 
-    let mut runner_done = false;
-    let mut runner_err: Option<String> = None;
-    let mut runner_handle = Some(runner_handle);
-
-    loop {
-        tokio::select! {
-            _ = flush_tick.tick() => {
-                flush_deltas(&ctx, &mut text_buf, &mut reasoning_buf).await;
-            }
-            maybe_card = card_rx.recv() => {
-                if let Some(card) = maybe_card {
-                    handle_tool_card(&mut ctx, &mut last_leaf_id, card).await;
-                }
-            }
-            maybe_plan = plan_rx.recv() => {
-                if let Some(plan) = maybe_plan {
-                    let dto = AiPlanDto {
-                        title: plan.title,
-                        focus: plan.focus,
-                        steps: plan
-                            .steps
-                            .into_iter()
-                            .map(|s| AiPlanStepDto {
-                                text: s.text,
-                                status: match s.status {
-                                    PlanStepStatus::Pending => AiPlanStepStatus::Pending,
-                                    PlanStepStatus::InProgress => AiPlanStepStatus::InProgress,
-                                    PlanStepStatus::Done => AiPlanStepStatus::Done,
-                                    PlanStepStatus::Failed => AiPlanStepStatus::Failed,
-                                },
-                            })
-                            .collect(),
-                    };
-                    let _ = ctx
-                        .event_tx
-                        .send_async(AppEvent::Ai(Box::new(AiAppEvent::PlanUpdated {
-                            run_id: ctx.run_id.clone(),
-                            conversation_id: ctx.conversation_id.clone(),
-                            plan: dto,
-                        })))
-                        .await;
-                }
-            }
-            maybe_evt = event_rx.recv() => {
-                match maybe_evt {
-                    Some(AgentEvent::TextDelta(d)) => text_buf.push_str(&d),
-                    Some(AgentEvent::ReasoningDelta(d)) => reasoning_buf.push_str(&d),
-                    Some(AgentEvent::FocusUpdated(focus)) => {
-                        let _ = ctx
-                            .event_tx
-                            .send_async(AppEvent::Ai(Box::new(AiAppEvent::FocusUpdated {
-                                run_id: ctx.run_id.clone(),
-                                focus,
-                            })))
-                            .await;
-                    }
-                    Some(AgentEvent::TurnEnd(turn)) => {
-                        flush_deltas(&ctx, &mut text_buf, &mut reasoning_buf).await;
-                        handle_turn_end(&mut ctx, &mut last_leaf_id, turn).await;
-                    }
-                    Some(AgentEvent::Approval(req)) => {
-                        flush_deltas(&ctx, &mut text_buf, &mut reasoning_buf).await;
-                        let request_id = Uuid::new_v4().to_string();
-                        ctx.approvals.lock().insert(request_id.clone(), req.respond);
-                        let dto = AiApprovalDto {
-                            request_id,
-                            run_id: ctx.run_id.clone(),
-                            tool_name: req.summary.tool_name,
-                            host_label: req.summary.host_label,
-                            protection: req.summary.protection,
-                            risk_label: req.summary.risk.label().to_owned(),
-                            is_destructive: req.summary.risk == ToolRisk::Destructive,
-                            title: req.summary.title,
-                            detail: req.summary.detail,
-                            diff_preview: req.summary.diff_preview,
-                            requires_fresh_approval: req.summary.requires_fresh_approval,
-                            suggested_prefix: req.suggested_prefix,
-                            impact_note: req.impact_note,
-                        };
-                        let _ = ctx.event_tx.send_async(AppEvent::Ai(Box::new(AiAppEvent::ApprovalRequested(dto)))).await;
-                    }
-                    Some(AgentEvent::TerminalHandoff(req)) => {
-                        flush_deltas(&ctx, &mut text_buf, &mut reasoning_buf).await;
-                        ctx.handoffs.lock().insert(ctx.run_id.clone(), req.respond);
-                        let _ = ctx
-                            .event_tx
-                            .send_async(AppEvent::Ai(Box::new(
-                                AiAppEvent::TerminalHandoffRequested {
-                                    run_id: ctx.run_id.clone(),
-                                    host_label: req.host_label,
-                                    command: req.command,
-                                },
-                            )))
-                            .await;
-                    }
-                    None if runner_done => break,
-                    None => {}
-                }
-            }
-            res = async {
-                if let Some(h) = runner_handle.as_mut() {
-                    h.await
-                } else {
-                    std::future::pending().await
-                }
-            }, if !runner_done => {
-                runner_done = true;
-                runner_handle = None;
-                match res {
-                    Ok(Ok(())) => {}
-                    Ok(Err(err)) => runner_err = Some(err.to_string()),
-                    Err(join_err) => runner_err = Some(format!("AI 运行任务异常中断: {join_err}")),
-                }
-                if event_rx.is_empty() && card_rx.is_empty() {
-                    break;
-                }
-            }
-        }
-    }
-
-    flush_deltas(&ctx, &mut text_buf, &mut reasoning_buf).await;
-    while let Ok(card) = card_rx.try_recv() {
-        handle_tool_card(&mut ctx, &mut last_leaf_id, card).await;
-    }
+    let MainAgentPumpSink {
+        ctx, last_leaf_id, ..
+    } = sink;
 
     // 更新会话索引的 active_leaf_id 与时间戳
     {
@@ -278,6 +172,120 @@ pub(super) async fn execute_and_pump(
             cancelled,
         })))
         .await;
+}
+
+struct MainAgentPumpSink {
+    ctx: PumpContext,
+    last_leaf_id: Option<String>,
+    text_buf: String,
+    reasoning_buf: String,
+}
+
+#[async_trait]
+impl AgentPumpSink for MainAgentPumpSink {
+    async fn on_tick(&mut self) {
+        flush_deltas(&self.ctx, &mut self.text_buf, &mut self.reasoning_buf).await;
+    }
+
+    async fn on_card(&mut self, card: ToolExecutionCard) {
+        handle_tool_card(&mut self.ctx, &mut self.last_leaf_id, card).await;
+    }
+
+    async fn on_plan(&mut self, plan: PlanSnapshot) {
+        let dto = AiPlanDto {
+            title: plan.title,
+            focus: plan.focus,
+            steps: plan
+                .steps
+                .into_iter()
+                .map(|s| AiPlanStepDto {
+                    text: s.text,
+                    status: match s.status {
+                        PlanStepStatus::Pending => AiPlanStepStatus::Pending,
+                        PlanStepStatus::InProgress => AiPlanStepStatus::InProgress,
+                        PlanStepStatus::Done => AiPlanStepStatus::Done,
+                        PlanStepStatus::Failed => AiPlanStepStatus::Failed,
+                    },
+                })
+                .collect(),
+        };
+        let _ = self
+            .ctx
+            .event_tx
+            .send_async(AppEvent::Ai(Box::new(AiAppEvent::PlanUpdated {
+                run_id: self.ctx.run_id.clone(),
+                conversation_id: self.ctx.conversation_id.clone(),
+                plan: dto,
+            })))
+            .await;
+    }
+
+    async fn on_event(&mut self, event: AgentEvent) {
+        match event {
+            AgentEvent::TextDelta(d) => self.text_buf.push_str(&d),
+            AgentEvent::ReasoningDelta(d) => self.reasoning_buf.push_str(&d),
+            AgentEvent::FocusUpdated(focus) => {
+                let _ = self
+                    .ctx
+                    .event_tx
+                    .send_async(AppEvent::Ai(Box::new(AiAppEvent::FocusUpdated {
+                        run_id: self.ctx.run_id.clone(),
+                        focus,
+                    })))
+                    .await;
+            }
+            AgentEvent::TurnEnd(turn) => {
+                flush_deltas(&self.ctx, &mut self.text_buf, &mut self.reasoning_buf).await;
+                handle_turn_end(&mut self.ctx, &mut self.last_leaf_id, turn).await;
+            }
+            AgentEvent::Approval(req) => {
+                flush_deltas(&self.ctx, &mut self.text_buf, &mut self.reasoning_buf).await;
+                let request_id = Uuid::new_v4().to_string();
+                self.ctx
+                    .approvals
+                    .lock()
+                    .insert(request_id.clone(), req.respond);
+                let dto = AiApprovalDto {
+                    request_id,
+                    run_id: self.ctx.run_id.clone(),
+                    tool_name: req.summary.tool_name,
+                    host_label: req.summary.host_label,
+                    protection: req.summary.protection,
+                    risk_label: req.summary.risk.label().to_owned(),
+                    is_destructive: req.summary.risk == ToolRisk::Destructive,
+                    title: req.summary.title,
+                    detail: req.summary.detail,
+                    diff_preview: req.summary.diff_preview,
+                    requires_fresh_approval: req.summary.requires_fresh_approval,
+                    suggested_prefix: req.suggested_prefix,
+                    impact_note: req.impact_note,
+                };
+                let _ = self
+                    .ctx
+                    .event_tx
+                    .send_async(AppEvent::Ai(Box::new(AiAppEvent::ApprovalRequested(dto))))
+                    .await;
+            }
+            AgentEvent::TerminalHandoff(req) => {
+                flush_deltas(&self.ctx, &mut self.text_buf, &mut self.reasoning_buf).await;
+                self.ctx
+                    .handoffs
+                    .lock()
+                    .insert(self.ctx.run_id.clone(), req.respond);
+                let _ = self
+                    .ctx
+                    .event_tx
+                    .send_async(AppEvent::Ai(Box::new(
+                        AiAppEvent::TerminalHandoffRequested {
+                            run_id: self.ctx.run_id.clone(),
+                            host_label: req.host_label,
+                            command: req.command,
+                        },
+                    )))
+                    .await;
+            }
+        }
+    }
 }
 
 async fn flush_deltas(ctx: &PumpContext, text_buf: &mut String, reasoning_buf: &mut String) {

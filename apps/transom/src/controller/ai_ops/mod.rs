@@ -6,6 +6,7 @@ mod bridge;
 mod checkpoint_ops;
 mod compact;
 mod context_builder;
+mod event_pump;
 mod hooks_exec;
 mod inline_assist;
 mod mcp_bridge;
@@ -383,7 +384,14 @@ async fn start_ai_run(state: &mut ControllerState, ctx: &ControllerCtx, mut req:
             cancel: cancel.clone(),
             card_tx,
             plan_tx: Some(plan_tx),
-            subagent_cfg: Some((&target, &memory, Some(settings.response_language.clone()))),
+            subagent_cfg: Some(context_builder::SubagentConfig {
+                target: &target,
+                memory: &memory,
+                response_language: Some(settings.response_language.clone()),
+                exec_policy_rules: &settings.exec_policy_rules,
+                hooks: &settings.hooks,
+                session_allow_prefixes: state.ai_session_prefixes.clone(),
+            }),
             current_turn_entry_id: current_turn_entry_id.clone(),
         },
     );

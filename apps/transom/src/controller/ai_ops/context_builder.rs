@@ -18,6 +18,16 @@ use super::bridge::{HostRuntimeBridge, SshRemoteExecutor, SshRemoteFsBridge, UiT
 use super::subagent;
 use crate::controller::state::{ControllerCtx, ControllerState};
 
+/// 子 Agent 继承父级上下文的配置对象。
+pub(super) struct SubagentConfig<'a> {
+    pub(super) target: &'a transom_ai::ModelTarget,
+    pub(super) memory: &'a transom_ai::MemorySnapshot,
+    pub(super) response_language: Option<String>,
+    pub(super) exec_policy_rules: &'a [transom_ai::ExecPolicyRule],
+    pub(super) hooks: &'a [transom_ai::HookRule],
+    pub(super) session_allow_prefixes: Arc<parking_lot::RwLock<std::collections::HashSet<String>>>,
+}
+
 /// 装配 [`ToolRuntimeContext`] 所需的参数对象。
 pub(super) struct ToolContextBuildParams<'a> {
     pub(super) req: &'a AiPromptRequest,
@@ -27,11 +37,7 @@ pub(super) struct ToolContextBuildParams<'a> {
     pub(super) cancel: CancellationToken,
     pub(super) card_tx: mpsc::Sender<transom_ai::ToolExecutionCard>,
     pub(super) plan_tx: Option<mpsc::Sender<PlanSnapshot>>,
-    pub(super) subagent_cfg: Option<(
-        &'a transom_ai::ModelTarget,
-        &'a transom_ai::MemorySnapshot,
-        Option<String>,
-    )>,
+    pub(super) subagent_cfg: Option<SubagentConfig<'a>>,
     pub(super) current_turn_entry_id: Arc<parking_lot::RwLock<Option<String>>>,
 }
 
@@ -144,12 +150,15 @@ pub(super) fn build_tool_context(
     bridge_deps.conversation_id = Some(conversation_id.to_owned());
     bridge_deps.current_turn_entry_id = current_turn_entry_id;
     let subagent_runner: Option<Arc<dyn transom_ai::SubagentRunner>> =
-        subagent_cfg.map(|(target, memory, response_language)| {
+        subagent_cfg.map(|cfg| {
             Arc::new(subagent::ControllerSubagentRunner {
-                target: target.clone(),
-                memory: memory.clone(),
-                response_language,
+                target: cfg.target.clone(),
+                memory: cfg.memory.clone(),
+                response_language: cfg.response_language,
                 execution_mode: state.ai_execution_mode.clone(),
+                exec_policy_rules: cfg.exec_policy_rules.to_vec(),
+                hooks: cfg.hooks.to_vec(),
+                session_allow_prefixes: cfg.session_allow_prefixes,
                 app_bridge_deps: bridge_deps.clone(),
                 tasks: state.ai_tasks.clone(),
                 approvals: state.ai_approvals.clone(),
