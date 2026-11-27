@@ -24,6 +24,7 @@ use transom_net::{ForwardTask, FtpClient, SftpClient, SshSession};
 use transom_sync::CloudSyncService;
 use transom_zmodem::ZmodemConfig;
 
+mod ai_ops;
 mod commands;
 mod container_ops;
 mod git_ops;
@@ -41,11 +42,24 @@ mod sync_exec;
 
 use state::{ControllerCtx, ControllerState};
 
+/// 启动控制平面所需的持久化与外部服务依赖集合。
+pub struct ControllerStores {
+    pub known_hosts: Arc<dyn KnownHostsStore>,
+    pub secrets: Arc<dyn SecretStore>,
+    pub session_store: Arc<dyn transom_core::SessionStore>,
+    pub settings_store: Arc<dyn transom_core::SettingsStore>,
+    pub backup: Arc<dyn transom_core::BackupService>,
+    pub git_projects: Arc<dyn transom_core::GitProjectStore>,
+    pub api_projects: Arc<dyn transom_api::ApiProjectStore>,
+    pub ai_store: Arc<transom_store::AiStore>,
+}
+
 pub struct Controller {
     _runtime: Runtime,
     command_tx: flume::Sender<AppCommand>,
     event_tx: flume::Sender<AppEvent>,
     event_rx: flume::Receiver<AppEvent>,
+    api_http: transom_api::ApiHttpService,
     /// 控制平面主循环的退出通知：`shutdown` 限时等待它，确保远端断开与
     /// 转发停止真正执行完，而不是随进程退出被粗暴取消。
     shutdown_rx: mpsc::Receiver<()>,
@@ -64,10 +78,17 @@ fn control_worker_threads() -> usize {
 }
 
 impl Controller {
-    pub fn start(
-        known_hosts: Arc<dyn KnownHostsStore>,
-        secrets: Arc<dyn SecretStore>,
-    ) -> Result<Self, AppError> {
+    pub fn start(stores: ControllerStores) -> Result<Self, AppError> {
+        let ControllerStores {
+            known_hosts,
+            secrets,
+            session_store,
+            settings_store,
+            backup,
+            git_projects,
+            api_projects,
+            ai_store,
+        } = stores;
         // 三条通道的容量与背压策略（全工程禁止无界通道）：
         // - 命令 256：用户命令低频，UI 侧 try_send 快速失败并提示；
         // - 事件 1024：可覆盖状态样本（流量/统计/进度）由生产者 try_send，
@@ -85,12 +106,23 @@ impl Controller {
             .map_err(|error| AppError::with_detail(ErrorCode::Io, error.to_string()))?;
 
         // 云同步服务随控制器构建一次：HTTP 客户端连接池全生命周期复用。
-        let cloud_sync = Arc::new(CloudSyncService::new(secrets)?);
+        let cloud_sync = Arc::new(CloudSyncService::new(secrets.clone())?);
+        let api_http = transom_api::ApiHttpService::new(runtime.handle().clone())
+            .map_err(|error| AppError::with_detail(ErrorCode::Io, error.to_string()))?;
+        let outer_api_http = api_http.clone();
         // 事件发送端留一份克隆给应用外壳：深链监听不在控制平面内，
         // 但唤起请求要走同一条事件总线。
         let outer_event_tx = event_tx.clone();
         let root = runtime.spawn(run_controller(ControlPlaneWiring {
             known_hosts,
+            secret_store: secrets,
+            session_store,
+            settings_store,
+            backup,
+            git_projects,
+            api_projects,
+            api_http,
+            ai_store,
             command_rx,
             internal_tx,
             internal_rx,
@@ -116,8 +148,14 @@ impl Controller {
             command_tx,
             event_tx: outer_event_tx,
             event_rx,
+            api_http: outer_api_http,
             shutdown_rx,
         })
+    }
+
+    /// 复用控制平面的全局 API HTTP 客户端服务。
+    pub fn api_http(&self) -> transom_api::ApiHttpService {
+        self.api_http.clone()
     }
 
     /// 优雅停机：驱动控制平面完成收尾，再限时关闭运行时。
@@ -225,6 +263,8 @@ enum Internal {
     },
     /// 镜像拉取长任务结束，主循环回收句柄与取消登记。
     ContainerPullTaskFinished { tab_id: TabId, task_id: String },
+    /// 反向 MCP Server 请求控制器快照（活跃 SSH 会话、审批表与终端回调表）。
+    McpSnapshot(tokio::sync::oneshot::Sender<ai_ops::McpControllerSnapshot>),
 }
 
 /// 建连任务的完成形态：SSH 会话，或"IO + 退出通知"的本地/串口/Telnet。
@@ -272,6 +312,14 @@ enum Incoming {
 /// 新增接线时也容易漏项。
 struct ControlPlaneWiring {
     known_hosts: Arc<dyn KnownHostsStore>,
+    secret_store: Arc<dyn SecretStore>,
+    session_store: Arc<dyn transom_core::SessionStore>,
+    settings_store: Arc<dyn transom_core::SettingsStore>,
+    backup: Arc<dyn transom_core::BackupService>,
+    git_projects: Arc<dyn transom_core::GitProjectStore>,
+    api_projects: Arc<dyn transom_api::ApiProjectStore>,
+    api_http: transom_api::ApiHttpService,
+    ai_store: Arc<transom_store::AiStore>,
     command_rx: flume::Receiver<AppCommand>,
     internal_tx: flume::Sender<Internal>,
     internal_rx: flume::Receiver<Internal>,
@@ -286,6 +334,14 @@ struct ControlPlaneWiring {
 async fn run_controller(wiring: ControlPlaneWiring) {
     let ControlPlaneWiring {
         known_hosts,
+        secret_store,
+        session_store,
+        settings_store,
+        backup,
+        git_projects,
+        api_projects,
+        api_http,
+        ai_store,
         command_rx,
         internal_tx,
         internal_rx,
@@ -296,6 +352,14 @@ async fn run_controller(wiring: ControlPlaneWiring) {
     } = wiring;
     let ctx = ControllerCtx {
         known_hosts,
+        secret_store,
+        session_store,
+        settings_store,
+        backup,
+        git_projects,
+        api_projects,
+        api_http,
+        ai_store,
         event_tx,
         internal_tx,
         cloud_sync,
@@ -309,7 +373,8 @@ async fn run_controller(wiring: ControlPlaneWiring) {
             transom_platform::system::ProcessSampler::new(),
         )),
     };
-    let mut state = ControllerState::new();
+    let mut state = ControllerState::new(ctx.event_tx.clone());
+    ai_ops::spawn_mcp_server(&ctx, &mut state);
 
     loop {
         // 批次集合是否有在途任务：select 的分支条件不能与 join_next 的
@@ -319,6 +384,7 @@ async fn run_controller(wiring: ControlPlaneWiring) {
         let has_container_ops = !state.container_ops.is_empty();
         let has_cleanup = !state.cleanup_set.is_empty();
         let has_git = !state.git_set.is_empty();
+        let has_ai = !state.ai_set.is_empty();
         let has_sync = state.sync_task.is_some();
         let incoming = tokio::select! {
             command = command_rx.recv_async() => Incoming::Command(command),
@@ -349,6 +415,10 @@ async fn run_controller(wiring: ControlPlaneWiring) {
             }
             joined = state.git_set.join_next(), if has_git => {
                 report_join_error("Git 请求", joined);
+                continue;
+            }
+            joined = state.ai_set.join_next(), if has_ai => {
+                report_join_error("AI 助手运行", joined);
                 continue;
             }
             joined = async {

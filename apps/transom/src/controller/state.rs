@@ -18,10 +18,29 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::task::JoinSet;
-use transom_core::{AppEvent, ConnectionId, KnownHostsStore, TabId, TransferId};
+use tokio_util::sync::CancellationToken;
+use transom_core::{
+    AppEvent, ConnectionId, KnownHostsStore, SecretStore, SessionId, TabId, TransferId,
+};
 use transom_git::{GitConfig, Repo};
 use transom_net::SshRemote;
+use transom_store::AiStore;
 use transom_sync::CloudSyncService;
+
+/// AI 工具在后台静默建立的无标签页远端 SSH 连接缓存表（避免主动打开 UI 标签页）。
+pub(super) type AiHeadlessRemoteMap = Arc<parking_lot::Mutex<HashMap<SessionId, SshRemote>>>;
+
+/// 在途 AI 运行的中途引导（Steer）注入队列映射表。
+pub(super) type SteerQueueMap = Arc<
+    parking_lot::Mutex<
+        HashMap<String, Arc<parking_lot::Mutex<std::collections::VecDeque<String>>>>,
+    >,
+>;
+
+/// 终端手动接管恢复回调映射表。
+pub(super) type HandoffSenderMap = Arc<
+    parking_lot::Mutex<HashMap<String, tokio::sync::oneshot::Sender<Result<Option<String>, ()>>>>,
+>;
 
 /// 控制平面的全部可变状态表。
 pub(super) struct ControllerState {
@@ -55,11 +74,45 @@ pub(super) struct ControllerState {
     pub(super) container_ops: JoinSet<()>,
     /// Git 面板的一次性读写请求：全部子进程自带超时，停机统一限时等待。
     pub(super) git_set: JoinSet<()>,
+    /// 在途 AI 运行的取消令牌。
+    pub(super) ai_runs: Arc<parking_lot::Mutex<HashMap<String, CancellationToken>>>,
+    /// 在途 AI 运行的中途引导（Steer）注入队列。
+    pub(super) ai_steers: SteerQueueMap,
+    /// 待用户审批的 AI 工具回调表。
+    pub(super) ai_approvals: Arc<
+        parking_lot::Mutex<
+            HashMap<String, tokio::sync::oneshot::Sender<transom_core::AiApprovalDecision>>,
+        >,
+    >,
+    /// 待用户在交互式终端完成手动操作的恢复通道。
+    pub(super) ai_handoffs: HandoffSenderMap,
+    /// 当前会话中已通过审批卡片“允许同类”放行的命令前缀集合。
+    pub(super) ai_session_prefixes: Arc<parking_lot::RwLock<std::collections::HashSet<String>>>,
+    /// 待 UI 回传的终端上下文请求表。
+    pub(super) ai_terminal_reqs:
+        Arc<parking_lot::Mutex<HashMap<String, tokio::sync::oneshot::Sender<Option<String>>>>>,
+    /// 待 UI 回传的软件级动作执行结果表。
+    pub(super) ai_app_action_reqs: super::ai_ops::app_bridge::AppActionReqMap,
+    /// AI 运行后台任务集合。
+    pub(super) ai_set: JoinSet<()>,
+    /// 托管后台任务中心（本机/远端命令、传输与子 Agent）。
+    pub(super) ai_tasks: Arc<super::ai_ops::task_runner::ManagedTaskRegistry>,
+    /// 当前 AI 命令执行模式（热更新）。
+    pub(super) ai_execution_mode: Arc<parking_lot::RwLock<transom_ai::ExecutionMode>>,
+    /// 按对话 ID 复用的超大工具输出句柄池。
+    pub(super) ai_output_stores: HashMap<String, Arc<transom_ai::ToolOutputStore>>,
+    /// AI 工具后台静默直连的远端 SSH 句柄缓存（不打开 UI 标签页）。
+    pub(super) ai_headless_remotes: AiHeadlessRemoteMap,
+    /// 已发起 SSH 连接的标签元数据（供反向 MCP Server 列表展示）。
+    pub(super) mcp_session_meta: HashMap<TabId, transom_core::AiHostTargetDto>,
+    /// 反向 MCP Server 取消令牌与后台任务句柄。
+    pub(super) mcp_cancel: CancellationToken,
+    pub(super) mcp_task: Option<tokio::task::JoinHandle<()>>,
 }
 
 impl ControllerState {
     /// 空状态：全部表为空，收尾与批次集合就位。
-    pub(super) fn new() -> Self {
+    pub(super) fn new(event_tx: flume::Sender<AppEvent>) -> Self {
         Self {
             sessions: HashMap::new(),
             sftp_tasks: HashMap::new(),
@@ -75,6 +128,27 @@ impl ControllerState {
             container_connects: HashMap::new(),
             container_ops: JoinSet::new(),
             git_set: JoinSet::new(),
+            ai_runs: Arc::new(parking_lot::Mutex::new(HashMap::new())),
+            ai_steers: Arc::new(parking_lot::Mutex::new(HashMap::new())),
+            ai_approvals: Arc::new(parking_lot::Mutex::new(HashMap::new())),
+            ai_handoffs: Arc::new(parking_lot::Mutex::new(HashMap::new())),
+            ai_session_prefixes: Arc::new(parking_lot::RwLock::new(
+                std::collections::HashSet::new(),
+            )),
+            ai_terminal_reqs: Arc::new(parking_lot::Mutex::new(HashMap::new())),
+            ai_app_action_reqs: Arc::new(parking_lot::Mutex::new(HashMap::new())),
+            ai_set: JoinSet::new(),
+            ai_tasks: Arc::new(super::ai_ops::task_runner::ManagedTaskRegistry::new(
+                event_tx,
+            )),
+            ai_execution_mode: Arc::new(parking_lot::RwLock::new(
+                transom_ai::ExecutionMode::Manual,
+            )),
+            ai_output_stores: HashMap::new(),
+            ai_headless_remotes: Arc::new(parking_lot::Mutex::new(HashMap::new())),
+            mcp_session_meta: HashMap::new(),
+            mcp_cancel: CancellationToken::new(),
+            mcp_task: None,
         }
     }
 
@@ -108,6 +182,7 @@ impl ControllerState {
 
     /// 销毁并安全清理指定标签的全部会话资源。
     pub(super) fn terminate_session(&mut self, tab_id: TabId, reason: &str) {
+        self.mcp_session_meta.remove(&tab_id);
         if let Some(session) = self.sessions.remove(&tab_id) {
             session.shutdown(&mut self.cleanup_set, reason);
         }
@@ -131,6 +206,14 @@ pub(super) fn find_session_by_connection(
 /// 控制平面随控制器一次性建立的共享句柄。
 pub(super) struct ControllerCtx {
     pub(super) known_hosts: Arc<dyn KnownHostsStore>,
+    pub(super) secret_store: Arc<dyn SecretStore>,
+    pub(super) session_store: Arc<dyn transom_core::SessionStore>,
+    pub(super) settings_store: Arc<dyn transom_core::SettingsStore>,
+    pub(super) backup: Arc<dyn transom_core::BackupService>,
+    pub(super) git_projects: Arc<dyn transom_core::GitProjectStore>,
+    pub(super) api_projects: Arc<dyn transom_api::ApiProjectStore>,
+    pub(super) api_http: transom_api::ApiHttpService,
+    pub(super) ai_store: Arc<AiStore>,
     pub(super) event_tx: flume::Sender<AppEvent>,
     pub(super) internal_tx: flume::Sender<Internal>,
     pub(super) cloud_sync: Arc<CloudSyncService>,

@@ -26,6 +26,8 @@ transom-sync.workspace = true
 transom-store.workspace = true
 transom-git.workspace = true
 transom-updater.workspace = true
+transom-ai.workspace = true
+tokio-util.workspace = true
 parking_lot.workspace = true
 # FTP 会话密码随连接命令携带（Zeroizing 包装，丢弃时擦除内存）。
 zeroize.workspace = true

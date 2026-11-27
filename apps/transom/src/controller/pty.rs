@@ -346,6 +346,7 @@ async fn connect_mosh_task(
         auth: mosh.auth.clone(),
         options: mosh.options.clone(),
         proxy_jump: None,
+        protection: Default::default(),
     };
     let prompter = Arc::new(UiPrompter {
         tab_id: dispatch.tab_id,

@@ -63,6 +63,10 @@ pub(super) async fn handle_command(
             super::git_ops::handle_git_command(state, ctx, cmd);
             LoopControl::Continue
         }
+        AppCommand::Ai(cmd) => {
+            super::ai_ops::handle_ai_command(state, ctx, *cmd).await;
+            LoopControl::Continue
+        }
     }
 }
 
@@ -85,6 +89,19 @@ async fn handle_terminal_command(
                 allow_sha1_publickey_auth,
                 shell_integration,
             } = *params;
+            if let transom_core::Connection::Ssh(ssh) = &session.connection {
+                state.mcp_session_meta.insert(
+                    tab_id,
+                    transom_core::AiHostTargetDto {
+                        tab_id,
+                        session_id: session.id,
+                        host_name: session.name.clone(),
+                        login: format!("{}@{}:{}", ssh.username, ssh.host, ssh.port),
+                        platform: "linux".to_owned(),
+                        protection: ssh.protection,
+                    },
+                );
+            }
             start_connect(
                 state,
                 ConnectDispatch {
@@ -250,5 +267,7 @@ pub(super) async fn shutdown(
     ctx.container.shutdown().await;
     // Git 请求全部是自带超时的子进程，限时等完即可，不需要单独中止。
     state.git_set.shutdown().await;
+    // 取消并回收所有在途 AI 运行任务。
+    super::ai_ops::shutdown_ai_runs(state).await;
     let _ = shutdown_tx.send(());
 }

@@ -38,5 +38,8 @@ pub(super) async fn handle_internal(
         Internal::ContainerPullTaskFinished { .. } => {
             handle_container_pull_finished(state, internal)
         }
+        Internal::McpSnapshot(tx) => {
+            crate::controller::ai_ops::handle_mcp_snapshot(state, ctx, tx);
+        }
     }
 }

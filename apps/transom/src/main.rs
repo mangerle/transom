@@ -2,9 +2,10 @@ mod controller;
 mod deep_link;
 mod local_pty;
 mod logging;
+mod mcp_stdio;
 mod pty_broker;
 
-use controller::Controller;
+use controller::{Controller, ControllerStores};
 use std::sync::Arc;
 use transom_core::{
     AppEvent, BackupService, DeepLinkRequest, HistoryStore, KnownHostsStore, LogLevel, SecretStore,
@@ -29,6 +30,9 @@ fn main() -> anyhow::Result<()> {
         eprintln!("日志系统装配失败，本次运行只有标准错误输出，原因: {error}");
     }
     if pty_broker::run_if_requested()? {
+        return Ok(());
+    }
+    if mcp_stdio::run_if_requested()? {
         return Ok(());
     }
 
@@ -79,8 +83,18 @@ fn main() -> anyhow::Result<()> {
     let api_projects: Arc<dyn transom_api::ApiProjectStore> = Arc::new(
         transom_store::JsonApiProjectStore::new(paths::api_projects_path()),
     );
-    let controller = Controller::start(known_hosts.clone(), secret_store.clone())?;
-    let api_http = transom_api::ApiHttpService::new(controller.runtime().handle().clone())?;
+    let ai_store = Arc::new(transom_store::AiStore::new());
+    let controller = Controller::start(ControllerStores {
+        known_hosts: known_hosts.clone(),
+        secrets: secret_store.clone(),
+        session_store: session_store.clone(),
+        settings_store: settings_store.clone(),
+        backup: backup.clone(),
+        git_projects: git_projects.clone(),
+        api_projects: api_projects.clone(),
+        ai_store: ai_store.clone(),
+    })?;
+    let api_http = controller.api_http();
     let api_ws = transom_api::ApiWebSocketService::new(controller.runtime().handle().clone());
 
     // 监听句柄保留在此直到进程结束：随控制器停机，不做脱缰派生。
@@ -98,6 +112,7 @@ fn main() -> anyhow::Result<()> {
         history,
         git_projects,
         api_projects,
+        ai_store,
         api_http,
         api_ws,
         command_tx: controller.command_sender(),
