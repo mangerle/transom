@@ -12,31 +12,37 @@ use super::{AiStore, sanitize_id_filename};
 use crate::file_io::write_atomic;
 
 impl AiStore {
-    /// 读取对话索引列表，按 `updated_at` 降序排列。
+    /// 读取对话索引列表，按 `updated_at` 降序排列（优先命中进程内索引缓存）。
     pub fn load_index(&self) -> Result<Vec<ConversationSummary>, AiError> {
         let _guard = self.index_lock.lock();
         self.read_index_unlocked()
     }
 
     fn read_index_unlocked(&self) -> Result<Vec<ConversationSummary>, AiError> {
-        let path = self.root.join("index.json");
-        if !path.exists() {
-            return Ok(Vec::new());
+        if let Some(cached) = self.index_cache.lock().as_ref() {
+            return Ok(cached.clone());
         }
-        let text = fs::read_to_string(&path).map_err(|err| AiError::StorageFailed {
-            target: path.display().to_string(),
-            reason: err.to_string(),
-        })?;
-        let mut list: Vec<ConversationSummary> =
-            serde_json::from_str(&text).map_err(|err| AiError::StorageFailed {
+        let path = self.root.join("index.json");
+        let list = if !path.exists() {
+            Vec::new()
+        } else {
+            let text = fs::read_to_string(&path).map_err(|err| AiError::StorageFailed {
                 target: path.display().to_string(),
                 reason: err.to_string(),
             })?;
-        list.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
+            let mut parsed: Vec<ConversationSummary> =
+                serde_json::from_str(&text).map_err(|err| AiError::StorageFailed {
+                    target: path.display().to_string(),
+                    reason: err.to_string(),
+                })?;
+            parsed.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
+            parsed
+        };
+        *self.index_cache.lock() = Some(list.clone());
         Ok(list)
     }
 
-    /// 在进程内互斥锁保护下执行 `index.json` 的读-改-原子写。
+    /// 在进程内互斥锁保护下执行 `index.json` 的内存更新与紧凑 JSON 原子写回。
     fn update_index(
         &self,
         mutator: impl FnOnce(&mut Vec<ConversationSummary>) -> bool,
@@ -48,15 +54,16 @@ impl AiStore {
         }
         list.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
         let path = self.root.join("index.json");
-        let payload =
-            serde_json::to_string_pretty(&list).map_err(|err| AiError::StorageFailed {
-                target: path.display().to_string(),
-                reason: err.to_string(),
-            })?;
+        let payload = serde_json::to_string(&list).map_err(|err| AiError::StorageFailed {
+            target: path.display().to_string(),
+            reason: err.to_string(),
+        })?;
         write_atomic(&path, payload.as_bytes()).map_err(|err| AiError::StorageFailed {
             target: path.display().to_string(),
             reason: err.to_string(),
-        })
+        })?;
+        *self.index_cache.lock() = Some(list);
+        Ok(())
     }
 
     /// 返回全局全部对话摘要列表（按更新时间倒序）。

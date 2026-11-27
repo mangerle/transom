@@ -25,6 +25,7 @@ use crate::paths::config_dir;
 pub struct AiStore {
     pub(super) root: PathBuf,
     pub(super) index_lock: Arc<Mutex<()>>,
+    pub(super) index_cache: Arc<Mutex<Option<Vec<transom_ai::ConversationSummary>>>>,
     pub(super) usage_lock: Arc<Mutex<()>>,
 }
 
@@ -45,6 +46,7 @@ impl AiStore {
         Self {
             root,
             index_lock: Arc::new(Mutex::new(())),
+            index_cache: Arc::new(Mutex::new(None)),
             usage_lock: Arc::new(Mutex::new(())),
         }
     }
