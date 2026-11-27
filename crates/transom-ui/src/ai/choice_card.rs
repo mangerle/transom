@@ -18,6 +18,34 @@ use crate::theme::tokens::{space, typography};
 type ChoiceIndexCb = Box<dyn Fn(usize, &mut Window, &mut App)>;
 type ChoiceActionCb = Box<dyn Fn(&mut Window, &mut App)>;
 
+/// 收敛交互式选择卡片的局部 UI 状态，避免零散字段堆叠在主视图中。
+pub(super) struct ChoiceCardState {
+    pub(super) custom_input: Entity<InputState>,
+    pub(super) selected_idx: usize,
+    pub(super) multi_selected: HashSet<usize>,
+    pub(super) collapsed: bool,
+    pub(super) dismissed_id: Option<String>,
+}
+
+impl ChoiceCardState {
+    pub(super) fn new(custom_input: Entity<InputState>) -> Self {
+        Self {
+            custom_input,
+            selected_idx: 0,
+            multi_selected: HashSet::new(),
+            collapsed: false,
+            dismissed_id: None,
+        }
+    }
+
+    pub(super) fn dismiss_and_reset(&mut self, item_id: String) {
+        self.dismissed_id = Some(item_id);
+        self.selected_idx = 0;
+        self.multi_selected.clear();
+        self.collapsed = false;
+    }
+}
+
 /// 交互式确认卡片渲染参数与回调。
 pub(super) struct ChoiceCardCallbacks {
     pub(super) on_select_option: ChoiceIndexCb,
@@ -253,7 +281,7 @@ impl AiAssistantView {
         else {
             return None;
         };
-        if self.dismissed_choice_id.as_deref() == Some(id.as_str()) {
+        if self.choice_card.dismissed_id.as_deref() == Some(id.as_str()) {
             return None;
         }
         let choices = extract_prompt_choices(text)?;
@@ -268,37 +296,34 @@ impl AiAssistantView {
         let is_multi = choices.multi_select;
         Some(render_choice_card(
             &choices,
-            self.choice_selected_idx,
-            &self.choice_multi_selected,
-            self.choice_collapsed,
-            &self.choice_custom_input,
+            self.choice_card.selected_idx,
+            &self.choice_card.multi_selected,
+            self.choice_card.collapsed,
+            &self.choice_card.custom_input,
             p,
             ChoiceCardCallbacks {
                 on_select_option: Box::new(move |idx, _, cx| {
                     v_sel.update(cx, |this, cx| {
                         if is_multi {
-                            if !this.choice_multi_selected.remove(&idx) {
-                                this.choice_multi_selected.insert(idx);
+                            if !this.choice_card.multi_selected.remove(&idx) {
+                                this.choice_card.multi_selected.insert(idx);
                             }
                         } else {
-                            this.choice_selected_idx = idx;
+                            this.choice_card.selected_idx = idx;
                         }
                         cx.notify();
                     });
                 }),
                 on_toggle_collapse: Box::new(move |_, cx| {
                     v_tog.update(cx, |this, cx| {
-                        this.choice_collapsed = !this.choice_collapsed;
+                        this.choice_card.collapsed = !this.choice_card.collapsed;
                         cx.notify();
                     });
                 }),
                 on_skip: Box::new(move |_, cx| {
                     let id_done = id_skip.clone();
                     v_skip.update(cx, |this, cx| {
-                        this.dismissed_choice_id = Some(id_done);
-                        this.choice_selected_idx = 0;
-                        this.choice_multi_selected.clear();
-                        this.choice_collapsed = false;
+                        this.choice_card.dismiss_and_reset(id_done);
                         cx.notify();
                     });
                 }),
@@ -321,11 +346,17 @@ impl AiAssistantView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let custom = self.choice_custom_input.read(cx).value().trim().to_owned();
+        let custom = self
+            .choice_card
+            .custom_input
+            .read(cx)
+            .value()
+            .trim()
+            .to_owned();
         let mut selected_parts: Vec<String> = Vec::new();
         if is_multi {
             for (idx, opt) in options.iter().enumerate() {
-                if self.choice_multi_selected.contains(&idx) {
+                if self.choice_card.multi_selected.contains(&idx) {
                     selected_parts.push(format!("{}. {opt}", idx + 1));
                 }
             }
@@ -335,7 +366,8 @@ impl AiAssistantView {
         } else if !custom.is_empty() {
             selected_parts.push(custom);
         } else if let Some(opt) = options.get(
-            self.choice_selected_idx
+            self.choice_card
+                .selected_idx
                 .min(options.len().saturating_sub(1)),
         ) {
             selected_parts.push(opt.clone());
@@ -344,11 +376,9 @@ impl AiAssistantView {
             return;
         }
         let answer = selected_parts.join("\n");
-        self.dismissed_choice_id = Some(item_id.to_owned());
-        self.choice_selected_idx = 0;
-        self.choice_multi_selected.clear();
-        self.choice_collapsed = false;
-        self.choice_custom_input
+        self.choice_card.dismiss_and_reset(item_id.to_owned());
+        self.choice_card
+            .custom_input
             .update(cx, |i, cx| i.set_value(String::new(), window, cx));
         self.send_prompt_text(answer, cx);
     }
@@ -359,15 +389,19 @@ impl AiAssistantView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let val = self.choice_custom_input.read(cx).value().trim().to_owned();
+        let val = self
+            .choice_card
+            .custom_input
+            .read(cx)
+            .value()
+            .trim()
+            .to_owned();
         if val.is_empty() {
             return;
         }
-        self.dismissed_choice_id = Some(item_id.to_owned());
-        self.choice_selected_idx = 0;
-        self.choice_multi_selected.clear();
-        self.choice_collapsed = false;
-        self.choice_custom_input
+        self.choice_card.dismiss_and_reset(item_id.to_owned());
+        self.choice_card
+            .custom_input
             .update(cx, |i, cx| i.set_value(String::new(), window, cx));
         self.send_prompt_text(val, cx);
     }

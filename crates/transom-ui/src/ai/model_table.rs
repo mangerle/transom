@@ -1,14 +1,19 @@
 //! 模型配置抽屉中的模型表格与行内请求模型 / 思考等级下拉渲染。
 
+use std::rc::Rc;
+
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Sizable as _;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
-use gpui_kit::component::input::Input;
+use gpui_kit::component::input::{Input, InputState};
 use gpui_kit::component::scroll::ScrollableElement;
 use gpui_kit::*;
 use transom_ai::ThinkingEffort;
 use transom_ui_icons::{AppIcon, AppIconElement, UiIcon};
 
+use super::config_drawer::{
+    ConfigDrawerActions, ConfigDrawerParams, DraftModelRow, render_config_drawer,
+};
 use super::view::AiAssistantView;
 use crate::palette::Palette;
 use crate::theme::tokens::{space, typography};
@@ -215,5 +220,204 @@ impl AiAssistantView {
             }
         }
         table.into_any_element()
+    }
+
+    pub(super) fn add_empty_draft_model_row(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.draft_models.push(make_draft_model_row(
+            "",
+            "",
+            Some(128_000),
+            None,
+            window,
+            cx,
+        ));
+        cx.notify();
+    }
+
+    pub(super) fn remove_draft_model_row(&mut self, idx: usize, cx: &mut Context<Self>) {
+        if idx < self.draft_models.len() {
+            self.draft_models.remove(idx);
+            cx.notify();
+        }
+    }
+
+    pub(super) fn load_provider_into_form(
+        &mut self,
+        provider_id: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(prov) = self
+            .state
+            .settings
+            .providers
+            .iter()
+            .find(|p| p.id == provider_id)
+            .cloned()
+        else {
+            return;
+        };
+        self.state.selected_protocol = prov.protocol;
+        self.provider_name_input
+            .update(cx, |i, cx| i.set_value(prov.name, window, cx));
+        self.base_url_input
+            .update(cx, |i, cx| i.set_value(prov.base_url, window, cx));
+        let saved_key = self
+            .ai_store
+            .load_provider_api_key(self.secret_store.as_ref(), &prov.id)
+            .ok()
+            .flatten()
+            .map(|s| s.to_string())
+            .unwrap_or_default();
+        self.api_key_input
+            .update(cx, |i, cx| i.set_value(saved_key, window, cx));
+        self.draft_models = prov
+            .models
+            .iter()
+            .map(|m| {
+                make_draft_model_row(
+                    &m.display_name,
+                    &m.name,
+                    m.context_window,
+                    m.efforts.first().copied(),
+                    window,
+                    cx,
+                )
+            })
+            .collect();
+        if self.draft_models.is_empty() {
+            self.draft_models.push(make_draft_model_row(
+                "",
+                "",
+                Some(128_000),
+                None,
+                window,
+                cx,
+            ));
+        }
+        cx.notify();
+    }
+
+    pub(super) fn render_config_body(&self, p: &Palette, cx: &mut Context<Self>) -> AnyElement {
+        let models_section = self.render_models_table_section(p, cx);
+        let picker_panel = self.render_model_picker_panel(p, cx);
+        let policy_hooks_section =
+            super::policy_hooks_drawer::render_policy_hooks_section(self, p, cx);
+        let view = cx.entity();
+        let view_sec = view.clone();
+        let view_test = view.clone();
+        let view_fetch = view.clone();
+        let view_picker = view.clone();
+        let view_add_row = view.clone();
+        let view_save = view.clone();
+        let view_edit = view.clone();
+        let view_del = view.clone();
+        let view_acp_preset = view.clone();
+        let view_acp_save = view.clone();
+        let view_acp_install = view.clone();
+        let selected_acp_idx = self.selected_acp_idx;
+        render_config_drawer(
+            ConfigDrawerParams {
+                active_section: self.state.config_section,
+                settings: &self.state.settings,
+                selected_protocol: self.state.selected_protocol,
+                provider_name_input: &self.provider_name_input,
+                api_key_input: &self.api_key_input,
+                base_url_input: &self.base_url_input,
+                models_section,
+                picker_panel,
+                has_discovered_models: !self.state.discovered_models.is_empty(),
+                acp_cmd_input: &self.acp_cmd_input,
+                selected_acp_idx,
+                acp_install_status: self.state.acp_install_status.as_ref(),
+                discovery_status: self.state.discovery_status.as_deref(),
+                lang_select: &self.lang_select,
+                running_behavior_select: &self.running_behavior_select,
+                policy_hooks_section,
+                p,
+            },
+            ConfigDrawerActions {
+                on_select_section: Rc::new(move |section, _, cx| {
+                    view_sec.update(cx, |this, cx| {
+                        this.state.config_section = section;
+                        cx.notify();
+                    });
+                }),
+                on_select_protocol: Rc::new(move |proto, _, cx| {
+                    view.update(cx, |this, cx| {
+                        this.state.selected_protocol = proto;
+                        cx.notify();
+                    });
+                }),
+                on_test_connection: Box::new(move |_, cx| {
+                    view_test.update(cx, |this, cx| this.test_provider_connection(cx));
+                }),
+                on_fetch_models: Box::new(move |_, cx| {
+                    view_fetch.update(cx, |this, cx| this.discover_provider_models(cx));
+                }),
+                on_open_model_picker: Box::new(move |_, cx| {
+                    view_picker.update(cx, |this, cx| this.open_model_picker(cx));
+                }),
+                on_add_model_row: Box::new(move |w, cx| {
+                    view_add_row.update(cx, |this, cx| this.add_empty_draft_model_row(w, cx));
+                }),
+                on_save_provider: Box::new(move |w, cx| {
+                    view_save.update(cx, |this, cx| this.save_provider_from_drawer(w, cx));
+                }),
+                on_edit_provider: Rc::new(move |id, w, cx| {
+                    view_edit.update(cx, |this, cx| this.load_provider_into_form(&id, w, cx));
+                }),
+                on_delete_provider: Rc::new(move |id, _, cx| {
+                    view_del.update(cx, |this, cx| this.delete_provider(&id, cx));
+                }),
+                on_apply_acp_preset: Rc::new(move |idx, w, cx| {
+                    view_acp_preset.update(cx, |this, cx| this.apply_acp_preset(idx, w, cx));
+                }),
+                on_save_acp: Box::new(move |w, cx| {
+                    view_acp_save.update(cx, |this, cx| this.save_acp_from_drawer(w, cx));
+                }),
+                on_install_acp: Rc::new(move |id, _, cx| {
+                    view_acp_install.update(cx, |this, cx| this.install_acp_agent(id, cx));
+                }),
+            },
+        )
+    }
+}
+
+pub(super) fn make_draft_model_row(
+    display_name: &str,
+    request_model: &str,
+    ctx_win: Option<u32>,
+    effort: Option<ThinkingEffort>,
+    window: &mut Window,
+    cx: &mut App,
+) -> DraftModelRow {
+    let disp_val = display_name.to_owned();
+    let req_val = request_model.to_owned();
+    let ctx_val = ctx_win.unwrap_or(128_000).to_string();
+    let display_input = cx.new(|cx| {
+        InputState::new(window, cx)
+            .default_value(disp_val)
+            .placeholder(rust_i18n::t!("ai.cfg_display_placeholder").to_string())
+    });
+    let request_input = cx.new(|cx| {
+        InputState::new(window, cx)
+            .default_value(req_val)
+            .placeholder(rust_i18n::t!("ai.cfg_request_placeholder").to_string())
+    });
+    let ctx_input = cx.new(|cx| {
+        InputState::new(window, cx)
+            .default_value(ctx_val)
+            .placeholder("128000")
+    });
+    DraftModelRow {
+        display_name: display_input,
+        request_model: request_input,
+        context_window: ctx_input,
+        effort,
     }
 }

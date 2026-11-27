@@ -15,9 +15,9 @@ use transom_store::AiStore;
 use super::AiPanelEvent;
 use super::approval::render_approval_card;
 use super::attachments::{ComposerAttachment, should_convert_paste_to_doc};
-use super::choice_card::init_choice_input;
+use super::choice_card::{ChoiceCardState, init_choice_input};
 use super::config_drawer::{ConfigChoice, ConfigSelect, DraftModelRow};
-use super::history_drawer::make_draft_model_row;
+use super::model_table::make_draft_model_row;
 use super::plan_card::{PlanCardParams, render_plan_card};
 use super::skills_drawer::SkillsDrawerState;
 use super::slash_menu::register_slash_key_interceptor;
@@ -45,11 +45,7 @@ pub(crate) struct AiAssistantView {
     pub(super) selected_acp_idx: usize,
     pub(super) last_composer_len: usize,
     pub(super) slash_selected_idx: usize,
-    pub(super) choice_custom_input: Entity<InputState>,
-    pub(super) choice_selected_idx: usize,
-    pub(super) choice_multi_selected: HashSet<usize>,
-    pub(super) choice_collapsed: bool,
-    pub(super) dismissed_choice_id: Option<String>,
+    pub(super) choice_card: ChoiceCardState,
     pub(super) msg_scroll_handle: ScrollHandle,
     pub(super) popover_scroll_handle: ScrollHandle,
     pub(super) active_nav_dot: Option<usize>,
@@ -318,11 +314,7 @@ impl AiAssistantView {
             selected_acp_idx: 0,
             last_composer_len: 0,
             slash_selected_idx: 0,
-            choice_custom_input,
-            choice_selected_idx: 0,
-            choice_multi_selected: HashSet::new(),
-            choice_collapsed: false,
-            dismissed_choice_id: None,
+            choice_card: ChoiceCardState::new(choice_custom_input),
             msg_scroll_handle: ScrollHandle::new(),
             popover_scroll_handle: ScrollHandle::new(),
             active_nav_dot: None,

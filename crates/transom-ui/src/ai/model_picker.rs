@@ -12,7 +12,7 @@ use gpui_kit::*;
 use transom_ai::ThinkingEffort;
 use transom_ui_icons::{AppIcon, AppIconElement, UiIcon};
 
-use super::history_drawer::make_draft_model_row;
+use super::model_table::make_draft_model_row;
 use super::view::AiAssistantView;
 use crate::palette::Palette;
 use crate::search::contains_case_insensitive;
