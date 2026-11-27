@@ -550,6 +550,7 @@ fn folder_defaults_inheritance_and_session_resolution() {
             },
             options: crate::model::session::SessionOptions::default(),
             proxy_jump: None,
+            protection: crate::HostProtection::Normal,
         }),
     );
     session.folder_id = Some(sub);

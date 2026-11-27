@@ -35,6 +35,7 @@ fn session(name: &str, host: &str, updated_at: u64) -> Session {
             auth: AuthMethod::Agent,
             options: Default::default(),
             proxy_jump: None,
+            protection: crate::HostProtection::Normal,
         }),
     );
     session.updated_at = updated_at;

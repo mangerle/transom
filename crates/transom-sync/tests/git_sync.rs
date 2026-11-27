@@ -39,6 +39,7 @@ fn catalog_with(name: &str) -> SessionCatalog {
             auth: AuthMethod::Agent,
             options: Default::default(),
             proxy_jump: None,
+            protection: Default::default(),
         }),
     ));
     catalog

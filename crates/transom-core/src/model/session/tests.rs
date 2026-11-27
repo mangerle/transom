@@ -76,6 +76,7 @@ fn proxy_jump_round_trips_through_json() {
         proxy_jump: Some(ProxyJumpConfig {
             jump_session_id: jump_id,
         }),
+        protection: crate::HostProtection::Normal,
     };
     let json = serde_json::to_string(&connection).unwrap();
     let decoded: SshConnection = serde_json::from_str(&json).unwrap();
@@ -100,6 +101,7 @@ fn session_round_trips_through_json() {
             },
             options: SessionOptions::default(),
             proxy_jump: None,
+            protection: crate::HostProtection::Normal,
         }),
     );
     session.folder_id = Some(FolderId::new());

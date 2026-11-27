@@ -24,6 +24,8 @@ pub enum ActivityItemId {
     ApiClient,
     /// 云同步状态、冲突与历史面板。
     CloudSync,
+    /// 智能运维 AI 助手右侧面板。
+    AiAssistant,
     Language,
     ImportSshConfig,
     KnownHosts,
@@ -41,7 +43,7 @@ impl ActivityItemId {
     /// `ToggleSnippets` 快捷键上，活动栏再放一个是重复入口。旧设置文件里残留的
     /// `"snippets"` 条目会经 `#[serde(other)]` 归为 `Unknown` 并被 `normalize`
     /// 剔除，因此不需要数据迁移。
-    pub const DEFAULT_ORDER: [Self; 15] = [
+    pub const DEFAULT_ORDER: [Self; 16] = [
         Self::Sessions,
         Self::Tabs,
         Self::QuickOpen,
@@ -52,6 +54,7 @@ impl ActivityItemId {
         Self::Git,
         Self::ApiClient,
         Self::CloudSync,
+        Self::AiAssistant,
         Self::Language,
         Self::ImportSshConfig,
         Self::KnownHosts,
@@ -60,7 +63,7 @@ impl ActivityItemId {
     ];
 
     /// 默认顶部条目数量，也是 `split_at` 的默认值。
-    pub const DEFAULT_SPLIT_AT: usize = 10;
+    pub const DEFAULT_SPLIT_AT: usize = 11;
 
     /// 供界面元素 ID 与设置项复用的稳定键名。
     ///
@@ -78,6 +81,7 @@ impl ActivityItemId {
             Self::Git => "git",
             Self::ApiClient => "api_client",
             Self::CloudSync => "cloud_sync",
+            Self::AiAssistant => "ai_assistant",
             Self::Language => "language",
             Self::ImportSshConfig => "import_ssh_config",
             Self::KnownHosts => "known_hosts",

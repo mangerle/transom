@@ -353,6 +353,7 @@ mod tests {
                 auth: crate::AuthMethod::Agent,
                 options: crate::SessionOptions::default(),
                 proxy_jump: None,
+                protection: crate::HostProtection::Normal,
             }),
         )
     }

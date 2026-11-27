@@ -3,9 +3,16 @@
 //! 顶层总线划分为分领域子枚举，各个业务子系统可独立引用或处理其专属子枚举，
 //! 降低跨 crate 编译依赖与巨型 match 分支。
 
+mod ai;
 mod domain_commands;
 mod domain_events;
 mod git;
+
+pub use ai::{
+    AiAppEvent, AiApprovalDecision, AiApprovalDto, AiCommand, AiContextBreakdownDto,
+    AiHostTargetDto, AiManagedTaskDto, AiManagedTaskStatus, AiPlanDto, AiPlanStepDto,
+    AiPlanStepStatus, AiPromptRequest, AiTerminalContextKind, AiToolCardDto, AiTurnMetricsDto,
+};
 
 pub use domain_commands::{
     ConnectParams, ContainerCommand, ForwardCommand, HostCommand, SftpCommand, SyncCommand,
@@ -28,6 +35,7 @@ pub enum AppCommand {
     /// 容器命令体量明显大于其它领域，装箱避免整个 AppCommand 被撑大。
     Container(Box<ContainerCommand>),
     Git(GitCommand),
+    Ai(Box<AiCommand>),
 }
 
 impl From<TerminalCommand> for AppCommand {
@@ -78,6 +86,12 @@ impl From<GitCommand> for AppCommand {
     }
 }
 
+impl From<AiCommand> for AppCommand {
+    fn from(cmd: AiCommand) -> Self {
+        Self::Ai(Box::new(cmd))
+    }
+}
+
 /// 应用顶层事件：按业务领域划分为子枚举。
 pub enum AppEvent {
     Terminal(TerminalAppEvent),
@@ -88,6 +102,7 @@ pub enum AppEvent {
     Zmodem(ZmodemAppEvent),
     Container(ContainerAppEvent),
     Git(GitAppEvent),
+    Ai(Box<AiAppEvent>),
     DeepLink { request: DeepLinkRequest },
 }
 
@@ -136,6 +151,12 @@ impl From<ContainerAppEvent> for AppEvent {
 impl From<GitAppEvent> for AppEvent {
     fn from(event: GitAppEvent) -> Self {
         Self::Git(event)
+    }
+}
+
+impl From<AiAppEvent> for AppEvent {
+    fn from(event: AiAppEvent) -> Self {
+        Self::Ai(Box::new(event))
     }
 }
 

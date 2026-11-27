@@ -24,6 +24,8 @@ pub enum SecretKind {
     GitSyncToken,
     /// 容器镜像仓库密码；按仓库 ID 归档，避免写进 settings.json。
     RegistryPassword,
+    /// AI 模型供应商 API Key；按供应商 ID 归档，严禁明文落盘。
+    AiProviderKey,
 }
 
 /// 口令归属：某个会话，或某个可被多个会话引用的凭据模板。
@@ -38,6 +40,8 @@ pub enum SecretOwner {
     Identity(IdentityId),
     /// 镜像仓库凭据，按仓库稳定 ID 归档。
     Registry(String),
+    /// AI 供应商凭据，按供应商稳定 ID 归档。
+    AiProvider(String),
 }
 
 impl From<SessionId> for SecretOwner {
@@ -108,6 +112,14 @@ impl SecretKey {
         )
     }
 
+    /// AI 供应商 API Key 槽位。
+    pub fn ai_provider_key(provider_id: &str) -> Self {
+        Self::new(
+            SecretOwner::AiProvider(provider_id.to_string()),
+            SecretKind::AiProviderKey,
+        )
+    }
+
     fn nil_session() -> SessionId {
         SessionId::from(uuid::Uuid::nil())
     }
@@ -141,11 +153,18 @@ impl SecretKey {
                     _ => "registry/unknown/password".to_string(),
                 };
             }
+            SecretKind::AiProviderKey => {
+                return match &self.owner {
+                    SecretOwner::AiProvider(id) => format!("ai-provider/{id}/api-key"),
+                    _ => "ai-provider/unknown/api-key".to_string(),
+                };
+            }
         };
         match &self.owner {
             SecretOwner::Session(id) => format!("{id}/{kind}"),
             SecretOwner::Identity(id) => format!("identity/{id}/{kind}"),
             SecretOwner::Registry(id) => format!("registry/{id}/{kind}"),
+            SecretOwner::AiProvider(id) => format!("ai-provider/{id}/{kind}"),
         }
     }
 }

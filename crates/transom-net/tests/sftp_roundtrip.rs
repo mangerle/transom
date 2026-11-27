@@ -59,6 +59,7 @@ async fn sftp_list_upload_download_and_mutations() {
             ..Default::default()
         },
         proxy_jump: None,
+        protection: Default::default(),
     };
 
     let session = tokio::time::timeout(
@@ -766,6 +767,7 @@ async fn upload_interrupted_does_not_corrupt_existing_remote_file() {
             ..Default::default()
         },
         proxy_jump: None,
+        protection: Default::default(),
     };
 
     let session = tokio::time::timeout(

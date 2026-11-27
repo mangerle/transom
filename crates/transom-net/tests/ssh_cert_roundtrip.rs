@@ -184,6 +184,7 @@ async fn run_case(
             ..Default::default()
         },
         proxy_jump: None,
+        protection: Default::default(),
     };
     let result = tokio::time::timeout(
         Duration::from_secs(8),

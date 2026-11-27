@@ -13,4 +13,4 @@ pub use connection::{
     SerialFlowControl, SerialParity, SerialStopBits, TelnetConnection, TelnetOptions, TextEncoding,
 };
 pub use entity::{BlockViewOverride, Session, StartupCommands};
-pub use ssh::{AuthMethod, ProxyJumpConfig, SessionOptions, SshConnection, SshHop};
+pub use ssh::{AuthMethod, HostProtection, ProxyJumpConfig, SessionOptions, SshConnection, SshHop};

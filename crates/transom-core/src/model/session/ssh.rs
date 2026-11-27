@@ -14,6 +14,29 @@ pub struct ProxyJumpConfig {
     pub jump_session_id: crate::ids::SessionId,
 }
 
+/// 主机 AI 保护级别：控制智能助手在该主机上的最大操作权限。
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum HostProtection {
+    /// 常规主机：遵循全局或会话执行模式。
+    #[default]
+    Normal,
+    /// 生产保护：强制禁止自动放行写操作，UI 展示生产警示。
+    Production,
+    /// 只读锁定：底层硬拦截一切写命令、文件修改与上传。
+    ReadOnly,
+}
+
+impl HostProtection {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Normal => "常规",
+            Self::Production => "生产保护",
+            Self::ReadOnly => "只读锁定",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SshConnection {
     pub host: String,
@@ -25,6 +48,9 @@ pub struct SshConnection {
     /// 跳板机引用；`None` 表示直连。链路可多层嵌套，环检测在连接前完成。
     #[serde(default)]
     pub proxy_jump: Option<ProxyJumpConfig>,
+    /// AI 助手对该主机的操作保护级别。
+    #[serde(default)]
+    pub protection: HostProtection,
 }
 
 impl SshConnection {
@@ -36,6 +62,7 @@ impl SshConnection {
             auth: AuthMethod::Agent,
             options: SessionOptions::default(),
             proxy_jump: None,
+            protection: HostProtection::Normal,
         }
     }
 }

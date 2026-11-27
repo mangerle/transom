@@ -160,6 +160,7 @@ fn ssh_connection(host: &str, port: u16, user: &str) -> SshConnection {
             ..Default::default()
         },
         proxy_jump: None,
+        protection: Default::default(),
     }
 }
 

@@ -33,6 +33,7 @@ pub fn quick_connect_session(input: &str) -> Result<Session, String> {
         auth: AuthMethod::Agent,
         options: SessionOptions::default(),
         proxy_jump: None,
+        protection: crate::HostProtection::Normal,
     });
     Ok(Session::new(name, connection))
 }

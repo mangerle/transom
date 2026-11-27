@@ -215,4 +215,19 @@ impl TerminalView {
                 .into_any_element(),
         )
     }
+
+    /// 导出最近若干条 OSC 133 命令块摘要，供 AI 助手诊断。
+    pub fn recent_blocks_summary(&self, limit: usize) -> String {
+        self.state.engine.lock().recent_blocks_summary(limit)
+    }
+
+    /// 导出当前终端末尾若干行文本，供 AI 助手读屏工具按需读取。
+    pub fn screen_tail_text(&self, lines: usize) -> String {
+        self.state.engine.lock().screen_tail_text(lines)
+    }
+
+    /// 返回最近一条非零退出的 OSC 133 命令块 `(block_id, exit_code, summary)`。
+    pub fn last_failed_block(&self) -> Option<(u64, i32, String)> {
+        self.state.engine.lock().last_failed_block()
+    }
 }

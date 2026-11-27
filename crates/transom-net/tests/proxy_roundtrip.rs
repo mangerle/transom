@@ -249,6 +249,7 @@ fn ssh_connection(port: u16) -> SshConnection {
             ..Default::default()
         },
         proxy_jump: None,
+        protection: Default::default(),
     }
 }
 

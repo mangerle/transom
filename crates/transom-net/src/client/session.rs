@@ -12,6 +12,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::task::JoinHandle;
+use tokio_util::sync::CancellationToken;
 use transom_core::{
     AppError, ErrorCode, ErrorContext, ForwardMeter, TerminalControl, TerminalIo, TrafficCounter,
 };
@@ -168,6 +169,85 @@ impl SshRemote {
                 format!(
                     "远端命令执行超时，已等待 {} 秒，命令: {}",
                     EXEC_COMMAND_TIMEOUT.as_secs(),
+                    command_excerpt(command)
+                ),
+            )),
+        }
+    }
+
+    /// 流式执行远端命令：支持独立取消令牌、自定义超时与实时增量输出回调。
+    pub async fn exec_command_stream<F>(
+        &self,
+        command: &str,
+        timeout: Duration,
+        cancel: CancellationToken,
+        mut on_chunk: F,
+    ) -> Result<CommandOutput, AppError>
+    where
+        F: FnMut(&str, bool) + Send,
+    {
+        let fut = async {
+            let mut channel = self.open_session().await?;
+            channel.exec(true, command).await.map_err(|error| {
+                AppError::with_detail(ErrorCode::ChannelFailed, error.to_string())
+            })?;
+
+            let mut stdout = Vec::new();
+            let mut stderr = Vec::new();
+            let mut exit_status = None;
+            loop {
+                tokio::select! {
+                    _ = cancel.cancelled() => {
+                        let _ = channel.close().await;
+                        return Err(AppError::with_detail(
+                            ErrorCode::Cancelled,
+                            "远端命令已被手动取消".to_owned(),
+                        ));
+                    }
+                    maybe_msg = channel.wait() => {
+                        let Some(msg) = maybe_msg else { break };
+                        match msg {
+                            ChannelMsg::Data { data } => {
+                                if exec_output_exceeds(&stdout, &stderr, data.len()) {
+                                    let _ = channel.close().await;
+                                    return Err(exec_output_limit_error(command));
+                                }
+                                let text = String::from_utf8_lossy(&data);
+                                on_chunk(&text, false);
+                                stdout.extend_from_slice(&data);
+                            }
+                            ChannelMsg::ExtendedData { data, ext: 1 } => {
+                                if exec_output_exceeds(&stdout, &stderr, data.len()) {
+                                    let _ = channel.close().await;
+                                    return Err(exec_output_limit_error(command));
+                                }
+                                let text = String::from_utf8_lossy(&data);
+                                on_chunk(&text, true);
+                                stderr.extend_from_slice(&data);
+                            }
+                            ChannelMsg::ExitStatus { exit_status: status } => {
+                                exit_status = Some(status);
+                            }
+                            ChannelMsg::Eof | ChannelMsg::Close => break,
+                            _ => {}
+                        }
+                    }
+                }
+            }
+            Ok(CommandOutput {
+                exit_status,
+                stdout: String::from_utf8_lossy(&stdout).to_string(),
+                stderr: String::from_utf8_lossy(&stderr).to_string(),
+            })
+        };
+
+        match tokio::time::timeout(timeout, fut).await {
+            Ok(result) => result,
+            Err(_) => Err(AppError::with_detail(
+                ErrorCode::Timeout,
+                format!(
+                    "远端命令执行超时，已等待 {} 秒，命令: {}",
+                    timeout.as_secs(),
                     command_excerpt(command)
                 ),
             )),

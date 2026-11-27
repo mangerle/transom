@@ -24,6 +24,9 @@ pub use backup::{
     SecretRestoreReport, collect_catalog_secrets,
 };
 pub use commands::{
+    AiAppEvent, AiApprovalDecision, AiApprovalDto, AiCommand, AiContextBreakdownDto,
+    AiHostTargetDto, AiManagedTaskDto, AiManagedTaskStatus, AiPlanDto, AiPlanStepDto,
+    AiPlanStepStatus, AiPromptRequest, AiTerminalContextKind, AiToolCardDto, AiTurnMetricsDto,
     AppCommand, AppEvent, ConnectParams, ContainerAppEvent, ContainerCommand, DeepLinkRequest,
     ForwardAppEvent, ForwardCommand, GitAppEvent, GitCommand, GitShelfOperation, HostAppEvent,
     HostCommand, SftpAppEvent, SftpCommand, SyncAppEvent, SyncCommand, SystemStats,
@@ -76,11 +79,11 @@ pub use model::layout::{ActivityBarLayout, ActivityItemId, StatusBarLayout, Stat
 pub use model::mac::{MacAddress, MacParseError, normalize_mac};
 pub use model::serial::{SerialPortDescriptor, SerialPortProvider};
 pub use model::session::{
-    AuthMethod, BlockViewOverride, Connection, FtpConnection, FtpSecurity, LocalConnection,
-    MoshConnection, ProxyJumpConfig, RdpColorDepth, RdpConnection, RdpDesktopSize, RdpPerformance,
-    RdpSecurity, SerialConnection, SerialDataBits, SerialFlowControl, SerialParity, SerialStopBits,
-    Session, SessionOptions, SshConnection, SshHop, StartupCommands, TelnetConnection,
-    TelnetOptions, TextEncoding,
+    AuthMethod, BlockViewOverride, Connection, FtpConnection, FtpSecurity, HostProtection,
+    LocalConnection, MoshConnection, ProxyJumpConfig, RdpColorDepth, RdpConnection, RdpDesktopSize,
+    RdpPerformance, RdpSecurity, SerialConnection, SerialDataBits, SerialFlowControl, SerialParity,
+    SerialStopBits, Session, SessionOptions, SshConnection, SshHop, StartupCommands,
+    TelnetConnection, TelnetOptions, TextEncoding,
 };
 pub use model::session_appearance::{SessionColor, SessionIcon};
 pub use model::settings::{

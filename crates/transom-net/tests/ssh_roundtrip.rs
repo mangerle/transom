@@ -105,6 +105,7 @@ async fn password_auth_pty_and_tofu_roundtrip() {
             ..Default::default()
         },
         proxy_jump: None,
+        protection: Default::default(),
     };
 
     let session = tokio::time::timeout(

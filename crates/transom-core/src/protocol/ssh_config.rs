@@ -181,6 +181,7 @@ impl ConfigParser<'_> {
                 auth,
                 options: SessionOptions::default(),
                 proxy_jump: None,
+                protection: crate::HostProtection::Normal,
             });
 
             // 文件夹归类由导入流程统一创建，解析器只负责连接参数。

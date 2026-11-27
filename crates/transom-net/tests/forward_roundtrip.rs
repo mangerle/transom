@@ -140,6 +140,7 @@ async fn connect(port: u16, dir: &tempfile::TempDir) -> SshSession {
             ..Default::default()
         },
         proxy_jump: None,
+        protection: Default::default(),
     };
     tokio::time::timeout(
         Duration::from_secs(8),

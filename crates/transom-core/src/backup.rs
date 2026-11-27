@@ -200,6 +200,7 @@ impl Serialize for BackupSecret {
             SecretOwner::Session(id) => state.serialize_field("session_id", id)?,
             SecretOwner::Identity(id) => state.serialize_field("identity_id", id)?,
             SecretOwner::Registry(id) => state.serialize_field("registry_id", id)?,
+            SecretOwner::AiProvider(id) => state.serialize_field("ai_provider_id", id)?,
         }
         state.serialize_field("kind", &self.kind)?;
         state.serialize_field("value", self.value.as_str())?;
@@ -217,6 +218,8 @@ impl<'de> Deserialize<'de> for BackupSecret {
             identity_id: Option<IdentityId>,
             #[serde(default)]
             registry_id: Option<String>,
+            #[serde(default)]
+            ai_provider_id: Option<String>,
             kind: SecretKind,
             value: String,
         }
@@ -224,13 +227,19 @@ impl<'de> Deserialize<'de> for BackupSecret {
         let raw = Raw::deserialize(deserializer)?;
         // 两个字段都缺或同时出现都视为坏数据：宁可报错，也不猜归属，
         // 猜错会把口令写到别人的槽位上。
-        let owner = match (raw.session_id, raw.identity_id, raw.registry_id) {
-            (Some(id), None, None) => SecretOwner::Session(id),
-            (None, Some(id), None) => SecretOwner::Identity(id),
-            (None, None, Some(id)) => SecretOwner::Registry(id),
+        let owner = match (
+            raw.session_id,
+            raw.identity_id,
+            raw.registry_id,
+            raw.ai_provider_id,
+        ) {
+            (Some(id), None, None, None) => SecretOwner::Session(id),
+            (None, Some(id), None, None) => SecretOwner::Identity(id),
+            (None, None, Some(id), None) => SecretOwner::Registry(id),
+            (None, None, None, Some(id)) => SecretOwner::AiProvider(id),
             _ => {
                 return Err(serde::de::Error::custom(
-                    "备份口令条目必须恰好带 session_id、identity_id 或 registry_id 之一",
+                    "备份口令条目必须恰好带 session_id、identity_id、registry_id 或 ai_provider_id 之一",
                 ));
             }
         };
@@ -314,6 +323,7 @@ mod tests {
                 auth: crate::AuthMethod::Password { save: true },
                 options: Default::default(),
                 proxy_jump: None,
+                protection: crate::HostProtection::Normal,
             }),
         )
     }
@@ -445,6 +455,7 @@ mod tests {
                 },
                 options: Default::default(),
                 proxy_jump: None,
+                protection: crate::HostProtection::Normal,
             }),
         );
         assert_eq!(key.secret_kinds(), &[SecretKind::KeyPassphrase]);

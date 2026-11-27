@@ -290,4 +290,58 @@ impl TerminalEngine {
     pub fn is_alt_screen(&self) -> bool {
         self.term.mode().contains(TermMode::ALT_SCREEN)
     }
+
+    /// 导出最近若干条 OSC 133 命令块的只读摘要，供 AI 诊断工具消费。
+    pub fn recent_blocks_summary(&self, limit: usize) -> String {
+        let blocks: Vec<_> = self.blocks.blocks().collect();
+        if blocks.is_empty() {
+            return String::new();
+        }
+        let start = blocks.len().saturating_sub(limit.max(1));
+        let mut out = Vec::new();
+        for block in &blocks[start..] {
+            let cmd = if block.command_text.is_empty() {
+                rust_i18n::t!("terminal.block.unknown_command").to_string()
+            } else {
+                block.command_text.clone()
+            };
+            let code = block
+                .exit_code
+                .map_or_else(|| "?".to_owned(), |c| c.to_string());
+            let body = self
+                .read_absolute_lines(block.output_start_line, block.output_end_line)
+                .unwrap_or_default();
+            let clipped: String = body.chars().take(1_200).collect();
+            out.push(format!("$ {cmd}  [exit={code}]\n{clipped}"));
+        }
+        out.join("\n---\n")
+    }
+
+    /// 读取当前终端屏幕及邻近历史末尾 `lines` 行纯文本。
+    pub fn screen_tail_text(&self, lines: usize) -> String {
+        let grid = self.term.grid();
+        let bottom = i64::from(grid.screen_lines() as i32 - 1);
+        let top = bottom.saturating_sub(lines.saturating_sub(1) as i64);
+        self.read_absolute_lines(top, bottom).unwrap_or_default()
+    }
+
+    /// 返回最近一条非零退出的 OSC 133 命令块 `(block_id, exit_code, summary)`，供一键 AI 诊断。
+    pub fn last_failed_block(&self) -> Option<(u64, i32, String)> {
+        let block = self
+            .blocks
+            .blocks()
+            .filter(|b| b.exit_code.is_some_and(|c| c != 0))
+            .last()?;
+        let code = block.exit_code?;
+        let cmd = if block.command_text.trim().is_empty() {
+            rust_i18n::t!("terminal.block.unknown_command").to_string()
+        } else {
+            block.command_text.clone()
+        };
+        let body = self
+            .read_absolute_lines(block.output_start_line, block.output_end_line)
+            .unwrap_or_default();
+        let clipped: String = body.chars().take(1_600).collect();
+        Some((block.id, code, format!("$ {cmd}  [exit={code}]\n{clipped}")))
+    }
 }
