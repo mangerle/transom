@@ -39,9 +39,11 @@ struct StoredOutput {
 }
 
 /// 线程安全的会话级工具输出句柄池。
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct ToolOutputStore {
     inner: Mutex<StoreInner>,
+    max_entries: usize,
+    max_total_bytes: usize,
 }
 
 #[derive(Debug, Default)]
@@ -54,7 +56,16 @@ struct StoreInner {
 impl ToolOutputStore {
     /// 创建空的输出句柄池。
     pub fn new() -> Self {
-        Self::default()
+        Self::with_limits(MAX_STORED_OUTPUTS, MAX_STORE_TOTAL_BYTES)
+    }
+
+    /// 创建指定条目数与字节上限的输出句柄池。
+    pub fn with_limits(max_entries: usize, max_total_bytes: usize) -> Self {
+        Self {
+            inner: Mutex::new(StoreInner::default()),
+            max_entries: max_entries.max(1),
+            max_total_bytes: max_total_bytes.max(1),
+        }
     }
 
     /// 清洗 ANSI 并遮蔽明文密钥，超限时落池返回带 `output_id` 的头尾预览。
@@ -75,7 +86,7 @@ impl ToolOutputStore {
         let byte_len = text.len();
         let id = format!("out-{}", &Uuid::new_v4().simple().to_string()[..8]);
 
-        self.insert(
+        let inserted = self.insert(
             id.clone(),
             StoredOutput {
                 tool_name: tool_name.to_owned(),
@@ -84,6 +95,12 @@ impl ToolOutputStore {
                 byte_len,
             },
         );
+        if !inserted {
+            let preview = clip_head_tail(&text, max_preview_chars);
+            return format!(
+                "{preview}\n\n[完整输出超过缓存上限: {line_count} 行 / {byte_len} 字节，未生成 output_id]"
+            );
+        }
 
         let preview = clip_head_tail(&text, max_preview_chars);
         format!(
@@ -170,14 +187,13 @@ impl ToolOutputStore {
         Ok(clip_head_tail(&body, DEFAULT_TOOL_OUTPUT_LIMIT))
     }
 
-    fn insert(&self, id: String, item: StoredOutput) {
+    fn insert(&self, id: String, item: StoredOutput) -> bool {
         let mut guard = self.inner.lock();
-        // 单条输出本身超过总上限时只保留末尾 16 MiB 以内，避免撑爆池子。
-        if item.byte_len > MAX_STORE_TOTAL_BYTES {
-            return;
+        if item.byte_len > self.max_total_bytes {
+            return false;
         }
-        while guard.order.len() >= MAX_STORED_OUTPUTS
-            || guard.total_bytes.saturating_add(item.byte_len) > MAX_STORE_TOTAL_BYTES
+        while guard.order.len() >= self.max_entries
+            || guard.total_bytes.saturating_add(item.byte_len) > self.max_total_bytes
         {
             let Some(oldest_id) = guard.order.pop_front() else {
                 break;
@@ -189,6 +205,13 @@ impl ToolOutputStore {
         guard.total_bytes = guard.total_bytes.saturating_add(item.byte_len);
         guard.order.push_back(id.clone());
         guard.entries.insert(id, item);
+        true
+    }
+}
+
+impl Default for ToolOutputStore {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -364,5 +387,14 @@ mod tests {
             &second,
             &pool.get_or_create("conversation-b")
         ));
+    }
+
+    #[test]
+    fn oversized_output_never_returns_a_dangling_handle() {
+        let store = ToolOutputStore::with_limits(2, 100);
+        let preview = store.store_and_preview("remote_exec", &"a".repeat(200), 80);
+
+        assert!(!preview.contains("output_id="));
+        assert!(preview.contains("未生成 output_id"));
     }
 }
