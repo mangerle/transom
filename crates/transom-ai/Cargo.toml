@@ -1,6 +1,6 @@
 [package]
 name = "transom-ai"
-description = "Transom 智能运维助手领域层：rig Agent 运行时、三层记忆、树状会话、审批门与工具集"
+description = "Transom 智能运维助手运行时：rig Agent 编排、协议适配、安全审批与工具执行"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -12,6 +12,7 @@ readme.workspace = true
 publish = false
 
 [dependencies]
+transom-ai-contracts.workspace = true
 transom-core.workspace = true
 transom-platform.workspace = true
 rig-core.workspace = true
@@ -23,15 +24,14 @@ tokio.workspace = true
 tokio-util.workspace = true
 futures.workspace = true
 async-trait.workspace = true
-thiserror.workspace = true
-chrono.workspace = true
 log.workspace = true
+chrono.workspace = true
+uuid.workspace = true
 sha2.workspace = true
 hex.workspace = true
 base64.workspace = true
 image.workspace = true
 similar.workspace = true
-uuid.workspace = true
 regex.workspace = true
 parking_lot.workspace = true
 

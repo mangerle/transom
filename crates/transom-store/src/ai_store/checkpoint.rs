@@ -8,7 +8,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use transom_ai::{AiError, CheckpointManifest, FileBackupRecord};
+use transom_ai_contracts::{AiError, CheckpointManifest, FileBackupRecord};
 use transom_core::AppError;
 
 use super::{AiStore, sanitize_id_filename};
@@ -97,7 +97,7 @@ impl AiStore {
     fn checkpoint_manifest_path(&self, conversation_id: &str) -> Result<PathBuf, AiError> {
         let checkpoint_dir = self.root.join("checkpoints");
         let file_name = sanitize_id_filename(conversation_id, "json");
-        transom_ai::resolve_sandbox_path(&checkpoint_dir, Path::new(&file_name))
+        transom_ai_contracts::resolve_sandbox_path(&checkpoint_dir, Path::new(&file_name))
     }
 }
 
@@ -111,7 +111,7 @@ fn map_storage_error(path: &Path, error: AppError) -> AiError {
 #[cfg(test)]
 mod tests {
     use super::AiStore;
-    use transom_ai::{CheckpointManifest, FileBackupRecord};
+    use transom_ai_contracts::{CheckpointManifest, FileBackupRecord};
 
     #[test]
     fn checkpoint_manifest_roundtrips_and_appends_in_one_transaction() {

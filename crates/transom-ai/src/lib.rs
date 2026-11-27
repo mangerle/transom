@@ -1,4 +1,7 @@
-//! Transom 智能运维助手领域层：rig Agent 运行时、三层透明记忆、JSONL 树状会话与安全审批门。
+//! Transom 智能运维助手运行时：rig Agent 编排、协议适配、工具执行与安全审批。
+//!
+//! 配置、会话、策略、审计、检查点与记忆等稳定契约由 `transom-ai-contracts` 提供；
+//! 本 crate 通过兼容重导出保持既有调用面，同时让存储层无需依赖完整运行时。
 
 pub mod acp;
 pub(crate) mod acp_handlers;
@@ -11,7 +14,6 @@ pub mod checkpoint;
 pub mod choices;
 pub mod compaction;
 pub mod config;
-pub(crate) mod config_presets;
 pub mod context_budget;
 pub mod discovery;
 pub mod error;
@@ -24,7 +26,6 @@ pub(crate) mod mcp_tools;
 pub mod memory;
 pub mod output_store;
 pub mod policy;
-pub(crate) mod policy_rules;
 pub mod redact;
 pub mod runner;
 pub(crate) mod runner_gate;

@@ -19,6 +19,7 @@ members = [
     "crates/transom-ui-icons",
     "crates/transom-ui-kit",
     "crates/transom-rdp",
+    "crates/transom-ai-contracts",
     "crates/transom-ai",
 ]
 resolver = "3"
@@ -167,6 +168,7 @@ transom-ui = { path = "crates/transom-ui" }
 transom-ui-icons = { path = "crates/transom-ui-icons" }
 transom-ui-kit = { path = "crates/transom-ui-kit" }
 transom-rdp = { path = "crates/transom-rdp" }
+transom-ai-contracts = { path = "crates/transom-ai-contracts" }
 transom-ai = { path = "crates/transom-ai" }
 
 # AI Agent 运行时与多协议 LLM 抽象（rig 0.47）

@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
-use transom_ai::{
+use transom_ai_contracts::{
     AiAuditEntry, AiError, MemorySnapshot, read_memory_file_limited, resolve_sandbox_path,
 };
 
@@ -216,7 +216,7 @@ mod tests {
     #[test]
     fn audit_log_is_owner_only() {
         use std::os::unix::fs::PermissionsExt as _;
-        use transom_ai::{AiAuditEntry, ToolRisk};
+        use transom_ai_contracts::{AiAuditEntry, ToolRisk};
 
         let dir = tempfile::tempdir().expect("创建临时目录失败");
         let store = AiStore::with_root(dir.path().to_path_buf());

@@ -10387,9 +10387,23 @@ dependencies = [
  "sha2 0.11.1",
  "similar 3.2.1",
  "tempfile",
- "thiserror 2.0.21",
  "tokio",
  "tokio-util",
+ "transom-ai-contracts",
+ "transom-core",
+ "transom-platform",
+ "uuid",
+]
+
+[[package]]
+name = "transom-ai-contracts"
+version = "1.9.0"
+dependencies = [
+ "chrono",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.21",
  "transom-core",
  "transom-platform",
  "uuid",
@@ -10604,7 +10618,7 @@ dependencies = [
  "serde_yaml_ng",
  "tempfile",
  "thiserror 2.0.21",
- "transom-ai",
+ "transom-ai-contracts",
  "transom-api",
  "transom-core",
  "transom-crypto",

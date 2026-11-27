@@ -4,7 +4,7 @@ use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use transom_ai::{
+use transom_ai_contracts::{
     AiError, ConversationSummary, SessionEntry, SessionScope, SessionTree, resolve_sandbox_path,
 };
 
@@ -209,7 +209,9 @@ impl AiStore {
 #[cfg(test)]
 mod tests {
     use super::super::AiStore;
-    use transom_ai::{ChatRole, ConversationSummary, SessionEntry, SessionEntryKind, SessionScope};
+    use transom_ai_contracts::{
+        ChatRole, ConversationSummary, SessionEntry, SessionEntryKind, SessionScope,
+    };
 
     #[cfg(unix)]
     #[test]
@@ -218,9 +220,9 @@ mod tests {
 
         let dir = tempfile::tempdir().expect("创建临时目录失败");
         let store = AiStore::with_root(dir.path().to_path_buf());
-        let entry = transom_ai::SessionEntry::new(
+        let entry = transom_ai_contracts::SessionEntry::new(
             None,
-            transom_ai::SessionEntryKind::Reasoning {
+            transom_ai_contracts::SessionEntryKind::Reasoning {
                 text: "私有会话内容".to_owned(),
             },
         );

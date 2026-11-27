@@ -14,7 +14,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use parking_lot::Mutex;
-use transom_ai::{AiError, AiSettings};
+use transom_ai_contracts::{AiError, AiSettings};
 use transom_core::{AppError, SecretKey, SecretStore};
 use zeroize::Zeroizing;
 
@@ -26,7 +26,7 @@ use crate::paths::config_dir;
 pub struct AiStore {
     pub(super) root: PathBuf,
     pub(super) index_lock: Arc<Mutex<()>>,
-    pub(super) index_cache: Arc<Mutex<Option<Vec<transom_ai::ConversationSummary>>>>,
+    pub(super) index_cache: Arc<Mutex<Option<Vec<transom_ai_contracts::ConversationSummary>>>>,
     pub(super) usage_lock: Arc<Mutex<()>>,
     pub(super) checkpoint_lock: Arc<Mutex<()>>,
 }
