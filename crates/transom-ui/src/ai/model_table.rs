@@ -70,7 +70,7 @@ impl AiAssistantView {
         let unset_label = rust_i18n::t!("ai.cfg_effort_unset").to_string();
         let has_discovered = !self.state.discovered_models.is_empty();
 
-        for (idx, row) in self.draft_models.iter().enumerate() {
+        for (idx, row) in self.config_form.draft_models.iter().enumerate() {
             let effort_label = row
                 .effort
                 .map(|e| e.as_str().to_owned())
@@ -227,7 +227,7 @@ impl AiAssistantView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.draft_models.push(make_draft_model_row(
+        self.config_form.draft_models.push(make_draft_model_row(
             "",
             "",
             Some(128_000),
@@ -239,8 +239,8 @@ impl AiAssistantView {
     }
 
     pub(super) fn remove_draft_model_row(&mut self, idx: usize, cx: &mut Context<Self>) {
-        if idx < self.draft_models.len() {
-            self.draft_models.remove(idx);
+        if idx < self.config_form.draft_models.len() {
+            self.config_form.draft_models.remove(idx);
             cx.notify();
         }
     }
@@ -262,9 +262,9 @@ impl AiAssistantView {
             return;
         };
         self.state.selected_protocol = prov.protocol;
-        self.provider_name_input
+        self.config_form.provider_name_input
             .update(cx, |i, cx| i.set_value(prov.name, window, cx));
-        self.base_url_input
+        self.config_form.base_url_input
             .update(cx, |i, cx| i.set_value(prov.base_url, window, cx));
         let saved_key = self
             .ai_store
@@ -273,9 +273,9 @@ impl AiAssistantView {
             .flatten()
             .map(|s| s.to_string())
             .unwrap_or_default();
-        self.api_key_input
+        self.config_form.api_key_input
             .update(cx, |i, cx| i.set_value(saved_key, window, cx));
-        self.draft_models = prov
+        self.config_form.draft_models = prov
             .models
             .iter()
             .map(|m| {
@@ -289,8 +289,8 @@ impl AiAssistantView {
                 )
             })
             .collect();
-        if self.draft_models.is_empty() {
-            self.draft_models.push(make_draft_model_row(
+        if self.config_form.draft_models.is_empty() {
+            self.config_form.draft_models.push(make_draft_model_row(
                 "",
                 "",
                 Some(128_000),
@@ -319,24 +319,24 @@ impl AiAssistantView {
         let view_acp_preset = view.clone();
         let view_acp_save = view.clone();
         let view_acp_install = view.clone();
-        let selected_acp_idx = self.selected_acp_idx;
+        let selected_acp_idx = self.config_form.selected_acp_idx;
         render_config_drawer(
             ConfigDrawerParams {
                 active_section: self.state.config_section,
                 settings: &self.state.settings,
                 selected_protocol: self.state.selected_protocol,
-                provider_name_input: &self.provider_name_input,
-                api_key_input: &self.api_key_input,
-                base_url_input: &self.base_url_input,
+                provider_name_input: &self.config_form.provider_name_input,
+                api_key_input: &self.config_form.api_key_input,
+                base_url_input: &self.config_form.base_url_input,
                 models_section,
                 picker_panel,
                 has_discovered_models: !self.state.discovered_models.is_empty(),
-                acp_cmd_input: &self.acp_cmd_input,
+                acp_cmd_input: &self.config_form.acp_cmd_input,
                 selected_acp_idx,
                 acp_install_status: self.state.acp_install_status.as_ref(),
                 discovery_status: self.state.discovery_status.as_deref(),
-                lang_select: &self.lang_select,
-                running_behavior_select: &self.running_behavior_select,
+                lang_select: &self.config_form.lang_select,
+                running_behavior_select: &self.config_form.running_behavior_select,
                 policy_hooks_section,
                 p,
             },

@@ -261,9 +261,9 @@ impl AiAssistantView {
             self.state.memory = mem;
             let g_text = self.state.memory.global_markdown.clone();
             let h_text = self.state.memory.host_markdown.clone();
-            self.global_mem_input
+            self.memory_form.global_mem_input
                 .update(cx, |i, cx| i.set_value(g_text, window, cx));
-            self.host_mem_input
+            self.memory_form.host_mem_input
                 .update(cx, |i, cx| i.set_value(h_text, window, cx));
         }
         cx.notify();

@@ -18,6 +18,7 @@ mod chrome_header;
 mod composer;
 mod composer_triggers;
 mod config_drawer;
+mod config_form;
 mod context_popup;
 mod empty_state;
 mod handoff_banner;

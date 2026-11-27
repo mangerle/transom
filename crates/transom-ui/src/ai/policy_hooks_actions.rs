@@ -71,7 +71,13 @@ impl AiAssistantView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let pattern = self.policy_pattern_input.read(cx).value().trim().to_owned();
+        let pattern = self
+            .policy_hooks_form
+            .policy_pattern_input
+            .read(cx)
+            .value()
+            .trim()
+            .to_owned();
         if pattern.is_empty() {
             return;
         }
@@ -82,7 +88,8 @@ impl AiAssistantView {
             note: String::new(),
             enabled: true,
         });
-        self.policy_pattern_input
+        self.policy_hooks_form
+            .policy_pattern_input
             .update(cx, |s, cx| s.set_value("", window, cx));
         let _ = self.persist_settings();
         cx.notify();
@@ -116,7 +123,13 @@ impl AiAssistantView {
     }
 
     pub(super) fn add_webhook_stop_hook(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let url = self.hook_webhook_input.read(cx).value().trim().to_owned();
+        let url = self
+            .policy_hooks_form
+            .hook_webhook_input
+            .read(cx)
+            .value()
+            .trim()
+            .to_owned();
         if url.is_empty() {
             return;
         }
@@ -132,7 +145,8 @@ impl AiAssistantView {
             enabled: true,
             block_on_failure: false,
         });
-        self.hook_webhook_input
+        self.policy_hooks_form
+            .hook_webhook_input
             .update(cx, |s, cx| s.set_value("", window, cx));
         let _ = self.persist_settings();
         cx.notify();

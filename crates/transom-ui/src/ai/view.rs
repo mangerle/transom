@@ -4,10 +4,7 @@ use std::sync::Arc;
 
 use gpui_kit::base::v_flex;
 use gpui_kit::component::input::{InputEvent, InputState, TextareaState};
-use gpui_kit::component::searchable_list::SearchableVec;
-use gpui_kit::component::select::{SelectEvent, SelectState};
 use gpui_kit::*;
-use transom_ai::RunningMessageBehavior;
 use transom_core::{AiAppEvent, AppCommand, SecretStore};
 use transom_store::AiStore;
 
@@ -15,8 +12,8 @@ use super::AiPanelEvent;
 use super::approval::render_approval_card;
 use super::attachments::{ComposerAttachment, should_convert_paste_to_doc};
 use super::choice_card::{ChoiceCardState, init_choice_input};
-use super::config_drawer::{ConfigChoice, ConfigSelect, DraftModelRow};
-use super::model_table::make_draft_model_row;
+use super::config_form::ConfigFormState;
+use super::memory_drawer::MemoryFormState;
 use super::plan_card::{PlanCardParams, render_plan_card};
 use super::skills_drawer::SkillsDrawerState;
 use super::slash_menu::register_slash_key_interceptor;
@@ -31,17 +28,9 @@ pub(crate) struct AiAssistantView {
     pub(super) secret_store: Arc<dyn SecretStore>,
     pub(super) command_tx: flume::Sender<AppCommand>,
     pub(super) composer_input: Entity<TextareaState>,
-    pub(super) provider_name_input: Entity<InputState>,
-    pub(super) api_key_input: Entity<InputState>,
-    pub(super) base_url_input: Entity<InputState>,
-    pub(super) draft_models: Vec<DraftModelRow>,
-    pub(super) global_mem_input: Entity<InputState>,
-    pub(super) host_mem_input: Entity<InputState>,
-    pub(super) acp_cmd_input: Entity<InputState>,
     pub(super) approval_feedback_input: Entity<InputState>,
-    pub(super) policy_pattern_input: Entity<InputState>,
-    pub(super) hook_webhook_input: Entity<InputState>,
-    pub(super) selected_acp_idx: usize,
+    pub(super) config_form: ConfigFormState,
+    pub(super) memory_form: MemoryFormState,
     pub(super) last_composer_len: usize,
     pub(super) slash_selected_idx: usize,
     pub(super) choice_card: ChoiceCardState,
@@ -56,8 +45,6 @@ pub(crate) struct AiAssistantView {
     pub(super) skills_drawer: SkillsDrawerState,
     pub(super) policy_hooks_form: super::policy_hooks_drawer::PolicyHooksFormState,
     pub(super) model_picker: super::model_picker::ModelPickerState,
-    pub(super) lang_select: Entity<ConfigSelect>,
-    pub(super) running_behavior_select: Entity<ConfigSelect>,
     pub(super) editing_title: bool,
     pub(super) title_input: Entity<InputState>,
     _subscriptions: Vec<Subscription>,
@@ -101,76 +88,23 @@ impl AiAssistantView {
                 .submit_on_enter(true)
                 .placeholder(rust_i18n::t!("ai.composer_placeholder").to_string())
         });
-        let provider_name_input = cx.new(|cx| {
-            InputState::new(window, cx)
-                .placeholder(rust_i18n::t!("ai.cfg_name_placeholder").to_string())
-        });
-        let api_key_input = cx.new(|cx| InputState::new(window, cx).placeholder("sk-..."));
-        let base_url_input = cx.new(|cx| InputState::new(window, cx).placeholder("https://..."));
-        let mut draft_models = Vec::new();
-        if let Some(first_prov) = state.settings.providers.first() {
-            let pname = first_prov.name.clone();
-            let purl = first_prov.base_url.clone();
-            provider_name_input.update(cx, |i, cx| i.set_value(pname, window, cx));
-            base_url_input.update(cx, |i, cx| i.set_value(purl, window, cx));
-            if let Ok(Some(saved_key)) =
-                ai_store.load_provider_api_key(secret_store.as_ref(), &first_prov.id)
-                && !saved_key.trim().is_empty()
-            {
-                api_key_input.update(cx, |i, cx| i.set_value(saved_key.as_str(), window, cx));
-            }
-            for m in &first_prov.models {
-                draft_models.push(make_draft_model_row(
-                    &m.display_name,
-                    &m.name,
-                    m.context_window,
-                    m.efforts.first().copied(),
-                    window,
-                    cx,
-                ));
-            }
-        }
-        if draft_models.is_empty() {
-            draft_models.push(make_draft_model_row(
-                "",
-                "",
-                Some(128_000),
-                None,
-                window,
-                cx,
-            ));
-        }
-        let global_mem_input = cx.new(|cx| {
-            InputState::new(window, cx)
-                .placeholder(rust_i18n::t!("ai.global_memory_placeholder").to_string())
-        });
-        let host_mem_input = cx.new(|cx| {
-            InputState::new(window, cx)
-                .placeholder(rust_i18n::t!("ai.host_memory_placeholder").to_string())
-        });
-        let acp_cmd_input = cx.new(|cx| InputState::new(window, cx).placeholder("claude-code-acp"));
+        let (config_form, form_subs) = ConfigFormState::new(
+            &state.settings,
+            &ai_store,
+            secret_store.as_ref(),
+            window,
+            cx,
+        );
+        let memory_form = MemoryFormState::new(&state.memory.global_markdown, window, cx);
         let approval_feedback_input = cx.new(|cx| {
             InputState::new(window, cx)
                 .placeholder(rust_i18n::t!("ai.approval_feedback_placeholder").to_string())
-        });
-        let policy_pattern_input = cx.new(|cx| {
-            InputState::new(window, cx)
-                .placeholder(rust_i18n::t!("ai.policy_pattern_placeholder").to_string())
-        });
-        let hook_webhook_input = cx.new(|cx| {
-            InputState::new(window, cx)
-                .placeholder(rust_i18n::t!("ai.hooks_webhook_placeholder").to_string())
         });
         let (choice_custom_input, choice_sub) = init_choice_input(window, cx);
         let skills_drawer =
             SkillsDrawerState::new(&ai_store, &state.settings.disabled_skills, window, cx);
         let policy_hooks_form = super::policy_hooks_drawer::PolicyHooksFormState::new(window, cx);
         let model_picker = super::model_picker::ModelPickerState::new(window, cx);
-
-        let global_text = state.memory.global_markdown.clone();
-        global_mem_input.update(cx, |input, cx| {
-            input.set_value(global_text, window, cx);
-        });
 
         let sub = cx.subscribe_in(
             &composer_input,
@@ -221,64 +155,6 @@ impl AiAssistantView {
 
         let key_sub = register_slash_key_interceptor(cx);
 
-        let cur_lang = state.settings.response_language.clone();
-        let lang_select = cx.new(|cx| {
-            let items = vec![
-                ConfigChoice::new("zh", rust_i18n::t!("ai.cfg_lang_zh").to_string()),
-                ConfigChoice::new("en", rust_i18n::t!("ai.cfg_lang_en").to_string()),
-                ConfigChoice::new("auto", rust_i18n::t!("ai.cfg_lang_auto").to_string()),
-            ];
-            let mut s = SelectState::new(SearchableVec::new(items), None, window, cx)
-                .searchable(false);
-            s.set_selected_value(&cur_lang, window, cx);
-            s
-        });
-        let cur_beh_val = match state.settings.running_message_behavior {
-            RunningMessageBehavior::Queue => "queue",
-            RunningMessageBehavior::Steer => "steer",
-            RunningMessageBehavior::Interrupt => "interrupt",
-        };
-        let running_behavior_select = cx.new(|cx| {
-            let items = vec![
-                ConfigChoice::new("queue", rust_i18n::t!("ai.running_msg_queue").to_string()),
-                ConfigChoice::new("steer", rust_i18n::t!("ai.running_msg_steer").to_string()),
-                ConfigChoice::new(
-                    "interrupt",
-                    rust_i18n::t!("ai.running_msg_interrupt").to_string(),
-                ),
-            ];
-            let mut s = SelectState::new(SearchableVec::new(items), None, window, cx)
-                .searchable(false);
-            s.set_selected_value(&cur_beh_val.to_owned(), window, cx);
-            s
-        });
-
-        let lang_sub = cx.subscribe_in(
-            &lang_select,
-            window,
-            |this, _, event: &SelectEvent<SearchableVec<ConfigChoice>>, _, cx| {
-                if let SelectEvent::Confirm(Some(val)) = event {
-                    this.state.settings.response_language = val.clone();
-                    let _ = this.persist_settings();
-                    cx.notify();
-                }
-            },
-        );
-        let beh_sub = cx.subscribe_in(
-            &running_behavior_select,
-            window,
-            |this, _, event: &SelectEvent<SearchableVec<ConfigChoice>>, _, cx| {
-                if let SelectEvent::Confirm(Some(val)) = event {
-                    let beh = match val.as_str() {
-                        "steer" => RunningMessageBehavior::Steer,
-                        "interrupt" => RunningMessageBehavior::Interrupt,
-                        _ => RunningMessageBehavior::Queue,
-                    };
-                    this.set_running_message_behavior(beh, cx);
-                }
-            },
-        );
-
         let title_input = cx.new(|cx| InputState::new(window, cx).placeholder("输入会话名称"));
         let title_sub = cx.subscribe_in(
             &title_input,
@@ -315,23 +191,18 @@ impl AiAssistantView {
             });
         });
 
+        let mut subscriptions = vec![sub, key_sub, choice_sub, title_sub];
+        subscriptions.extend(form_subs);
+
         Self {
             state,
             ai_store,
             secret_store,
             command_tx,
             composer_input,
-            provider_name_input,
-            api_key_input,
-            base_url_input,
-            draft_models,
-            global_mem_input,
-            host_mem_input,
-            acp_cmd_input,
             approval_feedback_input,
-            policy_pattern_input,
-            hook_webhook_input,
-            selected_acp_idx: 0,
+            config_form,
+            memory_form,
             last_composer_len: 0,
             slash_selected_idx: 0,
             choice_card: ChoiceCardState::new(choice_custom_input),
@@ -346,11 +217,9 @@ impl AiAssistantView {
             skills_drawer,
             policy_hooks_form,
             model_picker,
-            lang_select,
-            running_behavior_select,
             editing_title: false,
             title_input,
-            _subscriptions: vec![sub, key_sub, choice_sub, lang_sub, beh_sub, title_sub],
+            _subscriptions: subscriptions,
         }
     }
 

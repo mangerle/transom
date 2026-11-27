@@ -59,7 +59,7 @@ impl AiAssistantView {
     /// 打开“选择模型”面板，并从当前草稿行初始化已勾选集合。
     pub(super) fn open_model_picker(&mut self, cx: &mut Context<Self>) {
         self.model_picker.checked_ids = self
-            .draft_models
+            .config_form.draft_models
             .iter()
             .map(|r| r.request_model.read(cx).value().trim().to_owned())
             .filter(|id| !id.is_empty())
@@ -82,20 +82,20 @@ impl AiAssistantView {
     /// 将“选择模型”勾选集合批量应用到草稿模型行（保留已有行自定义配置）。
     pub(super) fn apply_model_picker(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let checked = &self.model_picker.checked_ids;
-        self.draft_models.retain(|r| {
+        self.config_form.draft_models.retain(|r| {
             let req = r.request_model.read(cx).value().trim().to_owned();
             !req.is_empty() && checked.contains(&req)
         });
 
         let existing: HashSet<String> = self
-            .draft_models
+            .config_form.draft_models
             .iter()
             .map(|r| r.request_model.read(cx).value().trim().to_owned())
             .collect();
 
         for (id, ctx_win) in &self.state.discovered_models {
             if checked.contains(id) && !existing.contains(id) {
-                self.draft_models.push(make_draft_model_row(
+                self.config_form.draft_models.push(make_draft_model_row(
                     id,
                     id,
                     Some(ctx_win.unwrap_or(128_000)),
@@ -105,8 +105,8 @@ impl AiAssistantView {
                 ));
             }
         }
-        if self.draft_models.is_empty() {
-            self.draft_models.push(make_draft_model_row(
+        if self.config_form.draft_models.is_empty() {
+            self.config_form.draft_models.push(make_draft_model_row(
                 "",
                 "",
                 Some(128_000),
@@ -125,7 +125,7 @@ impl AiAssistantView {
         effort: Option<ThinkingEffort>,
         cx: &mut Context<Self>,
     ) {
-        if let Some(row) = self.draft_models.get_mut(idx) {
+        if let Some(row) = self.config_form.draft_models.get_mut(idx) {
             row.effort = effort;
         }
         self.model_picker.row_effort_dropdown = None;
@@ -140,7 +140,7 @@ impl AiAssistantView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if let Some(row) = self.draft_models.get(idx) {
+        if let Some(row) = self.config_form.draft_models.get(idx) {
             row.request_model
                 .update(cx, |i, cx| i.set_value(model_id.clone(), window, cx));
             if row.display_name.read(cx).value().trim().is_empty() {

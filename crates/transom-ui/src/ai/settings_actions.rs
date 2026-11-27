@@ -26,9 +26,9 @@ impl AiAssistantView {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let name_val = self.provider_name_input.read(cx).value().to_string();
-        let base_url = self.base_url_input.read(cx).value().to_string();
-        let api_key = self.api_key_input.read(cx).value().to_string();
+        let name_val = self.config_form.provider_name_input.read(cx).value().to_string();
+        let base_url = self.config_form.base_url_input.read(cx).value().to_string();
+        let api_key = self.config_form.api_key_input.read(cx).value().to_string();
 
         let protocol = self.state.selected_protocol;
         let display_name = if name_val.trim().is_empty() {
@@ -47,7 +47,7 @@ impl AiAssistantView {
         };
 
         let mut models = Vec::new();
-        for row in &self.draft_models {
+        for row in &self.config_form.draft_models {
             let req = row.request_model.read(cx).value().trim().to_owned();
             if req.is_empty() {
                 continue;
@@ -141,10 +141,10 @@ impl AiAssistantView {
     }
 
     pub(super) fn save_memory_from_drawer(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        let global_md = self.global_mem_input.read(cx).value().to_string();
+        let global_md = self.memory_form.global_mem_input.read(cx).value().to_string();
         self.state.memory.global_markdown = global_md.clone();
         let (host_id, host_markdown) = if let Some(session) = &self.state.active_session {
-            let host_md = self.host_mem_input.read(cx).value().to_string();
+            let host_md = self.memory_form.host_mem_input.read(cx).value().to_string();
             self.state.memory.host_markdown = host_md.clone();
             (Some(session.session_id.to_string()), Some(host_md))
         } else {
@@ -236,12 +236,12 @@ impl AiAssistantView {
 
     /// 优先使用输入框当前填写的 API Key；为空时从系统密钥库回读匹配供应商的已保存密钥。
     fn resolve_drawer_api_key(&self, cx: &App) -> String {
-        let typed = self.api_key_input.read(cx).value().trim().to_owned();
+        let typed = self.config_form.api_key_input.read(cx).value().trim().to_owned();
         if !typed.is_empty() {
             return typed;
         }
-        let name = self.provider_name_input.read(cx).value().trim().to_owned();
-        let url = self.base_url_input.read(cx).value().trim().to_owned();
+        let name = self.config_form.provider_name_input.read(cx).value().trim().to_owned();
+        let url = self.config_form.base_url_input.read(cx).value().trim().to_owned();
         let matched = self
             .state
             .settings
@@ -260,7 +260,7 @@ impl AiAssistantView {
     }
 
     pub(super) fn test_provider_connection(&mut self, cx: &mut Context<Self>) {
-        let base_url = self.base_url_input.read(cx).value().to_string();
+        let base_url = self.config_form.base_url_input.read(cx).value().to_string();
         let api_key = self.resolve_drawer_api_key(cx);
         self.state.discovery_status = Some(rust_i18n::t!("ai.testing_connection").to_string());
         let _ = self
@@ -275,7 +275,7 @@ impl AiAssistantView {
     }
 
     pub(super) fn discover_provider_models(&mut self, cx: &mut Context<Self>) {
-        let base_url = self.base_url_input.read(cx).value().to_string();
+        let base_url = self.config_form.base_url_input.read(cx).value().to_string();
         let api_key = self.resolve_drawer_api_key(cx);
         self.state.discovery_status = Some(rust_i18n::t!("ai.fetching_models").to_string());
         let _ = self
@@ -299,13 +299,13 @@ impl AiAssistantView {
         let Some(agent) = presets.get(idx) else {
             return;
         };
-        self.selected_acp_idx = idx;
+        self.config_form.selected_acp_idx = idx;
         let line = if agent.args.is_empty() {
             agent.command.clone()
         } else {
             format!("{} {}", agent.command, agent.args.join(" "))
         };
-        self.acp_cmd_input
+        self.config_form.acp_cmd_input
             .update(cx, |i, cx| i.set_value(line, window, cx));
         cx.notify();
     }
@@ -313,10 +313,10 @@ impl AiAssistantView {
     pub(super) fn save_acp_from_drawer(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
         let presets = default_acp_presets();
         let base = presets
-            .get(self.selected_acp_idx)
+            .get(self.config_form.selected_acp_idx)
             .cloned()
             .unwrap_or_default();
-        let raw_cmd = self.acp_cmd_input.read(cx).value().to_string();
+        let raw_cmd = self.config_form.acp_cmd_input.read(cx).value().to_string();
         let parts: Vec<String> = raw_cmd.split_whitespace().map(str::to_owned).collect();
         let Some(cmd) = parts.first().cloned() else {
             return;

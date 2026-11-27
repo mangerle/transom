@@ -13,12 +13,14 @@ use super::view::AiAssistantView;
 use crate::palette::Palette;
 use crate::theme::tokens::{space, typography};
 
-/// 自定义 Hook 创建表单状态。
+/// 自定义 Hook 与命令策略创建表单状态。
 pub(super) struct PolicyHooksFormState {
     pub(super) selected_event: HookEvent,
     pub(super) tool_input: Entity<InputState>,
     pub(super) path_input: Entity<InputState>,
     pub(super) cmd_input: Entity<InputState>,
+    pub(super) policy_pattern_input: Entity<InputState>,
+    pub(super) hook_webhook_input: Entity<InputState>,
 }
 
 impl PolicyHooksFormState {
@@ -35,11 +37,21 @@ impl PolicyHooksFormState {
             InputState::new(window, cx)
                 .placeholder(rust_i18n::t!("ai.hook_cmd_placeholder").to_string())
         });
+        let policy_pattern_input = cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder(rust_i18n::t!("ai.policy_pattern_placeholder").to_string())
+        });
+        let hook_webhook_input = cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder(rust_i18n::t!("ai.hooks_webhook_placeholder").to_string())
+        });
         Self {
             selected_event: HookEvent::PostToolUse,
             tool_input,
             path_input,
             cmd_input,
+            policy_pattern_input,
+            hook_webhook_input,
         }
     }
 }
@@ -71,7 +83,7 @@ pub(super) fn render_policy_hooks_section(
                 div()
                     .flex_1()
                     .min_w_0()
-                    .child(Input::new(&view.policy_pattern_input).small()),
+                    .child(Input::new(&view.policy_hooks_form.policy_pattern_input).small()),
             )
             .child(
                 Button::new("ai-add-policy-allow")
@@ -373,7 +385,7 @@ fn render_hooks_card(
                         div()
                             .flex_1()
                             .min_w_0()
-                            .child(Input::new(&view.hook_webhook_input).small()),
+                            .child(Input::new(&view.policy_hooks_form.hook_webhook_input).small()),
                     )
                     .child(
                         Button::new("ai-add-webhook-hook")

@@ -10,6 +10,37 @@ use transom_ai::MemorySnapshot;
 use crate::palette::Palette;
 use crate::theme::tokens::{space, typography};
 
+/// 记忆抽屉的独立表单状态。
+pub(super) struct MemoryFormState {
+    pub(super) global_mem_input: Entity<InputState>,
+    pub(super) host_mem_input: Entity<InputState>,
+}
+
+impl MemoryFormState {
+    pub(super) fn new(
+        global_markdown: &str,
+        window: &mut Window,
+        cx: &mut Context<super::view::AiAssistantView>,
+    ) -> Self {
+        let global_mem_input = cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder(rust_i18n::t!("ai.global_memory_placeholder").to_string())
+        });
+        let host_mem_input = cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder(rust_i18n::t!("ai.host_memory_placeholder").to_string())
+        });
+        if !global_markdown.is_empty() {
+            let text = global_markdown.to_owned();
+            global_mem_input.update(cx, |input, cx| input.set_value(text, window, cx));
+        }
+        Self {
+            global_mem_input,
+            host_mem_input,
+        }
+    }
+}
+
 /// 渲染三层记忆查看与编辑抽屉。
 pub(super) fn render_memory_drawer(
     has_host: bool,
@@ -71,8 +102,8 @@ impl super::view::AiAssistantView {
         render_memory_drawer(
             has_host,
             host_name,
-            &self.global_mem_input,
-            &self.host_mem_input,
+            &self.memory_form.global_mem_input,
+            &self.memory_form.host_mem_input,
             &self.state.memory,
             p,
             move |w, cx| view.update(cx, |this, cx| this.save_memory_from_drawer(w, cx)),
