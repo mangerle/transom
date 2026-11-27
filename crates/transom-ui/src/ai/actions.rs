@@ -117,6 +117,9 @@ impl AiAssistantView {
             return;
         }
         self.state.queue_paused_by_cancel = false;
+        self.auto_scroll_locked = false;
+        self.active_nav_dot = None;
+        self.msg_scroll_handle.scroll_to_bottom();
         let packed = pack_attachments_for_request(&self.state.pending_attachments);
         let images_base64 = packed.images;
         let attachment_text = packed.text;

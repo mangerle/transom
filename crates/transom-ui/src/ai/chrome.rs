@@ -15,7 +15,7 @@ use super::popups::{
     ModelPopupParams, render_backend_popup, render_mode_popup, render_model_popup,
 };
 use super::state::{AiActivePopup, AiDrawerTab};
-use super::turn_nav::{collect_turn_nav_entries, render_turn_nav_rail};
+use super::turn_nav::{collect_turn_nav_entries, render_turn_nav_rail, resolve_active_nav_dot};
 use super::view::AiAssistantView;
 use super::work_group::{
     DisplayBlock, WorkGroupParams, chat_item_id, group_chat_items, render_work_group,
@@ -130,7 +130,25 @@ impl AiAssistantView {
             .pb(rems(space::LG))
             .gap(rems(0.65))
             .overflow_y_scroll()
-            .track_scroll(&self.msg_scroll_handle);
+            .track_scroll(&self.msg_scroll_handle)
+            .on_scroll(cx.listener(|this, event: &ScrollEvent, _, cx| {
+                let dy = event.delta.pixel_delta(px(16.0)).y;
+                if dy > px(0.5) {
+                    // 用户主动向上滚动：锁定自动滚底，避免抢夺视口。
+                    this.auto_scroll_locked = true;
+                    this.active_nav_dot = None;
+                    cx.notify();
+                } else if dy < px(-0.5) {
+                    // 用户向下滚动时若已接近底部，则自动恢复跟踪滚动。
+                    let max_y = this.msg_scroll_handle.max_offset().y;
+                    let off_y = -this.msg_scroll_handle.offset().y;
+                    if max_y - off_y <= px(24.0) {
+                        this.auto_scroll_locked = false;
+                    }
+                    this.active_nav_dot = None;
+                    cx.notify();
+                }
+            }));
 
         let mut nav_entries = Vec::new();
         if self.state.items.is_empty() {
@@ -338,12 +356,16 @@ impl AiAssistantView {
             .overflow_hidden();
         if !nav_entries.is_empty() {
             let view = cx.entity();
+            let top_item = self.msg_scroll_handle.top_item();
+            let computed_dot = resolve_active_nav_dot(&nav_entries, top_item, !show_scroll_bottom);
+            let active_dot = self.active_nav_dot.or(computed_dot);
             let rail = render_turn_nav_rail(
                 &nav_entries,
-                self.active_nav_dot,
+                active_dot,
                 p,
                 move |dot_idx, block_idx, _, cx| {
                     view.update(cx, |this, cx| {
+                        this.auto_scroll_locked = true;
                         this.msg_scroll_handle.scroll_to_item(block_idx);
                         this.active_nav_dot = Some(dot_idx);
                         cx.notify();
@@ -368,8 +390,9 @@ impl AiAssistantView {
                 p,
                 move |_, cx| {
                     v_btm.update(cx, |this, cx| {
-                        let target = this.msg_scroll_handle.max_offset().y;
-                        this.msg_scroll_handle.set_offset(point(px(0.0), -target));
+                        this.auto_scroll_locked = false;
+                        this.active_nav_dot = None;
+                        this.msg_scroll_handle.scroll_to_bottom();
                         cx.notify();
                     });
                 },

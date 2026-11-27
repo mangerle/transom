@@ -44,6 +44,25 @@ pub(super) fn collect_turn_nav_entries(blocks: &[DisplayBlock<'_>]) -> Vec<TurnN
     entries
 }
 
+/// 根据当前视口顶部元素索引与是否位于底部，计算应当高亮的圆点索引。
+pub(super) fn resolve_active_nav_dot(
+    entries: &[TurnNavEntry],
+    top_item: usize,
+    at_bottom: bool,
+) -> Option<usize> {
+    if entries.is_empty() {
+        return None;
+    }
+    if at_bottom {
+        return Some(entries.len() - 1);
+    }
+    let idx = entries
+        .iter()
+        .rposition(|e| e.block_idx <= top_item)
+        .unwrap_or(0);
+    Some(idx)
+}
+
 /// 渲染消息流右侧的纵向圆点快捷导航栏。
 pub(super) fn render_turn_nav_rail(
     entries: &[TurnNavEntry],
@@ -96,7 +115,7 @@ pub(super) fn render_turn_nav_rail(
 
 #[cfg(test)]
 mod tests {
-    use super::collect_turn_nav_entries;
+    use super::{TurnNavEntry, collect_turn_nav_entries, resolve_active_nav_dot};
     use crate::ai::state::UiChatItem;
     use crate::ai::work_group::DisplayBlock;
 
@@ -136,5 +155,34 @@ mod tests {
         assert_eq!(nav[1].block_idx, 2);
         assert_eq!(nav[1].turn_no, 2);
         assert!(nav[1].preview.ends_with('…'));
+    }
+
+    #[test]
+    fn resolves_active_dot_from_scroll_position() {
+        let entries = vec![
+            TurnNavEntry {
+                block_idx: 0,
+                turn_no: 1,
+                preview: "q1".to_owned(),
+            },
+            TurnNavEntry {
+                block_idx: 3,
+                turn_no: 2,
+                preview: "q2".to_owned(),
+            },
+            TurnNavEntry {
+                block_idx: 7,
+                turn_no: 3,
+                preview: "q3".to_owned(),
+            },
+        ];
+        assert_eq!(resolve_active_nav_dot(&[], 0, false), None);
+        assert_eq!(resolve_active_nav_dot(&entries, 0, false), Some(0));
+        assert_eq!(resolve_active_nav_dot(&entries, 2, false), Some(0));
+        assert_eq!(resolve_active_nav_dot(&entries, 3, false), Some(1));
+        assert_eq!(resolve_active_nav_dot(&entries, 6, false), Some(1));
+        assert_eq!(resolve_active_nav_dot(&entries, 7, false), Some(2));
+        // 即使 top_item 仍在前一个块，只要滚动条已触底就应高亮最后一轮
+        assert_eq!(resolve_active_nav_dot(&entries, 3, true), Some(2));
     }
 }

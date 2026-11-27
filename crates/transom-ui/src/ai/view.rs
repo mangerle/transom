@@ -47,6 +47,9 @@ pub(crate) struct AiAssistantView {
     pub(super) model_picker: super::model_picker::ModelPickerState,
     pub(super) editing_title: bool,
     pub(super) title_input: Entity<InputState>,
+    /// 用户主动向上滚动时设为 true，停止自动滚底。
+    /// 点击"回到底部"按钮后重置为 false。
+    pub(super) auto_scroll_locked: bool,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -219,6 +222,7 @@ impl AiAssistantView {
             model_picker,
             editing_title: false,
             title_input,
+            auto_scroll_locked: false,
             _subscriptions: subscriptions,
         }
     }
@@ -240,7 +244,23 @@ impl AiAssistantView {
             _ => None,
         };
         let models_discovered = matches!(event, AiAppEvent::ModelsDiscovered { .. });
+        let should_scroll_bottom = matches!(
+            event,
+            AiAppEvent::RunStarted { .. }
+                | AiAppEvent::TextDelta { .. }
+                | AiAppEvent::ReasoningDelta { .. }
+                | AiAppEvent::TurnEnd { .. }
+                | AiAppEvent::ToolCard(_)
+                | AiAppEvent::RunFinished { .. }
+        );
+        if matches!(event, AiAppEvent::RunStarted { .. }) {
+            self.auto_scroll_locked = false;
+            self.active_nav_dot = None;
+        }
         self.state.apply_app_event(event);
+        if should_scroll_bottom && !self.auto_scroll_locked {
+            self.msg_scroll_handle.scroll_to_bottom();
+        }
         if models_discovered {
             self.sync_picker_from_discovered(cx);
         }
