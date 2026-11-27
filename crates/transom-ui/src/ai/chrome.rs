@@ -349,9 +349,14 @@ impl AiAssistantView {
                     ),
             );
         }
+        let auto_following = self.state.running_run_id.is_some() && !self.auto_scroll_locked;
+        if auto_following {
+            // 流式输出且用户未主动向上滚动时，每帧维持贴底，避免高度变化导致半路停住或按钮闪烁。
+            self.msg_scroll_handle.scroll_to_bottom();
+        }
         let max_y = self.msg_scroll_handle.max_offset().y;
         let off_y = -self.msg_scroll_handle.offset().y;
-        let show_scroll_bottom = max_y > px(40.0) && (max_y - off_y) > px(40.0);
+        let show_scroll_bottom = !auto_following && max_y > px(40.0) && (max_y - off_y) > px(40.0);
 
         let mut body_row = h_flex()
             .flex_1()
