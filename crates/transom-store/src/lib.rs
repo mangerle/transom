@@ -8,6 +8,7 @@ mod history;
 mod registry_secrets;
 pub mod shelf;
 
+pub mod ai_store;
 pub mod backup;
 pub mod known_hosts;
 pub mod paths;
@@ -17,6 +18,7 @@ pub mod settings;
 
 // 备份/同步信封（BackupFormat、加解密入口）位于独立的 `transom_crypto` crate：
 // 存储层只暴露"文件"侧能力。调用方（sync、store）统一从 transom_crypto 引用。
+pub use ai_store::AiStore;
 pub use api_projects::JsonApiProjectStore;
 pub use backup::{CatalogBackupService, read_backup, write_backup};
 pub use error::StorageError;

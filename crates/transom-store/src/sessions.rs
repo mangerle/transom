@@ -140,6 +140,7 @@ mod tests {
                 auth: AuthMethod::Password { save: true },
                 options: Default::default(),
                 proxy_jump: None,
+                protection: transom_core::HostProtection::Normal,
             }),
         )
     }
