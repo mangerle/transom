@@ -68,7 +68,7 @@ impl AiAssistantView {
 
         let rm_tip = rust_i18n::t!("ai.cfg_remove_model").to_string();
         let unset_label = rust_i18n::t!("ai.cfg_effort_unset").to_string();
-        let has_discovered = !self.state.discovered_models.is_empty();
+        let has_discovered = !self.state.config.discovered_models.is_empty();
 
         for (idx, row) in self.config_form.draft_models.iter().enumerate() {
             let effort_label = row
@@ -159,7 +159,7 @@ impl AiAssistantView {
                     .bg(p.surface.floating)
                     .border_1()
                     .border_color(p.border);
-                for (m_idx, (mid, cw)) in self.state.discovered_models.iter().enumerate() {
+                for (m_idx, (mid, cw)) in self.state.config.discovered_models.iter().enumerate() {
                     let v_pick = cx.entity();
                     let m_id = mid.clone();
                     let m_cw = *cw;
@@ -253,6 +253,7 @@ impl AiAssistantView {
     ) {
         let Some(prov) = self
             .state
+            .config
             .settings
             .providers
             .iter()
@@ -261,7 +262,7 @@ impl AiAssistantView {
         else {
             return;
         };
-        self.state.selected_protocol = prov.protocol;
+        self.state.config.selected_protocol = prov.protocol;
         self.config_form
             .provider_name_input
             .update(cx, |i, cx| i.set_value(prov.name, window, cx));
@@ -325,19 +326,19 @@ impl AiAssistantView {
         let selected_acp_idx = self.config_form.selected_acp_idx;
         render_config_drawer(
             ConfigDrawerParams {
-                active_section: self.state.config_section,
-                settings: &self.state.settings,
-                selected_protocol: self.state.selected_protocol,
+                active_section: self.state.view.config_section,
+                settings: &self.state.config.settings,
+                selected_protocol: self.state.config.selected_protocol,
                 provider_name_input: &self.config_form.provider_name_input,
                 api_key_input: &self.config_form.api_key_input,
                 base_url_input: &self.config_form.base_url_input,
                 models_section,
                 picker_panel,
-                has_discovered_models: !self.state.discovered_models.is_empty(),
+                has_discovered_models: !self.state.config.discovered_models.is_empty(),
                 acp_cmd_input: &self.config_form.acp_cmd_input,
                 selected_acp_idx,
-                acp_install_status: self.state.acp_install_status.as_ref(),
-                discovery_status: self.state.discovery_status.as_deref(),
+                acp_install_status: self.state.config.acp_install_status.as_ref(),
+                discovery_status: self.state.config.discovery_status.as_deref(),
                 lang_select: &self.config_form.lang_select,
                 running_behavior_select: &self.config_form.running_behavior_select,
                 policy_hooks_section,
@@ -346,13 +347,13 @@ impl AiAssistantView {
             ConfigDrawerActions {
                 on_select_section: Rc::new(move |section, _, cx| {
                     view_sec.update(cx, |this, cx| {
-                        this.state.config_section = section;
+                        this.state.view.config_section = section;
                         cx.notify();
                     });
                 }),
                 on_select_protocol: Rc::new(move |proto, _, cx| {
                     view.update(cx, |this, cx| {
-                        this.state.selected_protocol = proto;
+                        this.state.config.selected_protocol = proto;
                         cx.notify();
                     });
                 }),

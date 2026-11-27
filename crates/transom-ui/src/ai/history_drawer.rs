@@ -293,16 +293,16 @@ impl AiAssistantView {
         let v_sw = cx.entity();
         render_history_drawer(
             HistoryDrawerParams {
-                conversations: &self.state.conversations,
-                active_id: self.state.active_conversation_id.as_deref(),
-                show_archived: self.state.show_archived_history,
+                conversations: &self.state.conversation.conversations,
+                active_id: self.state.conversation.active_conversation_id.as_deref(),
+                show_archived: self.state.conversation.show_archived_history,
                 p,
             },
             HistoryDrawerActions {
                 on_select: Rc::new(move |id, _, cx| {
                     v_sel.update(cx, |this, cx| {
                         this.select_conversation(&id);
-                        this.state.drawer = AiDrawerTab::Chat;
+                        this.state.view.drawer = AiDrawerTab::Chat;
                         cx.notify();
                     });
                 }),
@@ -316,7 +316,7 @@ impl AiAssistantView {
                 }),
                 on_switch_archived: Rc::new(move |show_arch, _, cx| {
                     v_sw.update(cx, |this, cx| {
-                        this.state.show_archived_history = show_arch;
+                        this.state.conversation.show_archived_history = show_arch;
                         cx.notify();
                     });
                 }),

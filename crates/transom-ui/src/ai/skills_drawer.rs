@@ -62,7 +62,7 @@ impl AiAssistantView {
     pub(super) fn refresh_skills_list(&mut self) {
         self.skills_drawer.skills = load_skills_with_disabled(
             Some(&self.ai_store.custom_skills_dir()),
-            &self.state.settings.disabled_skills,
+            &self.state.config.settings.disabled_skills,
         );
     }
 
@@ -70,14 +70,15 @@ impl AiAssistantView {
         let clean = skill_id.trim().to_ascii_lowercase();
         if let Some(pos) = self
             .state
+            .config
             .settings
             .disabled_skills
             .iter()
             .position(|s| s.eq_ignore_ascii_case(&clean))
         {
-            self.state.settings.disabled_skills.remove(pos);
+            self.state.config.settings.disabled_skills.remove(pos);
         } else {
-            self.state.settings.disabled_skills.push(clean);
+            self.state.config.settings.disabled_skills.push(clean);
         }
         self.refresh_skills_list();
         self.persist_settings_reported(cx);

@@ -10,8 +10,8 @@ use crate::ai::markdown_blocks::parse_markdown_segments;
 impl AiPanelState {
     /// 把从 JSONL 加载的树状会话主分支还原为 UI 消息列表，并恢复该会话的推理指标。
     pub(crate) fn load_entries(&mut self, entries: Vec<SessionEntry>) {
-        self.items.clear();
-        self.metrics.restore_from_entries(&entries);
+        self.conversation.items.clear();
+        self.conversation.metrics.restore_from_entries(&entries);
         for entry in entries {
             match entry.kind {
                 SessionEntryKind::Message {
@@ -22,7 +22,7 @@ impl AiPanelState {
                     ..
                 } => match role {
                     ChatRole::User => {
-                        self.items.push(UiChatItem::UserText {
+                        self.conversation.items.push(UiChatItem::UserText {
                             id: entry.id,
                             text,
                             timestamp: Some(entry.timestamp),
@@ -30,7 +30,7 @@ impl AiPanelState {
                     }
                     ChatRole::Assistant => {
                         let cached_segments = Some(Arc::new(parse_markdown_segments(&text)));
-                        self.items.push(UiChatItem::AssistantText {
+                        self.conversation.items.push(UiChatItem::AssistantText {
                             id: entry.id,
                             text,
                             model,
@@ -41,7 +41,7 @@ impl AiPanelState {
                     }
                 },
                 SessionEntryKind::Reasoning { text } => {
-                    self.items.push(UiChatItem::Reasoning {
+                    self.conversation.items.push(UiChatItem::Reasoning {
                         id: entry.id,
                         text,
                         streaming: false,
@@ -58,12 +58,13 @@ impl AiPanelState {
                     revert_backup_path,
                     ..
                 } => {
-                    self.items.push(UiChatItem::ToolCard {
+                    self.conversation.items.push(UiChatItem::ToolCard {
                         id: entry.id,
                         call_id: String::new(),
                         running: false,
                         tool_name,
                         host_label: self
+                            .conversation
                             .active_session
                             .as_ref()
                             .map(|session| session.host_name.clone())
@@ -83,7 +84,7 @@ impl AiPanelState {
                     label,
                     host_label,
                 } => {
-                    self.items.push(UiChatItem::AuditNotice {
+                    self.conversation.items.push(UiChatItem::AuditNotice {
                         id: entry.id,
                         approved,
                         label,

@@ -13,23 +13,24 @@ use super::AiPanelState;
 impl AiPanelState {
     /// 当前是否存在活动运行。
     pub(crate) fn has_active_run(&self) -> bool {
-        self.active_run.is_some()
+        self.run.active_run.is_some()
     }
 
     /// 活动运行是否属于当前正在查看的对话。
     pub(crate) fn active_run_is_current(&self) -> bool {
-        self.active_run.as_ref().is_some_and(|run| {
+        self.run.active_run.as_ref().is_some_and(|run| {
             run.conversation_id
                 .as_deref()
                 .is_none_or(|conversation_id| {
-                    self.active_conversation_id.as_deref() == Some(conversation_id)
+                    self.conversation.active_conversation_id.as_deref() == Some(conversation_id)
                 })
         })
     }
 
     /// 当前对话中运行的主键。
     pub(crate) fn current_run_id(&self) -> Option<&str> {
-        self.active_run
+        self.run
+            .active_run
             .as_ref()
             .filter(|_| self.active_run_is_current())
             .map(|run| run.run_id.as_str())
@@ -37,7 +38,8 @@ impl AiPanelState {
 
     /// 当前对话运行已耗时。
     pub(crate) fn current_run_started_at(&self) -> Option<Instant> {
-        self.active_run
+        self.run
+            .active_run
             .as_ref()
             .filter(|_| self.active_run_is_current())
             .map(|run| run.started_at)
@@ -45,7 +47,7 @@ impl AiPanelState {
 
     /// 记录本地已成功投递的运行。
     pub(crate) fn begin_run(&mut self, run_id: String, conversation_id: Option<String>) {
-        self.active_run = Some(ActiveAiRun {
+        self.run.active_run = Some(ActiveAiRun {
             run_id,
             conversation_id,
             started_at: Instant::now(),
@@ -55,7 +57,7 @@ impl AiPanelState {
 
     /// 将控制平面确认的会话 ID 绑定到本地运行。
     pub(crate) fn bind_run(&mut self, run_id: &str, conversation_id: &str) {
-        if let Some(run) = &mut self.active_run
+        if let Some(run) = &mut self.run.active_run
             && run.run_id == run_id
         {
             run.conversation_id = Some(conversation_id.to_owned());
@@ -66,8 +68,8 @@ impl AiPanelState {
 
     /// 请求取消当前可见运行，但在收到 `RunFinished` 前保留运行身份。
     pub(crate) fn request_current_run_cancel(&mut self) -> Option<String> {
-        let conversation = self.active_conversation_id.clone();
-        let run = self.active_run.as_mut()?;
+        let conversation = self.conversation.active_conversation_id.clone();
+        let run = self.run.active_run.as_mut()?;
         if run
             .conversation_id
             .as_deref()
@@ -82,11 +84,12 @@ impl AiPanelState {
     /// 在收到对应终态时清除运行。
     pub(crate) fn finish_run(&mut self, run_id: &str) -> bool {
         if self
+            .run
             .active_run
             .as_ref()
             .is_some_and(|run| run.run_id == run_id)
         {
-            self.active_run = None;
+            self.run.active_run = None;
             true
         } else {
             false
@@ -94,11 +97,12 @@ impl AiPanelState {
     }
 
     pub(super) fn conversation_is_current(&self, conversation_id: &str) -> bool {
-        self.active_conversation_id.as_deref() == Some(conversation_id)
+        self.conversation.active_conversation_id.as_deref() == Some(conversation_id)
     }
 
     fn run_is_active(&self, run_id: &str) -> bool {
-        self.active_run
+        self.run
+            .active_run
             .as_ref()
             .is_some_and(|run| run.run_id == run_id)
     }
@@ -111,6 +115,7 @@ impl AiPanelState {
     pub(crate) fn accepts_event(&self, event: &AiAppEvent) -> bool {
         match event {
             AiAppEvent::RunStarted { run_id, .. } => self
+                .run
                 .active_run
                 .as_ref()
                 .is_none_or(|run| run.run_id == *run_id),
@@ -149,7 +154,7 @@ impl AiPanelState {
             AiAppEvent::ApprovalRequested(dto) => {
                 dto.owner_run_id == "mcp-external"
                     || self.run_is_active(&dto.owner_run_id)
-                    || self.managed_tasks.iter().any(|task| {
+                    || self.run.managed_tasks.iter().any(|task| {
                         task.dto.task_id == dto.run_id
                             && task.dto.status == transom_core::AiManagedTaskStatus::Running
                     })

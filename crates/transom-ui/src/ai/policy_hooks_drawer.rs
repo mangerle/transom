@@ -62,8 +62,8 @@ pub(super) fn render_policy_hooks_section(
     p: &Palette,
     cx: &mut Context<AiAssistantView>,
 ) -> AnyElement {
-    let rules = &view.state.settings.exec_policy_rules;
-    let hooks = &view.state.settings.hooks;
+    let rules = &view.state.config.settings.exec_policy_rules;
+    let hooks = &view.state.config.settings.hooks;
 
     let mut policy_card =
         section_card(rust_i18n::t!("ai.exec_policy_title").to_string(), None, p)

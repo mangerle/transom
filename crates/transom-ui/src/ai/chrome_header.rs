@@ -25,14 +25,16 @@ impl AiAssistantView {
 
         let title = self
             .state
+            .conversation
             .active_conversation_title
             .as_deref()
             .filter(|t| !t.trim().is_empty())
             .map(str::to_owned)
             .unwrap_or_else(|| rust_i18n::t!("ai.title").to_string());
 
-        let engine_icon = super::popups::backend_icon(self.state.active_acp_agent_id.as_deref());
-        let has_active_conv = self.state.active_conversation_id.is_some();
+        let engine_icon =
+            super::popups::backend_icon(self.state.config.active_acp_agent_id.as_deref());
+        let has_active_conv = self.state.conversation.active_conversation_id.is_some();
         let v_title = cx.entity();
         let title_el: AnyElement = if self.editing_title {
             div()
@@ -118,16 +120,17 @@ impl AiAssistantView {
                         "ai-hist-btn",
                         AppIcon::Ui(UiIcon::HISTORY),
                         rust_i18n::t!("ai.history_title").to_string(),
-                        self.state.drawer == AiDrawerTab::History,
+                        self.state.view.drawer == AiDrawerTab::History,
                         p,
                         move |_, cx| {
                             v_hist.update(cx, |this, cx| {
-                                this.state.active_popup = AiActivePopup::None;
-                                this.state.drawer = if this.state.drawer == AiDrawerTab::History {
-                                    AiDrawerTab::Chat
-                                } else {
-                                    AiDrawerTab::History
-                                };
+                                this.state.view.active_popup = AiActivePopup::None;
+                                this.state.view.drawer =
+                                    if this.state.view.drawer == AiDrawerTab::History {
+                                        AiDrawerTab::Chat
+                                    } else {
+                                        AiDrawerTab::History
+                                    };
                                 cx.notify();
                             });
                         },
@@ -136,16 +139,17 @@ impl AiAssistantView {
                         "ai-mem-btn",
                         AppIcon::Ui(UiIcon::REAL_INTENTION_BULB),
                         rust_i18n::t!("ai.memory").to_string(),
-                        self.state.drawer == AiDrawerTab::Memory,
+                        self.state.view.drawer == AiDrawerTab::Memory,
                         p,
                         move |_, cx| {
                             v_mem.update(cx, |this, cx| {
-                                this.state.active_popup = AiActivePopup::None;
-                                this.state.drawer = if this.state.drawer == AiDrawerTab::Memory {
-                                    AiDrawerTab::Chat
-                                } else {
-                                    AiDrawerTab::Memory
-                                };
+                                this.state.view.active_popup = AiActivePopup::None;
+                                this.state.view.drawer =
+                                    if this.state.view.drawer == AiDrawerTab::Memory {
+                                        AiDrawerTab::Chat
+                                    } else {
+                                        AiDrawerTab::Memory
+                                    };
                                 cx.notify();
                             });
                         },
@@ -154,16 +158,16 @@ impl AiAssistantView {
                         "ai-skills-btn",
                         AppIcon::Ui(UiIcon::LIGHTNING),
                         rust_i18n::t!("ai.skills_title").to_string(),
-                        self.state.drawer == AiDrawerTab::Skills,
+                        self.state.view.drawer == AiDrawerTab::Skills,
                         p,
                         move |_, cx| {
                             v_skills.update(cx, |this, cx| {
-                                this.state.active_popup = AiActivePopup::None;
-                                if this.state.drawer == AiDrawerTab::Skills {
-                                    this.state.drawer = AiDrawerTab::Chat;
+                                this.state.view.active_popup = AiActivePopup::None;
+                                if this.state.view.drawer == AiDrawerTab::Skills {
+                                    this.state.view.drawer = AiDrawerTab::Chat;
                                 } else {
                                     this.refresh_skills_list();
-                                    this.state.drawer = AiDrawerTab::Skills;
+                                    this.state.view.drawer = AiDrawerTab::Skills;
                                 }
                                 cx.notify();
                             });
@@ -173,16 +177,17 @@ impl AiAssistantView {
                         "ai-cfg-btn",
                         AppIcon::Ui(UiIcon::SETTINGS),
                         rust_i18n::t!("ai.model").to_string(),
-                        self.state.drawer == AiDrawerTab::Config,
+                        self.state.view.drawer == AiDrawerTab::Config,
                         p,
                         move |_, cx| {
                             v_cfg.update(cx, |this, cx| {
-                                this.state.active_popup = AiActivePopup::None;
-                                this.state.drawer = if this.state.drawer == AiDrawerTab::Config {
-                                    AiDrawerTab::Chat
-                                } else {
-                                    AiDrawerTab::Config
-                                };
+                                this.state.view.active_popup = AiActivePopup::None;
+                                this.state.view.drawer =
+                                    if this.state.view.drawer == AiDrawerTab::Config {
+                                        AiDrawerTab::Chat
+                                    } else {
+                                        AiDrawerTab::Config
+                                    };
                                 cx.notify();
                             });
                         },

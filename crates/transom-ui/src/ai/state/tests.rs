@@ -6,10 +6,8 @@ use transom_core::{AiAppEvent, AiApprovalDto, AiToolCardDto, HostProtection};
 
 #[test]
 fn tool_card_updates_in_place_by_call_id() {
-    let mut st = AiPanelState {
-        active_conversation_id: Some("c1".to_owned()),
-        ..AiPanelState::default()
-    };
+    let mut st = AiPanelState::default();
+    st.conversation.active_conversation_id = Some("c1".to_owned());
     st.apply_app_event(AiAppEvent::ToolCard(AiToolCardDto {
         conversation_id: "c1".to_owned(),
         run_id: String::new(),
@@ -26,8 +24,8 @@ fn tool_card_updates_in_place_by_call_id() {
         revert_target_path: None,
         revert_backup_path: None,
     }));
-    assert_eq!(st.items.len(), 1);
-    assert_eq!(st.metrics.steps, 0);
+    assert_eq!(st.conversation.items.len(), 1);
+    assert_eq!(st.conversation.metrics.steps, 0);
 
     st.apply_app_event(AiAppEvent::ToolCard(AiToolCardDto {
         conversation_id: "c1".to_owned(),
@@ -45,10 +43,10 @@ fn tool_card_updates_in_place_by_call_id() {
         revert_target_path: None,
         revert_backup_path: None,
     }));
-    assert_eq!(st.items.len(), 1);
-    assert_eq!(st.metrics.steps, 1);
-    assert_eq!(st.metrics.tool_duration_ms, 820);
-    match &st.items[0] {
+    assert_eq!(st.conversation.items.len(), 1);
+    assert_eq!(st.conversation.metrics.steps, 1);
+    assert_eq!(st.conversation.metrics.tool_duration_ms, 820);
+    match &st.conversation.items[0] {
         UiChatItem::ToolCard {
             running,
             output,
@@ -67,19 +65,17 @@ fn tool_card_updates_in_place_by_call_id() {
 fn run_started_resets_prior_view_state_with_real_user_entry() {
     use transom_core::AiPlanDto;
 
-    let mut state = AiPanelState {
-        active_conversation_id: Some("conv-1".to_owned()),
-        active_plan: Some(AiPlanDto {
-            title: Some("旧计划".to_owned()),
-            steps: Vec::new(),
-            focus: Some("旧焦点".to_owned()),
-        }),
-        active_focus: Some("旧焦点".to_owned()),
-        status_panel_expanded: false,
-        ..AiPanelState::default()
-    };
+    let mut state = AiPanelState::default();
+    state.conversation.active_conversation_id = Some("conv-1".to_owned());
+    state.run.active_plan = Some(AiPlanDto {
+        title: Some("旧计划".to_owned()),
+        steps: Vec::new(),
+        focus: Some("旧焦点".to_owned()),
+    });
+    state.run.active_focus = Some("旧焦点".to_owned());
+    state.view.status_panel_expanded = false;
     state.begin_run("run-1".to_owned(), Some("conv-1".to_owned()));
-    state.items.push(UiChatItem::UserText {
+    state.conversation.items.push(UiChatItem::UserText {
         id: "local-u-run-1".to_owned(),
         text: "新问题".to_owned(),
         timestamp: None,
@@ -92,12 +88,12 @@ fn run_started_resets_prior_view_state_with_real_user_entry() {
         user_entry_id: "entry-1".to_owned(),
     });
 
-    assert!(state.active_plan.is_none());
-    assert!(state.active_focus.is_none());
-    assert!(state.status_panel_expanded);
-    assert_eq!(state.metrics.turns, 1);
+    assert!(state.run.active_plan.is_none());
+    assert!(state.run.active_focus.is_none());
+    assert!(state.view.status_panel_expanded);
+    assert_eq!(state.conversation.metrics.turns, 1);
     assert!(matches!(
-        &state.items[0],
+        &state.conversation.items[0],
         UiChatItem::UserText { id, .. } if id == "entry-1"
     ));
 }
@@ -117,7 +113,7 @@ fn stale_run_and_conversation_events_are_rejected() {
         conversation_id: "conv-1".to_owned(),
         delta: "当前内容".to_owned(),
     });
-    assert_eq!(state.items.len(), 1);
+    assert_eq!(state.conversation.items.len(), 1);
 
     state.apply_app_event(AiAppEvent::TextDelta {
         run_id: "run-2".to_owned(),
@@ -129,15 +125,15 @@ fn stale_run_and_conversation_events_are_rejected() {
         conversation_id: "conv-2".to_owned(),
         delta: "其他对话内容".to_owned(),
     });
-    assert_eq!(state.items.len(), 1);
-    assert!(state.active_run.is_some());
+    assert_eq!(state.conversation.items.len(), 1);
+    assert!(state.run.active_run.is_some());
 }
 
 #[test]
 fn approval_routing_accepts_active_or_external_owner_only() {
     let mut state = AiPanelState::default();
     state.begin_run("run-1".to_owned(), Some("conv-1".to_owned()));
-    state.active_conversation_id = Some("conv-1".to_owned());
+    state.conversation.active_conversation_id = Some("conv-1".to_owned());
     let approval = |owner: &str, run_id: &str| AiApprovalDto {
         request_id: "request-1".to_owned(),
         owner_run_id: owner.to_owned(),
@@ -171,14 +167,18 @@ fn approval_routing_accepts_active_or_external_owner_only() {
 fn cancel_keeps_run_identity_until_finished() {
     let mut state = AiPanelState::default();
     state.begin_run("run-1".to_owned(), Some("conv-1".to_owned()));
-    state.active_conversation_id = Some("conv-1".to_owned());
+    state.conversation.active_conversation_id = Some("conv-1".to_owned());
     assert_eq!(state.request_current_run_cancel().as_deref(), Some("run-1"));
     assert_eq!(
-        state.active_run.as_ref().map(|run| run.cancel_requested),
+        state
+            .run
+            .active_run
+            .as_ref()
+            .map(|run| run.cancel_requested),
         Some(true)
     );
     assert!(state.finish_run("run-1"));
-    assert!(state.active_run.is_none());
+    assert!(state.run.active_run.is_none());
 }
 
 #[test]
@@ -191,8 +191,8 @@ fn background_finish_does_not_clear_current_conversation_view() {
         title: "后台对话".to_owned(),
         user_entry_id: "entry-1".to_owned(),
     });
-    state.active_conversation_id = Some("conv-2".to_owned());
-    state.active_focus = Some("当前对话焦点".to_owned());
+    state.conversation.active_conversation_id = Some("conv-2".to_owned());
+    state.run.active_focus = Some("当前对话焦点".to_owned());
 
     state.apply_app_event(AiAppEvent::RunFinished {
         run_id: "run-1".to_owned(),
@@ -201,11 +201,12 @@ fn background_finish_does_not_clear_current_conversation_view() {
         cancelled: false,
     });
 
-    assert!(state.active_run.is_none());
-    assert_eq!(state.active_focus.as_deref(), Some("当前对话焦点"));
-    assert!(state.status_error.is_none());
+    assert!(state.run.active_run.is_none());
+    assert_eq!(state.run.active_focus.as_deref(), Some("当前对话焦点"));
+    assert!(state.view.status_error.is_none());
     assert_eq!(
         state
+            .run
             .background_run_errors
             .get("conv-1")
             .map(String::as_str),
@@ -215,27 +216,29 @@ fn background_finish_does_not_clear_current_conversation_view() {
 
 #[test]
 fn stale_settings_save_result_does_not_clear_current_request() {
-    let mut state = AiPanelState {
-        pending_settings_save: Some("new-save".to_owned()),
-        ..AiPanelState::default()
-    };
+    let mut state = AiPanelState::default();
+    state.config.pending_settings_save = Some("new-save".to_owned());
 
     state.apply_app_event(AiAppEvent::SettingsSaved {
         request_id: "old-save".to_owned(),
         revision: 1,
         error: Some("旧错误".to_owned()),
     });
-    assert_eq!(state.pending_settings_save.as_deref(), Some("new-save"));
-    assert!(state.status_error.is_none());
+    assert_eq!(
+        state.config.pending_settings_save.as_deref(),
+        Some("new-save")
+    );
+    assert!(state.view.status_error.is_none());
 
     state.apply_app_event(AiAppEvent::SettingsSaved {
         request_id: "new-save".to_owned(),
         revision: 2,
         error: Some("磁盘不可写".to_owned()),
     });
-    assert!(state.pending_settings_save.is_none());
+    assert!(state.config.pending_settings_save.is_none());
     assert!(
         state
+            .view
             .status_error
             .as_deref()
             .is_some_and(|error| error.contains("磁盘不可写"))
@@ -257,10 +260,8 @@ fn settings_snapshot_replaces_runtime_defaults() {
         execution_mode: transom_ai::ExecutionMode::AllowAll,
         ..transom_ai::AiSettings::default()
     };
-    let mut state = AiPanelState {
-        pending_settings_load: Some("load-1".to_owned()),
-        ..AiPanelState::default()
-    };
+    let mut state = AiPanelState::default();
+    state.config.pending_settings_load = Some("load-1".to_owned());
 
     let outcome = state.apply_app_event(AiAppEvent::SettingsSnapshot {
         request_id: "load-1".to_owned(),
@@ -270,20 +271,21 @@ fn settings_snapshot_replaces_runtime_defaults() {
     });
 
     assert_eq!(outcome.settings_snapshot, Some(settings.clone()));
-    assert!(state.pending_settings_load.is_none());
-    assert_eq!(state.settings, settings);
-    assert_eq!(state.selected_model_id, "provider:model-1");
-    assert_eq!(state.execution_mode, transom_ai::ExecutionMode::AllowAll);
-    assert!(state.status_error.is_none());
+    assert!(state.config.pending_settings_load.is_none());
+    assert_eq!(state.config.settings, settings);
+    assert_eq!(state.config.selected_model_id, "provider:model-1");
+    assert_eq!(
+        state.config.execution_mode,
+        transom_ai::ExecutionMode::AllowAll
+    );
+    assert!(state.view.status_error.is_none());
 }
 
 #[test]
 fn settings_load_failure_applies_default_snapshot_and_reports_error() {
     let settings = transom_ai::AiSettings::default();
-    let mut state = AiPanelState {
-        pending_settings_load: Some("load-1".to_owned()),
-        ..AiPanelState::default()
-    };
+    let mut state = AiPanelState::default();
+    state.config.pending_settings_load = Some("load-1".to_owned());
 
     let outcome = state.apply_app_event(AiAppEvent::SettingsSnapshot {
         request_id: "load-1".to_owned(),
@@ -293,9 +295,10 @@ fn settings_load_failure_applies_default_snapshot_and_reports_error() {
     });
 
     assert_eq!(outcome.settings_snapshot, Some(settings));
-    assert!(state.pending_settings_load.is_none());
+    assert!(state.config.pending_settings_load.is_none());
     assert!(
         state
+            .view
             .status_error
             .as_deref()
             .is_some_and(|error| error.contains("config.json 内容损坏"))
@@ -312,10 +315,8 @@ fn settings_load_failure_applies_default_snapshot_and_reports_error() {
 
 #[test]
 fn stale_settings_snapshot_is_ignored() {
-    let mut state = AiPanelState {
-        pending_settings_load: Some("new-load".to_owned()),
-        ..AiPanelState::default()
-    };
+    let mut state = AiPanelState::default();
+    state.config.pending_settings_load = Some("new-load".to_owned());
 
     let outcome = state.apply_app_event(AiAppEvent::SettingsSnapshot {
         request_id: "old-load".to_owned(),
@@ -325,6 +326,9 @@ fn stale_settings_snapshot_is_ignored() {
     });
 
     assert!(outcome.settings_snapshot.is_none());
-    assert_eq!(state.pending_settings_load.as_deref(), Some("new-load"));
-    assert!(state.status_error.is_none());
+    assert_eq!(
+        state.config.pending_settings_load.as_deref(),
+        Some("new-load")
+    );
+    assert!(state.view.status_error.is_none());
 }

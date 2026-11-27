@@ -33,22 +33,23 @@ pub(super) fn render_queued_messages_card(
     p: &Palette,
     cx: &mut Context<AiAssistantView>,
 ) -> Option<AnyElement> {
-    if view.state.queued_messages.is_empty()
+    if view.state.run.queued_messages.is_empty()
         || (view.state.has_active_run() && !view.state.active_run_is_current())
     {
         return None;
     }
-    let count = view.state.queued_messages.len();
-    let expanded = view.state.queue_expanded;
+    let count = view.state.run.queued_messages.len();
+    let expanded = view.state.run.queue_expanded;
     let chevron = if expanded {
         UiIcon::CHEVRON_DOWN
     } else {
         UiIcon::CHEVRON_RIGHT
     };
-    let status_note = if view.state.queue_paused_by_cancel {
+    let status_note = if view.state.run.queue_paused_by_cancel {
         rust_i18n::t!("ai.queue_paused_hint").to_string()
     } else if let Some(focus) = view
         .state
+        .run
         .active_focus
         .as_deref()
         .map(str::trim)
@@ -77,7 +78,7 @@ pub(super) fn render_queued_messages_card(
                 .gap(px(6.0))
                 .cursor_pointer()
                 .on_click(cx.listener(|this, _, _, cx| {
-                    this.state.queue_expanded = !this.state.queue_expanded;
+                    this.state.run.queue_expanded = !this.state.run.queue_expanded;
                     cx.notify();
                 }))
                 .child(
@@ -120,7 +121,7 @@ pub(super) fn render_queued_messages_card(
         );
 
     if expanded {
-        for (idx, item) in view.state.queued_messages.iter().enumerate() {
+        for (idx, item) in view.state.run.queued_messages.iter().enumerate() {
             let id_send = item.id.clone();
             let id_edit = item.id.clone();
             let id_del = item.id.clone();
@@ -212,11 +213,11 @@ pub(super) fn render_queued_messages_card(
 impl AiAssistantView {
     /// 当运行中发送消息时，按设置项选择排队、中途引导或打断立即发送。
     pub(super) fn handle_running_message(&mut self, prompt: String, cx: &mut Context<Self>) {
-        let attachments = std::mem::take(&mut self.state.pending_attachments);
-        match self.state.settings.running_message_behavior {
+        let attachments = std::mem::take(&mut self.state.composer.pending_attachments);
+        match self.state.config.settings.running_message_behavior {
             RunningMessageBehavior::Queue => {
-                self.state.queue_paused_by_cancel = false;
-                self.state.queued_messages.push(QueuedPrompt {
+                self.state.run.queue_paused_by_cancel = false;
+                self.state.run.queued_messages.push(QueuedPrompt {
                     id: uuid::Uuid::new_v4().to_string(),
                     prompt,
                     attachments,
@@ -231,13 +232,14 @@ impl AiAssistantView {
                                 run_id,
                                 message: prompt,
                             })));
-                    self.state.active_focus = Some(rust_i18n::t!("ai.steer_injected").to_string());
+                    self.state.run.active_focus =
+                        Some(rust_i18n::t!("ai.steer_injected").to_string());
                     cx.notify();
                 }
             }
             RunningMessageBehavior::Interrupt => {
-                self.state.queue_paused_by_cancel = false;
-                self.state.pending_interrupt_send = Some(QueuedPrompt {
+                self.state.run.queue_paused_by_cancel = false;
+                self.state.run.pending_interrupt_send = Some(QueuedPrompt {
                     id: uuid::Uuid::new_v4().to_string(),
                     prompt,
                     attachments,
@@ -248,13 +250,19 @@ impl AiAssistantView {
     }
 
     pub(super) fn send_queued_now(&mut self, id: &str, cx: &mut Context<Self>) {
-        let Some(pos) = self.state.queued_messages.iter().position(|q| q.id == id) else {
+        let Some(pos) = self
+            .state
+            .run
+            .queued_messages
+            .iter()
+            .position(|q| q.id == id)
+        else {
             return;
         };
-        let item = self.state.queued_messages.remove(pos);
-        self.state.queue_paused_by_cancel = false;
+        let item = self.state.run.queued_messages.remove(pos);
+        self.state.run.queue_paused_by_cancel = false;
         if self.state.active_run_is_current() {
-            self.state.pending_interrupt_send = Some(item);
+            self.state.run.pending_interrupt_send = Some(item);
             self.cancel_running(cx);
         } else {
             self.dispatch_queued_item(item, cx);
@@ -267,23 +275,29 @@ impl AiAssistantView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(pos) = self.state.queued_messages.iter().position(|q| q.id == id) else {
+        let Some(pos) = self
+            .state
+            .run
+            .queued_messages
+            .iter()
+            .position(|q| q.id == id)
+        else {
             return;
         };
-        let item = self.state.queued_messages.remove(pos);
-        self.state.pending_attachments = item.attachments;
+        let item = self.state.run.queued_messages.remove(pos);
+        self.state.composer.pending_attachments = item.attachments;
         self.composer_input
             .update(cx, |s, cx| s.set_value(item.prompt, window, cx));
         cx.notify();
     }
 
     pub(super) fn remove_queued_item(&mut self, id: &str, cx: &mut Context<Self>) {
-        self.state.queued_messages.retain(|q| q.id != id);
+        self.state.run.queued_messages.retain(|q| q.id != id);
         cx.notify();
     }
 
     pub(super) fn dispatch_queued_item(&mut self, item: QueuedPrompt, cx: &mut Context<Self>) {
-        self.state.pending_attachments = item.attachments;
+        self.state.composer.pending_attachments = item.attachments;
         self.send_prompt_text(item.prompt, cx);
     }
 
@@ -292,15 +306,15 @@ impl AiAssistantView {
         cancelled: bool,
         cx: &mut Context<Self>,
     ) {
-        if let Some(interrupt_item) = self.state.pending_interrupt_send.take() {
+        if let Some(interrupt_item) = self.state.run.pending_interrupt_send.take() {
             self.dispatch_queued_item(interrupt_item, cx);
             return;
         }
-        if cancelled || self.state.queue_paused_by_cancel {
+        if cancelled || self.state.run.queue_paused_by_cancel {
             return;
         }
-        if !self.state.queued_messages.is_empty() {
-            let next = self.state.queued_messages.remove(0);
+        if !self.state.run.queued_messages.is_empty() {
+            let next = self.state.run.queued_messages.remove(0);
             self.dispatch_queued_item(next, cx);
         }
     }
@@ -310,7 +324,7 @@ impl AiAssistantView {
         behavior: RunningMessageBehavior,
         cx: &mut Context<Self>,
     ) {
-        self.state.settings.running_message_behavior = behavior;
+        self.state.config.settings.running_message_behavior = behavior;
         self.persist_settings_reported(cx);
     }
 
@@ -323,6 +337,7 @@ impl AiAssistantView {
     ) {
         let matched = self
             .state
+            .run
             .pending_approvals
             .iter()
             .find(|a| a.request_id == request_id)
@@ -373,15 +388,17 @@ impl AiAssistantView {
                 }
             };
             self.state
+                .conversation
                 .items
                 .push(super::state_types::UiChatItem::AuditNotice {
-                    id: format!("audit-{}", self.state.items.len()),
+                    id: format!("audit-{}", self.state.conversation.items.len()),
                     approved,
                     label,
                     host_label: approval.host_label,
                 });
         }
         self.state
+            .run
             .pending_approvals
             .retain(|a| a.request_id != request_id);
         self.approval_feedback_input
@@ -403,14 +420,14 @@ impl AiAssistantView {
 
     pub(super) fn cancel_running(&mut self, cx: &mut Context<Self>) {
         if let Some(run_id) = self.state.request_current_run_cancel() {
-            if self.state.pending_interrupt_send.is_none() {
-                self.state.queue_paused_by_cancel = true;
+            if self.state.run.pending_interrupt_send.is_none() {
+                self.state.run.queue_paused_by_cancel = true;
             }
             if let Err(err) = self
                 .command_tx
                 .try_send(AppCommand::Ai(Box::new(AiCommand::CancelRun { run_id })))
             {
-                self.state.status_error = Some(
+                self.state.view.status_error = Some(
                     rust_i18n::t!("ai.cancel_run_failed", error = err.to_string()).to_string(),
                 );
             }

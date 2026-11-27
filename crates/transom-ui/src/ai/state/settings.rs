@@ -6,15 +6,15 @@ use super::AiPanelState;
 
 impl AiPanelState {
     pub(super) fn handle_settings_saved(&mut self, request_id: String, error: Option<String>) {
-        if self.pending_settings_save.as_deref() != Some(request_id.as_str()) {
+        if self.config.pending_settings_save.as_deref() != Some(request_id.as_str()) {
             return;
         }
-        self.pending_settings_save = None;
+        self.config.pending_settings_save = None;
         if let Some(err) = error {
-            self.status_error =
+            self.view.status_error =
                 Some(rust_i18n::t!("ai.save_config_failed", error = err).to_string());
         } else {
-            self.status_error = None;
+            self.view.status_error = None;
         }
     }
 
@@ -24,10 +24,10 @@ impl AiPanelState {
         settings_json: Option<String>,
         error: Option<String>,
     ) -> Option<AiSettings> {
-        if self.pending_settings_load.as_deref() != Some(request_id.as_str()) {
+        if self.config.pending_settings_load.as_deref() != Some(request_id.as_str()) {
             return None;
         }
-        self.pending_settings_load = None;
+        self.config.pending_settings_load = None;
         let parsed = settings_json
             .as_deref()
             .map(serde_json::from_str::<AiSettings>)
@@ -37,7 +37,7 @@ impl AiPanelState {
                 self.apply_loaded_settings(settings.clone());
             }),
             Err(err) => {
-                self.status_error = Some(
+                self.view.status_error = Some(
                     rust_i18n::t!("ai.invalid_config_snapshot", error = err.to_string())
                         .to_string(),
                 );
@@ -45,26 +45,26 @@ impl AiPanelState {
             }
         };
         if let Some(err) = error {
-            self.status_error =
+            self.view.status_error =
                 Some(rust_i18n::t!("ai.load_config_failed", error = err).to_string());
         }
         loaded
     }
 
     fn apply_loaded_settings(&mut self, settings: AiSettings) {
-        self.selected_model_id = settings.default_model.clone();
-        self.selected_effort = settings.default_effort;
-        self.execution_mode = settings.execution_mode;
-        self.active_acp_agent_id = settings.active_acp_agent_id.clone();
-        self.selected_protocol = settings
-            .resolve_model(&self.selected_model_id)
+        self.config.selected_model_id = settings.default_model.clone();
+        self.config.selected_effort = settings.default_effort;
+        self.config.execution_mode = settings.execution_mode;
+        self.config.active_acp_agent_id = settings.active_acp_agent_id.clone();
+        self.config.selected_protocol = settings
+            .resolve_model(&self.config.selected_model_id)
             .map(|(provider, _)| provider.protocol)
             .unwrap_or(transom_ai::ProviderProtocol::OpenAi);
-        if self.selected_model_id.is_empty()
+        if self.config.selected_model_id.is_empty()
             && let Some((_, model)) = settings.models().next()
         {
-            self.selected_model_id = model.id.clone();
+            self.config.selected_model_id = model.id.clone();
         }
-        self.settings = settings;
+        self.config.settings = settings;
     }
 }

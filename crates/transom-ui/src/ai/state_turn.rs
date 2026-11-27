@@ -17,7 +17,7 @@ impl AiPanelState {
     ) {
         // 移除末尾的流式暂态条目，以规范化后的 TurnEnd 替换
         while matches!(
-            self.items.last(),
+            self.conversation.items.last(),
             Some(
                 UiChatItem::Reasoning {
                     streaming: true,
@@ -28,23 +28,24 @@ impl AiPanelState {
                 }
             )
         ) {
-            self.items.pop();
+            self.conversation.items.pop();
         }
         if !reasoning.trim().is_empty() {
-            self.items.push(UiChatItem::Reasoning {
-                id: format!("turn-r-{}", self.items.len()),
+            self.conversation.items.push(UiChatItem::Reasoning {
+                id: format!("turn-r-{}", self.conversation.items.len()),
                 text: reasoning,
                 streaming: false,
             });
         }
         if !text.trim().is_empty() {
             let model_name = self
+                .config
                 .settings
-                .resolve_model(&self.selected_model_id)
+                .resolve_model(&self.config.selected_model_id)
                 .map(|(_, m)| m.name.clone());
             let cached_segments = Some(Arc::new(parse_markdown_segments(&text)));
-            self.items.push(UiChatItem::AssistantText {
-                id: format!("turn-t-{}", self.items.len()),
+            self.conversation.items.push(UiChatItem::AssistantText {
+                id: format!("turn-t-{}", self.conversation.items.len()),
                 text,
                 model: model_name,
                 tokens_per_sec,
@@ -69,7 +70,7 @@ impl AiPanelState {
                 revert_target_path,
                 revert_backup_path,
                 ..
-            }) = self.items.iter_mut().rev().find(
+            }) = self.conversation.items.iter_mut().rev().find(
                 |it| matches!(it, UiChatItem::ToolCard { call_id, .. } if call_id == &dto.call_id),
             )
         {
@@ -86,8 +87,8 @@ impl AiPanelState {
             *revert_backup_path = dto.revert_backup_path;
             return;
         }
-        self.items.push(UiChatItem::ToolCard {
-            id: format!("tool-{}", self.items.len()),
+        self.conversation.items.push(UiChatItem::ToolCard {
+            id: format!("tool-{}", self.conversation.items.len()),
             call_id: dto.call_id,
             running: dto.running,
             tool_name: dto.tool_name,

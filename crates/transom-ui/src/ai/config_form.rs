@@ -65,7 +65,7 @@ impl ConfigFormState {
             window,
             |this, _, event: &SelectEvent<SearchableVec<ConfigChoice>>, _, cx| {
                 if let SelectEvent::Confirm(Some(val)) = event {
-                    this.state.settings.response_language = val.clone();
+                    this.state.config.settings.response_language = val.clone();
                     this.persist_settings_reported(cx);
                 }
             },

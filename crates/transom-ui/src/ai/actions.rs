@@ -15,29 +15,30 @@ impl AiAssistantView {
     pub(super) fn select_conversation(&mut self, conv_id: &str) {
         self.active_nav_dot = None;
         self.editing_title = false;
-        self.state.active_conversation_id = Some(conv_id.to_owned());
-        self.state.active_conversation_title = self
+        self.state.conversation.active_conversation_id = Some(conv_id.to_owned());
+        self.state.conversation.active_conversation_title = self
             .state
+            .conversation
             .conversations
             .iter()
             .find(|c| c.id == conv_id)
             .map(|c| c.title.clone());
-        self.state.metrics.reset_session();
+        self.state.conversation.metrics.reset_session();
         if !self.state.active_run_is_current() {
-            self.state.active_plan = None;
-            self.state.active_focus = None;
-            self.state.status_error = None;
+            self.state.run.active_plan = None;
+            self.state.run.active_focus = None;
+            self.state.view.status_error = None;
         }
         match self.ai_store.load_session_tree(conv_id) {
             Ok(tree) => {
                 let branch: Vec<_> = tree.active_branch().into_iter().cloned().collect();
                 self.state.load_entries(branch);
-                self.state.status_error = self.state.background_run_errors.remove(conv_id);
+                self.state.view.status_error = self.state.run.background_run_errors.remove(conv_id);
             }
             Err(err) => {
-                self.state.items.clear();
-                self.state.background_run_errors.remove(conv_id);
-                self.state.status_error = Some(
+                self.state.conversation.items.clear();
+                self.state.run.background_run_errors.remove(conv_id);
+                self.state.view.status_error = Some(
                     rust_i18n::t!("ai.load_conversation_failed", error = err.to_string())
                         .to_string(),
                 );
@@ -46,8 +47,11 @@ impl AiAssistantView {
     }
 
     pub(super) fn delete_conversation(&mut self, conv_id: &str, cx: &mut Context<Self>) {
-        self.state.conversations.retain(|c| c.id != conv_id);
-        if self.state.active_conversation_id.as_deref() == Some(conv_id) {
+        self.state
+            .conversation
+            .conversations
+            .retain(|c| c.id != conv_id);
+        if self.state.conversation.active_conversation_id.as_deref() == Some(conv_id) {
             self.clear_conversation(cx);
         }
         let _ = self
@@ -66,6 +70,7 @@ impl AiAssistantView {
     ) {
         if let Some(conv) = self
             .state
+            .conversation
             .conversations
             .iter_mut()
             .find(|c| c.id == conv_id)
@@ -82,11 +87,12 @@ impl AiAssistantView {
     }
 
     pub(super) fn start_editing_title(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.state.active_conversation_id.is_none() {
+        if self.state.conversation.active_conversation_id.is_none() {
             return;
         }
         let cur = self
             .state
+            .conversation
             .active_conversation_title
             .clone()
             .unwrap_or_default();
@@ -104,11 +110,17 @@ impl AiAssistantView {
         }
         self.editing_title = false;
         let next = self.title_input.read(cx).value().trim().to_owned();
-        if let Some(cid) = self.state.active_conversation_id.clone()
+        if let Some(cid) = self.state.conversation.active_conversation_id.clone()
             && !next.is_empty()
         {
-            self.state.active_conversation_title = Some(next.clone());
-            if let Some(conv) = self.state.conversations.iter_mut().find(|c| c.id == cid) {
+            self.state.conversation.active_conversation_title = Some(next.clone());
+            if let Some(conv) = self
+                .state
+                .conversation
+                .conversations
+                .iter_mut()
+                .find(|c| c.id == cid)
+            {
                 conv.title = next.clone();
             }
             let _ =
@@ -122,8 +134,8 @@ impl AiAssistantView {
     }
 
     pub(super) fn toggle_extra_scope_tab(&mut self, tab_id: TabId, cx: &mut Context<Self>) {
-        if !self.state.extra_scope_tabs.remove(&tab_id) {
-            self.state.extra_scope_tabs.insert(tab_id);
+        if !self.state.conversation.extra_scope_tabs.remove(&tab_id) {
+            self.state.conversation.extra_scope_tabs.insert(tab_id);
         }
         cx.notify();
     }
@@ -132,21 +144,21 @@ impl AiAssistantView {
         let mut prompt = raw_prompt.trim().to_owned();
         if self.state.has_active_run() {
             if !self.state.active_run_is_current() {
-                self.state.status_error =
+                self.state.view.status_error =
                     Some(rust_i18n::t!("ai.background_run_active").to_string());
                 cx.notify();
                 return;
             }
-            if !prompt.is_empty() || !self.state.pending_attachments.is_empty() {
+            if !prompt.is_empty() || !self.state.composer.pending_attachments.is_empty() {
                 self.handle_running_message(prompt, cx);
             }
             return;
         }
-        self.state.queue_paused_by_cancel = false;
+        self.state.run.queue_paused_by_cancel = false;
         self.auto_scroll_locked = false;
         self.active_nav_dot = None;
         self.msg_scroll_handle.scroll_to_bottom();
-        let packed = pack_attachments_for_request(&self.state.pending_attachments);
+        let packed = pack_attachments_for_request(&self.state.composer.pending_attachments);
         let images_base64 = packed.images;
         let attachment_text = packed.text;
         if prompt.is_empty() {
@@ -155,10 +167,16 @@ impl AiAssistantView {
             }
             prompt = rust_i18n::t!("ai.analyze_attachments_prompt").to_string();
         }
-        self.state.pending_attachments.clear();
-        let primary_tab = self.state.active_session.as_ref().map(|s| s.tab_id);
+        self.state.composer.pending_attachments.clear();
+        let primary_tab = self
+            .state
+            .conversation
+            .active_session
+            .as_ref()
+            .map(|s| s.tab_id);
         let available_names: Vec<&str> = self
             .state
+            .conversation
             .connected_sessions
             .iter()
             .filter(|s| Some(s.tab_id) != primary_tab)
@@ -167,69 +185,97 @@ impl AiAssistantView {
         for mentioned in extract_host_mentions(&prompt, &available_names) {
             if let Some(found) = self
                 .state
+                .conversation
                 .connected_sessions
                 .iter()
                 .find(|s| s.host_name == mentioned && Some(s.tab_id) != primary_tab)
             {
-                self.state.extra_scope_tabs.insert(found.tab_id);
+                self.state
+                    .conversation
+                    .extra_scope_tabs
+                    .insert(found.tab_id);
             }
         }
         let run_id = uuid::Uuid::new_v4().to_string();
         let local_item_id = format!("local-u-{run_id}");
-        self.state.items.push(UiChatItem::UserText {
+        self.state.conversation.items.push(UiChatItem::UserText {
             id: local_item_id.clone(),
             text: prompt.clone(),
             timestamp: Some(chrono::Utc::now().to_rfc3339()),
         });
         self.active_nav_dot = None;
-        self.state.status_error = None;
-        self.state.active_focus = Some(rust_i18n::t!("ai.working_default").to_string());
+        self.state.view.status_error = None;
+        self.state.run.active_focus = Some(rust_i18n::t!("ai.working_default").to_string());
 
-        let effective_model_id = if let Some(acp_id) = &self.state.active_acp_agent_id {
+        let effective_model_id = if let Some(acp_id) = &self.state.config.active_acp_agent_id {
             self.state
+                .config
                 .settings
                 .acp_agents
                 .iter()
                 .find(|a| &a.id == acp_id)
                 .map(|a| format!("acp:{}", a.default_model))
-                .unwrap_or_else(|| self.state.selected_model_id.clone())
+                .unwrap_or_else(|| self.state.config.selected_model_id.clone())
         } else {
-            self.state.selected_model_id.clone()
+            self.state.config.selected_model_id.clone()
         };
 
-        let conversation_id = self.state.active_conversation_id.clone();
+        let conversation_id = self.state.conversation.active_conversation_id.clone();
         let req = AiPromptRequest {
             run_id: run_id.clone(),
             conversation_id,
-            tab_id: self.state.active_session.as_ref().map(|s| s.tab_id),
-            session_id: self.state.active_session.as_ref().map(|s| s.session_id),
+            tab_id: self
+                .state
+                .conversation
+                .active_session
+                .as_ref()
+                .map(|s| s.tab_id),
+            session_id: self
+                .state
+                .conversation
+                .active_session
+                .as_ref()
+                .map(|s| s.session_id),
             host_name: self
                 .state
+                .conversation
                 .active_session
                 .as_ref()
                 .map(|s| s.host_name.clone()),
-            login: self.state.active_session.as_ref().map(|s| s.login.clone()),
+            login: self
+                .state
+                .conversation
+                .active_session
+                .as_ref()
+                .map(|s| s.login.clone()),
             platform: self
                 .state
+                .conversation
                 .active_session
                 .as_ref()
                 .map(|s| s.platform.clone()),
             protection: self
                 .state
+                .conversation
                 .active_session
                 .as_ref()
                 .map(|s| s.protection)
                 .unwrap_or(HostProtection::Normal),
             model_id: effective_model_id,
-            effort: self.state.selected_effort.map(|e| e.as_str().to_owned()),
+            effort: self
+                .state
+                .config
+                .selected_effort
+                .map(|e| e.as_str().to_owned()),
             prompt,
             images_base64,
             attachment_text,
             extra_hosts: self
                 .state
+                .conversation
                 .connected_sessions
                 .iter()
-                .filter(|s| self.state.extra_scope_tabs.contains(&s.tab_id))
+                .filter(|s| self.state.conversation.extra_scope_tabs.contains(&s.tab_id))
                 .map(|s| AiHostTargetDto {
                     tab_id: s.tab_id,
                     session_id: s.session_id,
@@ -239,7 +285,7 @@ impl AiAssistantView {
                     protection: s.protection,
                 })
                 .collect(),
-            acp_agent_id: self.state.active_acp_agent_id.clone(),
+            acp_agent_id: self.state.config.active_acp_agent_id.clone(),
             plan_mode: false,
         };
         if let Err(err) = self
@@ -248,15 +294,17 @@ impl AiAssistantView {
                 req,
             )))))
         {
-            self.state.items.retain(
+            self.state.conversation.items.retain(
                 |item| !matches!(item, UiChatItem::UserText { id, .. } if id == &local_item_id),
             );
-            self.state.active_focus = None;
-            self.state.status_error =
+            self.state.run.active_focus = None;
+            self.state.view.status_error =
                 Some(rust_i18n::t!("ai.send_failed", error = err.to_string()).to_string());
         } else {
-            self.state
-                .begin_run(run_id, self.state.active_conversation_id.clone());
+            self.state.begin_run(
+                run_id,
+                self.state.conversation.active_conversation_id.clone(),
+            );
         }
         cx.notify();
     }
@@ -264,14 +312,14 @@ impl AiAssistantView {
     pub(super) fn send_from_composer(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let text = self.composer_input.read(cx).value().to_string();
         let trimmed = text.trim();
-        if trimmed.is_empty() && self.state.pending_attachments.is_empty() {
+        if trimmed.is_empty() && self.state.composer.pending_attachments.is_empty() {
             return;
         }
         let combined = trimmed.to_owned();
         self.composer_input
             .update(cx, |i, cx| i.set_value(String::new(), window, cx));
         self.last_composer_len = 0;
-        self.state.active_popup = AiActivePopup::None;
+        self.state.view.active_popup = AiActivePopup::None;
         if combined == "/clear" {
             self.clear_conversation(cx);
             return;
@@ -286,21 +334,21 @@ impl AiAssistantView {
     pub(super) fn clear_conversation(&mut self, cx: &mut Context<Self>) {
         self.active_nav_dot = None;
         self.editing_title = false;
-        self.state.active_conversation_id = None;
-        self.state.active_conversation_title = None;
-        self.state.items.clear();
-        self.state.metrics.reset_session();
-        self.state.active_plan = None;
-        self.state.active_focus = None;
-        self.state.status_error = None;
-        self.state.drawer = AiDrawerTab::Chat;
-        self.state.active_popup = AiActivePopup::None;
+        self.state.conversation.active_conversation_id = None;
+        self.state.conversation.active_conversation_title = None;
+        self.state.conversation.items.clear();
+        self.state.conversation.metrics.reset_session();
+        self.state.run.active_plan = None;
+        self.state.run.active_focus = None;
+        self.state.view.status_error = None;
+        self.state.view.drawer = AiDrawerTab::Chat;
+        self.state.view.active_popup = AiActivePopup::None;
         cx.notify();
     }
 
     /// 供终端右键菜单调用：直接请求解释最近的终端命令块或屏幕输出。
     pub(crate) fn explain_terminal_output(&mut self, snippet: String, cx: &mut Context<Self>) {
-        self.state.drawer = AiDrawerTab::Chat;
+        self.state.view.drawer = AiDrawerTab::Chat;
         let trimmed = snippet.trim();
         let prompt = if trimmed.is_empty() {
             rust_i18n::t!("ai.explain_prompt_empty").to_string()
@@ -320,8 +368,8 @@ impl AiAssistantView {
         output: String,
         cx: &mut Context<Self>,
     ) {
-        self.state.drawer = AiDrawerTab::Chat;
-        self.state.pending_attachments.push(
+        self.state.view.drawer = AiDrawerTab::Chat;
+        self.state.composer.pending_attachments.push(
             super::attachments::ComposerAttachment::TerminalContext {
                 id: uuid::Uuid::new_v4().to_string(),
                 host,

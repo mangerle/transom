@@ -42,7 +42,7 @@ impl AiAssistantView {
             .trim()
             .to_owned();
         let ev = self.policy_hooks_form.selected_event;
-        self.state.settings.hooks.push(HookRule {
+        self.state.config.settings.hooks.push(HookRule {
             id: Uuid::new_v4().to_string(),
             name: format!("{}: {cmd}", ev.label()),
             event: ev,
@@ -80,13 +80,17 @@ impl AiAssistantView {
         if pattern.is_empty() {
             return;
         }
-        self.state.settings.exec_policy_rules.push(ExecPolicyRule {
-            id: Uuid::new_v4().to_string(),
-            pattern,
-            action,
-            note: String::new(),
-            enabled: true,
-        });
+        self.state
+            .config
+            .settings
+            .exec_policy_rules
+            .push(ExecPolicyRule {
+                id: Uuid::new_v4().to_string(),
+                pattern,
+                action,
+                note: String::new(),
+                enabled: true,
+            });
         self.policy_hooks_form
             .policy_pattern_input
             .update(cx, |s, cx| s.set_value("", window, cx));
@@ -94,12 +98,16 @@ impl AiAssistantView {
     }
 
     pub(super) fn delete_exec_policy_rule(&mut self, id: &str, cx: &mut Context<Self>) {
-        self.state.settings.exec_policy_rules.retain(|r| r.id != id);
+        self.state
+            .config
+            .settings
+            .exec_policy_rules
+            .retain(|r| r.id != id);
         self.persist_settings_reported(cx);
     }
 
     pub(super) fn add_preset_nginx_hook(&mut self, cx: &mut Context<Self>) {
-        self.state.settings.hooks.push(HookRule {
+        self.state.config.settings.hooks.push(HookRule {
             id: Uuid::new_v4().to_string(),
             name: rust_i18n::t!("ai.hook_preset_nginx_name").to_string(),
             event: HookEvent::PostToolUse,
@@ -129,7 +137,7 @@ impl AiAssistantView {
         if url.is_empty() {
             return;
         }
-        self.state.settings.hooks.push(HookRule {
+        self.state.config.settings.hooks.push(HookRule {
             id: Uuid::new_v4().to_string(),
             name: rust_i18n::t!("ai.hook_webhook_name").to_string(),
             event: HookEvent::Stop,
@@ -148,14 +156,21 @@ impl AiAssistantView {
     }
 
     pub(super) fn toggle_hook_rule(&mut self, id: &str, cx: &mut Context<Self>) {
-        if let Some(rule) = self.state.settings.hooks.iter_mut().find(|r| r.id == id) {
+        if let Some(rule) = self
+            .state
+            .config
+            .settings
+            .hooks
+            .iter_mut()
+            .find(|r| r.id == id)
+        {
             rule.enabled = !rule.enabled;
             self.persist_settings_reported(cx);
         }
     }
 
     pub(super) fn delete_hook_rule(&mut self, id: &str, cx: &mut Context<Self>) {
-        self.state.settings.hooks.retain(|r| r.id != id);
+        self.state.config.settings.hooks.retain(|r| r.id != id);
         self.persist_settings_reported(cx);
     }
 }

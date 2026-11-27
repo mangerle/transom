@@ -253,7 +253,7 @@ pub(super) fn init_choice_input(
     });
     let sub = cx.subscribe_in(&input, window, |this, _, event: &InputEvent, window, cx| {
         if matches!(event, InputEvent::PressEnter { .. })
-            && let Some(UiChatItem::AssistantText { id, .. }) = this.state.items.last()
+            && let Some(UiChatItem::AssistantText { id, .. }) = this.state.conversation.items.last()
         {
             let id = id.clone();
             this.submit_custom_choice(&id, window, cx);
@@ -269,7 +269,7 @@ impl AiAssistantView {
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> Option<AnyElement> {
-        if self.state.has_active_run() || !self.state.pending_approvals.is_empty() {
+        if self.state.has_active_run() || !self.state.run.pending_approvals.is_empty() {
             return None;
         }
         let UiChatItem::AssistantText {
@@ -277,7 +277,7 @@ impl AiAssistantView {
             text,
             streaming: false,
             ..
-        } = self.state.items.last()?
+        } = self.state.conversation.items.last()?
         else {
             return None;
         };

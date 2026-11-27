@@ -74,7 +74,7 @@ impl AiAssistantView {
 
     /// 当后台拉取到新模型列表时自动弹出“选择模型”面板。
     pub(super) fn sync_picker_from_discovered(&mut self, cx: &mut Context<Self>) {
-        if self.state.discovered_models.is_empty() {
+        if self.state.config.discovered_models.is_empty() {
             return;
         }
         self.open_model_picker(cx);
@@ -95,7 +95,7 @@ impl AiAssistantView {
             .map(|r| r.request_model.read(cx).value().trim().to_owned())
             .collect();
 
-        for (id, ctx_win) in &self.state.discovered_models {
+        for (id, ctx_win) in &self.state.config.discovered_models {
             if checked.contains(id) && !existing.contains(id) {
                 self.config_form.draft_models.push(make_draft_model_row(
                     id,
@@ -164,7 +164,7 @@ impl AiAssistantView {
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> Option<AnyElement> {
-        if !self.model_picker.open || self.state.discovered_models.is_empty() {
+        if !self.model_picker.open || self.state.config.discovered_models.is_empty() {
             return None;
         }
         let query = self
@@ -174,11 +174,12 @@ impl AiAssistantView {
             .value()
             .trim()
             .to_lowercase();
-        let total = self.state.discovered_models.len();
+        let total = self.state.config.discovered_models.len();
         let selected_count = self.model_picker.checked_ids.len();
 
         let filtered: Vec<(String, Option<u32>)> = self
             .state
+            .config
             .discovered_models
             .iter()
             .filter(|(id, _)| {
@@ -340,7 +341,7 @@ impl AiAssistantView {
                                 .label(rust_i18n::t!("ai.picker_select_all").to_string())
                                 .on_click(move |_, _, cx| {
                                     v_all.update(cx, |this, cx| {
-                                        for (id, _) in &this.state.discovered_models {
+                                        for (id, _) in &this.state.config.discovered_models {
                                             this.model_picker.checked_ids.insert(id.clone());
                                         }
                                         cx.notify();

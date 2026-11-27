@@ -220,7 +220,7 @@ impl AiAssistantView {
         }
         let skills = load_skills_with_disabled(
             Some(&self.ai_store.custom_skills_dir()),
-            &self.state.settings.disabled_skills,
+            &self.state.config.settings.disabled_skills,
         );
         filter_slash_items(&current_input, &skills)
     }
@@ -288,7 +288,7 @@ pub(super) fn register_slash_key_interceptor(cx: &mut Context<AiAssistantView>) 
             return;
         };
         let handled = entity.update(cx, |this, cx| {
-            if this.state.drawer != AiDrawerTab::Chat
+            if this.state.view.drawer != AiDrawerTab::Chat
                 || !this
                     .composer_input
                     .read(cx)

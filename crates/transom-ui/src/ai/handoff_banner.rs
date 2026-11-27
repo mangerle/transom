@@ -13,10 +13,10 @@ use crate::palette::Palette;
 
 impl AiAssistantView {
     pub(super) fn compact_conversation(&mut self, focus: String, cx: &mut Context<Self>) {
-        let Some(conv_id) = self.state.active_conversation_id.clone() else {
+        let Some(conv_id) = self.state.conversation.active_conversation_id.clone() else {
             return;
         };
-        self.state.active_popup = AiActivePopup::None;
+        self.state.view.active_popup = AiActivePopup::None;
         let _ =
             self.command_tx
                 .try_send(AppCommand::Ai(Box::new(AiCommand::CompactConversation {
@@ -27,7 +27,7 @@ impl AiAssistantView {
     }
 
     pub(super) fn rollback_checkpoint(&mut self, entry_id: String, cx: &mut Context<Self>) {
-        let Some(conv_id) = self.state.active_conversation_id.clone() else {
+        let Some(conv_id) = self.state.conversation.active_conversation_id.clone() else {
             return;
         };
         if self.state.has_active_run() {
@@ -43,7 +43,7 @@ impl AiAssistantView {
     }
 
     pub(super) fn resume_handoff(&mut self, cancelled: bool, cx: &mut Context<Self>) {
-        let Some((run_id, _, _)) = self.state.handoff_pending.take() else {
+        let Some((run_id, _, _)) = self.state.run.handoff_pending.take() else {
             return;
         };
         cx.emit(AiPanelEvent::ResumeHandoffRequested { run_id, cancelled });
@@ -53,6 +53,7 @@ impl AiAssistantView {
     pub(super) fn install_acp_agent(&mut self, agent_id: String, cx: &mut Context<Self>) {
         let agent = self
             .state
+            .config
             .settings
             .acp_agents
             .iter()
@@ -76,7 +77,7 @@ impl AiAssistantView {
                 .unwrap_or_default()
         };
         if install_command.trim().is_empty() {
-            self.state.acp_install_status = Some((
+            self.state.config.acp_install_status = Some((
                 agent_id,
                 false,
                 rust_i18n::t!("ai.acp_install_no_cmd").to_string(),
@@ -99,8 +100,8 @@ impl AiAssistantView {
     }
 
     pub(super) fn toggle_card_id(&mut self, id: String, cx: &mut Context<Self>) {
-        if !self.state.expanded_cards.remove(&id) {
-            self.state.expanded_cards.insert(id);
+        if !self.state.conversation.expanded_cards.remove(&id) {
+            self.state.conversation.expanded_cards.insert(id);
         }
         cx.notify();
     }
@@ -161,7 +162,11 @@ impl AiAssistantView {
                                     host_label,
                                     target_path,
                                     backup_path,
-                                    conversation_id: this.state.active_conversation_id.clone(),
+                                    conversation_id: this
+                                        .state
+                                        .conversation
+                                        .active_conversation_id
+                                        .clone(),
                                 },
                             )));
                     });
@@ -212,17 +217,18 @@ impl AiAssistantView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let active_changed = self.state.active_session != session;
-        let list_changed = self.state.connected_sessions != connected_sessions;
+        let active_changed = self.state.conversation.active_session != session;
+        let list_changed = self.state.conversation.connected_sessions != connected_sessions;
         if !active_changed && !list_changed {
             return;
         }
-        self.state.connected_sessions = connected_sessions;
+        self.state.conversation.connected_sessions = connected_sessions;
         let primary_tab = session.as_ref().map(|s| s.tab_id);
-        self.state.extra_scope_tabs.retain(|tid| {
+        self.state.conversation.extra_scope_tabs.retain(|tid| {
             Some(*tid) != primary_tab
                 && self
                     .state
+                    .conversation
                     .connected_sessions
                     .iter()
                     .any(|s| s.tab_id == *tid)
@@ -231,7 +237,7 @@ impl AiAssistantView {
             cx.notify();
             return;
         }
-        self.state.active_session = session;
+        self.state.conversation.active_session = session;
         let scope = self.state.current_scope();
         let host_id = match &scope {
             transom_ai::SessionScope::Host(id) => Some(id.as_str()),
@@ -257,10 +263,10 @@ impl AiAssistantView {
         candidates: Vec<super::state::AiMentionCandidate>,
         cx: &mut Context<Self>,
     ) {
-        if self.state.mention_candidates == candidates {
+        if self.state.composer.mention_candidates == candidates {
             return;
         }
-        self.state.mention_candidates = candidates;
+        self.state.composer.mention_candidates = candidates;
         cx.notify();
     }
 
@@ -279,20 +285,21 @@ impl AiAssistantView {
             }
         } else {
             self.state
+                .config
                 .settings
-                .resolve_model(&self.state.selected_model_id)
+                .resolve_model(&self.state.config.selected_model_id)
                 .map(|(_, m)| m.display_label().to_owned())
                 .unwrap_or_else(|| rust_i18n::t!("ai.no_model").to_string())
         };
         let model_label = if active_acp.is_none() {
-            match self.state.selected_effort {
+            match self.state.config.selected_effort {
                 Some(eff) => format!("{base_model_label} · {}", eff.as_str()),
                 None => base_model_label,
             }
         } else {
             base_model_label
         };
-        let session_badge = self.state.active_session.as_ref().map(|s| {
+        let session_badge = self.state.conversation.active_session.as_ref().map(|s| {
             format!(
                 "{} · {}",
                 s.host_name,
@@ -303,7 +310,7 @@ impl AiAssistantView {
                 }
             )
         });
-        let active_acp_id = self.state.active_acp_agent_id.clone();
+        let active_acp_id = self.state.config.active_acp_agent_id.clone();
         let acp_missing_warning = active_acp.as_ref().and_then(|agent| {
             (!is_acp_command_available(&agent.command))
                 .then(|| (agent.id.clone(), agent.name.clone(), agent.command.clone()))
@@ -312,16 +319,22 @@ impl AiAssistantView {
             .map(|a| a.name)
             .unwrap_or_else(|| rust_i18n::t!("ai.acp_builtin_mode").to_string());
 
-        let primary_tab = self.state.active_session.as_ref().map(|s| s.tab_id);
+        let primary_tab = self
+            .state
+            .conversation
+            .active_session
+            .as_ref()
+            .map(|s| s.tab_id);
         let extra_host_options: Vec<ExtraHostOption> = if primary_tab.is_some() {
             self.state
+                .conversation
                 .connected_sessions
                 .iter()
                 .filter(|s| Some(s.tab_id) != primary_tab)
                 .map(|s| ExtraHostOption {
                     tab_id: s.tab_id,
                     host_name: s.host_name.clone(),
-                    selected: self.state.extra_scope_tabs.contains(&s.tab_id),
+                    selected: self.state.conversation.extra_scope_tabs.contains(&s.tab_id),
                 })
                 .collect()
         } else {
@@ -343,6 +356,7 @@ impl AiAssistantView {
 
         let running_tasks_count = self
             .state
+            .run
             .managed_tasks
             .iter()
             .filter(|t| t.dto.status == transom_core::AiManagedTaskStatus::Running)
@@ -351,27 +365,27 @@ impl AiAssistantView {
         let v_pill_tasks = view.clone();
         let status_header = super::plan_card::render_status_pills_row(
             super::plan_card::StatusPillsParams {
-                plan: self.state.active_plan.as_ref(),
-                focus: self.state.active_focus.as_deref(),
-                plan_expanded: self.state.status_panel_expanded,
+                plan: self.state.run.active_plan.as_ref(),
+                focus: self.state.run.active_focus.as_deref(),
+                plan_expanded: self.state.view.status_panel_expanded,
                 running_tasks_count,
-                tasks_expanded: self.state.tasks_drawer_expanded,
+                tasks_expanded: self.state.run.tasks_drawer_expanded,
                 p,
             },
             move |_, cx| {
                 v_pill_plan.update(cx, |this, cx| {
-                    this.state.status_panel_expanded = !this.state.status_panel_expanded;
-                    if this.state.status_panel_expanded {
-                        this.state.tasks_drawer_expanded = false;
+                    this.state.view.status_panel_expanded = !this.state.view.status_panel_expanded;
+                    if this.state.view.status_panel_expanded {
+                        this.state.run.tasks_drawer_expanded = false;
                     }
                     cx.notify();
                 });
             },
             move |_, cx| {
                 v_pill_tasks.update(cx, |this, cx| {
-                    this.state.tasks_drawer_expanded = !this.state.tasks_drawer_expanded;
-                    if this.state.tasks_drawer_expanded {
-                        this.state.status_panel_expanded = false;
+                    this.state.run.tasks_drawer_expanded = !this.state.run.tasks_drawer_expanded;
+                    if this.state.run.tasks_drawer_expanded {
+                        this.state.view.status_panel_expanded = false;
                     }
                     cx.notify();
                 });
@@ -383,16 +397,16 @@ impl AiAssistantView {
                 input: &self.composer_input,
                 is_running: self.state.has_active_run(),
                 model_label,
-                execution_mode: self.state.execution_mode,
+                execution_mode: self.state.config.execution_mode,
                 session_badge,
                 acp_label,
                 active_acp_id,
                 acp_missing_warning,
-                acp_install_status: self.state.acp_install_status.as_ref(),
-                active_popup: self.state.active_popup,
+                acp_install_status: self.state.config.acp_install_status.as_ref(),
+                active_popup: self.state.view.active_popup,
                 toolbar_popover: self.render_toolbar_popover(p, cx),
-                pending_attachments: &self.state.pending_attachments,
-                metrics: &self.state.metrics,
+                pending_attachments: &self.state.composer.pending_attachments,
+                metrics: &self.state.conversation.metrics,
                 context_window: self.active_context_window(),
                 extra_host_options,
                 status_header,
@@ -416,8 +430,8 @@ impl AiAssistantView {
                 }),
                 on_open_config: Box::new(move |_, cx| {
                     v_cfg.update(cx, |this, cx| {
-                        this.state.active_popup = AiActivePopup::None;
-                        this.state.drawer = AiDrawerTab::Config;
+                        this.state.view.active_popup = AiActivePopup::None;
+                        this.state.view.drawer = AiDrawerTab::Config;
                         cx.notify();
                     });
                 }),

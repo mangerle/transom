@@ -202,7 +202,7 @@ impl AiAssistantView {
         {
             return Vec::new();
         }
-        filter_mention_items(&current_input, &self.state.mention_candidates)
+        filter_mention_items(&current_input, &self.state.composer.mention_candidates)
     }
 
     /// 将选中的 `@` 目标替换为行内胶囊芯片，保留在同一行内与光标对齐。

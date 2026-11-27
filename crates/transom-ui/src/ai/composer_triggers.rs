@@ -12,8 +12,9 @@ use crate::theme::tokens::typography;
 impl AiAssistantView {
     pub(super) fn active_context_window(&self) -> u32 {
         self.state
+            .config
             .settings
-            .resolve_model(&self.state.selected_model_id)
+            .resolve_model(&self.state.config.selected_model_id)
             .and_then(|(_, m)| m.context_window)
             .unwrap_or(128_000)
     }

@@ -90,10 +90,11 @@ pub(super) fn render_memory_drawer(
 
 impl super::view::AiAssistantView {
     pub(super) fn render_memory_body(&self, p: &Palette, cx: &mut Context<Self>) -> AnyElement {
-        let has_host = self.state.active_session.is_some();
+        let has_host = self.state.conversation.active_session.is_some();
         let general = rust_i18n::t!("ai.general_label").to_string();
         let host_name = self
             .state
+            .conversation
             .active_session
             .as_ref()
             .map(|s| s.host_name.as_str())

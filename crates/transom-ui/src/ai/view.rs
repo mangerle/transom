@@ -66,12 +66,12 @@ impl AiAssistantView {
     ) -> Self {
         let mut state = AiPanelState::default();
         let settings_request_id = uuid::Uuid::new_v4().to_string();
-        state.pending_settings_load = Some(settings_request_id.clone());
+        state.config.pending_settings_load = Some(settings_request_id.clone());
         if let Err(err) = command_tx.try_send(AppCommand::Ai(Box::new(AiCommand::LoadSettings {
             request_id: settings_request_id,
         }))) {
-            state.pending_settings_load = None;
-            state.status_error = Some(
+            state.config.pending_settings_load = None;
+            state.view.status_error = Some(
                 rust_i18n::t!("ai.load_config_request_failed", error = err.to_string()).to_string(),
             );
         }
@@ -88,8 +88,12 @@ impl AiAssistantView {
                 .placeholder(rust_i18n::t!("ai.approval_feedback_placeholder").to_string())
         });
         let (choice_custom_input, choice_sub) = init_choice_input(window, cx);
-        let skills_drawer =
-            SkillsDrawerState::new(&ai_store, &state.settings.disabled_skills, window, cx);
+        let skills_drawer = SkillsDrawerState::new(
+            &ai_store,
+            &state.config.settings.disabled_skills,
+            window,
+            cx,
+        );
         let policy_hooks_form = super::policy_hooks_drawer::PolicyHooksFormState::new(window, cx);
         let model_picker = super::model_picker::ModelPickerState::new(window, cx);
 
@@ -108,30 +112,32 @@ impl AiAssistantView {
                     this.slash_selected_idx = 0;
                     let current = this.composer_input.read(cx).value().to_string();
                     if should_convert_paste_to_doc(this.last_composer_len, &current) {
-                        this.state.pasted_doc_seq += 1;
-                        let title =
-                            rust_i18n::t!("ai.pasted_doc_title", index = this.state.pasted_doc_seq)
-                                .to_string();
+                        this.state.composer.pasted_doc_seq += 1;
+                        let title = rust_i18n::t!(
+                            "ai.pasted_doc_title",
+                            index = this.state.composer.pasted_doc_seq
+                        )
+                        .to_string();
                         let lines = current.lines().count().max(1);
                         let chars = current.chars().count();
-                        this.state
-                            .pending_attachments
-                            .push(ComposerAttachment::PastedDoc {
+                        this.state.composer.pending_attachments.push(
+                            ComposerAttachment::PastedDoc {
                                 id: uuid::Uuid::new_v4().to_string(),
                                 title,
                                 content: current,
                                 lines,
                                 chars,
-                            });
+                            },
+                        );
                         this.last_composer_len = 0;
                         this.composer_input
                             .update(cx, |i, cx| i.set_value(String::new(), window, cx));
                     } else {
                         this.last_composer_len = current.len();
-                        if this.state.active_popup != AiActivePopup::None
+                        if this.state.view.active_popup != AiActivePopup::None
                             && current.starts_with('/')
                         {
-                            this.state.active_popup = AiActivePopup::None;
+                            this.state.view.active_popup = AiActivePopup::None;
                         }
                     }
                     cx.notify();
@@ -171,16 +177,16 @@ impl AiAssistantView {
             let _ = this.update(cx, |this, cx| {
                 match loaded {
                     Ok((conversations, memory, totals)) => {
-                        this.state.conversations = conversations;
+                        this.state.conversation.conversations = conversations;
                         if this.state.memory.global_markdown.is_empty()
                             && !memory.global_markdown.is_empty()
                         {
                             this.state.memory.global_markdown = memory.global_markdown;
                         }
-                        this.state.metrics.set_stored_totals(totals);
+                        this.state.conversation.metrics.set_stored_totals(totals);
                     }
                     Err(err) => {
-                        this.state.status_error = Some(
+                        this.state.view.status_error = Some(
                             rust_i18n::t!("ai.load_local_data_failed", error = err.to_string())
                                 .to_string(),
                         );
@@ -234,21 +240,23 @@ impl AiAssistantView {
 
         let has_plan_steps = self
             .state
+            .run
             .active_plan
             .as_ref()
             .is_some_and(|pl| !pl.steps.is_empty());
-        if has_plan_steps && self.state.status_panel_expanded {
+        if has_plan_steps && self.state.view.status_panel_expanded {
             let v_toggle = cx.entity();
             container = container.child(div().px(rems(space::SM)).pb(rems(space::XS)).child(
                 render_plan_card(
                     PlanCardParams {
-                        plan: self.state.active_plan.as_ref(),
+                        plan: self.state.run.active_plan.as_ref(),
                         expanded: true,
                         p,
                     },
                     move |_, cx| {
                         v_toggle.update(cx, |this, cx| {
-                            this.state.status_panel_expanded = !this.state.status_panel_expanded;
+                            this.state.view.status_panel_expanded =
+                                !this.state.view.status_panel_expanded;
                             cx.notify();
                         });
                     },
@@ -257,7 +265,7 @@ impl AiAssistantView {
         }
 
         if self.state.active_run_is_current()
-            && let Some((_, host, cmd)) = &self.state.handoff_pending
+            && let Some((_, host, cmd)) = &self.state.run.handoff_pending
         {
             let v_cont = cx.entity();
             let v_canc = cx.entity();
@@ -276,7 +284,7 @@ impl AiAssistantView {
             container = container.child(bar);
         }
 
-        if let Some(approval) = self.state.pending_approvals.first() {
+        if let Some(approval) = self.state.run.pending_approvals.first() {
             let req_id = approval.request_id.clone();
             let view_d = cx.entity();
             container = container.child(div().px(rems(space::SM)).pb(rems(space::XS)).child(
@@ -315,8 +323,9 @@ impl AiAssistantView {
 
         if self.state.active_run_is_current()
             && let Some(focus_bar) = super::plan_card::render_running_focus_bar(
-                self.state.active_focus.as_deref(),
+                self.state.run.active_focus.as_deref(),
                 self.state
+                    .run
                     .active_plan
                     .as_ref()
                     .and_then(|pl| pl.focus.as_deref()),
@@ -341,7 +350,7 @@ impl Render for AiAssistantView {
         let rem = window.rem_size();
         let header = self.render_header(&p, cx);
 
-        let body = match self.state.drawer {
+        let body = match self.state.view.drawer {
             AiDrawerTab::History => self.render_history_body(&p, cx),
             AiDrawerTab::Config => self.render_config_body(&p, cx),
             AiDrawerTab::Skills => self.render_skills_body(&p, cx),
@@ -358,8 +367,8 @@ impl Render for AiAssistantView {
             .on_mouse_down(
                 MouseButton::Left,
                 cx.listener(|this, _, _, cx| {
-                    if this.state.active_popup != AiActivePopup::None {
-                        this.state.active_popup = AiActivePopup::None;
+                    if this.state.view.active_popup != AiActivePopup::None {
+                        this.state.view.active_popup = AiActivePopup::None;
                         cx.notify();
                     }
                 }),

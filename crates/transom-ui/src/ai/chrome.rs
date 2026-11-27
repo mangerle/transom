@@ -33,29 +33,29 @@ impl AiAssistantView {
             return None;
         }
         let view = cx.entity();
-        let kind = self.state.active_popup;
+        let kind = self.state.view.active_popup;
         let pop = match kind {
             AiActivePopup::None => return None,
             AiActivePopup::Backend => {
                 let v_cfg = view.clone();
                 Some(render_backend_popup(
-                    &self.state.settings,
-                    self.state.active_acp_agent_id.as_deref(),
+                    &self.state.config.settings,
+                    self.state.config.active_acp_agent_id.as_deref(),
                     p,
                     move |id, _, cx| {
                         view.update(cx, |this, cx| this.select_acp_agent(id, cx));
                     },
                     move |_, cx| {
                         v_cfg.update(cx, |this, cx| {
-                            this.state.active_popup = AiActivePopup::None;
-                            this.state.drawer = AiDrawerTab::Config;
+                            this.state.view.active_popup = AiActivePopup::None;
+                            this.state.view.drawer = AiDrawerTab::Config;
                             cx.notify();
                         });
                     },
                 ))
             }
             AiActivePopup::Mode => Some(render_mode_popup(
-                self.state.execution_mode,
+                self.state.config.execution_mode,
                 p,
                 move |mode, _, cx| {
                     view.update(cx, |this, cx| this.select_execution_mode(mode, cx));
@@ -67,10 +67,10 @@ impl AiAssistantView {
                 let active_acp = self.active_acp_agent();
                 Some(render_model_popup(
                     ModelPopupParams {
-                        settings: &self.state.settings,
+                        settings: &self.state.config.settings,
                         active_acp: active_acp.as_ref(),
-                        selected_model_id: &self.state.selected_model_id,
-                        selected_effort: self.state.selected_effort,
+                        selected_model_id: &self.state.config.selected_model_id,
+                        selected_effort: self.state.config.selected_effort,
                         p,
                     },
                     move |id, _, cx| {
@@ -81,21 +81,27 @@ impl AiAssistantView {
                     },
                     move |_, cx| {
                         v_cfg.update(cx, |this, cx| {
-                            this.state.active_popup = AiActivePopup::None;
-                            this.state.drawer = AiDrawerTab::Config;
+                            this.state.view.active_popup = AiActivePopup::None;
+                            this.state.view.drawer = AiDrawerTab::Config;
                             cx.notify();
                         });
                     },
                 ))
             }
-            AiActivePopup::SessionStats => Some(render_session_stats_popup(&self.state.metrics, p)),
-            AiActivePopup::TokenUsage => Some(render_token_usage_popup(&self.state.metrics, p)),
+            AiActivePopup::SessionStats => Some(render_session_stats_popup(
+                &self.state.conversation.metrics,
+                p,
+            )),
+            AiActivePopup::TokenUsage => Some(render_token_usage_popup(
+                &self.state.conversation.metrics,
+                p,
+            )),
             AiActivePopup::ContextUsage => {
                 let v_cmp = view;
                 Some(render_context_usage_popup(
-                    &self.state.metrics,
+                    &self.state.conversation.metrics,
                     self.active_context_window(),
-                    self.state.items.len(),
+                    self.state.conversation.items.len(),
                     p,
                     move |_, cx| {
                         v_cmp.update(cx, |this, cx| this.compact_conversation(String::new(), cx));
@@ -107,8 +113,9 @@ impl AiAssistantView {
     }
 
     pub(super) fn active_acp_agent(&self) -> Option<AcpAgentConfig> {
-        let id = self.state.active_acp_agent_id.as_deref()?;
+        let id = self.state.config.active_acp_agent_id.as_deref()?;
         self.state
+            .config
             .settings
             .acp_agents
             .iter()
@@ -151,7 +158,7 @@ impl AiAssistantView {
             }));
 
         let mut nav_entries = Vec::new();
-        if self.state.items.is_empty() {
+        if self.state.conversation.items.is_empty() {
             let active = self.active_acp_agent();
             let v_quick = cx.entity();
             msg_list = msg_list.child(render_empty_state(
@@ -168,7 +175,7 @@ impl AiAssistantView {
                 .state
                 .current_run_started_at()
                 .map(|time| time.elapsed().as_secs());
-            let blocks = group_chat_items(&self.state.items, is_running);
+            let blocks = group_chat_items(&self.state.conversation.items, is_running);
             nav_entries = collect_turn_nav_entries(&blocks);
             let has_active_wg = blocks.last().is_some_and(|b| {
                 matches!(
@@ -181,21 +188,24 @@ impl AiAssistantView {
             });
             let code_callbacks = self.build_code_callbacks(cx);
             let copied_key = self.copied_key.as_deref();
-            let has_active_terminal = self.state.active_session.is_some();
+            let has_active_terminal = self.state.conversation.active_session.is_some();
             for (b_idx, block) in blocks.into_iter().enumerate() {
                 let v_exp = cx.entity();
                 match block {
                     DisplayBlock::Single(item) => {
                         let cid = chat_item_id(item).to_owned();
-                        let expanded = self.state.expanded_cards.contains(&cid);
+                        let expanded = self.state.conversation.expanded_cards.contains(&cid);
                         let full_key = format!("full-out-{cid}");
-                        let full_output_expanded = self.state.expanded_cards.contains(&full_key);
+                        let full_output_expanded =
+                            self.state.conversation.expanded_cards.contains(&full_key);
                         let is_follow_user =
                             b_idx > 0 && matches!(item, super::state::UiChatItem::UserText { .. });
                         let v_rb = cx.entity();
                         let v_full = cx.entity();
-                        let subagent_task =
-                            super::work_group::find_subagent_task(&self.state.managed_tasks, item);
+                        let subagent_task = super::work_group::find_subagent_task(
+                            &self.state.run.managed_tasks,
+                            item,
+                        );
                         let item_el = render_chat_item(
                             ChatItemRenderParams {
                                 item,
@@ -248,12 +258,12 @@ impl AiAssistantView {
                                 ok_steps,
                                 duration_ms,
                                 in_progress,
-                                expanded_cards: &self.state.expanded_cards,
-                                active_focus: self.state.active_focus.as_deref(),
+                                expanded_cards: &self.state.conversation.expanded_cards,
+                                active_focus: self.state.run.active_focus.as_deref(),
                                 live_elapsed_secs: live_elapsed,
                                 copied_key,
                                 has_active_terminal,
-                                managed_tasks: &self.state.managed_tasks,
+                                managed_tasks: &self.state.run.managed_tasks,
                                 p,
                             },
                             move |tid, _, cx| {
@@ -267,6 +277,7 @@ impl AiAssistantView {
             if is_running && !has_active_wg {
                 let focus = self
                     .state
+                    .run
                     .active_focus
                     .as_deref()
                     .map(str::trim)
@@ -319,7 +330,7 @@ impl AiAssistantView {
             }
         }
 
-        if let Some(err) = &self.state.status_error {
+        if let Some(err) = &self.state.view.status_error {
             msg_list = msg_list.child(
                 h_flex()
                     .w_full()

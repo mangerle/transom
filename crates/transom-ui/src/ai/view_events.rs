@@ -25,7 +25,9 @@ impl AiAssistantView {
                 cancelled,
                 conversation_id,
                 ..
-            } if self.state.active_conversation_id.as_deref() == Some(conversation_id.as_str()) => {
+            } if self.state.conversation.active_conversation_id.as_deref()
+                == Some(conversation_id.as_str()) =>
+            {
                 Some(*cancelled)
             }
             _ => None,
@@ -43,7 +45,9 @@ impl AiAssistantView {
                 title,
                 ok,
                 summary,
-            } if self.state.active_conversation_id.as_deref() == Some(conversation_id.as_str()) => {
+            } if self.state.conversation.active_conversation_id.as_deref()
+                == Some(conversation_id.as_str()) =>
+            {
                 let status = if *ok {
                     rust_i18n::t!("ai.subagent_done_ok").to_string()
                 } else {
@@ -71,7 +75,10 @@ impl AiAssistantView {
         let should_scroll_bottom = match &event {
             AiAppEvent::RunFinished {
                 conversation_id, ..
-            } => self.state.active_conversation_id.as_deref() == Some(conversation_id.as_str()),
+            } => {
+                self.state.conversation.active_conversation_id.as_deref()
+                    == Some(conversation_id.as_str())
+            }
             AiAppEvent::RunStarted { .. }
             | AiAppEvent::TextDelta { .. }
             | AiAppEvent::ReasoningDelta { .. }
@@ -92,7 +99,7 @@ impl AiAssistantView {
                 window,
                 cx,
             ) {
-                self.state.status_error =
+                self.state.view.status_error =
                     Some(rust_i18n::t!("ai.load_config_failed", error = err).to_string());
             }
             self.refresh_skills_list();
@@ -116,9 +123,9 @@ impl AiAssistantView {
                     .await;
                 let _ = this.update(cx, |this, cx| {
                     match conversations {
-                        Ok(conversations) => this.state.conversations = conversations,
+                        Ok(conversations) => this.state.conversation.conversations = conversations,
                         Err(err) => {
-                            this.state.status_error = Some(
+                            this.state.view.status_error = Some(
                                 rust_i18n::t!("ai.load_local_data_failed", error = err.to_string())
                                     .to_string(),
                             );
@@ -136,6 +143,7 @@ impl AiAssistantView {
                 self.send_prompt_text(wake_prompt, cx);
             } else {
                 self.state
+                    .run
                     .queued_messages
                     .push(super::queue_card::QueuedPrompt {
                         id: uuid::Uuid::new_v4().to_string(),

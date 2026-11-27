@@ -27,18 +27,19 @@ pub(super) fn apply_managed_task_event(state: &mut AiPanelState, event: AiAppEve
     match event {
         AiAppEvent::ManagedTaskStarted(dto) => {
             let id = dto.task_id.clone();
-            state.managed_tasks.push(UiManagedTask {
+            state.run.managed_tasks.push(UiManagedTask {
                 dto,
                 log: String::new(),
             });
-            if state.managed_tasks.len() > 24 {
-                let drop_n = state.managed_tasks.len() - 24;
-                state.managed_tasks.drain(..drop_n);
+            if state.run.managed_tasks.len() > 24 {
+                let drop_n = state.run.managed_tasks.len() - 24;
+                state.run.managed_tasks.drain(..drop_n);
             }
-            state.selected_task_id = Some(id);
+            state.run.selected_task_id = Some(id);
         }
         AiAppEvent::ManagedTaskOutput { task_id, chunk } => {
             if let Some(task) = state
+                .run
                 .managed_tasks
                 .iter_mut()
                 .find(|t| t.dto.task_id == task_id)
@@ -60,6 +61,7 @@ pub(super) fn apply_managed_task_event(state: &mut AiPanelState, event: AiAppEve
             summary,
         } => {
             if let Some(task) = state
+                .run
                 .managed_tasks
                 .iter_mut()
                 .find(|t| t.dto.task_id == task_id)
@@ -84,22 +86,24 @@ impl AiAssistantView {
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> Option<AnyElement> {
-        if self.state.managed_tasks.is_empty() {
+        if self.state.run.managed_tasks.is_empty() {
             return None;
         }
         let running_count = self
             .state
+            .run
             .managed_tasks
             .iter()
             .filter(|t| t.dto.status == AiManagedTaskStatus::Running)
             .count();
-        if running_count == 0 || !self.state.tasks_drawer_expanded {
+        if running_count == 0 || !self.state.run.tasks_drawer_expanded {
             return None;
         }
         let summary = rust_i18n::t!("ai.tasks_running_summary", count = running_count).to_string();
 
         let active_title = self
             .state
+            .run
             .managed_tasks
             .iter()
             .rev()
@@ -108,7 +112,7 @@ impl AiAssistantView {
             .unwrap_or_default();
 
         let v_toggle = cx.entity();
-        let expanded = self.state.tasks_drawer_expanded;
+        let expanded = self.state.run.tasks_drawer_expanded;
 
         let mut card = v_flex()
             .w_full()
@@ -130,7 +134,7 @@ impl AiAssistantView {
             .hover(|s| s.bg(p.surface.hover))
             .on_click(move |_, _, cx| {
                 v_toggle.update(cx, |this, cx| {
-                    this.state.tasks_drawer_expanded = !this.state.tasks_drawer_expanded;
+                    this.state.run.tasks_drawer_expanded = !this.state.run.tasks_drawer_expanded;
                     cx.notify();
                 });
             })
@@ -205,8 +209,9 @@ impl AiAssistantView {
     }
 
     fn render_task_drawer_body(&self, p: &Palette, cx: &mut Context<Self>) -> AnyElement {
-        let selected_id = self.state.selected_task_id.as_deref().filter(|id| {
+        let selected_id = self.state.run.selected_task_id.as_deref().filter(|id| {
             self.state
+                .run
                 .managed_tasks
                 .iter()
                 .any(|t| t.dto.task_id == *id)
@@ -223,6 +228,7 @@ impl AiAssistantView {
 
         for (idx, item) in self
             .state
+            .run
             .managed_tasks
             .iter()
             .rev()
@@ -266,10 +272,10 @@ impl AiAssistantView {
                 .on_click(move |_, _, cx| {
                     let picked = tid.clone();
                     v_pick.update(cx, |this, cx| {
-                        if this.state.selected_task_id.as_deref() == Some(picked.as_str()) {
-                            this.state.selected_task_id = None;
+                        if this.state.run.selected_task_id.as_deref() == Some(picked.as_str()) {
+                            this.state.run.selected_task_id = None;
                         } else {
-                            this.state.selected_task_id = Some(picked);
+                            this.state.run.selected_task_id = Some(picked);
                         }
                         cx.notify();
                     });
@@ -355,6 +361,7 @@ impl AiAssistantView {
         if let Some(id) = selected_id
             && let Some(task) = self
                 .state
+                .run
                 .managed_tasks
                 .iter()
                 .find(|t| t.dto.task_id == id)

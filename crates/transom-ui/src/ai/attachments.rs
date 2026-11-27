@@ -327,7 +327,7 @@ impl AiAssistantView {
         if image_payloads.is_empty() && path_payloads.is_empty() {
             return false;
         }
-        let seq_base = self.state.pending_attachments.len() + 1;
+        let seq_base = self.state.composer.pending_attachments.len() + 1;
         let bg = cx.background_executor().clone();
         self._attachment_task = Some(cx.spawn_in(window, async move |this, cx| {
             let loaded = bg
@@ -345,8 +345,8 @@ impl AiAssistantView {
             let _ = this.update(cx, |this, cx| {
                 for res in loaded {
                     match res {
-                        Ok(att) => this.state.pending_attachments.push(att),
-                        Err(err) => this.state.status_error = Some(err),
+                        Ok(att) => this.state.composer.pending_attachments.push(att),
+                        Err(err) => this.state.view.status_error = Some(err),
                     }
                 }
                 cx.notify();
@@ -378,8 +378,8 @@ impl AiAssistantView {
             let _ = this.update(cx, |this, cx| {
                 for res in loaded {
                     match res {
-                        Ok(att) => this.state.pending_attachments.push(att),
-                        Err(err) => this.state.status_error = Some(err),
+                        Ok(att) => this.state.composer.pending_attachments.push(att),
+                        Err(err) => this.state.view.status_error = Some(err),
                     }
                 }
                 cx.notify();
@@ -388,7 +388,10 @@ impl AiAssistantView {
     }
 
     pub(super) fn remove_attachment(&mut self, id: &str, cx: &mut Context<Self>) {
-        self.state.pending_attachments.retain(|a| a.id() != id);
+        self.state
+            .composer
+            .pending_attachments
+            .retain(|a| a.id() != id);
         cx.notify();
     }
 }
