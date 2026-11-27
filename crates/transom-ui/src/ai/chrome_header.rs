@@ -166,7 +166,7 @@ impl AiAssistantView {
                                 if this.state.view.drawer == AiDrawerTab::Skills {
                                     this.state.view.drawer = AiDrawerTab::Chat;
                                 } else {
-                                    this.refresh_skills_list();
+                                    this.refresh_skills_list(cx);
                                     this.state.view.drawer = AiDrawerTab::Skills;
                                 }
                                 cx.notify();

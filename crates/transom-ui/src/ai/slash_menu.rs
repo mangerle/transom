@@ -3,7 +3,7 @@
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::input::InlineToken;
 use gpui_kit::*;
-use transom_ai::{SkillDefinition, load_skills_with_disabled};
+use transom_ai::SkillDefinition;
 use transom_ui_icons::{AppIcon, AppIconElement, CustomIcon, UiIcon};
 
 use super::state::AiDrawerTab;
@@ -218,11 +218,7 @@ impl AiAssistantView {
         {
             return Vec::new();
         }
-        let skills = load_skills_with_disabled(
-            Some(&self.ai_store.custom_skills_dir()),
-            &self.state.config.settings.disabled_skills,
-        );
-        filter_slash_items(&current_input, &skills)
+        filter_slash_items(&current_input, &self.skills_drawer.skills)
     }
 
     /// 将选中的斜杠命令替换为行内胶囊芯片（开头的 `/clear` 且无前置内容时直接清空会话）。

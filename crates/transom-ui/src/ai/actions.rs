@@ -10,11 +10,14 @@ use super::AiPanelEvent;
 use super::attachments::pack_attachments_for_request;
 use super::state::{AiActivePopup, AiDrawerTab, UiChatItem};
 use super::view::AiAssistantView;
+use crate::app::spawn_blocking_local;
 
 impl AiAssistantView {
-    pub(super) fn select_conversation(&mut self, conv_id: &str) {
+    pub(super) fn select_conversation(&mut self, conv_id: &str, cx: &mut Context<Self>) {
         self.active_nav_dot = None;
         self.editing_title = false;
+        self.state.conversation.load_seq = self.state.conversation.load_seq.wrapping_add(1);
+        let load_seq = self.state.conversation.load_seq;
         self.state.conversation.active_conversation_id = Some(conv_id.to_owned());
         self.state.conversation.active_conversation_title = self
             .state
@@ -29,21 +32,56 @@ impl AiAssistantView {
             self.state.run.active_focus = None;
             self.state.view.status_error = None;
         }
-        match self.ai_store.load_session_tree(conv_id) {
-            Ok(tree) => {
-                let branch: Vec<_> = tree.active_branch().into_iter().cloned().collect();
-                self.state.load_entries(branch);
-                self.state.view.status_error = self.state.run.background_run_errors.remove(conv_id);
+        let store = self.ai_store.clone();
+        let conversation_id = conv_id.to_owned();
+        let display_conversation_id = conv_id.to_owned();
+        self._conversation_load_task = Some(cx.spawn(async move |this, cx| {
+            let loaded =
+                spawn_blocking_local(move || store.load_session_tree(&conversation_id)).await;
+            let loaded = loaded.unwrap_or_else(|| {
+                Err(transom_ai::AiError::StorageFailed {
+                    target: "ai_session_load".to_owned(),
+                    reason: rust_i18n::t!("ai.background_task_failed").to_string(),
+                })
+            });
+            if this
+                .update(cx, |this, cx| {
+                    if this.state.conversation.load_seq != load_seq {
+                        return;
+                    }
+                    match loaded {
+                        Ok(tree) => {
+                            let branch: Vec<_> =
+                                tree.active_branch().into_iter().cloned().collect();
+                            this.state.load_entries(branch);
+                            this.state.view.status_error = this
+                                .state
+                                .run
+                                .background_run_errors
+                                .remove(&display_conversation_id);
+                        }
+                        Err(err) => {
+                            this.state.conversation.items.clear();
+                            this.state
+                                .run
+                                .background_run_errors
+                                .remove(&display_conversation_id);
+                            this.state.view.status_error = Some(
+                                rust_i18n::t!(
+                                    "ai.load_conversation_failed",
+                                    error = err.to_string()
+                                )
+                                .to_string(),
+                            );
+                        }
+                    }
+                    cx.notify();
+                })
+                .is_err()
+            {
+                log::debug!("AI 会话读取完成时视图已关闭，结果被丢弃");
             }
-            Err(err) => {
-                self.state.conversation.items.clear();
-                self.state.run.background_run_errors.remove(conv_id);
-                self.state.view.status_error = Some(
-                    rust_i18n::t!("ai.load_conversation_failed", error = err.to_string())
-                        .to_string(),
-                );
-            }
-        }
+        }));
     }
 
     pub(super) fn delete_conversation(&mut self, conv_id: &str, cx: &mut Context<Self>) {

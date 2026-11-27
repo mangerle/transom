@@ -4,6 +4,7 @@ use gpui_kit::*;
 use transom_core::AiAppEvent;
 
 use super::view::AiAssistantView;
+use crate::app::spawn_blocking_local;
 
 impl AiAssistantView {
     /// 处理控制平面推送的 AI 事件。
@@ -102,7 +103,7 @@ impl AiAssistantView {
                 self.state.view.status_error =
                     Some(rust_i18n::t!("ai.load_config_failed", error = err).to_string());
             }
-            self.refresh_skills_list();
+            self.refresh_skills_list(cx);
             self.probe_active_acp_agent(cx);
         }
         if should_scroll_bottom && !self.auto_scroll_locked {
@@ -112,27 +113,39 @@ impl AiAssistantView {
             self.sync_picker_from_discovered(cx);
         }
         if let Some(cid) = reload_conv {
-            self.select_conversation(&cid);
+            self.select_conversation(&cid, cx);
         }
         if refresh_index {
             let store = self.ai_store.clone();
-            let bg = cx.background_executor().clone();
             self._refresh_index_task = Some(cx.spawn(async move |this, cx| {
-                let conversations = bg
-                    .spawn(async move { store.list_all_conversations() })
-                    .await;
-                let _ = this.update(cx, |this, cx| {
-                    match conversations {
-                        Ok(conversations) => this.state.conversation.conversations = conversations,
-                        Err(err) => {
-                            this.state.view.status_error = Some(
-                                rust_i18n::t!("ai.load_local_data_failed", error = err.to_string())
+                let conversations =
+                    spawn_blocking_local(move || store.list_all_conversations()).await;
+                if this
+                    .update(cx, |this, cx| {
+                        match conversations {
+                            Some(Ok(conversations)) => {
+                                this.state.conversation.conversations = conversations
+                            }
+                            Some(Err(err)) => {
+                                this.state.view.status_error = Some(
+                                    rust_i18n::t!(
+                                        "ai.load_local_data_failed",
+                                        error = err.to_string()
+                                    )
                                     .to_string(),
-                            );
+                                );
+                            }
+                            None => {
+                                this.state.view.status_error =
+                                    Some(rust_i18n::t!("ai.background_task_failed").to_string());
+                            }
                         }
-                    }
-                    cx.notify();
-                });
+                        cx.notify();
+                    })
+                    .is_err()
+                {
+                    log::debug!("AI 会话索引刷新完成时视图已关闭，结果被丢弃");
+                }
             }));
         }
         if let Some(cancelled) = finished_cancelled {

@@ -301,7 +301,7 @@ impl AiAssistantView {
             HistoryDrawerActions {
                 on_select: Rc::new(move |id, _, cx| {
                     v_sel.update(cx, |this, cx| {
-                        this.select_conversation(&id);
+                        this.select_conversation(&id, cx);
                         this.state.view.drawer = AiDrawerTab::Chat;
                         cx.notify();
                     });

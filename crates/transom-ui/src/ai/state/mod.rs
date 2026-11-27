@@ -64,6 +64,10 @@ pub(crate) struct AiConversationUiState {
     pub(crate) items: Vec<UiChatItem>,
     pub(crate) expanded_cards: HashSet<String>,
     pub(crate) metrics: AiSessionMetrics,
+    /// 会话切换序号，用于丢弃后台读取迟到的旧会话。
+    pub(crate) load_seq: u64,
+    /// 记忆刷新序号，用于丢弃活动主机切换前发起的旧读取。
+    pub(crate) memory_load_seq: u64,
 }
 
 /// 当前运行、审批、计划、任务与消息队列状态。

@@ -12,6 +12,7 @@ use transom_ai::PreparedImage;
 use transom_ui_icons::{AppIcon, AppIconElement, CustomIcon, UiIcon};
 
 use super::view::AiAssistantView;
+use crate::app::spawn_blocking_local;
 use crate::palette::Palette;
 use crate::theme::tokens::{space, typography};
 
@@ -328,29 +329,40 @@ impl AiAssistantView {
             return false;
         }
         let seq_base = self.state.composer.pending_attachments.len() + 1;
-        let bg = cx.background_executor().clone();
         self._attachment_task = Some(cx.spawn_in(window, async move |this, cx| {
-            let loaded = bg
-                .spawn(async move {
-                    let mut out = Vec::new();
-                    for (i, bytes) in image_payloads.into_iter().enumerate() {
-                        out.push(load_attachment_from_image_bytes(&bytes, seq_base + i));
-                    }
-                    for path in path_payloads {
-                        out.push(load_attachment_from_path(&path));
-                    }
-                    out
-                })
-                .await;
-            let _ = this.update(cx, |this, cx| {
-                for res in loaded {
-                    match res {
-                        Ok(att) => this.state.composer.pending_attachments.push(att),
-                        Err(err) => this.state.view.status_error = Some(err),
-                    }
+            let loaded = spawn_blocking_local(move || {
+                let mut out = Vec::new();
+                for (i, bytes) in image_payloads.into_iter().enumerate() {
+                    out.push(load_attachment_from_image_bytes(&bytes, seq_base + i));
                 }
-                cx.notify();
-            });
+                for path in path_payloads {
+                    out.push(load_attachment_from_path(&path));
+                }
+                out
+            })
+            .await;
+            if this
+                .update(cx, |this, cx| {
+                    match loaded {
+                        Some(loaded) => {
+                            for res in loaded {
+                                match res {
+                                    Ok(att) => this.state.composer.pending_attachments.push(att),
+                                    Err(err) => this.state.view.status_error = Some(err),
+                                }
+                            }
+                        }
+                        None => {
+                            this.state.view.status_error =
+                                Some(rust_i18n::t!("ai.background_task_failed").to_string());
+                        }
+                    }
+                    cx.notify();
+                })
+                .is_err()
+            {
+                log::debug!("AI 附件读取完成时视图已关闭，结果被丢弃");
+            }
         }));
         true
     }
@@ -365,25 +377,36 @@ impl AiAssistantView {
         if paths.is_empty() {
             return;
         }
-        let bg = cx.background_executor().clone();
         self._attachment_task = Some(cx.spawn_in(window, async move |this, cx| {
-            let loaded = bg
-                .spawn(async move {
-                    paths
-                        .into_iter()
-                        .map(|p| load_attachment_from_path(&p))
-                        .collect::<Vec<_>>()
-                })
-                .await;
-            let _ = this.update(cx, |this, cx| {
-                for res in loaded {
-                    match res {
-                        Ok(att) => this.state.composer.pending_attachments.push(att),
-                        Err(err) => this.state.view.status_error = Some(err),
+            let loaded = spawn_blocking_local(move || {
+                paths
+                    .into_iter()
+                    .map(|p| load_attachment_from_path(&p))
+                    .collect::<Vec<_>>()
+            })
+            .await;
+            if this
+                .update(cx, |this, cx| {
+                    match loaded {
+                        Some(loaded) => {
+                            for res in loaded {
+                                match res {
+                                    Ok(att) => this.state.composer.pending_attachments.push(att),
+                                    Err(err) => this.state.view.status_error = Some(err),
+                                }
+                            }
+                        }
+                        None => {
+                            this.state.view.status_error =
+                                Some(rust_i18n::t!("ai.background_task_failed").to_string());
+                        }
                     }
-                }
-                cx.notify();
-            });
+                    cx.notify();
+                })
+                .is_err()
+            {
+                log::debug!("AI 拖入附件读取完成时视图已关闭，结果被丢弃");
+            }
         }));
     }
 

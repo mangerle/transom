@@ -10340,6 +10340,9 @@ ai:
   load_config_request_failed:
     en: 'Failed to request the AI config snapshot: %{error}'
     zh-CN: '请求控制平面配置快照失败: %{error}'
+  background_task_failed:
+    en: Background file task could not be started or did not return a result
+    zh-CN: 后台文件任务无法启动或未返回结果
   invalid_config_snapshot:
     en: 'The AI config snapshot is invalid: %{error}'
     zh-CN: 'AI 配置快照格式无效: %{error}'
@@ -10604,6 +10607,9 @@ ai:
   skills_delete:
     en: Delete
     zh-CN: 删除
+  skills_delete_missing:
+    en: The selected custom skill no longer exists
+    zh-CN: 指定的自定义技能已不存在
   skills_save:
     en: Save Skill
     zh-CN: 保存技能

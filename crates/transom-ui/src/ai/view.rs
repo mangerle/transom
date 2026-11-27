@@ -18,6 +18,7 @@ use super::plan_card::{PlanCardParams, render_plan_card};
 use super::skills_drawer::SkillsDrawerState;
 use super::slash_menu::register_slash_key_interceptor;
 use super::state::{AiActivePopup, AiDrawerTab, AiPanelState};
+use crate::app::spawn_blocking_local;
 use crate::palette::Palette;
 use crate::theme::tokens::space;
 
@@ -42,6 +43,9 @@ pub(crate) struct AiAssistantView {
     pub(super) _attachment_task: Option<Task<()>>,
     pub(super) _init_load_task: Option<Task<()>>,
     pub(super) _refresh_index_task: Option<Task<()>>,
+    pub(super) _conversation_load_task: Option<Task<()>>,
+    pub(super) _memory_load_task: Option<Task<()>>,
+    pub(super) _skills_load_task: Option<Task<()>>,
     pub(super) skills_drawer: SkillsDrawerState,
     pub(super) policy_hooks_form: super::policy_hooks_drawer::PolicyHooksFormState,
     pub(super) model_picker: super::model_picker::ModelPickerState,
@@ -88,12 +92,7 @@ impl AiAssistantView {
                 .placeholder(rust_i18n::t!("ai.approval_feedback_placeholder").to_string())
         });
         let (choice_custom_input, choice_sub) = init_choice_input(window, cx);
-        let skills_drawer = SkillsDrawerState::new(
-            &ai_store,
-            &state.config.settings.disabled_skills,
-            window,
-            cx,
-        );
+        let skills_drawer = SkillsDrawerState::new(window, cx);
         let policy_hooks_form = super::policy_hooks_drawer::PolicyHooksFormState::new(window, cx);
         let model_picker = super::model_picker::ModelPickerState::new(window, cx);
 
@@ -164,36 +163,45 @@ impl AiAssistantView {
         );
 
         let init_store = ai_store.clone();
-        let bg = cx.background_executor().clone();
         let init_load_task = cx.spawn_in(window, async move |this, cx| {
-            let loaded = bg
-                .spawn(async move {
-                    let conversations = init_store.list_all_conversations()?;
-                    let memory = init_store.load_memory(None)?;
-                    let totals = init_store.load_usage_totals()?;
-                    Ok::<_, transom_ai::AiError>((conversations, memory, totals))
+            let loaded = spawn_blocking_local(move || {
+                let conversations = init_store.list_all_conversations()?;
+                let memory = init_store.load_memory(None)?;
+                let totals = init_store.load_usage_totals()?;
+                Ok::<_, transom_ai::AiError>((conversations, memory, totals))
+            })
+            .await;
+            let loaded = loaded.unwrap_or_else(|| {
+                Err(transom_ai::AiError::StorageFailed {
+                    target: "ai_local_data_init".to_owned(),
+                    reason: rust_i18n::t!("ai.background_task_failed").to_string(),
                 })
-                .await;
-            let _ = this.update(cx, |this, cx| {
-                match loaded {
-                    Ok((conversations, memory, totals)) => {
-                        this.state.conversation.conversations = conversations;
-                        if this.state.memory.global_markdown.is_empty()
-                            && !memory.global_markdown.is_empty()
-                        {
-                            this.state.memory.global_markdown = memory.global_markdown;
-                        }
-                        this.state.conversation.metrics.set_stored_totals(totals);
-                    }
-                    Err(err) => {
-                        this.state.view.status_error = Some(
-                            rust_i18n::t!("ai.load_local_data_failed", error = err.to_string())
-                                .to_string(),
-                        );
-                    }
-                }
-                cx.notify();
             });
+            if this
+                .update(cx, |this, cx| {
+                    match loaded {
+                        Ok((conversations, memory, totals)) => {
+                            this.state.conversation.conversations = conversations;
+                            if this.state.memory.global_markdown.is_empty()
+                                && !memory.global_markdown.is_empty()
+                            {
+                                this.state.memory.global_markdown = memory.global_markdown;
+                            }
+                            this.state.conversation.metrics.set_stored_totals(totals);
+                        }
+                        Err(err) => {
+                            this.state.view.status_error = Some(
+                                rust_i18n::t!("ai.load_local_data_failed", error = err.to_string())
+                                    .to_string(),
+                            );
+                        }
+                    }
+                    cx.notify();
+                })
+                .is_err()
+            {
+                log::debug!("AI 本地数据初始化视图已关闭，结果被丢弃");
+            }
         });
 
         let mut subscriptions = vec![sub, key_sub, choice_sub, title_sub];
@@ -219,6 +227,9 @@ impl AiAssistantView {
             _attachment_task: None,
             _init_load_task: Some(init_load_task),
             _refresh_index_task: None,
+            _conversation_load_task: None,
+            _memory_load_task: None,
+            _skills_load_task: None,
             skills_drawer,
             policy_hooks_form,
             model_picker,

@@ -1,14 +1,13 @@
 //! AI 面板「技能（Skills）」抽屉：浏览内置/自定义技能、开关启用、在线编辑与一键导入 `SKILL.md`。
 
+use super::view::AiAssistantView;
+use crate::app::spawn_blocking_local;
 use gpui_kit::component::input::{InputState, TextareaState};
 use gpui_kit::*;
 use transom_ai::{
     SkillDefinition, delete_custom_skill, import_skill_from_path, load_skills_with_disabled,
     save_custom_skill,
 };
-use transom_store::AiStore;
-
-use super::view::AiAssistantView;
 
 /// 技能管理抽屉内部状态。
 pub(super) struct SkillsDrawerState {
@@ -20,18 +19,13 @@ pub(super) struct SkillsDrawerState {
     pub(super) tags_input: Entity<InputState>,
     pub(super) body_input: Entity<TextareaState>,
     pub(super) status_notice: Option<(bool, String)>,
+    pub(super) load_seq: u64,
+    pub(super) _mutation_task: Option<Task<()>>,
     pub(super) _import_task: Option<Task<()>>,
 }
 
 impl SkillsDrawerState {
-    pub(super) fn new(
-        ai_store: &AiStore,
-        disabled_skills: &[String],
-        window: &mut Window,
-        cx: &mut Context<AiAssistantView>,
-    ) -> Self {
-        let skills =
-            load_skills_with_disabled(Some(&ai_store.custom_skills_dir()), disabled_skills);
+    pub(super) fn new(window: &mut Window, cx: &mut Context<AiAssistantView>) -> Self {
         let mk_input = |key: &str, window: &mut Window, cx: &mut Context<AiAssistantView>| {
             let ph = rust_i18n::t!(key).to_string();
             cx.new(|cx| InputState::new(window, cx).placeholder(ph))
@@ -45,7 +39,7 @@ impl SkillsDrawerState {
                 .placeholder(rust_i18n::t!("ai.skills_body_placeholder").to_string())
         });
         Self {
-            skills,
+            skills: Vec::new(),
             editing_id: None,
             id_input,
             title_input,
@@ -53,17 +47,43 @@ impl SkillsDrawerState {
             tags_input,
             body_input,
             status_notice: None,
+            load_seq: 0,
+            _mutation_task: None,
             _import_task: None,
         }
     }
 }
 
 impl AiAssistantView {
-    pub(super) fn refresh_skills_list(&mut self) {
-        self.skills_drawer.skills = load_skills_with_disabled(
-            Some(&self.ai_store.custom_skills_dir()),
-            &self.state.config.settings.disabled_skills,
-        );
+    pub(super) fn refresh_skills_list(&mut self, cx: &mut Context<Self>) {
+        self.skills_drawer.load_seq = self.skills_drawer.load_seq.wrapping_add(1);
+        let load_seq = self.skills_drawer.load_seq;
+        let dir = self.ai_store.custom_skills_dir();
+        let disabled = self.state.config.settings.disabled_skills.clone();
+        self._skills_load_task = Some(cx.spawn(async move |this, cx| {
+            let loaded =
+                spawn_blocking_local(move || load_skills_with_disabled(Some(&dir), &disabled))
+                    .await;
+            if this
+                .update(cx, |this, cx| {
+                    if this.skills_drawer.load_seq != load_seq {
+                        return;
+                    }
+                    if let Some(skills) = loaded {
+                        this.skills_drawer.skills = skills;
+                    } else {
+                        this.skills_drawer.status_notice = Some((
+                            false,
+                            rust_i18n::t!("ai.background_task_failed").to_string(),
+                        ));
+                    }
+                    cx.notify();
+                })
+                .is_err()
+            {
+                log::debug!("AI 技能列表读取完成时视图已关闭，结果被丢弃");
+            }
+        }));
     }
 
     pub(super) fn toggle_skill_enabled(&mut self, skill_id: &str, cx: &mut Context<Self>) {
@@ -80,7 +100,7 @@ impl AiAssistantView {
         } else {
             self.state.config.settings.disabled_skills.push(clean);
         }
-        self.refresh_skills_list();
+        self.refresh_skills_list(cx);
         self.persist_settings_reported(cx);
     }
 
@@ -139,37 +159,72 @@ impl AiAssistantView {
             .map(str::to_owned)
             .collect();
 
-        match save_custom_skill(
-            &self.ai_store.custom_skills_dir(),
-            &id,
-            &title,
-            &desc,
-            &tags,
-            &body,
-        ) {
-            Ok(_) => {
-                self.skills_drawer.editing_id = None;
-                self.skills_drawer.status_notice =
-                    Some((true, rust_i18n::t!("ai.skills_saved_ok").to_string()));
-                self.refresh_skills_list();
+        let dir = self.ai_store.custom_skills_dir();
+        self.skills_drawer._mutation_task = Some(cx.spawn(async move |this, cx| {
+            let result = spawn_blocking_local(move || {
+                save_custom_skill(&dir, &id, &title, &desc, &tags, &body)
+            })
+            .await;
+            if this
+                .update(cx, |this, cx| {
+                    match result {
+                        Some(Ok(_)) => {
+                            this.skills_drawer.editing_id = None;
+                            this.skills_drawer.status_notice =
+                                Some((true, rust_i18n::t!("ai.skills_saved_ok").to_string()));
+                            this.refresh_skills_list(cx);
+                        }
+                        Some(Err(err)) => {
+                            this.skills_drawer.status_notice = Some((false, err.to_string()));
+                        }
+                        None => {
+                            this.skills_drawer.status_notice = Some((
+                                false,
+                                rust_i18n::t!("ai.background_task_failed").to_string(),
+                            ));
+                        }
+                    }
+                    cx.notify();
+                })
+                .is_err()
+            {
+                log::debug!("AI 技能保存完成时视图已关闭，结果被丢弃");
             }
-            Err(err) => {
-                self.skills_drawer.status_notice = Some((false, err.to_string()));
-            }
-        }
-        cx.notify();
+        }));
     }
 
     pub(super) fn delete_skill_from_drawer(&mut self, skill_id: &str, cx: &mut Context<Self>) {
-        match delete_custom_skill(&self.ai_store.custom_skills_dir(), skill_id) {
-            Ok(_) => {
-                self.refresh_skills_list();
+        let dir = self.ai_store.custom_skills_dir();
+        let skill_id = skill_id.to_owned();
+        self.skills_drawer._mutation_task = Some(cx.spawn(async move |this, cx| {
+            let result = spawn_blocking_local(move || delete_custom_skill(&dir, &skill_id)).await;
+            if this
+                .update(cx, |this, cx| {
+                    match result {
+                        Some(Ok(true)) => this.refresh_skills_list(cx),
+                        Some(Ok(false)) => {
+                            this.skills_drawer.status_notice = Some((
+                                false,
+                                rust_i18n::t!("ai.skills_delete_missing").to_string(),
+                            ));
+                        }
+                        Some(Err(err)) => {
+                            this.skills_drawer.status_notice = Some((false, err.to_string()));
+                        }
+                        None => {
+                            this.skills_drawer.status_notice = Some((
+                                false,
+                                rust_i18n::t!("ai.background_task_failed").to_string(),
+                            ));
+                        }
+                    }
+                    cx.notify();
+                })
+                .is_err()
+            {
+                log::debug!("AI 技能删除完成时视图已关闭，结果被丢弃");
             }
-            Err(err) => {
-                self.skills_drawer.status_notice = Some((false, err.to_string()));
-            }
-        }
-        cx.notify();
+        }));
     }
 
     pub(super) fn import_skill_via_dialog(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -180,7 +235,6 @@ impl AiAssistantView {
             prompt: None,
         });
         let dir = self.ai_store.custom_skills_dir();
-        let bg = cx.background_executor().clone();
         self.skills_drawer._import_task = Some(cx.spawn_in(window, async move |this, cx| {
             let Ok(Ok(Some(paths))) = picked.await else {
                 return;
@@ -188,24 +242,34 @@ impl AiAssistantView {
             let Some(src) = paths.into_iter().next() else {
                 return;
             };
-            let res = bg
-                .spawn(async move { import_skill_from_path(&src, &dir) })
-                .await;
-            let _ = this.update(cx, |this, cx| {
-                match res {
-                    Ok(skill) => {
-                        this.skills_drawer.status_notice = Some((
-                            true,
-                            rust_i18n::t!("ai.skills_imported_ok", name = skill.title).to_string(),
-                        ));
-                        this.refresh_skills_list();
+            let result = spawn_blocking_local(move || import_skill_from_path(&src, &dir)).await;
+            if this
+                .update_in(cx, |this, _window, cx| {
+                    match result {
+                        Some(Ok(skill)) => {
+                            this.skills_drawer.status_notice = Some((
+                                true,
+                                rust_i18n::t!("ai.skills_imported_ok", name = skill.title)
+                                    .to_string(),
+                            ));
+                            this.refresh_skills_list(cx);
+                        }
+                        Some(Err(err)) => {
+                            this.skills_drawer.status_notice = Some((false, err.to_string()));
+                        }
+                        None => {
+                            this.skills_drawer.status_notice = Some((
+                                false,
+                                rust_i18n::t!("ai.background_task_failed").to_string(),
+                            ));
+                        }
                     }
-                    Err(err) => {
-                        this.skills_drawer.status_notice = Some((false, err.to_string()));
-                    }
-                }
-                cx.notify();
-            });
+                    cx.notify();
+                })
+                .is_err()
+            {
+                log::debug!("AI 技能导入完成时视图已关闭，结果被丢弃");
+            }
         }));
     }
 }

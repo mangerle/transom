@@ -9,6 +9,7 @@ use super::AiPanelEvent;
 use super::composer::{ComposerActions, ComposerParams, ExtraHostOption, render_composer};
 use super::state::{AiActivePopup, AiDrawerTab};
 use super::view::AiAssistantView;
+use crate::app::spawn_blocking_local;
 use crate::palette::Palette;
 
 impl AiAssistantView {
@@ -239,21 +240,53 @@ impl AiAssistantView {
         }
         self.state.conversation.active_session = session;
         let scope = self.state.current_scope();
-        let host_id = match &scope {
-            transom_ai::SessionScope::Host(id) => Some(id.as_str()),
+        let host_id = match scope {
+            transom_ai::SessionScope::Host(id) => Some(id),
             transom_ai::SessionScope::Global => None,
         };
-        if let Ok(mem) = self.ai_store.load_memory(host_id) {
-            self.state.memory = mem;
-            let g_text = self.state.memory.global_markdown.clone();
-            let h_text = self.state.memory.host_markdown.clone();
-            self.memory_form
-                .global_mem_input
-                .update(cx, |i, cx| i.set_value(g_text, window, cx));
-            self.memory_form
-                .host_mem_input
-                .update(cx, |i, cx| i.set_value(h_text, window, cx));
-        }
+        self.state.conversation.memory_load_seq =
+            self.state.conversation.memory_load_seq.wrapping_add(1);
+        let load_seq = self.state.conversation.memory_load_seq;
+        let store = self.ai_store.clone();
+        self._memory_load_task = Some(cx.spawn_in(window, async move |this, cx| {
+            let loaded = spawn_blocking_local(move || store.load_memory(host_id.as_deref())).await;
+            let loaded = loaded.unwrap_or_else(|| {
+                Err(transom_ai::AiError::StorageFailed {
+                    target: "ai_memory_load".to_owned(),
+                    reason: rust_i18n::t!("ai.background_task_failed").to_string(),
+                })
+            });
+            if this
+                .update_in(cx, |this, window, cx| {
+                    if this.state.conversation.memory_load_seq != load_seq {
+                        return;
+                    }
+                    match loaded {
+                        Ok(memory) => {
+                            this.state.memory = memory;
+                            let global_text = this.state.memory.global_markdown.clone();
+                            let host_text = this.state.memory.host_markdown.clone();
+                            this.memory_form
+                                .global_mem_input
+                                .update(cx, |input, cx| input.set_value(global_text, window, cx));
+                            this.memory_form
+                                .host_mem_input
+                                .update(cx, |input, cx| input.set_value(host_text, window, cx));
+                        }
+                        Err(err) => {
+                            this.state.view.status_error = Some(
+                                rust_i18n::t!("ai.load_local_data_failed", error = err.to_string())
+                                    .to_string(),
+                            );
+                        }
+                    }
+                    cx.notify();
+                })
+                .is_err()
+            {
+                log::debug!("AI 记忆读取完成时视图已关闭，结果被丢弃");
+            }
+        }));
         cx.notify();
     }
 
