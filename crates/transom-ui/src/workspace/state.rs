@@ -298,6 +298,7 @@ mod tests {
                 auth: AuthMethod::Password { save: false },
                 options: Default::default(),
                 proxy_jump: None,
+                protection: Default::default(),
             }),
         );
         let group = TabGroup::new(pane, TabGroupOwner::Session(session.id), 0);

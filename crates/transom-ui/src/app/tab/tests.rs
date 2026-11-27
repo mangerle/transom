@@ -94,6 +94,7 @@ fn ssh_session() -> Session {
             auth: AuthMethod::Agent,
             options: Default::default(),
             proxy_jump: None,
+            protection: Default::default(),
         }),
     )
 }

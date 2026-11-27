@@ -2,6 +2,8 @@
 
 #[path = "../activity_bar/mod.rs"]
 pub(crate) mod activity_bar;
+#[path = "../ai/mod.rs"]
+pub(crate) mod ai;
 #[path = "../api_client/mod.rs"]
 pub(crate) mod api_client;
 #[path = "../audit.rs"]

@@ -63,7 +63,8 @@ actions!(
         GoToEditorLine,
         DiffPrevChange,
         DiffNextChange,
-        DiffFindInView
+        DiffFindInView,
+        InlineAiAssist
     ]
 );
 

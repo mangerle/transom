@@ -206,6 +206,45 @@ pub(crate) fn save_snippet_form(app_state: &mut AppState, cx: &mut Context<AppSh
     cx.notify();
 }
 
+/// 从外部入口（如 AI 工具卡片）直接保存一条快捷命令并同步补全池。
+pub(crate) fn add_quick_snippet(
+    app_state: &mut AppState,
+    name: String,
+    command: String,
+    cx: &mut Context<AppShell>,
+) {
+    let candidate = Snippet {
+        id: SnippetId::new(),
+        name: name.trim().to_owned(),
+        command: command.trim().to_owned(),
+    };
+    if !candidate.is_valid() {
+        return;
+    }
+    if app_settings(cx)
+        .snippets
+        .items
+        .iter()
+        .any(|item| item.command == candidate.command)
+    {
+        app_state.set_transient_status(rust_i18n::t!("snippets.saved"), cx);
+        return;
+    }
+    if app_settings(cx).snippets.items.len() >= SNIPPET_MAX_ITEMS {
+        return;
+    }
+    app_settings_mut(cx).snippets.items.push(candidate);
+    let settings_snapshot = app_settings(cx).clone();
+    if app_state.persist_settings(&settings_snapshot).is_ok() {
+        app_state
+            .runtime
+            .completion
+            .apply_settings(app_settings(cx));
+        app_state.set_transient_status(rust_i18n::t!("snippets.saved"), cx);
+    }
+    cx.notify();
+}
+
 /// 从卡片里删除一条命令并立即落盘；卡片保持打开，便于连续清理。
 pub(super) fn delete_snippet(app_state: &mut AppState, id: SnippetId, cx: &mut Context<AppShell>) {
     let before = app_settings(cx).snippets.items.len();

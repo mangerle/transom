@@ -181,6 +181,13 @@ impl AppShell {
                 crate::monitor::MonitorOps::new(&mut shell.state).on_monitor_panel_event(event, cx);
             },
         ));
+        self.state.runtime.tasks.subscriptions.ai_panel = Some(cx.subscribe(
+            &self.state.features.ai_panel,
+            |shell, _view, event: &crate::ai::AiPanelEvent, cx| {
+                crate::ai::panel_events::on_ai_panel_event(&mut shell.state, event, cx);
+                cx.notify();
+            },
+        ));
         self.state.runtime.tasks.subscriptions.container_sidebar = Some(cx.subscribe(
             &self.state.features.containers.sidebar,
             |shell, _view, event: &crate::container::ContainerSidebarEvent, cx| {

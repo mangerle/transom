@@ -70,7 +70,9 @@ impl AppState {
                 .find(|identity| identity.id == *identity_id)
                 .is_some_and(|identity| enable_auth_save(&mut identity.auth)),
             // 仓库凭据没有目录侧的"已保存"标记。
-            transom_core::SecretOwner::Registry(_) => false,
+            transom_core::SecretOwner::Registry(_) | transom_core::SecretOwner::AiProvider(_) => {
+                false
+            }
         };
         if !flipped {
             return;

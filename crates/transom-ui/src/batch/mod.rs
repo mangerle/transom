@@ -31,6 +31,7 @@ mod tests {
                 auth: AuthMethod::Agent,
                 options: Default::default(),
                 proxy_jump: None,
+                protection: Default::default(),
             }),
         )
     }

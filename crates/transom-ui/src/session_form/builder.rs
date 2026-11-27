@@ -190,6 +190,7 @@ impl SessionForm {
                 proxy_jump: self
                     .jump_choice
                     .map(|jump_session_id| ProxyJumpConfig { jump_session_id }),
+                protection: Default::default(),
             }),
             password,
             key_passphrase,
@@ -272,6 +273,7 @@ impl SessionForm {
                 proxy_jump: self
                     .jump_choice
                     .map(|jump_session_id| ProxyJumpConfig { jump_session_id }),
+                protection: Default::default(),
             }),
             password,
             key_passphrase,

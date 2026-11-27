@@ -122,6 +122,7 @@ pub(crate) struct SessionState {
 pub(crate) struct UiState {
     pub(crate) workspace_panels: Entity<ResizableState>,
     pub(crate) workspace_panels_left: Entity<ResizableState>,
+    pub(crate) ai_panel_split: Entity<ResizableState>,
     pub(crate) vertical_tabs_search: Entity<InputState>,
     pub(crate) modals: ModalHub,
     pub(crate) status: Option<String>,
@@ -147,6 +148,10 @@ pub(crate) struct FeatureState {
     pub(crate) broadcast: BroadcastBarState,
     pub(crate) status_metrics: Entity<crate::status_bar::StatusBarMetricsView>,
     pub(crate) stats_sampling: bool,
+    pub(crate) ai_panel: Entity<crate::ai::AiAssistantView>,
+    pub(crate) ai_panel_open: bool,
+    pub(crate) inline_assist: crate::ai::inline_assist::InlineAssistState,
+    pub(crate) dismissed_failed_blocks: HashMap<TabId, u64>,
 }
 
 /// 应用运行期状态。

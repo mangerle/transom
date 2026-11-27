@@ -59,6 +59,11 @@ bind_fn!(
 bind_fn!(bind_prev_prompt, action_prev_prompt, PrevPrompt);
 bind_fn!(bind_next_prompt, action_next_prompt, NextPrompt);
 bind_fn!(bind_toggle_snippets, action_toggle_snippets, ToggleSnippets);
+bind_fn!(
+    bind_inline_ai_assist,
+    action_inline_ai_assist,
+    InlineAiAssist
+);
 bind_fn!(bind_split_right, action_split_right, SplitRight);
 bind_fn!(bind_split_down, action_split_down, SplitDown);
 bind_fn!(bind_close_pane, action_close_pane, ClosePane);
@@ -362,6 +367,14 @@ pub(super) static SPECS: &[ShortcutSpec] = &[
         context: EDITOR_PANEL_CONTEXT,
         bind: bind_go_to_editor_line,
         action: action_go_to_editor_line,
+    },
+    ShortcutSpec {
+        id: "inline_ai_assist",
+        label_key: "settings.shortcut_inline_ai_assist",
+        defaults: &["$app-i"],
+        context: WORKSPACE_ONLY,
+        bind: bind_inline_ai_assist,
+        action: action_inline_ai_assist,
     },
 ];
 

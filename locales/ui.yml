@@ -163,6 +163,9 @@ activity:
   git:
     en: Git
     zh-CN: Git
+  ai_assistant:
+    en: AI Assistant
+    zh-CN: AI 助手
   api_client:
     en: API Client
     zh-CN: API 客户端
@@ -4993,6 +4996,9 @@ settings:
   shortcut_go_to_line:
     en: Go to Line in Editor
     zh-CN: 编辑器跳转到行
+  shortcut_inline_ai_assist:
+    en: Inline Terminal AI Assist
+    zh-CN: 终端内联 AI 唤起
   shortcut_toggle_block_view:
     en: Toggle Semantic Block View
     zh-CN: 切换语义块视图
@@ -10272,3 +10278,806 @@ performance:
   sampling:
     en: Sampling
     zh-CN: 采样中
+
+ai:
+  title:
+    en: AI Ops Assistant
+    zh-CN: AI 运维助手
+  new_chat:
+    en: New Chat
+    zh-CN: 新对话
+  memory:
+    en: Memory
+    zh-CN: 记忆
+  model:
+    en: Model
+    zh-CN: 模型
+  collapse:
+    en: Collapse
+    zh-CN: 收起
+  send:
+    en: Send
+    zh-CN: 发送
+  stop:
+    en: Stop
+    zh-CN: 停止
+  approve:
+    en: Approve
+    zh-CN: 批准执行
+  reject:
+    en: Reject
+    zh-CN: 拒绝
+  thinking:
+    en: Thinking…
+    zh-CN: 思考中…
+  show_reasoning:
+    en: Show Reasoning
+    zh-CN: 查看思考过程
+  hide_reasoning:
+    en: Hide Reasoning
+    zh-CN: 收起思考过程
+  status_ok:
+    en: OK
+    zh-CN: 成功
+  status_fail:
+    en: Failed
+    zh-CN: 失败
+  composer_placeholder:
+    en: Type / for commands, @host for multi-host, Enter to send
+    zh-CN: 输入 / 呼出指令，@主机名 协同多主机，Enter 发送
+  empty_hint:
+    en: Type natural language or use /inspect, /diagnose, /deploy.
+    zh-CN: 可输入自然语言或使用 /inspect（巡检）、/diagnose（排障）、/deploy（部署）。
+  no_model:
+    en: No model configured
+    zh-CN: 未配置模型
+  connected:
+    en: Connected
+    zh-CN: 已连接
+  disconnected:
+    en: Disconnected
+    zh-CN: 未连接
+  global_mode:
+    en: Global Mode (No Host)
+    zh-CN: 通用模式（未绑定主机）
+  mention_local_desc:
+    en: Local machine terminal & workspace
+    zh-CN: 本机终端与本地工作区
+  mention_docker_desc:
+    en: Container engine
+    zh-CN: 容器引擎
+  mention_badge_local:
+    en: Local
+    zh-CN: 本机
+  mention_badge_ssh_online:
+    en: SSH Online
+    zh-CN: SSH 已连接
+  mention_badge_ssh:
+    en: SSH
+    zh-CN: SSH
+  mention_badge_docker:
+    en: Docker
+    zh-CN: Docker
+  scroll_to_bottom:
+    en: Scroll to bottom
+    zh-CN: 滚动到最底部
+  wg_ran_commands:
+    en: Ran commands
+    zh-CN: 运行了命令
+  wg_read_files:
+    en: Read files
+    zh-CN: 已读取文件
+  wg_read_and_ran:
+    en: Read files and ran commands
+    zh-CN: 已读取文件并运行了命令
+  tool_shell_header:
+    en: "Shell · %{host}"
+    zh-CN: "Shell · %{host}"
+  picker_title:
+    en: Select Models
+    zh-CN: 选择模型
+  picker_subtitle:
+    en: Checked models will be added; unchecked models will be removed.
+    zh-CN: 勾选的模型会加入列表，取消勾选会从列表中移除。
+  picker_search_placeholder:
+    en: Search models…
+    zh-CN: 搜索模型…
+  picker_select_all:
+    en: Select All
+    zh-CN: 全选
+  picker_clear_all:
+    en: Clear
+    zh-CN: 全不选
+  picker_selected_only:
+    en: Selected Only
+    zh-CN: 只看已选
+  picker_selected_count:
+    en: "%{selected} selected / %{total} total"
+    zh-CN: "已选 %{selected} / 共 %{total}"
+  picker_apply:
+    en: Apply
+    zh-CN: 应用
+  picker_select_models:
+    en: Select Models
+    zh-CN: 选择模型
+  picker_refresh:
+    en: Refresh Models
+    zh-CN: 刷新模型列表
+  general_label:
+    en: General
+    zh-CN: 通用
+  preset_heading:
+    en: Quick Add or Update Provider
+    zh-CN: 一键添加或更新模型供应商
+  model_name_label:
+    en: Model Name (e.g. gpt-4.1 / claude-sonnet-4-5 / deepseek-chat)
+    zh-CN: 模型名称（如 gpt-4.1 / claude-sonnet-4-5 / deepseek-chat）
+  api_key_label:
+    en: API Key (Stored securely in OS Keyring)
+    zh-CN: API Key（将加密存入系统钥匙串，不写明文）
+  save_provider:
+    en: Save Provider & Key
+    zh-CN: 保存供应商与密钥
+  configured_providers:
+    en: Configured Providers
+    zh-CN: 已配置供应商
+  provider_row:
+    en: "%{name} [%{protocol}] · Models: %{models}"
+    zh-CN: "%{name} [%{protocol}] · 模型: %{models}"
+  global_memory_title:
+    en: Global Ops Memory (global.md)
+    zh-CN: 全局运维偏好记忆（global.md）
+  global_memory_placeholder:
+    en: Global ops preferences…
+    zh-CN: 全局运维偏好…
+  host_memory_title:
+    en: "Host Memory (%{host})"
+    zh-CN: "当前主机长期记忆（%{host}）"
+  host_memory_placeholder:
+    en: Host environment notes…
+    zh-CN: 当前主机环境备忘…
+  save_memory:
+    en: Save Memory
+    zh-CN: 保存记忆
+  send_failed:
+    en: "Failed to send AI request: %{error}"
+    zh-CN: "发送 AI 请求失败: %{error}"
+  save_key_failed:
+    en: "Failed to save API Key to keyring: %{error}"
+    zh-CN: "保存 API Key 到钥匙串失败: %{error}"
+  save_config_failed:
+    en: "Failed to save AI config: %{error}"
+    zh-CN: "保存 AI 配置失败: %{error}"
+  bulk_scope_label:
+    en: "Multi-host:"
+    zh-CN: "协同主机:"
+  fresh_approval_badge:
+    en: "Fresh confirmation required every time"
+    zh-CN: "批量变更强制每次确认"
+  test_connection:
+    en: Test Connection
+    zh-CN: 测试连接
+  fetch_models:
+    en: Fetch Models
+    zh-CN: 拉取模型
+  testing_connection:
+    en: Testing connection…
+    zh-CN: 正在测试连接…
+  fetching_models:
+    en: Fetching models…
+    zh-CN: 正在拉取模型列表…
+  discovered_models:
+    en: "Discovered models (click to select):"
+    zh-CN: "发现的模型（点击填入）:"
+  explain_recent_output:
+    en: AI Explain Recent Output
+    zh-CN: AI 解释最近输出
+  save_as_snippet:
+    en: Save Snippet
+    zh-CN: 存为快捷命令
+  copy:
+    en: Copy
+    zh-CN: 复制
+  copied:
+    en: Copied
+    zh-CN: 已复制
+  send_to_terminal:
+    en: Insert to Terminal
+    zh-CN: 填入终端
+  copy_output:
+    en: Copy Output
+    zh-CN: 复制输出
+  code_block_default:
+    en: Code
+    zh-CN: 代码
+  streaming_code:
+    en: Streaming…
+    zh-CN: 生成中…
+  sent_to_terminal:
+    en: Command inserted into terminal
+    zh-CN: 已填入终端输入框
+  quick_inspect_title:
+    en: Host Health Check
+    zh-CN: 主机健康巡检
+  quick_inspect_desc:
+    en: Check CPU, memory, load and services
+    zh-CN: 检查 CPU、内存、负载与关键服务状态
+  quick_disk_title:
+    en: Disk Space Analysis
+    zh-CN: 磁盘空间排查
+  quick_disk_desc:
+    en: Find large files, logs and inode usage
+    zh-CN: 定位大文件、日志膨胀与 inode 占用
+  quick_docker_title:
+    en: Container Diagnostics
+    zh-CN: 容器状态诊断
+  quick_docker_desc:
+    en: Inspect containers and diagnose logs
+    zh-CN: 列出 Docker/Podman 容器并排查异常日志
+  quick_sessions_title:
+    en: Manage Saved Sessions
+    zh-CN: 管理软件会话
+  quick_sessions_desc:
+    en: List saved servers or create a session
+    zh-CN: 列出已保存服务器或快速新建连接
+  quick_sessions_prompt:
+    en: List all my saved sessions and folders
+    zh-CN: 列出我所有已保存的服务器会话和分组目录
+  tasks_running_summary:
+    en: "Running tasks: %{count}"
+    zh-CN: "运行中任务: %{count}"
+  tasks_all_done_summary:
+    en: "Background tasks (%{count})"
+    zh-CN: "后台任务 (%{count})"
+  task_stop:
+    en: Stop
+    zh-CN: 停止
+  task_clear_done:
+    en: Clear done
+    zh-CN: 清除已完成
+  task_waiting_output:
+    en: Waiting for output…
+    zh-CN: 等待输出…
+  task_status_running:
+    en: Running
+    zh-CN: 运行中
+  task_status_succeeded:
+    en: Done
+    zh-CN: 已完成
+  task_status_failed:
+    en: Failed
+    zh-CN: 失败
+  task_status_cancelled:
+    en: Cancelled
+    zh-CN: 已取消
+  skills_title:
+    en: Skills
+    zh-CN: 技能 (Skills)
+  skills_builtin_badge:
+    en: Built-in
+    zh-CN: 内置
+  skills_custom_badge:
+    en: Custom
+    zh-CN: 自定义
+  skills_new:
+    en: New Skill
+    zh-CN: 新建技能
+  skills_import:
+    en: Import SKILL.md
+    zh-CN: 导入 SKILL.md
+  skills_enabled:
+    en: Enabled
+    zh-CN: 已启用
+  skills_disabled:
+    en: Disabled
+    zh-CN: 已禁用
+  skills_edit:
+    en: Edit
+    zh-CN: 编辑
+  skills_delete:
+    en: Delete
+    zh-CN: 删除
+  skills_save:
+    en: Save Skill
+    zh-CN: 保存技能
+  skills_cancel:
+    en: Cancel
+    zh-CN: 取消
+  skills_id_placeholder:
+    en: Skill ID (e.g. nginx-audit)
+    zh-CN: 技能标识（如 nginx-audit）
+  skills_title_placeholder:
+    en: Display Title
+    zh-CN: 显示标题
+  skills_desc_placeholder:
+    en: One-line description for auto-discovery
+    zh-CN: 一句话描述（供 AI 自动识别何时加载）
+  skills_tags_placeholder:
+    en: Tags separated by comma
+    zh-CN: 标签（逗号分隔，可选）
+  approval_impact:
+    en: "Impact: %{note}"
+    zh-CN: "影响评估：%{note}"
+  approval_handoff:
+    en: Handoff to Terminal
+    zh-CN: 移交终端手动
+  approval_allow_prefix:
+    en: "Allow `%{prefix} *` in Session"
+    zh-CN: "本会话允许 `%{prefix} *`"
+  approval_feedback_placeholder:
+    en: Optional feedback if rejecting (guides AI to adjust plan)…
+    zh-CN: 拒绝时可附带修改意见（引导 AI 立即调整方案）…
+  reject_with_feedback:
+    en: Reject with Feedback
+    zh-CN: 拒绝并附带意见
+  mode_plan:
+    en: Plan (Read-only)
+    zh-CN: 规划模式
+  mode_exec:
+    en: Execute
+    zh-CN: 执行模式
+  plan_start_execute:
+    en: Approve & Start Execution
+    zh-CN: 确认并开始执行
+  plan_execute_prompt:
+    en: Plan approved. Please execute the steps above now.
+    zh-CN: 计划已确认，请按上述步骤开始执行。
+  slash_compact_desc:
+    en: Compact context with optional focus instructions
+    zh-CN: 压缩上下文（可附带保留重点）
+  compact_now:
+    en: Compact Context Now
+    zh-CN: 立即压缩上下文
+  ctx_breakdown_title:
+    en: Context Composition
+    zh-CN: 上下文构成拆解
+  ctx_part_system:
+    en: System Prompt
+    zh-CN: 系统提示词
+  ctx_part_memory:
+    en: Memory
+    zh-CN: 三层记忆
+  ctx_part_tools:
+    en: Tool Schemas
+    zh-CN: 工具定义
+  ctx_part_history:
+    en: Chat History
+    zh-CN: 对话历史
+  ctx_part_outputs:
+    en: Tool Outputs
+    zh-CN: 工具输出
+  rollback_turn:
+    en: Rollback Before Turn
+    zh-CN: 回退到此轮前
+  bulk_matrix_summary:
+    en: "%{ok}/%{total} hosts succeeded"
+    zh-CN: "%{ok}/%{total} 台主机成功"
+  bulk_matrix_all_same:
+    en: Outputs consistent
+    zh-CN: 输出一致
+  bulk_matrix_diff_count:
+    en: "%{count} host(s) differ"
+    zh-CN: "%{count} 台存在差异"
+  bulk_matrix_diff:
+    en: Diff
+    zh-CN: 差异
+  handoff_banner_title:
+    en: "Manual terminal handoff on %{host}"
+    zh-CN: "正在终端手动接管（%{host}）"
+  handoff_continue:
+    en: Done, Continue AI
+    zh-CN: 已完成，继续 AI
+  handoff_toast:
+    en: Switched to terminal for manual step; click "Done, Continue AI" when finished
+    zh-CN: 已切至终端手动操作，完成后请在 AI 面板点击“已完成，继续 AI”
+  inline_title:
+    en: Inline Terminal AI
+    zh-CN: 终端内联命令生成
+  inline_placeholder:
+    en: Describe the command to run (e.g. find process on port 8080)…
+    zh-CN: 输入中文需求（如：查占用 8080 端口的进程并看启动路径）…
+  inline_generate:
+    en: Generate
+    zh-CN: 生成命令
+  inline_generating:
+    en: Generating…
+    zh-CN: 生成中…
+  inline_insert:
+    en: Insert to Terminal
+    zh-CN: 插入终端
+  diagnose_exit_btn:
+    en: "AI Diagnose (exit %{code})"
+    zh-CN: "AI 诊断 (exit %{code})"
+  exec_policy_title:
+    en: Command Exec Policy Rules
+    zh-CN: 命令前缀策略规则
+  policy_pattern_placeholder:
+    en: Command prefix (e.g. docker ps, systemctl restart)…
+    zh-CN: 命令前缀（如 docker ps、systemctl restart）…
+  policy_add_allow:
+    en: + Allow
+    zh-CN: + 放行
+  policy_add_deny:
+    en: + Deny
+    zh-CN: + 拦截
+  hooks_title:
+    en: Lifecycle Hooks (PreToolUse / PostToolUse / Stop)
+    zh-CN: 生命周期钩子（Hooks）
+  hooks_add_preset:
+    en: + Nginx Check
+    zh-CN: + Nginx 校验预设
+  hooks_webhook_placeholder:
+    en: Feishu / DingTalk / WeCom Webhook URL…
+    zh-CN: 飞书 / 钉钉 / 企业微信 Webhook 地址…
+  hooks_add_webhook:
+    en: + Stop Webhook
+    zh-CN: + 结束通知
+  hook_preset_nginx_name:
+    en: Auto run `nginx -t` after Nginx edit
+    zh-CN: 修改 Nginx 配置后自动运行 nginx -t
+  hook_webhook_name:
+    en: Webhook notification on turn stop
+    zh-CN: 对话结束 Webhook 通知
+  enabled:
+    en: Enabled
+    zh-CN: 已启用
+  disabled:
+    en: Disabled
+    zh-CN: 已停用
+  queue_title:
+    en: Queued Messages
+    zh-CN: 待发送消息
+  queue_waiting_on:
+    en: "Waiting on current task: %{focus}"
+    zh-CN: "等待当前任务：%{focus}"
+  queue_waiting_default:
+    en: Waiting on active task…
+    zh-CN: 等待当前任务完成…
+  queue_paused_hint:
+    en: Paused after stop — click send or edit
+    zh-CN: 已在停止后暂停自动发送，可手动发送或编辑
+  queue_attachments_only:
+    en: "%{count} attachment(s)"
+    zh-CN: "%{count} 个附件"
+  queue_send_now:
+    en: Interrupt and send now
+    zh-CN: 立即打断并发送
+  queue_edit:
+    en: Edit in composer
+    zh-CN: 回填到输入框编辑
+  queue_delete:
+    en: Remove from queue
+    zh-CN: 从队列移除
+  steer_injected:
+    en: Steering instruction injected…
+    zh-CN: 已注入中途引导指令…
+  running_msg_title:
+    en: Behavior When Sending During Active Task
+    zh-CN: 任务运行中发送消息行为
+  running_msg_queue:
+    en: Queue
+    zh-CN: 排队等待
+  running_msg_steer:
+    en: Steer
+    zh-CN: 中途引导
+  running_msg_interrupt:
+    en: Interrupt & Send
+    zh-CN: 打断并发送
+  task_detach:
+    en: Background
+    zh-CN: 转后台
+  dismiss_failed_diag:
+    en: Dismiss this failure badge
+    zh-CN: 忽略此条失败提示
+  hook_tool_placeholder:
+    en: Tool (optional)
+    zh-CN: 工具名（可选）
+  hook_path_placeholder:
+    en: Path filter (optional)
+    zh-CN: 路径关键字（可选）
+  hook_cmd_placeholder:
+    en: Shell command to run…
+    zh-CN: 要执行的校验命令…
+  hook_add_custom:
+    en: + Add Hook
+    zh-CN: + 添加钩子
+  skills_body_placeholder:
+    en: Enter Markdown SOP instructions…
+    zh-CN: 输入 Markdown 运维指令正文…
+  skills_resources_count:
+    en: "%{count} resource(s)"
+    zh-CN: "%{count} 个附带资源"
+  skills_saved_ok:
+    en: Skill saved
+    zh-CN: 技能已保存
+  skills_imported_ok:
+    en: "Imported skill: %{name}"
+    zh-CN: "已导入技能: %{name}"
+  skills_empty:
+    en: No skills found
+    zh-CN: 暂无技能
+  acp_section_title:
+    en: External ACP Agent (Claude Code / Codex / Kimi)
+    zh-CN: 外部 ACP 编程 Agent（Claude Code / Codex / Kimi）
+  acp_builtin_mode:
+    en: Built-in AI
+    zh-CN: 内置 AI
+  acp_cmd_label:
+    en: ACP Command
+    zh-CN: ACP 启动命令
+  acp_save:
+    en: Enable ACP Agent
+    zh-CN: 启用并保存 ACP
+  choice_card_title:
+    en: Choose an option or reply
+    zh-CN: 请选择操作或补充信息
+  choice_custom_placeholder:
+    en: Other (write your answer)
+    zh-CN: 其他（输入你的回答）
+  choice_skip:
+    en: Skip
+    zh-CN: 跳过
+  choice_submit:
+    en: Submit
+    zh-CN: 提交
+  choice_toggle:
+    en: Collapse or expand choices
+    zh-CN: 折叠或展开选项
+  choice_dismiss:
+    en: Dismiss choices
+    zh-CN: 关闭选择卡片
+  cfg_language_label:
+    en: Thinking & Response Language
+    zh-CN: 思考与回复语言
+  cfg_lang_zh:
+    en: Chinese
+    zh-CN: 中文
+  cfg_lang_en:
+    en: English
+    zh-CN: English
+  cfg_lang_auto:
+    en: Auto
+    zh-CN: 自动
+  mention_hint:
+    en: "Tip: @host in prompt"
+    zh-CN: "支持 @主机名"
+  explain_prompt_empty:
+    en: Check recent terminal output and explain any errors.
+    zh-CN: 请查看当前终端最近的输出并解释异常原因。
+  explain_prompt_with_output:
+    en: "Analyze and explain the recent terminal output below and suggest fixes:\n\n```\n%{output}\n```"
+    zh-CN: "请分析并解释以下终端最近输出的原因及处理建议：\n\n```\n%{output}\n```"
+  plan_title:
+    en: Task Progress
+    zh-CN: 任务进度
+  empty_greeting:
+    en: Send a message to Transom AI
+    zh-CN: 向 Transom AI 发送运维指令
+  empty_greeting_acp:
+    en: "Send a message to %{agent}"
+    zh-CN: "给 %{agent} 发送消息"
+  empty_subhint:
+    en: Type / for slash commands, @host to add multi-host scope, Enter to send
+    zh-CN: 输入 / 呼出快捷指令，@主机名 加入协同主机，Enter 发送
+  acp_missing_banner:
+    en: "%{agent} CLI (%{cmd}) is not installed or not in PATH"
+    zh-CN: "%{agent} 尚未安装或不在 PATH 中（%{cmd}）"
+  acp_go_configure:
+    en: Configure
+    zh-CN: 前往配置
+  acp_switch_builtin:
+    en: Use Built-in
+    zh-CN: 切回内置
+  acp_not_installed:
+    en: Not installed
+    zh-CN: 未安装
+  popup_cli_manage:
+    en: CLI & Model Settings
+    zh-CN: 模型与 CLI 配置管理
+  popup_thinking_effort:
+    en: Thinking Effort
+    zh-CN: 思考强度
+  effort_default:
+    en: Default
+    zh-CN: 默认
+  mode_manual_desc:
+    en: Ask for confirmation before every tool call
+    zh-CN: 需要手动确认每个操作，适合谨慎使用
+  mode_safe_read_desc:
+    en: Auto-run read-only inspection, confirm writes
+    zh-CN: 自动执行只读巡检，写操作前弹窗确认
+  mode_auto_desc:
+    en: Auto-run read and write ops, confirm destructive
+    zh-CN: 自动执行读写操作，仅高危操作前确认
+  mode_allow_all_desc:
+    en: Auto-approve all operations including high-risk and external agent permissions
+    zh-CN: 自动放行所有操作（含高危与外部 Agent 权限），不再弹窗确认
+  slash_clear_desc:
+    en: Clear conversation history and start a new chat
+    zh-CN: 清除对话历史并新建会话
+  slash_inspect_desc:
+    en: Run comprehensive host health & resource check
+    zh-CN: 执行主机健康状态与资源综合巡检
+  slash_diagnose_desc:
+    en: Analyze service errors, logs and port anomalies
+    zh-CN: 排查服务异常、关键日志与端口故障
+  slash_deploy_desc:
+    en: Plan and execute safe service deployment steps
+    zh-CN: 规划并执行安全的服务发布与回滚检查
+  slash_disk_desc:
+    en: Check disk usage, large files and inode pressure
+    zh-CN: 排查磁盘空间占用、大文件与 inode 压力
+  slash_docker_desc:
+    en: Inspect container status, logs and resource usage
+    zh-CN: 排查容器运行状态、日志与资源占用
+  status_panel_tasks:
+    en: Tasks
+    zh-CN: 任务
+  status_panel_empty:
+    en: No active tasks
+    zh-CN: 暂无任务运行
+  status_panel_toggle:
+    en: Toggle status panel
+    zh-CN: 收起/展开状态面板
+  attach_file:
+    en: Attach file, document or image
+    zh-CN: 添加文件、文档或图片
+  attachment_remove:
+    en: Remove attachment
+    zh-CN: 移除附件
+  attachment_binary_unsupported:
+    en: "Unsupported binary file: %{name}"
+    zh-CN: "不支持的二进制文件: %{name}"
+  pasted_doc_title:
+    en: "Pasted Doc #%{index}"
+    zh-CN: "粘贴文档 #%{index}"
+  analyze_attachments_prompt:
+    en: Please analyze the attached content.
+    zh-CN: 请分析并处理我附带的内容。
+  acp_install_btn:
+    en: Install CLI
+    zh-CN: 一键安装
+  acp_installing:
+    en: Installing…
+    zh-CN: 安装中…
+  acp_install_cmd_label:
+    en: "Install command: %{cmd}"
+    zh-CN: "推荐安装命令: %{cmd}"
+  acp_install_no_cmd:
+    en: No install command configured for this ACP agent.
+    zh-CN: 当前 ACP Agent 未配置自动安装命令，请手动安装或在设置中填写命令。
+  stats_title:
+    en: Session Stats
+    zh-CN: 会话统计
+  stats_turns_steps:
+    en: "%{turns} turns %{steps} steps"
+    zh-CN: "%{turns} 轮 %{steps} 步"
+  stats_model_time:
+    en: Model time
+    zh-CN: 模型用时
+  stats_tool_time:
+    en: Tool call time
+    zh-CN: 工具调用用时
+  stats_ttft:
+    en: Avg TTFT
+    zh-CN: 首 token 平均 (TTFT)
+  stats_tps:
+    en: Output speed (TPS)
+    zh-CN: 输出速度 (TPS)
+  usage_title:
+    en: Token Usage
+    zh-CN: Token 用量
+  usage_cache_hit:
+    en: Cache hit
+    zh-CN: 缓存命中
+  usage_uncached_input:
+    en: Uncached input
+    zh-CN: 未缓存输入
+  usage_cache_read:
+    en: Cache read
+    zh-CN: 缓存读取
+  usage_output:
+    en: Output
+    zh-CN: 输出
+  usage_today:
+    en: Today
+    zh-CN: 今日用量
+  usage_month:
+    en: This month
+    zh-CN: 本月用量
+  usage_chip_cache:
+    en: "%{total} tok · Cache %{hit}%"
+    zh-CN: "%{total} tok · 缓存命中 %{hit}%"
+  ctx_title:
+    en: Context Usage
+    zh-CN: 上下文使用情况
+  ctx_used:
+    en: Currently used
+    zh-CN: 当前已用
+  ctx_limit:
+    en: Context window
+    zh-CN: 窗口上限
+  ctx_remaining:
+    en: Remaining
+    zh-CN: 剩余可用
+  ctx_messages:
+    en: Messages
+    zh-CN: 消息条数
+  working_running:
+    en: "Running %{focus}"
+    zh-CN: "正在执行 %{focus}"
+  working_default:
+    en: Working…
+    zh-CN: 正在处理…
+  worked_for:
+    en: "Worked for %{duration}"
+    zh-CN: "耗时 %{duration}"
+  work_steps_summary:
+    en: "%{done}/%{total} steps"
+    zh-CN: "%{done}/%{total} 步"
+  history_title:
+    en: Conversations
+    zh-CN: 会话历史
+  history_empty:
+    en: No conversations yet. Send a message to start.
+    zh-CN: 暂无历史会话，发送第一条指令后将自动生成会话标题。
+  delete_conversation:
+    en: Delete conversation
+    zh-CN: 删除会话
+  delete_provider:
+    en: Delete provider
+    zh-CN: 删除配置
+  cfg_name_label:
+    en: Name
+    zh-CN: 名称
+  cfg_name_placeholder:
+    en: "e.g. Open Design / Custom Relay"
+    zh-CN: "例如：Open Design / 自定义中转"
+  cfg_api_url_label:
+    en: API Base URL
+    zh-CN: API 请求地址
+  cfg_protocol_label:
+    en: Upstream Protocol
+    zh-CN: 上游协议格式
+  cfg_ctx_window_label:
+    en: Context Window
+    zh-CN: 上下文窗口
+  cfg_save:
+    en: Save Configuration
+    zh-CN: 保存配置
+  dur_secs:
+    en: "%{s}s"
+    zh-CN: "%{s}秒"
+  dur_mins_secs:
+    en: "%{m}m%{s}s"
+    zh-CN: "%{m}分%{s}秒"
+  dur_hours_mins_secs:
+    en: "%{h}h%{m}m%{s}s"
+    zh-CN: "%{h}小时%{m}分%{s}秒"
+  cfg_models_title:
+    en: Model List
+    zh-CN: 模型列表
+  cfg_add_manual:
+    en: Add Manual
+    zh-CN: 手动添加
+  cfg_col_display:
+    en: Display Name
+    zh-CN: 菜单显示名
+  cfg_col_request:
+    en: Request Model
+    zh-CN: 实际请求模型
+  cfg_col_effort:
+    en: Thinking
+    zh-CN: 思考等级
+  cfg_effort_unset:
+    en: Unset
+    zh-CN: 未设置
+  cfg_remove_model:
+    en: Remove model
+    zh-CN: 移除模型
+  cfg_display_placeholder:
+    en: "e.g. DeepSeek V4 Flash"
+    zh-CN: "例如：DeepSeek V4 Flash"
+  cfg_request_placeholder:
+    en: "e.g. deepseek-chat"
+    zh-CN: "例如：deepseek-chat"

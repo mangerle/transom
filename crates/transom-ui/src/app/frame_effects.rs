@@ -302,6 +302,31 @@ impl AppShell {
                     Some(session_id) => self.open_edit_session(session_id, window, cx),
                     None => self.open_new_session(window, cx),
                 },
+                WindowRequest::SplitActivePane(axis) => {
+                    self.split_active_pane(axis, window, cx);
+                }
+                WindowRequest::OpenSftpPanel => {
+                    let already_open = self
+                        .state
+                        .workspace
+                        .active_tab
+                        .and_then(|tid| crate::sftp::sftp_state(&self.state.workspace, tid, cx))
+                        .is_some_and(|p| p.open);
+                    if !already_open {
+                        crate::sftp::toggle_sftp(&mut self.state, window, cx);
+                    }
+                }
+                WindowRequest::OpenForwardsPanel => {
+                    let already_open = self
+                        .state
+                        .workspace
+                        .active_tab
+                        .and_then(|tid| self.state.workspace.tab(tid))
+                        .is_some_and(|tab| tab.forwards_view().is_some());
+                    if !already_open {
+                        crate::forward::toggle_forward_panel(&mut self.state, window, cx);
+                    }
+                }
                 WindowRequest::TransientStatus(message) => {
                     self.state.set_transient_status(message, cx)
                 }

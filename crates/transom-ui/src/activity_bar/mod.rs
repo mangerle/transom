@@ -93,6 +93,7 @@ fn activity_item_selected(
         ActivityItemId::CloudSync => {
             app_state.session.sidebar.visible() && section == SidebarSection::CloudSync
         }
+        ActivityItemId::AiAssistant => app_state.features.ai_panel_open,
         ActivityItemId::Keys => app_state.ui.modals.tools.key_wizard.read(cx).is_open(),
         _ => false,
     }
@@ -337,6 +338,10 @@ fn activate_activity_item(
             crate::api_client::focus_api_client(app_state, window, cx);
         }
         ActivityItemId::CloudSync => crate::cloud_sync::toggle_cloud_sync_sidebar(app_state, cx),
+        ActivityItemId::AiAssistant => {
+            app_state.features.ai_panel_open = !app_state.features.ai_panel_open;
+            cx.notify();
+        }
         ActivityItemId::Unknown => {}
     }
 }
@@ -402,6 +407,7 @@ mod labels {
             ActivityItemId::Git => UiIcon::VCS.into(),
             ActivityItemId::ApiClient => CustomIcon::API.into(),
             ActivityItemId::CloudSync => CustomIcon::CLOUD.into(),
+            ActivityItemId::AiAssistant => CustomIcon::AI_SPARKLE.into(),
             ActivityItemId::Unknown => UiIcon::ERROR.into(),
         }
     }
@@ -418,6 +424,7 @@ mod labels {
             ActivityItemId::Git => "activity.git",
             ActivityItemId::ApiClient => "activity.api_client",
             ActivityItemId::CloudSync => "activity.cloud_sync",
+            ActivityItemId::AiAssistant => "activity.ai_assistant",
             ActivityItemId::Language => "activity.language",
             ActivityItemId::ImportSshConfig => "app.import_ssh_config",
             ActivityItemId::KnownHosts => "known_hosts.title",

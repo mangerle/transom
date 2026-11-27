@@ -66,6 +66,12 @@ pub(crate) enum WindowRequest {
     TransientStatus(String),
     /// 打开会话表单：`None` 为新建，`Some` 为编辑对应会话。
     OpenSessionForm(Option<transom_core::SessionId>),
+    /// 对当前活动窗格执行分屏。
+    SplitActivePane(transom_core::SplitAxis),
+    /// 展开当前标签页的 SFTP 面板。
+    OpenSftpPanel,
+    /// 展开当前标签页的端口转发面板。
+    OpenForwardsPanel,
 }
 
 /// 有界请求队列：只在当前帧内积压，渲染期一次取空。
@@ -216,6 +222,18 @@ impl WindowRequests {
     /// 打开会话表单：`None` 为新建，`Some` 为编辑。
     pub(crate) fn push_open_session_form(&mut self, session_id: Option<transom_core::SessionId>) {
         self.push(WindowRequest::OpenSessionForm(session_id));
+    }
+
+    pub(crate) fn push_split_active_pane(&mut self, axis: transom_core::SplitAxis) {
+        self.push(WindowRequest::SplitActivePane(axis));
+    }
+
+    pub(crate) fn push_open_sftp_panel(&mut self) {
+        self.push(WindowRequest::OpenSftpPanel);
+    }
+
+    pub(crate) fn push_open_forwards_panel(&mut self) {
+        self.push(WindowRequest::OpenForwardsPanel);
     }
 
     pub(crate) fn is_empty(&self) -> bool {

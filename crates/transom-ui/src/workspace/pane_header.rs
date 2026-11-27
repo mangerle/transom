@@ -7,13 +7,62 @@
 
 use crate::divider::{DividerEdge, DividerStyled};
 use crate::palette::Palette;
-use crate::theme::tokens::size;
+use crate::theme::tokens::{size, typography};
 use gpui_kit::base::h_flex;
+use gpui_kit::component::Sizable as _;
+use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::*;
 use transom_core::DividerWidth;
 use transom_ui_icons::AppIcon;
 use transom_ui_icons::AppIconElement;
 use transom_ui_icons::UiIcon;
+
+/// 窗格头失败诊断按钮回调类型。
+pub(super) type DiagnoseClickCb = Box<dyn Fn(&ClickEvent, &mut Window, &mut App)>;
+
+/// 窗格头失败诊断信息：退出码、点击诊断回调与忽略该失败块回调。
+pub(super) struct FailedDiagProps {
+    pub(super) exit_code: i32,
+    pub(super) on_diagnose: DiagnoseClickCb,
+    pub(super) on_dismiss: DiagnoseClickCb,
+}
+
+/// 从窗格终端的 OSC-133 失败块构建一键 AI 诊断参数（自动跳过已忽略块）。
+pub(super) fn build_failed_diag(
+    tab_id: transom_core::TabId,
+    state: &crate::app::AppState,
+    cx: &mut Context<crate::app::AppShell>,
+) -> Option<FailedDiagProps> {
+    let tab = state.workspace.tab(tab_id)?;
+    let dismissed = state.features.dismissed_failed_blocks.get(&tab_id).copied();
+    let (block_id, exit_code, summary) = tab.terminal()?.read(cx).last_failed_block()?;
+    if dismissed == Some(block_id) {
+        return None;
+    }
+    let on_diagnose: DiagnoseClickCb = Box::new(cx.listener(move |this, _, window, cx| {
+        cx.stop_propagation();
+        this.activate_tab(tab_id, window, cx);
+        this.state.features.ai_panel_open = true;
+        let snippet = summary.clone();
+        this.state.features.ai_panel.update(cx, |panel, cx| {
+            panel.explain_terminal_output(snippet, cx);
+        });
+        cx.notify();
+    }));
+    let on_dismiss: DiagnoseClickCb = Box::new(cx.listener(move |this, _, _, cx| {
+        cx.stop_propagation();
+        this.state
+            .features
+            .dismissed_failed_blocks
+            .insert(tab_id, block_id);
+        cx.notify();
+    }));
+    Some(FailedDiagProps {
+        exit_code,
+        on_diagnose,
+        on_dismiss,
+    })
+}
 
 /// 标题条的渲染输入。
 pub(super) struct PaneHeaderProps<'a> {
@@ -28,6 +77,8 @@ pub(super) struct PaneHeaderProps<'a> {
     pub(super) title: String,
     /// 组内窗格序号；并排格没有序号，传 `None`。
     pub(super) ordinal: Option<usize>,
+    /// 最近一条 OSC-133 非零退出码及一键 AI 诊断回调。
+    pub(super) failed_diag: Option<FailedDiagProps>,
     pub(super) palette: &'a Palette,
 }
 
@@ -93,19 +144,58 @@ where
                 .child(ordinal.to_string()),
         );
     }
-    header
+    let close_id = props.close_id;
+    let mut header_end = header.child(
+        div()
+            .flex_1()
+            .text_xs()
+            .overflow_hidden()
+            .whitespace_nowrap()
+            .truncate()
+            .child(props.title),
+    );
+    if let Some(diag) = props.failed_diag {
+        let code = diag.exit_code;
+        let on_diag = diag.on_diagnose;
+        let on_dismiss = diag.on_dismiss;
+        let dismiss_tip = rust_i18n::t!("ai.dismiss_failed_diag").to_string();
+        header_end = header_end.child(
+            h_flex()
+                .items_center()
+                .gap(px(2.0))
+                .on_mouse_down(MouseButton::Left, |_, window, cx| {
+                    window.prevent_default();
+                    cx.stop_propagation();
+                })
+                .child(
+                    Button::new(SharedString::from(format!("{close_id}-diag")))
+                        .ghost()
+                        .xsmall()
+                        .child(
+                            div()
+                                .text_size(rems(typography::CAPTION))
+                                .text_color(p.warning)
+                                .child(
+                                    rust_i18n::t!("ai.diagnose_exit_btn", code = code).to_string(),
+                                ),
+                        )
+                        .on_click(move |ev, w, cx| on_diag(ev, w, cx)),
+                )
+                .child(
+                    Button::new(SharedString::from(format!("{close_id}-diag-dismiss")))
+                        .ghost()
+                        .xsmall()
+                        .accessibility_label(dismiss_tip.clone())
+                        .tooltip(dismiss_tip)
+                        .child(AppIconElement::new(AppIcon::Ui(UiIcon::CLOSE)).xsmall())
+                        .on_click(move |ev, w, cx| on_dismiss(ev, w, cx)),
+                ),
+        );
+    }
+    header_end
         .child(
             div()
-                .flex_1()
-                .text_xs()
-                .overflow_hidden()
-                .whitespace_nowrap()
-                .truncate()
-                .child(props.title),
-        )
-        .child(
-            div()
-                .id(ElementId::Name(props.close_id.into()))
+                .id(ElementId::Name(close_id.into()))
                 .size(px(18.0))
                 .rounded(p.radius.sm)
                 .flex()

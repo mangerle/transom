@@ -1,0 +1,495 @@
+//! AI 面板斜杠命令补全弹层与空状态引导页。
+
+use gpui_kit::base::{h_flex, v_flex};
+use gpui_kit::component::button::{Button, ButtonVariants as _};
+use gpui_kit::component::input::Position;
+use gpui_kit::*;
+use transom_ai::{SkillDefinition, load_skills_with_disabled};
+use transom_ui_icons::{AppIcon, AppIconElement, UiIcon};
+
+use super::state::AiDrawerTab;
+use super::view::AiAssistantView;
+use crate::palette::Palette;
+use crate::theme::tokens::{space, typography};
+
+/// 斜杠命令补全弹层中的单条候选指令。
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(super) struct SlashItem {
+    pub(super) command: String,
+    pub(super) description: String,
+    pub(super) builtin: bool,
+}
+
+/// 提取输入文本末尾正在输入的 `/query`（返回 `/` 起始字节偏移与查询词）。
+///
+/// 仅当 `/` 位于开头或前一个字符为空白、且之后不含空白或嵌套 `/`（避免误触 `/var/log`）时触发。
+pub(super) fn extract_active_slash(input: &str) -> Option<(usize, &str)> {
+    let slash_pos = input.rfind('/')?;
+    if slash_pos > 0 {
+        let prev = input[..slash_pos].chars().next_back()?;
+        if !prev.is_whitespace() {
+            return None;
+        }
+    }
+    let query = &input[slash_pos..];
+    if query.chars().any(char::is_whitespace) {
+        return None;
+    }
+    Some((slash_pos, query))
+}
+
+/// 根据当前输入框内容筛选斜杠命令；支持在 `@主机` 后继续输入 `/命令`。
+pub(super) fn filter_slash_items(input_text: &str, skills: &[SkillDefinition]) -> Vec<SlashItem> {
+    let Some((_, active_query)) = extract_active_slash(input_text) else {
+        return Vec::new();
+    };
+    let query = active_query.to_lowercase();
+    let mut all = vec![
+        SlashItem {
+            command: "/clear".to_owned(),
+            description: rust_i18n::t!("ai.slash_clear_desc").to_string(),
+            builtin: true,
+        },
+        SlashItem {
+            command: "/compact".to_owned(),
+            description: rust_i18n::t!("ai.slash_compact_desc").to_string(),
+            builtin: true,
+        },
+    ];
+    for skill in skills.iter().filter(|s| s.enabled) {
+        let cmd = if skill.command.starts_with('/') {
+            skill.command.clone()
+        } else {
+            format!("/{}", skill.command)
+        };
+        if !all.iter().any(|it| it.command.eq_ignore_ascii_case(&cmd)) {
+            let desc = if skill.title.trim().is_empty() || skill.title == skill.id {
+                skill.description.clone()
+            } else {
+                format!("{} · {}", skill.title, skill.description)
+            };
+            all.push(SlashItem {
+                command: cmd,
+                description: desc,
+                builtin: skill.builtin,
+            });
+        }
+    }
+    all.into_iter()
+        .filter(|it| it.command.to_lowercase().starts_with(&query))
+        .collect()
+}
+
+/// 计算斜杠命令列表上下移动后的索引（支持首尾回绕）。
+pub(super) fn step_slash_index(current: usize, len: usize, delta: isize) -> usize {
+    if len == 0 {
+        return 0;
+    }
+    let cur = current.min(len - 1) as isize;
+    let total = len as isize;
+    (cur + delta).rem_euclid(total) as usize
+}
+
+/// 渲染输入框正上方的斜杠命令补全弹层。
+pub(super) fn render_slash_popover(
+    items: &[SlashItem],
+    selected_idx: usize,
+    scroll_handle: &ScrollHandle,
+    p: &Palette,
+    on_pick: impl Fn(String, &mut Window, &mut App) + Clone + 'static,
+) -> AnyElement {
+    let active_idx = selected_idx.min(items.len().saturating_sub(1));
+    let mut list = v_flex()
+        .id("ai-slash-list")
+        .w_full()
+        .max_h(px(240.0))
+        .overflow_y_scroll()
+        .track_scroll(scroll_handle);
+    for (idx, item) in items.iter().enumerate() {
+        let is_selected = idx == active_idx;
+        let cmd = item.command.clone();
+        let pick = on_pick.clone();
+        let mut row = h_flex()
+            .id(("ai-slash-item", idx))
+            .w_full()
+            .px(rems(space::SM))
+            .py(rems(space::XS))
+            .gap(rems(space::SM))
+            .justify_between()
+            .items_center()
+            .rounded(p.radius.sm)
+            .cursor_pointer()
+            .hover(|s| s.bg(p.surface.hover))
+            .on_click(move |_, w, cx| pick(cmd.clone(), w, cx))
+            .child(
+                h_flex()
+                    .gap(rems(space::XS))
+                    .items_center()
+                    .child(
+                        div()
+                            .text_color(if is_selected { p.primary } else { p.text.muted })
+                            .child(AppIconElement::new(AppIcon::Ui(UiIcon::RUN_ANYTHING)).small()),
+                    )
+                    .child(
+                        div()
+                            .text_size(rems(typography::BODY))
+                            .font_weight(if is_selected {
+                                FontWeight::SEMIBOLD
+                            } else {
+                                FontWeight::MEDIUM
+                            })
+                            .text_color(p.foreground)
+                            .child(item.command.clone()),
+                    ),
+            )
+            .child(
+                h_flex()
+                    .flex_1()
+                    .gap(rems(space::XS))
+                    .items_center()
+                    .justify_end()
+                    .overflow_hidden()
+                    .child(
+                        div()
+                            .flex_1()
+                            .truncate()
+                            .text_right()
+                            .text_size(rems(typography::CAPTION))
+                            .text_color(p.text.muted)
+                            .child(item.description.clone()),
+                    )
+                    .child(
+                        div()
+                            .flex_shrink_0()
+                            .px(px(5.0))
+                            .py(px(1.0))
+                            .rounded(p.radius.sm)
+                            .bg(p.secondary)
+                            .text_size(rems(typography::CAPTION))
+                            .text_color(if item.builtin {
+                                p.text.muted
+                            } else {
+                                p.primary
+                            })
+                            .child(if item.builtin {
+                                rust_i18n::t!("ai.skills_builtin_badge").to_string()
+                            } else {
+                                rust_i18n::t!("ai.skills_custom_badge").to_string()
+                            }),
+                    ),
+            );
+        if is_selected {
+            row = row.bg(p.surface.selected);
+        }
+        list = list.child(row);
+    }
+    v_flex()
+        .w_full()
+        .p(rems(space::XXS))
+        .gap(px(2.0))
+        .rounded(p.radius.md)
+        .bg(p.surface.floating)
+        .border_1()
+        .border_color(p.border)
+        .shadow_md()
+        .child(list)
+        .into_any_element()
+}
+
+pub(super) struct AcpBannerParams<'a> {
+    pub(super) agent_id: &'a str,
+    pub(super) agent: &'a str,
+    pub(super) cmd: &'a str,
+    pub(super) installing: bool,
+    pub(super) install_detail: Option<&'a str>,
+    pub(super) p: &'a Palette,
+}
+
+/// 渲染输入卡片顶部的 ACP CLI 未安装告警横幅。
+pub(super) fn render_acp_warning_banner(
+    params: AcpBannerParams<'_>,
+    on_install: impl Fn(String, &mut Window, &mut App) + 'static,
+    on_switch_builtin: impl Fn(&mut Window, &mut App) + 'static,
+    on_open_config: impl Fn(&mut Window, &mut App) + 'static,
+) -> AnyElement {
+    let AcpBannerParams {
+        agent_id,
+        agent,
+        cmd,
+        installing,
+        install_detail,
+        p,
+    } = params;
+    let text = rust_i18n::t!("ai.acp_missing_banner", agent = agent, cmd = cmd).to_string();
+    let aid = agent_id.to_owned();
+    let install_label = if installing {
+        rust_i18n::t!("ai.acp_installing").to_string()
+    } else {
+        rust_i18n::t!("ai.acp_install_btn").to_string()
+    };
+    let mut banner = v_flex()
+        .w_full()
+        .px(rems(space::SM))
+        .py(rems(space::XS))
+        .gap(px(4.0))
+        .bg(p.tone.warning_subtle)
+        .border_b_1()
+        .border_color(p.divider(p.border))
+        .child(
+            h_flex()
+                .w_full()
+                .gap(rems(space::XS))
+                .justify_between()
+                .items_center()
+                .child(
+                    h_flex()
+                        .flex_1()
+                        .overflow_hidden()
+                        .gap(rems(space::XS))
+                        .items_center()
+                        .child(
+                            div()
+                                .text_color(p.warning)
+                                .child(AppIconElement::new(AppIcon::Ui(UiIcon::WARNING)).small()),
+                        )
+                        .child(
+                            div()
+                                .flex_1()
+                                .truncate()
+                                .text_size(rems(typography::CAPTION))
+                                .text_color(p.warning)
+                                .child(text),
+                        ),
+                )
+                .child(
+                    h_flex()
+                        .gap(rems(space::XXS))
+                        .flex_shrink_0()
+                        .child(
+                            Button::new("ai-acp-warn-builtin")
+                                .ghost()
+                                .label(rust_i18n::t!("ai.acp_switch_builtin").to_string())
+                                .on_click(move |_, w, cx| on_switch_builtin(w, cx)),
+                        )
+                        .child(
+                            Button::new("ai-acp-warn-cfg")
+                                .ghost()
+                                .label(rust_i18n::t!("ai.acp_go_configure").to_string())
+                                .on_click(move |_, w, cx| on_open_config(w, cx)),
+                        )
+                        .child(
+                            Button::new("ai-acp-warn-install")
+                                .primary()
+                                .label(install_label)
+                                .on_click(move |_, w, cx| {
+                                    if !installing {
+                                        on_install(aid.clone(), w, cx);
+                                    }
+                                }),
+                        ),
+                ),
+        );
+    if let Some(detail) = install_detail {
+        banner = banner.child(
+            div()
+                .w_full()
+                .truncate()
+                .text_size(rems(typography::CAPTION))
+                .text_color(p.text.muted)
+                .child(detail.to_owned()),
+        );
+    }
+    banner.into_any_element()
+}
+
+impl AiAssistantView {
+    /// 获取当前输入框匹配的斜杠命令候选项。
+    pub(super) fn current_slash_items(&self, cx: &App) -> Vec<SlashItem> {
+        let current_input = self.composer_input.read(cx).value().to_string();
+        let skills = load_skills_with_disabled(
+            Some(&self.ai_store.custom_skills_dir()),
+            &self.state.settings.disabled_skills,
+        );
+        filter_slash_items(&current_input, &skills)
+    }
+
+    /// 将选中的斜杠命令应用到输入框（开头的 `/clear` 直接清空并新建会话，否则替换末尾 `/query`）。
+    pub(super) fn apply_slash_command(
+        &mut self,
+        cmd: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.slash_selected_idx = 0;
+        let current = self.composer_input.read(cx).value().to_string();
+        let slash_pos = extract_active_slash(&current)
+            .map(|(pos, _)| pos)
+            .unwrap_or(0);
+        if cmd == "/clear" && slash_pos == 0 {
+            self.composer_input
+                .update(cx, |i, cx| i.set_value(String::new(), window, cx));
+            self.last_composer_len = 0;
+            self.clear_conversation(cx);
+        } else {
+            let mut filled = String::with_capacity(slash_pos + cmd.len() + 1);
+            filled.push_str(&current[..slash_pos]);
+            filled.push_str(cmd);
+            filled.push(' ');
+            let line = filled.lines().count().saturating_sub(1) as u32;
+            let col = filled.lines().last().unwrap_or("").chars().count() as u32;
+            self.last_composer_len = filled.len();
+            self.composer_input.update(cx, |i, cx| {
+                i.set_value(filled, window, cx);
+                i.set_cursor_position(Position::new(line, col), window, cx);
+            });
+            cx.notify();
+        }
+    }
+
+    /// 若斜杠补全弹层当前可见，则应用当前高亮命令并返回 `true`。
+    pub(super) fn try_apply_selected_slash(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let items = self.current_slash_items(cx);
+        let Some(item) = items.get(self.slash_selected_idx.min(items.len().saturating_sub(1)))
+        else {
+            return false;
+        };
+        let cmd = item.command.clone();
+        self.apply_slash_command(&cmd, window, cx);
+        true
+    }
+}
+
+/// 注册斜杠补全全局按键拦截器，在输入框 action 派发前拦截上下方向键与 Tab / Enter。
+pub(super) fn register_slash_key_interceptor(cx: &mut Context<AiAssistantView>) -> Subscription {
+    let weak_keys = cx.weak_entity();
+    cx.intercept_keystrokes(move |event, window, cx| {
+        let m = &event.keystroke.modifiers;
+        if m.control || m.alt || m.platform || m.function || m.shift {
+            return;
+        }
+        let key = event.keystroke.key.as_str();
+        if !matches!(key, "up" | "down" | "tab" | "enter") {
+            return;
+        }
+        let Some(entity) = weak_keys.upgrade() else {
+            return;
+        };
+        let handled = entity.update(cx, |this, cx| {
+            if this.state.drawer != AiDrawerTab::Chat
+                || !this
+                    .composer_input
+                    .read(cx)
+                    .focus_handle(cx)
+                    .is_focused(window)
+            {
+                return false;
+            }
+            let slash_items = this.current_slash_items(cx);
+            if !slash_items.is_empty() {
+                match key {
+                    "up" => {
+                        this.slash_selected_idx =
+                            step_slash_index(this.slash_selected_idx, slash_items.len(), -1);
+                        this.popover_scroll_handle
+                            .scroll_to_item(this.slash_selected_idx);
+                        cx.notify();
+                    }
+                    "down" => {
+                        this.slash_selected_idx =
+                            step_slash_index(this.slash_selected_idx, slash_items.len(), 1);
+                        this.popover_scroll_handle
+                            .scroll_to_item(this.slash_selected_idx);
+                        cx.notify();
+                    }
+                    "tab" | "enter" => {
+                        let idx = this.slash_selected_idx.min(slash_items.len() - 1);
+                        let cmd = slash_items[idx].command.clone();
+                        this.apply_slash_command(&cmd, window, cx);
+                    }
+                    _ => return false,
+                }
+                return true;
+            }
+            let mention_items = this.current_mention_items(cx);
+            if mention_items.is_empty() {
+                return false;
+            }
+            match key {
+                "up" => {
+                    this.slash_selected_idx =
+                        step_slash_index(this.slash_selected_idx, mention_items.len(), -1);
+                    this.popover_scroll_handle
+                        .scroll_to_item(this.slash_selected_idx);
+                    cx.notify();
+                }
+                "down" => {
+                    this.slash_selected_idx =
+                        step_slash_index(this.slash_selected_idx, mention_items.len(), 1);
+                    this.popover_scroll_handle
+                        .scroll_to_item(this.slash_selected_idx);
+                    cx.notify();
+                }
+                "tab" | "enter" => {
+                    let idx = this.slash_selected_idx.min(mention_items.len() - 1);
+                    let token = mention_items[idx].token.clone();
+                    this.apply_mention_candidate(&token, window, cx);
+                }
+                _ => return false,
+            }
+            true
+        });
+        if handled {
+            cx.stop_propagation();
+        }
+    })
+}
+
+impl AiAssistantView {
+    pub(super) fn render_slash_floating_popover(
+        &self,
+        p: &Palette,
+        cx: &mut Context<Self>,
+    ) -> Option<AnyElement> {
+        let slash_items = self.current_slash_items(cx);
+        if slash_items.is_empty() {
+            return None;
+        }
+        let view = cx.entity();
+        Some(render_slash_popover(
+            &slash_items,
+            self.slash_selected_idx,
+            &self.popover_scroll_handle,
+            p,
+            move |cmd, w, cx| {
+                view.update(cx, |this, cx| this.apply_slash_command(&cmd, w, cx));
+            },
+        ))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{extract_active_slash, step_slash_index};
+
+    #[test]
+    fn step_slash_index_wraps_around_bounds() {
+        assert_eq!(step_slash_index(0, 0, 1), 0);
+        assert_eq!(step_slash_index(0, 6, 1), 1);
+        assert_eq!(step_slash_index(5, 6, 1), 0);
+        assert_eq!(step_slash_index(0, 6, -1), 5);
+        assert_eq!(step_slash_index(3, 6, -1), 2);
+        assert_eq!(step_slash_index(99, 4, -1), 2);
+    }
+
+    #[test]
+    fn extract_active_slash_supports_slash_after_mention_and_ignores_paths() {
+        assert_eq!(extract_active_slash("/in"), Some((0, "/in")));
+        assert_eq!(extract_active_slash("@local /in"), Some((7, "/in")));
+        assert_eq!(extract_active_slash("/var/log"), None);
+        assert_eq!(extract_active_slash("@local /inspect done"), None);
+    }
+}

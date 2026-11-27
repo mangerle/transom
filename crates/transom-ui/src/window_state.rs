@@ -161,6 +161,7 @@ mod tests {
                 auth: AuthMethod::Agent,
                 options: Default::default(),
                 proxy_jump: None,
+                protection: Default::default(),
             }),
         );
         let expected = session.id.to_string();

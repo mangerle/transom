@@ -33,7 +33,7 @@ mod window_appearance;
 pub(crate) use app::AppShell;
 pub use app::workspace::WorkspaceState;
 pub(crate) use app::{
-    activity_bar, api_client, audit, audit_viewer, backup, batch, broadcast, cast_player,
+    activity_bar, ai, api_client, audit, audit_viewer, backup, batch, broadcast, cast_player,
     cast_player_io, chrome, cloud_sync, command_palette, connection, container, dialog_host,
     diff_pane, diff_viewer, editor, forward, git, identity, keys, monitor, notify, pane_tree,
     performance, probe, rdp, record, session_appearance, session_form, settings, sftp, shortcuts,
@@ -66,6 +66,8 @@ pub struct UiServices {
     pub git_projects: Arc<dyn transom_core::GitProjectStore>,
     /// API 项目本地登记表；实现位于 `transom-store`。
     pub api_projects: Arc<dyn ApiProjectStore>,
+    /// AI 助手本地配置、会话与记忆存储。
+    pub ai_store: Arc<transom_store::AiStore>,
     /// 全局 API HTTP 客户端；连接池随应用进程复用。
     pub api_http: ApiHttpService,
     /// 全局 API WebSocket 连接服务。

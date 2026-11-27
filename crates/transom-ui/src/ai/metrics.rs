@@ -1,0 +1,499 @@
+//! AI 会话统计、Token 用量与上下文使用情况指标与详情浮层。
+
+use gpui_kit::base::{h_flex, v_flex};
+use gpui_kit::component::progress::ProgressCircle;
+use gpui_kit::*;
+use transom_core::AiTurnMetricsDto;
+use transom_ui_icons::{AppIcon, AppIconElement, CustomIcon};
+
+use super::state::AiActivePopup;
+use crate::palette::Palette;
+use crate::theme::tokens::{space, typography};
+
+/// 当前会话及今日/本月的实时推理指标。
+#[derive(Clone, Debug, Default)]
+pub(crate) struct AiSessionMetrics {
+    pub(crate) turns: u32,
+    pub(crate) steps: u32,
+    pub(crate) model_duration_ms: u64,
+    pub(crate) tool_duration_ms: u64,
+    pub(crate) ttft_ms_sum: u64,
+    pub(crate) ttft_samples: u32,
+    pub(crate) last_tps: Option<f32>,
+    pub(crate) input_tokens: u64,
+    pub(crate) cached_input_tokens: u64,
+    pub(crate) output_tokens: u64,
+    pub(crate) last_context_tokens: u64,
+    pub(crate) today_tokens: u64,
+    pub(crate) month_tokens: u64,
+    pub(crate) last_breakdown: Option<transom_core::AiContextBreakdownDto>,
+}
+
+impl AiSessionMetrics {
+    pub(crate) fn set_stored_totals(&mut self, totals: (u64, u64)) {
+        self.today_tokens = totals.0;
+        self.month_tokens = totals.1;
+    }
+
+    pub(crate) fn reset_session(&mut self) {
+        let today = self.today_tokens;
+        let month = self.month_tokens;
+        *self = Self::default();
+        self.today_tokens = today;
+        self.month_tokens = month;
+    }
+
+    pub(crate) fn record_turn(&mut self, tps: Option<f32>, dto: &AiTurnMetricsDto) {
+        self.steps = self.steps.saturating_add(1);
+        self.model_duration_ms = self.model_duration_ms.saturating_add(dto.model_duration_ms);
+        if let Some(ttft) = dto.ttft_ms {
+            self.ttft_ms_sum = self.ttft_ms_sum.saturating_add(ttft);
+            self.ttft_samples = self.ttft_samples.saturating_add(1);
+        }
+        if tps.is_some() {
+            self.last_tps = tps;
+        }
+        self.input_tokens = self.input_tokens.saturating_add(dto.input_tokens);
+        self.cached_input_tokens = self
+            .cached_input_tokens
+            .saturating_add(dto.cached_input_tokens);
+        self.output_tokens = self.output_tokens.saturating_add(dto.output_tokens);
+        let turn_ctx = dto.input_tokens.saturating_add(dto.output_tokens);
+        if turn_ctx > 0 {
+            self.last_context_tokens = turn_ctx;
+        }
+        self.today_tokens = dto.today_tokens;
+        self.month_tokens = dto.month_tokens;
+        if dto.context_breakdown.is_some() {
+            self.last_breakdown = dto.context_breakdown.clone();
+        }
+    }
+
+    pub(crate) fn total_tokens(&self) -> u64 {
+        self.input_tokens.saturating_add(self.output_tokens)
+    }
+
+    pub(crate) fn uncached_input_tokens(&self) -> u64 {
+        self.input_tokens.saturating_sub(self.cached_input_tokens)
+    }
+
+    pub(crate) fn cache_hit_percent(&self) -> u64 {
+        if self.input_tokens == 0 {
+            return 0;
+        }
+        self.cached_input_tokens
+            .saturating_mul(100)
+            .checked_div(self.input_tokens)
+            .unwrap_or(0)
+            .min(100)
+    }
+
+    pub(crate) fn avg_ttft_ms(&self) -> Option<u64> {
+        self.ttft_ms_sum.checked_div(u64::from(self.ttft_samples))
+    }
+
+    pub(crate) fn context_percent(&self, context_window: u32) -> u64 {
+        let win = u64::from(context_window.max(1));
+        self.last_context_tokens
+            .saturating_mul(100)
+            .checked_div(win)
+            .unwrap_or(0)
+            .min(100)
+    }
+}
+
+pub(crate) fn format_compact_tokens(n: u64) -> String {
+    if n >= 1_000_000_000 {
+        format!("{:.1}B", n as f64 / 1_000_000_000.0)
+    } else if n >= 1_000_000 {
+        format!("{:.1}M", n as f64 / 1_000_000.0)
+    } else if n >= 1_000 {
+        format!("{:.1}K", n as f64 / 1_000.0)
+    } else {
+        n.to_string()
+    }
+}
+
+pub(crate) fn format_with_commas(n: u64) -> String {
+    let s = n.to_string();
+    let mut out = String::with_capacity(s.len() + s.len() / 3);
+    for (idx, ch) in s.chars().rev().enumerate() {
+        if idx > 0 && idx % 3 == 0 {
+            out.push(',');
+        }
+        out.push(ch);
+    }
+    out.chars().rev().collect()
+}
+
+pub(crate) fn format_duration_zh(ms: u64) -> String {
+    if ms < 60_000 {
+        let s = format!("{:.1}", ms as f64 / 1000.0);
+        return rust_i18n::t!("ai.dur_secs", s = s).to_string();
+    }
+    let total_secs = ms / 1000;
+    let hours = total_secs / 3600;
+    let mins = (total_secs % 3600) / 60;
+    let secs = total_secs % 60;
+    if hours > 0 {
+        rust_i18n::t!("ai.dur_hours_mins_secs", h = hours, m = mins, s = secs).to_string()
+    } else {
+        rust_i18n::t!("ai.dur_mins_secs", m = mins, s = secs).to_string()
+    }
+}
+
+fn popup_shell(p: &Palette) -> Div {
+    v_flex()
+        .w_full()
+        .p(rems(space::MD))
+        .gap(rems(space::XS))
+        .rounded(p.radius.md)
+        .bg(p.surface.floating)
+        .border_1()
+        .border_color(p.border)
+        .shadow_md()
+}
+
+fn metric_row(label: String, value: String, p: &Palette) -> AnyElement {
+    h_flex()
+        .w_full()
+        .justify_between()
+        .items_center()
+        .child(
+            div()
+                .text_size(rems(typography::BODY))
+                .text_color(p.text.muted)
+                .child(label),
+        )
+        .child(
+            div()
+                .text_size(rems(typography::BODY))
+                .text_color(p.foreground)
+                .child(value),
+        )
+        .into_any_element()
+}
+
+/// 渲染“会话统计”详情浮层。
+pub(super) fn render_session_stats_popup(m: &AiSessionMetrics, p: &Palette) -> AnyElement {
+    let header_right =
+        rust_i18n::t!("ai.stats_turns_steps", turns = m.turns, steps = m.steps).to_string();
+    let ttft_str = m
+        .avg_ttft_ms()
+        .map(format_duration_zh)
+        .unwrap_or_else(|| "--".to_owned());
+    let tps_str = m
+        .last_tps
+        .map(|t| format!("{t:.0} tok/s"))
+        .unwrap_or_else(|| "-- tok/s".to_owned());
+
+    popup_shell(p)
+        .child(
+            h_flex()
+                .w_full()
+                .pb(rems(space::XS))
+                .justify_between()
+                .items_center()
+                .border_b_1()
+                .border_color(p.divider(p.border))
+                .child(
+                    h_flex()
+                        .gap(rems(space::XS))
+                        .items_center()
+                        .child(div().text_color(p.foreground).child(
+                            AppIconElement::new(AppIcon::Custom(CustomIcon::SPEEDOMETER)).small(),
+                        ))
+                        .child(
+                            div()
+                                .text_size(rems(typography::BODY))
+                                .font_weight(FontWeight::SEMIBOLD)
+                                .text_color(p.foreground)
+                                .child(rust_i18n::t!("ai.stats_title").to_string()),
+                        ),
+                )
+                .child(
+                    div()
+                        .text_size(rems(typography::BODY))
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .text_color(p.foreground)
+                        .child(header_right),
+                ),
+        )
+        .child(metric_row(
+            rust_i18n::t!("ai.stats_model_time").to_string(),
+            format_duration_zh(m.model_duration_ms),
+            p,
+        ))
+        .child(metric_row(
+            rust_i18n::t!("ai.stats_tool_time").to_string(),
+            format_duration_zh(m.tool_duration_ms),
+            p,
+        ))
+        .child(metric_row(
+            rust_i18n::t!("ai.stats_ttft").to_string(),
+            ttft_str,
+            p,
+        ))
+        .child(metric_row(
+            rust_i18n::t!("ai.stats_tps").to_string(),
+            tps_str,
+            p,
+        ))
+        .into_any_element()
+}
+
+/// 渲染“Token 用量”详情浮层。
+pub(super) fn render_token_usage_popup(m: &AiSessionMetrics, p: &Palette) -> AnyElement {
+    let total_str = format!("{} tok", format_with_commas(m.total_tokens()));
+    popup_shell(p)
+        .child(
+            h_flex()
+                .w_full()
+                .pb(rems(space::XS))
+                .justify_between()
+                .items_center()
+                .border_b_1()
+                .border_color(p.divider(p.border))
+                .child(
+                    h_flex()
+                        .gap(rems(space::XS))
+                        .items_center()
+                        .child(div().text_color(p.foreground).child(
+                            AppIconElement::new(AppIcon::Custom(CustomIcon::DATABASE)).small(),
+                        ))
+                        .child(
+                            div()
+                                .text_size(rems(typography::BODY))
+                                .font_weight(FontWeight::SEMIBOLD)
+                                .text_color(p.foreground)
+                                .child(rust_i18n::t!("ai.usage_title").to_string()),
+                        ),
+                )
+                .child(
+                    div()
+                        .text_size(rems(typography::BODY))
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .text_color(p.foreground)
+                        .child(total_str),
+                ),
+        )
+        .child(metric_row(
+            rust_i18n::t!("ai.usage_cache_hit").to_string(),
+            format!("{}%", m.cache_hit_percent()),
+            p,
+        ))
+        .child(metric_row(
+            rust_i18n::t!("ai.usage_uncached_input").to_string(),
+            format!("{} tok", format_with_commas(m.uncached_input_tokens())),
+            p,
+        ))
+        .child(metric_row(
+            rust_i18n::t!("ai.usage_cache_read").to_string(),
+            format!("{} tok", format_with_commas(m.cached_input_tokens)),
+            p,
+        ))
+        .child(metric_row(
+            rust_i18n::t!("ai.usage_output").to_string(),
+            format!("{} tok", format_with_commas(m.output_tokens)),
+            p,
+        ))
+        .child(
+            div()
+                .w_full()
+                .h(px(1.0))
+                .my(px(4.0))
+                .bg(p.divider(p.border)),
+        )
+        .child(
+            h_flex()
+                .w_full()
+                .gap(rems(space::LG))
+                .child(
+                    v_flex()
+                        .flex_1()
+                        .gap(px(2.0))
+                        .child(
+                            div()
+                                .text_size(rems(typography::CAPTION))
+                                .text_color(p.text.muted)
+                                .child(rust_i18n::t!("ai.usage_today").to_string()),
+                        )
+                        .child(
+                            div()
+                                .text_size(rems(typography::TITLE))
+                                .font_weight(FontWeight::BOLD)
+                                .text_color(p.foreground)
+                                .child(format!("{} Token", format_compact_tokens(m.today_tokens))),
+                        ),
+                )
+                .child(
+                    v_flex()
+                        .flex_1()
+                        .gap(px(2.0))
+                        .child(
+                            div()
+                                .text_size(rems(typography::CAPTION))
+                                .text_color(p.text.muted)
+                                .child(rust_i18n::t!("ai.usage_month").to_string()),
+                        )
+                        .child(
+                            div()
+                                .text_size(rems(typography::TITLE))
+                                .font_weight(FontWeight::BOLD)
+                                .text_color(p.foreground)
+                                .child(format!("{} Token", format_compact_tokens(m.month_tokens))),
+                        ),
+                ),
+        )
+        .into_any_element()
+}
+
+/// 渲染“上下文使用情况”详情浮层。
+pub(super) fn render_context_usage_popup(
+    m: &AiSessionMetrics,
+    context_window: u32,
+    msg_count: usize,
+    p: &Palette,
+    on_compact: impl Fn(&mut Window, &mut App) + 'static,
+) -> AnyElement {
+    let pct = m.context_percent(context_window);
+    let win = u64::from(context_window.max(1));
+    let remaining = win.saturating_sub(m.last_context_tokens);
+    let bar_color = if pct >= 90 {
+        p.danger
+    } else if pct >= 75 {
+        p.warning
+    } else {
+        p.primary
+    };
+    let ratio = (pct as f32 / 100.0).clamp(0.0, 1.0);
+
+    let mut box_el = popup_shell(p)
+        .child(
+            h_flex()
+                .w_full()
+                .pb(rems(space::XS))
+                .justify_between()
+                .items_center()
+                .border_b_1()
+                .border_color(p.divider(p.border))
+                .child(
+                    h_flex()
+                        .gap(rems(space::XS))
+                        .items_center()
+                        .child(
+                            ProgressCircle::new("ai-ctx-popup-ring")
+                                .value(pct as f32)
+                                .size(px(14.0))
+                                .color(bar_color),
+                        )
+                        .child(
+                            div()
+                                .text_size(rems(typography::BODY))
+                                .font_weight(FontWeight::SEMIBOLD)
+                                .text_color(p.foreground)
+                                .child(rust_i18n::t!("ai.ctx_title").to_string()),
+                        ),
+                )
+                .child(
+                    div()
+                        .text_size(rems(typography::BODY))
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .text_color(bar_color)
+                        .child(format!("{pct}%")),
+                ),
+        )
+        .child(
+            div()
+                .w_full()
+                .h(px(6.0))
+                .rounded(p.radius.sm)
+                .bg(p.secondary)
+                .overflow_hidden()
+                .child(div().h_full().w(relative(ratio)).bg(bar_color)),
+        )
+        .child(metric_row(
+            rust_i18n::t!("ai.ctx_used").to_string(),
+            format!("{} tok", format_with_commas(m.last_context_tokens)),
+            p,
+        ))
+        .child(metric_row(
+            rust_i18n::t!("ai.ctx_limit").to_string(),
+            format!("{} tok", format_with_commas(win)),
+            p,
+        ))
+        .child(metric_row(
+            rust_i18n::t!("ai.ctx_remaining").to_string(),
+            format!("{} tok", format_with_commas(remaining)),
+            p,
+        ))
+        .child(metric_row(
+            rust_i18n::t!("ai.ctx_messages").to_string(),
+            msg_count.to_string(),
+            p,
+        ));
+    if let Some(bd) = &m.last_breakdown {
+        box_el = box_el.child(super::context_popup::render_context_breakdown_section(
+            bd, p, on_compact,
+        ));
+    }
+    box_el.into_any_element()
+}
+
+/// 将底部控制条弹层锚定到对应触发按钮正上方。
+pub(super) fn anchor_toolbar_popover(kind: AiActivePopup, pop: AnyElement) -> AnyElement {
+    let anchor = match kind {
+        AiActivePopup::Backend => div().left(px(14.0)).w(px(230.0)),
+        AiActivePopup::Mode => div().left(px(46.0)).w(px(280.0)),
+        AiActivePopup::Model => div().left(px(84.0)).w(px(260.0)),
+        AiActivePopup::SessionStats => div().left(px(175.0)).w(px(250.0)),
+        AiActivePopup::TokenUsage => div().left(px(235.0)).w(px(270.0)),
+        AiActivePopup::ContextUsage => div().right(px(52.0)).w(px(250.0)),
+        AiActivePopup::None => div(),
+    };
+    deferred(anchor.absolute().bottom(px(48.0)).child(pop))
+        .with_priority(1)
+        .into_any_element()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{AiSessionMetrics, format_compact_tokens, format_duration_zh, format_with_commas};
+    use transom_core::AiTurnMetricsDto;
+
+    #[test]
+    fn formats_tokens_commas_and_durations_cleanly() {
+        assert_eq!(format_compact_tokens(850), "850");
+        assert_eq!(format_compact_tokens(87_200_000), "87.2M");
+        assert_eq!(format_compact_tokens(1_200_000_000), "1.2B");
+        assert_eq!(format_with_commas(87_570_086), "87,570,086");
+        assert!(!format_duration_zh(6_200).is_empty());
+        assert!(!format_duration_zh(3_874_000).is_empty());
+    }
+
+    #[test]
+    fn accumulates_turn_metrics_and_preserves_daily_totals_on_reset() {
+        let mut m = AiSessionMetrics::default();
+        m.record_turn(
+            Some(166.0),
+            &AiTurnMetricsDto {
+                input_tokens: 1_000,
+                cached_input_tokens: 950,
+                output_tokens: 200,
+                model_duration_ms: 1_200,
+                ttft_ms: Some(300),
+                today_tokens: 5_000,
+                month_tokens: 20_000,
+                context_breakdown: None,
+            },
+        );
+        assert_eq!(m.cache_hit_percent(), 95);
+        assert_eq!(m.total_tokens(), 1_200);
+        assert_eq!(m.context_percent(12_000), 10);
+
+        m.reset_session();
+        assert_eq!(m.total_tokens(), 0);
+        assert_eq!(m.today_tokens, 5_000);
+        assert_eq!(m.month_tokens, 20_000);
+    }
+}

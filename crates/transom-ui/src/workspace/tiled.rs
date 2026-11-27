@@ -124,6 +124,7 @@ impl AppShell {
                 icon: tab_icon,
                 title,
                 ordinal: None,
+                failed_diag: None,
                 palette: p,
             },
             cx.listener(move |this, _, window, cx| {

@@ -12,6 +12,7 @@ use gpui_kit::*;
 use transom_core::{Connection, SplitAxis, SplitId, TabId};
 use transom_ui_icons::AppIcon;
 use transom_ui_icons::AppIconElement;
+use transom_ui_icons::CustomIcon;
 use transom_ui_icons::DomainIcon;
 use transom_ui_icons::UiIcon;
 
@@ -174,6 +175,8 @@ impl AppShell {
             )
         };
 
+        let failed_diag = super::pane_header::build_failed_diag(tab_id, &self.state, cx);
+
         let header = super::pane_header::pane_header(
             super::pane_header::PaneHeaderProps {
                 id: format!("pane-header-{tab_id}"),
@@ -183,6 +186,7 @@ impl AppShell {
                 icon: status_icon,
                 title: self.state.workspace.tabs[index].display_name(),
                 ordinal: Some(ordinal),
+                failed_diag,
                 palette: p,
             },
             cx.listener(move |this, _, window, cx| {
@@ -364,6 +368,39 @@ fn pane_context_menu(
     };
 
     let mut menu = menu
+        .item(crate::widgets::menu_item(
+            rust_i18n::t!("ai.explain_recent_output").to_string(),
+            AppIcon::Custom(CustomIcon::AI_SPARKLE),
+            {
+                let app = app.clone();
+                move |_, window, cx| {
+                    app.update(cx, |this, cx| {
+                        this.activate_tab(tab_id, window, cx);
+                        this.state.features.ai_panel_open = true;
+                        let snippet = this
+                            .state
+                            .workspace
+                            .tab(tab_id)
+                            .and_then(|t| t.terminal())
+                            .map(|term| {
+                                let tv = term.read(cx);
+                                let blocks = tv.recent_blocks_summary(3);
+                                if blocks.trim().is_empty() {
+                                    tv.screen_tail_text(60)
+                                } else {
+                                    blocks
+                                }
+                            })
+                            .unwrap_or_default();
+                        this.state.features.ai_panel.update(cx, |panel, cx| {
+                            panel.explain_terminal_output(snippet, cx);
+                        });
+                        cx.notify();
+                    });
+                }
+            },
+        ))
+        .item(PopupMenuItem::separator())
         .item(crate::widgets::menu_item(
             rust_i18n::t!("menu.split_right").to_string(),
             AppIcon::Ui(UiIcon::EDITOR_PREVIEW),

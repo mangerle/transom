@@ -84,6 +84,15 @@ pub(super) fn assemble_state(
     let container_create_dialog = cx.new(|_| crate::container::ContainerCreateDialogView::new());
     let cloud_sync = cx.new(|_| CloudSyncView::new(SyncHistoryWriter::spawn(sync_history_path())));
     let update = cx.new(|_| crate::app::update::UpdateView::new());
+    let ai_panel = cx.new(|cx| {
+        crate::ai::AiAssistantView::new(
+            services.ai_store.clone(),
+            services.secret_store.clone(),
+            services.command_tx.clone(),
+            window,
+            cx,
+        )
+    });
     AppState {
         runtime: super::super::state::RuntimeState {
             services,
@@ -107,6 +116,7 @@ pub(super) fn assemble_state(
         ui: super::super::state::UiState {
             workspace_panels: inputs.workspace_panels.clone(),
             workspace_panels_left: inputs.workspace_panels_left.clone(),
+            ai_panel_split: cx.new(|_| ResizableState::default()),
             vertical_tabs_search: inputs.vertical_tabs_search.clone(),
             modals: ModalHub::new(
                 session_form,
@@ -165,6 +175,10 @@ pub(super) fn assemble_state(
             },
             status_metrics: cx.new(|_| crate::status_bar::StatusBarMetricsView::new()),
             stats_sampling: true,
+            ai_panel,
+            ai_panel_open: false,
+            inline_assist: crate::ai::inline_assist::InlineAssistState::new(window, cx),
+            dismissed_failed_blocks: HashMap::new(),
         },
     }
 }

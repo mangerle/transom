@@ -99,13 +99,24 @@ impl AppShell {
         if let Some(activity_bar) = activity_bar {
             main_row = main_row.child(activity_bar);
         }
-        main_row = main_row.child(
-            div()
-                .flex_1()
-                .h_full()
-                .overflow_hidden()
-                .child(resizable_group),
-        );
+        if self.state.features.ai_panel_open && !self.state.ui.immersive {
+            let split = crate::ai::panel_events::wrap_with_ai_panel_split(
+                &self.state,
+                resizable_group.into_any_element(),
+                rem,
+                window,
+                cx,
+            );
+            main_row = main_row.child(split);
+        } else {
+            main_row = main_row.child(
+                div()
+                    .flex_1()
+                    .h_full()
+                    .overflow_hidden()
+                    .child(resizable_group),
+            );
+        }
         let status_bar = self.render_workspace_status_bar(
             StatusBarLayoutInput {
                 p,
@@ -347,6 +358,10 @@ impl AppShell {
             .on_action(cx.listener(|this, action, window, cx| {
                 crate::snippets::on_toggle_snippets(&mut this.state, action, window, cx)
             }))
+            .on_action(cx.listener(|this, _: &keymap::InlineAiAssist, window, cx| {
+                crate::ai::inline_assist::open_inline_assist(&mut this.state, window, cx);
+                cx.notify();
+            }))
             .on_action(cx.listener(Self::on_split_right))
             .on_action(cx.listener(Self::on_split_down))
             .on_action(cx.listener(Self::on_close_pane))
@@ -410,6 +425,11 @@ impl Render for AppShell {
             root = root.child(status_bar);
         }
         root = root.child(self.state.features.editors.clone());
+        root = root.child(crate::ai::inline_assist::render_workspace_inline_assist(
+            &self.state,
+            &p,
+            &cx.entity(),
+        ));
         // 弹窗栈的压暗层铺在编辑面板之上：弹窗本体由组件库在窗口根上渲染，
         // 层序天然更高，这里只需要把窗面压暗并阻断下层命中。
         root = root.children(crate::dialog_host::dialog_dim(&self.state, &p));

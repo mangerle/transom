@@ -109,6 +109,7 @@ pub(crate) struct PanelSubscriptions {
     /// 订阅本身即生命周期守卫，无需读取。
     pub(crate) _status_metrics: Option<Subscription>,
     pub(crate) _git_focus: Option<Subscription>,
+    pub(crate) ai_panel: Option<Subscription>,
 }
 
 impl PanelSubscriptions {
@@ -150,6 +151,7 @@ impl PanelSubscriptions {
             git_worktree_modal: None,
             _status_metrics: None,
             _git_focus: None,
+            ai_panel: None,
         }
     }
 

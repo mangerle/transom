@@ -17,10 +17,12 @@ transom-platform.workspace = true
 tokio = { workspace = true, features = ["sync"] }
 serde.workspace = true
 serde_json.workspace = true
+uuid.workspace = true
 thiserror.workspace = true
 transom-core.workspace = true
 transom-api.workspace = true
 transom-store.workspace = true
+transom-ai.workspace = true
 transom-desktop.workspace = true
 transom-git.workspace = true
 transom-terminal.workspace = true
