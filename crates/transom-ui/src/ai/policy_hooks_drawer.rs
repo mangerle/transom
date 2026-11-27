@@ -9,6 +9,7 @@ use transom_ai::{ExecPolicyAction, ExecPolicyRule, HookAction, HookEvent, HookMa
 use transom_ui_icons::{AppIcon, AppIconElement, UiIcon};
 use uuid::Uuid;
 
+use super::config_drawer::{field_label, section_card};
 use super::view::AiAssistantView;
 use crate::palette::Palette;
 use crate::theme::tokens::{space, typography};
@@ -44,7 +45,7 @@ impl PolicyHooksFormState {
     }
 }
 
-/// 渲染运行中发消息行为、命令策略与生命周期钩子管理块。
+/// 渲染命令策略与生命周期钩子管理块（卡片化布局，适配窄侧栏宽度）。
 pub(super) fn render_policy_hooks_section(
     view: &AiAssistantView,
     p: &Palette,
@@ -52,56 +53,80 @@ pub(super) fn render_policy_hooks_section(
 ) -> AnyElement {
     let rules = &view.state.settings.exec_policy_rules;
     let hooks = &view.state.settings.hooks;
-    let cur_behavior = view.state.settings.running_message_behavior;
 
-    let mut root = v_flex()
-        .w_full()
-        .gap(rems(space::SM))
-        .child(super::queue_card::render_running_behavior_row(
-            cur_behavior,
-            p,
-            cx,
-        ))
-        .child(
-            v_flex()
+    let mut policy_card = section_card(
+        rust_i18n::t!("ai.exec_policy_title").to_string(),
+        None,
+        p,
+    )
+    .child(field_label(
+        "按命令前缀快速放行或拦截 AI 的远端命令调用".to_owned(),
+        p,
+    ))
+    .child(
+        h_flex()
+            .w_full()
+            .gap(rems(space::XS))
+            .items_center()
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .child(Input::new(&view.policy_pattern_input).small()),
+            )
+            .child(
+                Button::new("ai-add-policy-allow")
+                    .outline()
+                    .small()
+                    .child(
+                        h_flex()
+                            .gap(px(4.0))
+                            .items_center()
+                            .child(
+                                div()
+                                    .text_color(p.success)
+                                    .child(AppIconElement::new(AppIcon::Ui(UiIcon::CHECK)).small()),
+                            )
+                            .child("放行"),
+                    )
+                    .on_click(cx.listener(|this, _, w, cx| {
+                        this.add_exec_policy_rule(ExecPolicyAction::Allow, w, cx);
+                    })),
+            )
+            .child(
+                Button::new("ai-add-policy-deny")
+                    .outline()
+                    .small()
+                    .child(
+                        h_flex()
+                            .gap(px(4.0))
+                            .items_center()
+                            .child(
+                                div()
+                                    .text_color(p.danger)
+                                    .child(AppIconElement::new(AppIcon::Ui(UiIcon::CLOSE)).small()),
+                            )
+                            .child("拦截"),
+                    )
+                    .on_click(cx.listener(|this, _, w, cx| {
+                        this.add_exec_policy_rule(ExecPolicyAction::Deny, w, cx);
+                    })),
+            ),
+    );
+
+    if rules.is_empty() {
+        policy_card = policy_card.child(
+            div()
                 .w_full()
-                .pt(rems(space::XS))
-                .gap(rems(space::XS))
-                .border_t_1()
-                .border_color(p.divider(p.border))
-                .child(
-                    div()
-                        .text_size(rems(typography::BODY))
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .text_color(p.foreground)
-                        .child(rust_i18n::t!("ai.exec_policy_title").to_string()),
-                )
-                .child(
-                    h_flex()
-                        .w_full()
-                        .gap(rems(space::XS))
-                        .items_center()
-                        .child(div().flex_1().child(Input::new(&view.policy_pattern_input)))
-                        .child(
-                            Button::new("ai-add-policy-allow")
-                                .outline()
-                                .xsmall()
-                                .label(rust_i18n::t!("ai.policy_add_allow").to_string())
-                                .on_click(cx.listener(|this, _, w, cx| {
-                                    this.add_exec_policy_rule(ExecPolicyAction::Allow, w, cx);
-                                })),
-                        )
-                        .child(
-                            Button::new("ai-add-policy-deny")
-                                .outline()
-                                .xsmall()
-                                .label(rust_i18n::t!("ai.policy_add_deny").to_string())
-                                .on_click(cx.listener(|this, _, w, cx| {
-                                    this.add_exec_policy_rule(ExecPolicyAction::Deny, w, cx);
-                                })),
-                        ),
-                ),
+                .px(rems(space::SM))
+                .py(rems(space::XS))
+                .rounded(p.radius.sm)
+                .bg(p.secondary)
+                .text_size(rems(typography::CAPTION))
+                .text_color(p.text.muted)
+                .child("暂无自定义前缀规则，当前遵循执行模式默认策略。"),
         );
+    }
 
     for (idx, rule) in rules.iter().enumerate() {
         let rid = rule.id.clone();
@@ -110,7 +135,7 @@ pub(super) fn render_policy_hooks_section(
             ExecPolicyAction::Deny => p.danger,
             ExecPolicyAction::Ask => p.warning,
         };
-        root = root.child(
+        policy_card = policy_card.child(
             h_flex()
                 .id(("exec-policy-row", idx))
                 .w_full()
@@ -122,10 +147,18 @@ pub(super) fn render_policy_hooks_section(
                 .bg(p.secondary)
                 .child(
                     h_flex()
+                        .flex_1()
+                        .min_w_0()
                         .gap(px(6.0))
                         .items_center()
+                        .overflow_hidden()
                         .child(
                             div()
+                                .flex_shrink_0()
+                                .px(px(6.0))
+                                .py(px(1.0))
+                                .rounded(p.radius.sm)
+                                .bg(badge_color.opacity(0.12))
                                 .text_size(rems(typography::CAPTION))
                                 .font_weight(FontWeight::SEMIBOLD)
                                 .text_color(badge_color)
@@ -133,6 +166,9 @@ pub(super) fn render_policy_hooks_section(
                         )
                         .child(
                             div()
+                                .flex_1()
+                                .min_w_0()
+                                .truncate()
                                 .font_family("monospace")
                                 .text_size(rems(typography::CAPTION))
                                 .text_color(p.foreground)
@@ -151,12 +187,11 @@ pub(super) fn render_policy_hooks_section(
         );
     }
 
-    root = root.child(render_hooks_header_and_forms(view, p, cx));
-
+    let mut hooks_card = render_hooks_card(view, p, cx);
     for (idx, hook) in hooks.iter().enumerate() {
         let hid = hook.id.clone();
         let hid_del = hook.id.clone();
-        root = root.child(
+        hooks_card = hooks_card.child(
             h_flex()
                 .id(("ai-hook-row", idx))
                 .w_full()
@@ -169,11 +204,17 @@ pub(super) fn render_policy_hooks_section(
                 .child(
                     h_flex()
                         .flex_1()
+                        .min_w_0()
                         .gap(px(6.0))
                         .items_center()
                         .overflow_hidden()
                         .child(
                             div()
+                                .flex_shrink_0()
+                                .px(px(6.0))
+                                .py(px(1.0))
+                                .rounded(p.radius.sm)
+                                .bg(p.surface.floating)
                                 .text_size(rems(typography::CAPTION))
                                 .text_color(if hook.enabled {
                                     p.primary
@@ -185,6 +226,7 @@ pub(super) fn render_policy_hooks_section(
                         .child(
                             div()
                                 .flex_1()
+                                .min_w_0()
                                 .truncate()
                                 .text_size(rems(typography::CAPTION))
                                 .text_color(p.foreground)
@@ -193,6 +235,7 @@ pub(super) fn render_policy_hooks_section(
                 )
                 .child(
                     h_flex()
+                        .flex_shrink_0()
                         .gap(px(4.0))
                         .child(
                             Button::new(("toggle-hook", idx))
@@ -220,98 +263,136 @@ pub(super) fn render_policy_hooks_section(
         );
     }
 
-    root.into_any_element()
+    v_flex()
+        .w_full()
+        .gap(rems(space::SM))
+        .child(policy_card)
+        .child(hooks_card)
+        .into_any_element()
 }
 
-fn render_hooks_header_and_forms(
+fn render_hooks_card(
     view: &AiAssistantView,
     p: &Palette,
     cx: &mut Context<AiAssistantView>,
-) -> AnyElement {
+) -> Div {
     let ev_label = view.policy_hooks_form.selected_event.label();
-    v_flex()
-        .w_full()
-        .pt(rems(space::XS))
-        .gap(rems(space::XS))
-        .border_t_1()
-        .border_color(p.divider(p.border))
-        .child(
-            h_flex()
-                .justify_between()
-                .items_center()
-                .child(
-                    div()
-                        .text_size(rems(typography::BODY))
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .text_color(p.foreground)
-                        .child(rust_i18n::t!("ai.hooks_title").to_string()),
-                )
-                .child(
-                    Button::new("ai-add-nginx-hook")
-                        .outline()
-                        .xsmall()
-                        .label(rust_i18n::t!("ai.hooks_add_preset").to_string())
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            this.add_preset_nginx_hook(cx);
-                        })),
-                ),
-        )
-        .child(
-            h_flex()
-                .w_full()
-                .gap(rems(space::XS))
-                .items_center()
-                .child(
-                    Button::new("ai-hook-ev-cycle")
-                        .outline()
-                        .xsmall()
-                        .label(ev_label)
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            this.cycle_custom_hook_event(cx);
-                        })),
-                )
-                .child(
-                    div()
-                        .w(rems(5.5))
-                        .child(Input::new(&view.policy_hooks_form.tool_input)),
-                )
-                .child(
-                    div()
-                        .w(rems(5.5))
-                        .child(Input::new(&view.policy_hooks_form.path_input)),
-                )
-                .child(
-                    div()
-                        .flex_1()
-                        .child(Input::new(&view.policy_hooks_form.cmd_input)),
-                )
-                .child(
-                    Button::new("ai-add-custom-hook")
-                        .primary()
-                        .xsmall()
-                        .label(rust_i18n::t!("ai.hook_add_custom").to_string())
-                        .on_click(cx.listener(|this, _, w, cx| {
-                            this.add_custom_shell_hook(w, cx);
-                        })),
-                ),
-        )
-        .child(
-            h_flex()
-                .w_full()
-                .gap(rems(space::XS))
-                .items_center()
-                .child(div().flex_1().child(Input::new(&view.hook_webhook_input)))
-                .child(
-                    Button::new("ai-add-webhook-hook")
-                        .outline()
-                        .xsmall()
-                        .label(rust_i18n::t!("ai.hooks_add_webhook").to_string())
-                        .on_click(cx.listener(|this, _, w, cx| {
-                            this.add_webhook_stop_hook(w, cx);
-                        })),
-                ),
-        )
-        .into_any_element()
+    let preset_btn = Button::new("ai-add-nginx-hook")
+        .ghost()
+        .small()
+        .label("Nginx 校验预设")
+        .on_click(cx.listener(|this, _, _, cx| {
+            this.add_preset_nginx_hook(cx);
+        }))
+        .into_any_element();
+
+    section_card(
+        rust_i18n::t!("ai.hooks_title").to_string(),
+        Some(preset_btn),
+        p,
+    )
+    .child(
+        v_flex()
+            .w_full()
+            .gap(rems(space::XS))
+            .child(field_label("Shell 校验钩子".to_owned(), p))
+            .child(
+                h_flex()
+                    .w_full()
+                    .gap(rems(space::XS))
+                    .items_center()
+                    .child(
+                        Button::new("ai-hook-ev-cycle")
+                            .outline()
+                            .small()
+                            .child(
+                                h_flex()
+                                    .gap(px(4.0))
+                                    .items_center()
+                                    .child(ev_label)
+                                    .child(AppIconElement::new(AppIcon::Ui(UiIcon::CHEVRON_DOWN)).small()),
+                            )
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.cycle_custom_hook_event(cx);
+                            })),
+                    )
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .child(Input::new(&view.policy_hooks_form.tool_input).small()),
+                    )
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .child(Input::new(&view.policy_hooks_form.path_input).small()),
+                    ),
+            )
+            .child(
+                h_flex()
+                    .w_full()
+                    .gap(rems(space::XS))
+                    .items_center()
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .child(Input::new(&view.policy_hooks_form.cmd_input).small()),
+                    )
+                    .child(
+                        Button::new("ai-add-custom-hook")
+                            .primary()
+                            .small()
+                            .child(
+                                h_flex()
+                                    .gap(px(4.0))
+                                    .items_center()
+                                    .child(AppIconElement::new(AppIcon::Ui(UiIcon::ADD)).small())
+                                    .child("添加钩子"),
+                            )
+                            .on_click(cx.listener(|this, _, w, cx| {
+                                this.add_custom_shell_hook(w, cx);
+                            })),
+                    ),
+            ),
+    )
+    .child(
+        v_flex()
+            .w_full()
+            .pt(rems(space::XS))
+            .gap(rems(space::XS))
+            .border_t_1()
+            .border_color(p.divider(p.border))
+            .child(field_label("Webhook 结束通知".to_owned(), p))
+            .child(
+                h_flex()
+                    .w_full()
+                    .gap(rems(space::XS))
+                    .items_center()
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .child(Input::new(&view.hook_webhook_input).small()),
+                    )
+                    .child(
+                        Button::new("ai-add-webhook-hook")
+                            .outline()
+                            .small()
+                            .child(
+                                h_flex()
+                                    .gap(px(4.0))
+                                    .items_center()
+                                    .child(AppIconElement::new(AppIcon::Ui(UiIcon::ADD)).small())
+                                    .child("添加通知"),
+                            )
+                            .on_click(cx.listener(|this, _, w, cx| {
+                                this.add_webhook_stop_hook(w, cx);
+                            })),
+                    ),
+            ),
+    )
 }
 
 impl AiAssistantView {

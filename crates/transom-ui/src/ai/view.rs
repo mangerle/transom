@@ -5,7 +5,10 @@ use std::sync::Arc;
 
 use gpui_kit::base::v_flex;
 use gpui_kit::component::input::{InputEvent, InputState, TextareaState};
+use gpui_kit::component::searchable_list::SearchableVec;
+use gpui_kit::component::select::{SelectEvent, SelectState};
 use gpui_kit::*;
+use transom_ai::RunningMessageBehavior;
 use transom_core::{AiAppEvent, AppCommand, SecretStore};
 use transom_store::AiStore;
 
@@ -13,11 +16,9 @@ use super::AiPanelEvent;
 use super::approval::render_approval_card;
 use super::attachments::{ComposerAttachment, should_convert_paste_to_doc};
 use super::choice_card::init_choice_input;
-use super::config_drawer::DraftModelRow;
+use super::config_drawer::{ConfigChoice, ConfigSelect, DraftModelRow};
 use super::history_drawer::make_draft_model_row;
-use super::plan_card::{
-    PlanCardParams, StatusPillsParams, render_plan_card, render_status_pills_row,
-};
+use super::plan_card::{PlanCardParams, render_plan_card};
 use super::skills_drawer::SkillsDrawerState;
 use super::slash_menu::register_slash_key_interceptor;
 use super::state::{AiActivePopup, AiDrawerTab, AiPanelState};
@@ -58,6 +59,10 @@ pub(crate) struct AiAssistantView {
     pub(super) skills_drawer: SkillsDrawerState,
     pub(super) policy_hooks_form: super::policy_hooks_drawer::PolicyHooksFormState,
     pub(super) model_picker: super::model_picker::ModelPickerState,
+    pub(super) lang_select: Entity<ConfigSelect>,
+    pub(super) running_behavior_select: Entity<ConfigSelect>,
+    pub(super) editing_title: bool,
+    pub(super) title_input: Entity<InputState>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -116,6 +121,12 @@ impl AiAssistantView {
             let purl = first_prov.base_url.clone();
             provider_name_input.update(cx, |i, cx| i.set_value(pname, window, cx));
             base_url_input.update(cx, |i, cx| i.set_value(purl, window, cx));
+            if let Ok(Some(saved_key)) =
+                ai_store.load_provider_api_key(secret_store.as_ref(), &first_prov.id)
+                && !saved_key.trim().is_empty()
+            {
+                api_key_input.update(cx, |i, cx| i.set_value(saved_key.as_str(), window, cx));
+            }
             for m in &first_prov.models {
                 draft_models.push(make_draft_model_row(
                     &m.display_name,
@@ -218,6 +229,76 @@ impl AiAssistantView {
 
         let key_sub = register_slash_key_interceptor(cx);
 
+        let cur_lang = state.settings.response_language.clone();
+        let lang_select = cx.new(|cx| {
+            let items = vec![
+                ConfigChoice::new("zh", rust_i18n::t!("ai.cfg_lang_zh").to_string()),
+                ConfigChoice::new("en", rust_i18n::t!("ai.cfg_lang_en").to_string()),
+                ConfigChoice::new("auto", rust_i18n::t!("ai.cfg_lang_auto").to_string()),
+            ];
+            let mut s = SelectState::new(SearchableVec::new(items), None, window, cx)
+                .searchable(false);
+            s.set_selected_value(&cur_lang, window, cx);
+            s
+        });
+        let cur_beh_val = match state.settings.running_message_behavior {
+            RunningMessageBehavior::Queue => "queue",
+            RunningMessageBehavior::Steer => "steer",
+            RunningMessageBehavior::Interrupt => "interrupt",
+        };
+        let running_behavior_select = cx.new(|cx| {
+            let items = vec![
+                ConfigChoice::new("queue", rust_i18n::t!("ai.running_msg_queue").to_string()),
+                ConfigChoice::new("steer", rust_i18n::t!("ai.running_msg_steer").to_string()),
+                ConfigChoice::new(
+                    "interrupt",
+                    rust_i18n::t!("ai.running_msg_interrupt").to_string(),
+                ),
+            ];
+            let mut s = SelectState::new(SearchableVec::new(items), None, window, cx)
+                .searchable(false);
+            s.set_selected_value(&cur_beh_val.to_owned(), window, cx);
+            s
+        });
+
+        let lang_sub = cx.subscribe_in(
+            &lang_select,
+            window,
+            |this, _, event: &SelectEvent<SearchableVec<ConfigChoice>>, _, cx| {
+                if let SelectEvent::Confirm(Some(val)) = event {
+                    this.state.settings.response_language = val.clone();
+                    let _ = this.ai_store.save_settings(&this.state.settings);
+                    cx.notify();
+                }
+            },
+        );
+        let beh_sub = cx.subscribe_in(
+            &running_behavior_select,
+            window,
+            |this, _, event: &SelectEvent<SearchableVec<ConfigChoice>>, _, cx| {
+                if let SelectEvent::Confirm(Some(val)) = event {
+                    let beh = match val.as_str() {
+                        "steer" => RunningMessageBehavior::Steer,
+                        "interrupt" => RunningMessageBehavior::Interrupt,
+                        _ => RunningMessageBehavior::Queue,
+                    };
+                    this.set_running_message_behavior(beh, cx);
+                }
+            },
+        );
+
+        let title_input = cx.new(|cx| InputState::new(window, cx).placeholder("输入会话名称"));
+        let title_sub = cx.subscribe_in(
+            &title_input,
+            window,
+            |this, _, event: &InputEvent, _, cx| match event {
+                InputEvent::PressEnter { .. } | InputEvent::Blur => {
+                    this.commit_title_edit(cx);
+                }
+                _ => {}
+            },
+        );
+
         Self {
             state,
             ai_store,
@@ -251,7 +332,11 @@ impl AiAssistantView {
             skills_drawer,
             policy_hooks_form,
             model_picker,
-            _subscriptions: vec![sub, key_sub, choice_sub],
+            lang_select,
+            running_behavior_select,
+            editing_title: false,
+            title_input,
+            _subscriptions: vec![sub, key_sub, choice_sub, lang_sub, beh_sub, title_sub],
         }
     }
 
@@ -293,6 +378,7 @@ impl AiAssistantView {
             .flex_1()
             .w_full()
             .min_w_0()
+            .min_h_0()
             .overflow_hidden()
             .child(self.render_message_stream(p, cx));
 
@@ -301,15 +387,12 @@ impl AiAssistantView {
         if has_status_panel && self.state.status_panel_expanded {
             let elapsed = self.state.run_started_at.map(|t| t.elapsed().as_secs());
             let v_toggle = cx.entity();
-            let v_plan = cx.entity();
             container = container.child(div().px(rems(space::SM)).pb(rems(space::XS)).child(
                 render_plan_card(
                     PlanCardParams {
                         plan: self.state.active_plan.as_ref(),
                         focus: self.state.active_focus.as_deref(),
                         elapsed_secs: elapsed,
-                        plan_mode: self.state.plan_mode,
-                        is_running: self.state.running_run_id.is_some(),
                         expanded: true,
                         p,
                     },
@@ -318,9 +401,6 @@ impl AiAssistantView {
                             this.state.status_panel_expanded = !this.state.status_panel_expanded;
                             cx.notify();
                         });
-                    },
-                    move |_, cx| {
-                        v_plan.update(cx, |this, cx| this.execute_approved_plan(cx));
                     },
                 ),
             ));
@@ -377,39 +457,6 @@ impl AiAssistantView {
             );
         }
 
-        let running_tasks_count = self
-            .state
-            .managed_tasks
-            .iter()
-            .filter(|t| t.dto.status == transom_core::AiManagedTaskStatus::Running)
-            .count();
-        let v_pill_plan = cx.entity();
-        let v_pill_tasks = cx.entity();
-        if let Some(pills) = render_status_pills_row(
-            StatusPillsParams {
-                plan: self.state.active_plan.as_ref(),
-                focus: self.state.active_focus.as_deref(),
-                plan_expanded: self.state.status_panel_expanded,
-                running_tasks_count,
-                tasks_expanded: self.state.tasks_drawer_expanded,
-                p,
-            },
-            move |_, cx| {
-                v_pill_plan.update(cx, |this, cx| {
-                    this.state.status_panel_expanded = !this.state.status_panel_expanded;
-                    cx.notify();
-                });
-            },
-            move |_, cx| {
-                v_pill_tasks.update(cx, |this, cx| {
-                    this.state.tasks_drawer_expanded = !this.state.tasks_drawer_expanded;
-                    cx.notify();
-                });
-            },
-        ) {
-            container = container.child(pills);
-        }
-
         if let Some(q_card) = super::queue_card::render_queued_messages_card(self, p, cx) {
             container = container.child(q_card);
         }
@@ -427,15 +474,7 @@ impl Render for AiAssistantView {
 
         let body = match self.state.drawer {
             AiDrawerTab::History => self.render_history_body(&p, cx),
-            AiDrawerTab::Config => v_flex()
-                .flex_1()
-                .w_full()
-                .overflow_hidden()
-                .child(self.render_config_body(&p, cx))
-                .child(div().px(rems(space::SM)).pb(rems(space::SM)).child(
-                    super::policy_hooks_drawer::render_policy_hooks_section(self, &p, cx),
-                ))
-                .into_any_element(),
+            AiDrawerTab::Config => self.render_config_body(&p, cx),
             AiDrawerTab::Skills => self.render_skills_body(&p, cx),
             AiDrawerTab::Memory => self.render_memory_body(&p, cx),
             AiDrawerTab::Chat => self.render_chat_body(&p, rem, cx),
@@ -444,8 +483,18 @@ impl Render for AiAssistantView {
         v_flex()
             .size_full()
             .min_w_0()
+            .min_h_0()
             .overflow_hidden()
             .bg(p.background)
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(|this, _, _, cx| {
+                    if this.state.active_popup != AiActivePopup::None {
+                        this.state.active_popup = AiActivePopup::None;
+                        cx.notify();
+                    }
+                }),
+            )
             .child(header)
             .child(body)
     }

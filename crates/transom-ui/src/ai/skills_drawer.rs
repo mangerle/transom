@@ -13,6 +13,7 @@ use transom_ai::{
 use transom_store::AiStore;
 use transom_ui_icons::{AppIcon, AppIconElement, UiIcon};
 
+use super::config_drawer::{field_group, section_card};
 use super::view::AiAssistantView;
 use crate::palette::Palette;
 use crate::theme::tokens::{space, typography};
@@ -223,6 +224,7 @@ impl AiAssistantView {
         let mut root = v_flex()
             .flex_1()
             .w_full()
+            .min_h_0()
             .p(rems(space::SM))
             .gap(rems(space::SM))
             .overflow_hidden();
@@ -401,8 +403,7 @@ impl AiAssistantView {
                                         p.text.muted
                                     })
                                     .child(
-                                        AppIconElement::new(AppIcon::Ui(UiIcon::RUN_ANYTHING))
-                                            .small(),
+                                        AppIconElement::new(AppIcon::Ui(UiIcon::LIGHTNING)).small(),
                                     ),
                             )
                             .child(
@@ -445,28 +446,72 @@ impl AiAssistantView {
         card.into_any_element()
     }
 
-    fn render_skill_editor_form(&self, _p: &Palette, cx: &mut Context<Self>) -> AnyElement {
+    fn render_skill_editor_form(&self, p: &Palette, cx: &mut Context<Self>) -> AnyElement {
         let v_save = cx.entity();
         let v_cancel = cx.entity();
+        let is_new = self
+            .skills_drawer
+            .editing_id
+            .as_deref()
+            .is_some_and(str::is_empty);
+        let form_title = if is_new {
+            "新建技能".to_owned()
+        } else {
+            "编辑技能".to_owned()
+        };
 
-        v_flex()
-            .flex_1()
-            .w_full()
-            .gap(rems(space::XS))
-            .overflow_y_scrollbar()
-            .child(Input::new(&self.skills_drawer.id_input).small())
-            .child(Input::new(&self.skills_drawer.title_input).small())
-            .child(Input::new(&self.skills_drawer.desc_input).small())
-            .child(Input::new(&self.skills_drawer.tags_input).small())
-            .child(
-                div()
-                    .w_full()
-                    .min_h(rems(12.0))
-                    .child(Textarea::new(&self.skills_drawer.body_input)),
-            )
+        let card = section_card(form_title, None, p)
             .child(
                 h_flex()
                     .w_full()
+                    .gap(rems(space::SM))
+                    .items_start()
+                    .child(
+                        div().flex_1().min_w_0().child(field_group(
+                            "技能 ID（斜杠命令）".to_owned(),
+                            Input::new(&self.skills_drawer.id_input).small(),
+                            p,
+                        )),
+                    )
+                    .child(
+                        div().flex_1().min_w_0().child(field_group(
+                            "技能名称".to_owned(),
+                            Input::new(&self.skills_drawer.title_input).small(),
+                            p,
+                        )),
+                    ),
+            )
+            .child(field_group(
+                "简短描述".to_owned(),
+                Input::new(&self.skills_drawer.desc_input).small(),
+                p,
+            ))
+            .child(field_group(
+                "标签（逗号分隔，可选）".to_owned(),
+                Input::new(&self.skills_drawer.tags_input).small(),
+                p,
+            ))
+            .child(field_group(
+                "提示词模板（Prompt）".to_owned(),
+                div()
+                    .w_full()
+                    .p(rems(space::XS))
+                    .rounded(p.radius.sm)
+                    .bg(p.background)
+                    .border_1()
+                    .border_color(p.divider(p.border))
+                    .child(
+                        Textarea::new(&self.skills_drawer.body_input)
+                            .appearance(false)
+                            .bordered(false)
+                            .h(rems(16.0)),
+                    ),
+                p,
+            ))
+            .child(
+                h_flex()
+                    .w_full()
+                    .pt(px(2.0))
                     .justify_end()
                     .gap(rems(space::XS))
                     .child(
@@ -490,7 +535,14 @@ impl AiAssistantView {
                                 v_save.update(cx, |this, cx| this.save_skill_from_drawer(cx));
                             }),
                     ),
-            )
+            );
+
+        v_flex()
+            .flex_1()
+            .w_full()
+            .min_h_0()
+            .overflow_y_scrollbar()
+            .child(card)
             .into_any_element()
     }
 }

@@ -26,6 +26,21 @@ pub(crate) struct ActiveAiSessionInfo {
     pub(crate) connected: bool,
 }
 
+/// 输入框已选中的指令或主机目标胶囊（支持整块退格删除）。
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum ComposerChip {
+    SlashCommand(String),
+    Mention(String),
+}
+
+impl ComposerChip {
+    pub(crate) fn label(&self) -> &str {
+        match self {
+            Self::SlashCommand(s) | Self::Mention(s) => s,
+        }
+    }
+}
+
 /// 面板右侧抽屉视图模式。
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(crate) enum AiDrawerTab {
@@ -35,6 +50,15 @@ pub(crate) enum AiDrawerTab {
     Config,
     Memory,
     Skills,
+}
+
+/// 设置抽屉顶部分区标签。
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) enum AiConfigSection {
+    #[default]
+    Models,
+    General,
+    PolicyHooks,
 }
 
 /// 底部控制条当前展开的浮层菜单。
@@ -56,6 +80,7 @@ pub(crate) enum UiChatItem {
     UserText {
         id: String,
         text: String,
+        timestamp: Option<String>,
     },
     Reasoning {
         id: String,
@@ -88,11 +113,13 @@ pub(crate) struct AiPanelState {
     pub(crate) connected_sessions: Vec<ActiveAiSessionInfo>,
     pub(crate) extra_scope_tabs: HashSet<TabId>,
     pub(crate) drawer: AiDrawerTab,
+    pub(crate) config_section: AiConfigSection,
     pub(crate) settings: AiSettings,
     pub(crate) selected_model_id: String,
     pub(crate) selected_effort: Option<ThinkingEffort>,
     pub(crate) execution_mode: ExecutionMode,
     pub(crate) conversations: Vec<ConversationSummary>,
+    pub(crate) show_archived_history: bool,
     pub(crate) active_conversation_id: Option<String>,
     pub(crate) active_conversation_title: Option<String>,
     pub(crate) selected_protocol: ProviderProtocol,
@@ -110,6 +137,7 @@ pub(crate) struct AiPanelState {
     pub(crate) run_started_at: Option<std::time::Instant>,
     pub(crate) active_popup: AiActivePopup,
     pub(crate) status_panel_expanded: bool,
+    pub(crate) composer_chips: Vec<ComposerChip>,
     pub(crate) pending_attachments: Vec<ComposerAttachment>,
     pub(crate) pasted_doc_seq: usize,
     pub(crate) acp_install_status: Option<(String, bool, String)>,
@@ -117,7 +145,6 @@ pub(crate) struct AiPanelState {
     pub(crate) managed_tasks: Vec<super::task_bar::UiManagedTask>,
     pub(crate) tasks_drawer_expanded: bool,
     pub(crate) selected_task_id: Option<String>,
-    pub(crate) plan_mode: bool,
     pub(crate) handoff_pending: Option<(String, String, String)>,
     pub(crate) queued_messages: Vec<super::queue_card::QueuedPrompt>,
     pub(crate) queue_expanded: bool,
@@ -133,11 +160,13 @@ impl Default for AiPanelState {
             connected_sessions: Vec::new(),
             extra_scope_tabs: HashSet::new(),
             drawer: AiDrawerTab::Chat,
+            config_section: AiConfigSection::Models,
             settings: AiSettings::default(),
             selected_model_id: String::new(),
             selected_effort: None,
             execution_mode: ExecutionMode::Manual,
             conversations: Vec::new(),
+            show_archived_history: false,
             active_conversation_id: None,
             active_conversation_title: None,
             selected_protocol: ProviderProtocol::OpenAi,
@@ -155,6 +184,7 @@ impl Default for AiPanelState {
             run_started_at: None,
             active_popup: AiActivePopup::None,
             status_panel_expanded: true,
+            composer_chips: Vec::new(),
             pending_attachments: Vec::new(),
             pasted_doc_seq: 0,
             acp_install_status: None,
@@ -162,7 +192,6 @@ impl Default for AiPanelState {
             managed_tasks: Vec::new(),
             tasks_drawer_expanded: false,
             selected_task_id: None,
-            plan_mode: false,
             handoff_pending: None,
             queued_messages: Vec::new(),
             queue_expanded: true,
@@ -182,9 +211,10 @@ impl AiPanelState {
         }
     }
 
-    /// 把从 JSONL 加载的树状会话主分支还原为 UI 消息列表。
+    /// 把从 JSONL 加载的树状会话主分支还原为 UI 消息列表，并恢复该会话的推理指标。
     pub(crate) fn load_entries(&mut self, entries: Vec<SessionEntry>) {
         self.items.clear();
+        self.metrics.restore_from_entries(&entries);
         for entry in entries {
             match entry.kind {
                 SessionEntryKind::Message {
@@ -195,7 +225,11 @@ impl AiPanelState {
                     ..
                 } => match role {
                     transom_ai::ChatRole::User => {
-                        self.items.push(UiChatItem::UserText { id: entry.id, text });
+                        self.items.push(UiChatItem::UserText {
+                            id: entry.id,
+                            text,
+                            timestamp: Some(entry.timestamp),
+                        });
                     }
                     transom_ai::ChatRole::Assistant => {
                         self.items.push(UiChatItem::AssistantText {
@@ -273,6 +307,7 @@ impl AiPanelState {
                     self.active_plan = None;
                     self.active_focus = None;
                     self.status_panel_expanded = true;
+                    self.tasks_drawer_expanded = false;
                     self.run_started_at = Some(std::time::Instant::now());
                     self.metrics.turns = self.metrics.turns.saturating_add(1);
                 }
@@ -341,9 +376,7 @@ impl AiPanelState {
                 self.pending_approvals.clear();
                 self.active_focus = None;
                 self.run_started_at = None;
-                if !self.plan_mode {
-                    self.status_panel_expanded = false;
-                }
+                self.status_panel_expanded = false;
                 for item in &mut self.items {
                     if let UiChatItem::Reasoning { streaming, .. }
                     | UiChatItem::AssistantText { streaming, .. } = item

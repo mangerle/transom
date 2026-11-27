@@ -17,6 +17,7 @@ use super::view::AiAssistantView;
 impl AiAssistantView {
     pub(super) fn select_conversation(&mut self, conv_id: &str) {
         self.active_nav_dot = None;
+        self.editing_title = false;
         self.state.active_conversation_id = Some(conv_id.to_owned());
         self.state.active_conversation_title = self
             .state
@@ -41,6 +42,61 @@ impl AiAssistantView {
             .try_send(AppCommand::Ai(Box::new(AiCommand::DeleteConversation {
                 conversation_id: conv_id.to_owned(),
             })));
+        cx.notify();
+    }
+
+    pub(super) fn set_conversation_archived(
+        &mut self,
+        conv_id: &str,
+        archived: bool,
+        cx: &mut Context<Self>,
+    ) {
+        if let Err(err) = self.ai_store.set_conversation_archived(conv_id, archived) {
+            self.state.status_error = Some(err.to_string());
+            cx.notify();
+            return;
+        }
+        if let Some(conv) = self.state.conversations.iter_mut().find(|c| c.id == conv_id) {
+            conv.archived = archived;
+        }
+        cx.notify();
+    }
+
+    pub(super) fn start_editing_title(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.state.active_conversation_id.is_none() {
+            return;
+        }
+        let cur = self
+            .state
+            .active_conversation_title
+            .clone()
+            .unwrap_or_default();
+        self.editing_title = true;
+        self.title_input.update(cx, |input, cx| {
+            input.set_value(cur, window, cx);
+            input.focus_handle(cx).focus(window, cx);
+        });
+        cx.notify();
+    }
+
+    pub(super) fn commit_title_edit(&mut self, cx: &mut Context<Self>) {
+        if !self.editing_title {
+            return;
+        }
+        self.editing_title = false;
+        let next = self.title_input.read(cx).value().trim().to_owned();
+        if let Some(cid) = self.state.active_conversation_id.clone()
+            && !next.is_empty()
+        {
+            if let Err(err) = self.ai_store.rename_conversation(&cid, &next) {
+                self.state.status_error = Some(err.to_string());
+            } else {
+                self.state.active_conversation_title = Some(next.clone());
+                if let Some(conv) = self.state.conversations.iter_mut().find(|c| c.id == cid) {
+                    conv.title = next;
+                }
+            }
+        }
         cx.notify();
     }
 
@@ -92,6 +148,7 @@ impl AiAssistantView {
         self.state.items.push(UiChatItem::UserText {
             id: format!("local-u-{run_id}"),
             text: prompt.clone(),
+            timestamp: Some(chrono::Utc::now().to_rfc3339()),
         });
         self.state.running_run_id = Some(run_id.clone());
         self.active_nav_dot = None;
@@ -153,7 +210,7 @@ impl AiAssistantView {
                 })
                 .collect(),
             acp_agent_id: self.state.active_acp_agent_id.clone(),
-            plan_mode: self.state.plan_mode,
+            plan_mode: false,
         };
         if let Err(err) = self
             .command_tx
@@ -171,29 +228,41 @@ impl AiAssistantView {
     pub(super) fn send_from_composer(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let text = self.composer_input.read(cx).value().to_string();
         let trimmed = text.trim();
-        if trimmed.is_empty() && self.state.pending_attachments.is_empty() {
+        if trimmed.is_empty()
+            && self.state.composer_chips.is_empty()
+            && self.state.pending_attachments.is_empty()
+        {
             return;
         }
+        let chips = std::mem::take(&mut self.state.composer_chips);
+        let mut parts: Vec<String> = chips.into_iter().map(|c| c.label().to_owned()).collect();
+        if !trimmed.is_empty() {
+            parts.push(text);
+        }
+        let combined = parts.join(" ");
+        let combined_trimmed = combined.trim();
         self.composer_input
             .update(cx, |i, cx| i.set_value(String::new(), window, cx));
         self.last_composer_len = 0;
         self.state.active_popup = AiActivePopup::None;
-        if trimmed == "/clear" {
+        if combined_trimmed == "/clear" {
             self.clear_conversation(cx);
             return;
         }
-        if let Some(rest) = trimmed.strip_prefix("/compact") {
+        if let Some(rest) = combined_trimmed.strip_prefix("/compact") {
             self.compact_conversation(rest.trim().to_owned(), cx);
             return;
         }
-        self.send_prompt_text(text, cx);
+        self.send_prompt_text(combined, cx);
     }
 
     pub(super) fn clear_conversation(&mut self, cx: &mut Context<Self>) {
         self.active_nav_dot = None;
+        self.editing_title = false;
         self.state.active_conversation_id = None;
         self.state.active_conversation_title = None;
         self.state.items.clear();
+        self.state.composer_chips.clear();
         self.state.metrics.reset_session();
         self.state.active_plan = None;
         self.state.active_focus = None;
@@ -436,9 +505,34 @@ impl AiAssistantView {
         cx.emit(AiPanelEvent::SaveSnippetRequested { name, command });
     }
 
+    /// 优先使用输入框当前填写的 API Key；为空时从系统密钥库回读匹配供应商的已保存密钥。
+    fn resolve_drawer_api_key(&self, cx: &App) -> String {
+        let typed = self.api_key_input.read(cx).value().trim().to_owned();
+        if !typed.is_empty() {
+            return typed;
+        }
+        let name = self.provider_name_input.read(cx).value().trim().to_owned();
+        let url = self.base_url_input.read(cx).value().trim().to_owned();
+        let matched = self
+            .state
+            .settings
+            .providers
+            .iter()
+            .find(|p| (!name.is_empty() && p.name == name) || (!url.is_empty() && p.base_url == url))
+            .or_else(|| self.state.settings.providers.first());
+        if let Some(prov) = matched
+            && let Ok(Some(saved)) = self
+                .ai_store
+                .load_provider_api_key(self.secret_store.as_ref(), &prov.id)
+        {
+            return saved.to_string();
+        }
+        String::new()
+    }
+
     pub(super) fn test_provider_connection(&mut self, cx: &mut Context<Self>) {
         let base_url = self.base_url_input.read(cx).value().to_string();
-        let api_key = self.api_key_input.read(cx).value().to_string();
+        let api_key = self.resolve_drawer_api_key(cx);
         self.state.discovery_status = Some(rust_i18n::t!("ai.testing_connection").to_string());
         let _ = self
             .command_tx
@@ -453,7 +547,7 @@ impl AiAssistantView {
 
     pub(super) fn discover_provider_models(&mut self, cx: &mut Context<Self>) {
         let base_url = self.base_url_input.read(cx).value().to_string();
-        let api_key = self.api_key_input.read(cx).value().to_string();
+        let api_key = self.resolve_drawer_api_key(cx);
         self.state.discovery_status = Some(rust_i18n::t!("ai.fetching_models").to_string());
         let _ = self
             .command_tx
