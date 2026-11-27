@@ -113,6 +113,7 @@ mod tests {
             model: None,
             tokens_per_sec: None,
             streaming: false,
+            cached_segments: None,
         };
         let long_text =
             "请帮我排查线上服务器内存泄漏和数据库连接池耗尽的根本原因并给出完整方案，谢谢！"

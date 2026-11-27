@@ -45,6 +45,7 @@ pub(super) struct CodeBlockCallbacks {
 pub(super) struct MarkdownRenderParams<'a> {
     pub(super) msg_id: &'a str,
     pub(super) text: &'a str,
+    pub(super) cached_segments: Option<&'a [MarkdownSegment]>,
     pub(super) copied_key: Option<&'a str>,
     pub(super) has_active_terminal: bool,
     pub(super) p: &'a Palette,
@@ -158,19 +159,25 @@ fn trim_up_to_3_spaces(line: &str) -> &str {
 
 /// 将解析后的 Markdown 分段渲染为混排正文与代码块卡片。
 pub(super) fn render_markdown_content(params: MarkdownRenderParams<'_>) -> AnyElement {
-    let segments = parse_markdown_segments(params.text);
+    let owned;
+    let segments: &[MarkdownSegment] = if let Some(cached) = params.cached_segments {
+        cached
+    } else {
+        owned = parse_markdown_segments(params.text);
+        &owned
+    };
     if segments.is_empty() {
         return div().into_any_element();
     }
     let mut col = v_flex().w_full().gap(rems(space::XS));
-    for (idx, seg) in segments.into_iter().enumerate() {
+    for (idx, seg) in segments.iter().enumerate() {
         match seg {
             MarkdownSegment::Prose(prose) => {
                 col = col.child(
                     div().w_full().line_height(relative(1.5)).child(
                         TextView::markdown(
                             SharedString::from(format!("ai-md-{}-{idx}", params.msg_id)),
-                            prose,
+                            prose.clone(),
                         )
                         .selectable(true),
                     ),
@@ -181,7 +188,13 @@ pub(super) fn render_markdown_content(params: MarkdownRenderParams<'_>) -> AnyEl
                 code,
                 unclosed,
             } => {
-                col = col.child(render_code_card(&params, idx, lang, code, unclosed));
+                col = col.child(render_code_card(
+                    &params,
+                    idx,
+                    lang.clone(),
+                    code.clone(),
+                    *unclosed,
+                ));
             }
         }
     }

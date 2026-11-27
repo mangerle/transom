@@ -58,9 +58,11 @@ pub(super) fn render_chat_item(
             model,
             tokens_per_sec,
             streaming,
+            cached_segments,
         } => render_assistant_message(
             id,
             text,
+            cached_segments.as_deref().map(Vec::as_slice),
             model.as_deref(),
             *tokens_per_sec,
             *streaming,
@@ -247,6 +249,7 @@ fn render_reasoning_block(
 fn render_assistant_message(
     id: &str,
     text: &str,
+    cached_segments: Option<&[super::markdown_blocks::MarkdownSegment]>,
     model: Option<&str>,
     tokens_per_sec: Option<f32>,
     streaming: bool,
@@ -261,6 +264,7 @@ fn render_assistant_message(
         .child(render_markdown_content(MarkdownRenderParams {
             msg_id: id,
             text,
+            cached_segments,
             copied_key: params.copied_key,
             has_active_terminal: params.has_active_terminal,
             p,

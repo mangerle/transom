@@ -379,6 +379,7 @@ mod tests {
                 model: None,
                 tokens_per_sec: None,
                 streaming: false,
+                cached_segments: None,
             },
         ];
         let blocks = group_chat_items(&items, false);

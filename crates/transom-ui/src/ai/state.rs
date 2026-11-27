@@ -1,8 +1,10 @@
 //! AI 助手面板的本地状态模型。
 
 use std::collections::HashSet;
+use std::sync::Arc;
 
 use super::attachments::ComposerAttachment;
+use super::markdown_blocks::parse_markdown_segments;
 use super::metrics_model::AiSessionMetrics;
 pub(crate) use super::state_types::{
     ActiveAiSessionInfo, AiActivePopup, AiConfigSection, AiDrawerTab, UiChatItem,
@@ -138,12 +140,14 @@ impl AiPanelState {
                         });
                     }
                     transom_ai::ChatRole::Assistant => {
+                        let cached_segments = Some(Arc::new(parse_markdown_segments(&text)));
                         self.items.push(UiChatItem::AssistantText {
                             id: entry.id,
                             text,
                             model,
                             tokens_per_sec,
                             streaming: false,
+                            cached_segments,
                         });
                     }
                 },
@@ -254,6 +258,7 @@ impl AiPanelState {
                         model: None,
                         tokens_per_sec: None,
                         streaming: true,
+                        cached_segments: None,
                     });
                 }
             }
@@ -285,10 +290,22 @@ impl AiPanelState {
                 self.run_started_at = None;
                 self.status_panel_expanded = false;
                 for item in &mut self.items {
-                    if let UiChatItem::Reasoning { streaming, .. }
-                    | UiChatItem::AssistantText { streaming, .. } = item
-                    {
-                        *streaming = false;
+                    match item {
+                        UiChatItem::Reasoning { streaming, .. } => {
+                            *streaming = false;
+                        }
+                        UiChatItem::AssistantText {
+                            text,
+                            streaming,
+                            cached_segments,
+                            ..
+                        } => {
+                            *streaming = false;
+                            if cached_segments.is_none() {
+                                *cached_segments = Some(Arc::new(parse_markdown_segments(text)));
+                            }
+                        }
+                        _ => {}
                     }
                 }
                 if let Some(err) = error {
@@ -413,12 +430,14 @@ impl AiPanelState {
                 .settings
                 .resolve_model(&self.selected_model_id)
                 .map(|(_, m)| m.name.clone());
+            let cached_segments = Some(Arc::new(parse_markdown_segments(&text)));
             self.items.push(UiChatItem::AssistantText {
                 id: format!("turn-t-{}", self.items.len()),
                 text,
                 model: model_name,
                 tokens_per_sec,
                 streaming: false,
+                cached_segments,
             });
         }
     }
