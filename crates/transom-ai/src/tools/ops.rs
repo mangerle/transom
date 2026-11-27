@@ -7,7 +7,7 @@ use serde::Deserialize;
 use serde_json::json;
 use similar::TextDiff;
 
-use super::{ToolRuntimeContext, TransferDirection, to_rig_err};
+use super::{AppBridgeDomain, ToolRuntimeContext, TransferDirection, to_rig_err};
 use crate::compaction::truncate_tool_output;
 use crate::error::ToolError;
 use crate::policy::ToolRisk;
@@ -110,7 +110,7 @@ impl Tool for RemoteFsTool {
                 "mode": args.mode,
                 "recursive": args.recursive,
             });
-            let res = bridge.invoke(Self::NAME, &args.action, payload).await;
+            let res = bridge.invoke(AppBridgeDomain::RemoteFs, &args.action, payload).await;
             let elapsed = started.elapsed().as_millis() as u64;
             return match res {
                 Ok(text) => {
@@ -338,7 +338,7 @@ impl Tool for TransferFileTool {
                 "remote_path": args.remote_path,
                 "overwrite": args.overwrite,
             });
-            bridge.invoke(Self::NAME, action, payload).await
+            bridge.invoke(AppBridgeDomain::TransferFile, action, payload).await
         } else {
             let fs = self
                 .ctx

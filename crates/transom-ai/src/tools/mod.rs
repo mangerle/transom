@@ -35,7 +35,7 @@ use crate::output_store::ToolOutputStore;
 use crate::policy::{HostProtection, ToolRisk};
 use crate::session::SessionScope;
 
-pub use app_bridge::AppActionBridge;
+pub use app_bridge::{AppActionBridge, AppBridgeDomain};
 pub use assess::{assess_tool_call, assess_tool_call_value};
 pub use delegate::{DelegateMode, DelegateTaskRequest, SubagentRunner};
 pub use skill_tool::SkillLoader;

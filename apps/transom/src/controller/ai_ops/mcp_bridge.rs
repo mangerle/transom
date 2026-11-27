@@ -15,9 +15,9 @@ use serde_json::Value;
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 use transom_ai::{
-    AiAuditEntry, AppActionBridge, ExecutionMode, HostProtection, LockedSession, McpServer,
-    McpServerBackend, McpSessionInfo, RemoteExecutor, SessionPromptContext, SessionScope,
-    ToolOutputStore, ToolRuntimeContext, assess_tool_call, classify_shell_command,
+    AiAuditEntry, AppActionBridge, AppBridgeDomain, ExecutionMode, HostProtection, LockedSession,
+    McpServer, McpServerBackend, McpSessionInfo, RemoteExecutor, SessionPromptContext,
+    SessionScope, ToolOutputStore, ToolRuntimeContext, assess_tool_call, classify_shell_command,
     detect_blocking_command, evaluate_bulk_policy, evaluate_policy, format_blocking_command_hint,
     serve_local_socket,
 };
@@ -352,10 +352,13 @@ impl ControllerMcpBackend {
         let started = Instant::now();
         let action = arguments["action"].as_str().unwrap_or("");
         let bridge = ControllerAppActionBridge::new(deps);
-        let result = bridge
-            .invoke(name, action, arguments.clone())
-            .await
-            .map_err(|e| e.to_string());
+        let result = match AppBridgeDomain::parse(name) {
+            Ok(domain) => bridge
+                .invoke(domain, action, arguments.clone())
+                .await
+                .map_err(|e| e.to_string()),
+            Err(e) => Err(e.to_string()),
+        };
         let elapsed = started.elapsed().as_millis() as u64;
         let _ = snap.ai_store.append_audit(&AiAuditEntry {
             timestamp: chrono::Utc::now().to_rfc3339(),

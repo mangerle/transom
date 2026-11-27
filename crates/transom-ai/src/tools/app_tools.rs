@@ -6,7 +6,7 @@ use rig_agent::tool::{Tool, ToolContext, ToolExecutionError};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use super::{ToolExecutionCard, ToolRuntimeContext, to_rig_err};
+use super::{AppBridgeDomain, ToolExecutionCard, ToolRuntimeContext, to_rig_err};
 use crate::error::ToolError;
 use crate::policy::ToolRisk;
 
@@ -30,10 +30,11 @@ pub(crate) async fn invoke_app_tool(
             reason: "当前运行上下文未挂载软件操作桥接器".to_owned(),
         })
     })?;
+    let domain = AppBridgeDomain::parse(tool_name).map_err(to_rig_err)?;
     let started = Instant::now();
     let payload = Value::Object(args.extra);
     let summary = format!("{tool_name}({})", args.action);
-    let res = bridge.invoke(tool_name, &args.action, payload).await;
+    let res = bridge.invoke(domain, &args.action, payload).await;
     let elapsed = started.elapsed().as_millis() as u64;
     match res {
         Ok(raw) => {
@@ -387,7 +388,7 @@ mod tests {
     use super::{AppActionArgs, SessionCatalogTool};
     use crate::output_store::ToolOutputStore;
     use crate::session::SessionScope;
-    use crate::tools::{AppActionBridge, ToolError, ToolRuntimeContext};
+    use crate::tools::{AppActionBridge, AppBridgeDomain, ToolError, ToolRuntimeContext};
 
     struct FakeBridge;
 
@@ -395,7 +396,7 @@ mod tests {
     impl AppActionBridge for FakeBridge {
         async fn invoke(
             &self,
-            domain: &str,
+            domain: AppBridgeDomain,
             action: &str,
             args: Value,
         ) -> Result<String, ToolError> {

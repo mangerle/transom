@@ -21,7 +21,7 @@ use parking_lot::Mutex;
 use serde_json::Value;
 use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
-use transom_ai::{AppActionBridge, ToolError};
+use transom_ai::{AppActionBridge, AppBridgeDomain, ToolError};
 use transom_api::{ApiHttpService, ApiProjectStore};
 use transom_core::{
     AiAppEvent, AppEvent, BackupService, GitProjectStore, KnownHostsStore, SecretStore,
@@ -171,25 +171,36 @@ impl ControllerAppActionBridge {
 
 #[async_trait]
 impl AppActionBridge for ControllerAppActionBridge {
-    async fn invoke(&self, domain: &str, action: &str, args: Value) -> Result<String, ToolError> {
+    async fn invoke(
+        &self,
+        domain: AppBridgeDomain,
+        action: &str,
+        args: Value,
+    ) -> Result<String, ToolError> {
         match domain {
-            "session_catalog" => sessions::handle(self, action, &args).await,
-            "workspace_control" => workspace::handle_workspace(self, action, &args).await,
-            "host_monitor" => workspace::handle_monitor(self, action, &args).await,
-            "port_forward_ops" => workspace::handle_forward(self, action, &args).await,
-            "sftp_transfer" => system::handle_sftp_transfer(self, action, &args).await,
-            "container_workspace" => dev::handle_container(self, action, &args).await,
-            "git_workspace" => dev::handle_git(self, action, &args).await,
-            "api_client" => api_client::handle_api_client(self, action, &args).await,
-            "app_settings_ops" => system::handle_settings(self, action, &args).await,
-            "ai_memory_skills" => memory::handle_memory_skills(self, action, &args).await,
-            "remote_exec" => target_ops::handle_remote_exec(self, &args).await,
-            "remote_fs" => target_ops::handle_remote_fs(self, action, &args).await,
-            "transfer_file" => target_ops::handle_transfer_file(self, action, &args).await,
-            other => Err(ToolError::InvalidArguments {
-                tool: "app_bridge",
-                reason: format!("未知软件操作领域: {other}"),
-            }),
+            AppBridgeDomain::SessionCatalog => sessions::handle(self, action, &args).await,
+            AppBridgeDomain::WorkspaceControl => {
+                workspace::handle_workspace(self, action, &args).await
+            }
+            AppBridgeDomain::HostMonitor => workspace::handle_monitor(self, action, &args).await,
+            AppBridgeDomain::PortForwardOps => workspace::handle_forward(self, action, &args).await,
+            AppBridgeDomain::SftpTransfer => {
+                system::handle_sftp_transfer(self, action, &args).await
+            }
+            AppBridgeDomain::ContainerWorkspace => {
+                dev::handle_container(self, action, &args).await
+            }
+            AppBridgeDomain::GitWorkspace => dev::handle_git(self, action, &args).await,
+            AppBridgeDomain::ApiClient => api_client::handle_api_client(self, action, &args).await,
+            AppBridgeDomain::AppSettingsOps => system::handle_settings(self, action, &args).await,
+            AppBridgeDomain::AiMemorySkills => {
+                memory::handle_memory_skills(self, action, &args).await
+            }
+            AppBridgeDomain::RemoteExec => target_ops::handle_remote_exec(self, &args).await,
+            AppBridgeDomain::RemoteFs => target_ops::handle_remote_fs(self, action, &args).await,
+            AppBridgeDomain::TransferFile => {
+                target_ops::handle_transfer_file(self, action, &args).await
+            }
         }
     }
 }

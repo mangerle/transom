@@ -99,9 +99,9 @@ pub use thinking::{
     ThinkingEffort, ThinkingSwitch, build_request_params, fallback_effort, request_params,
 };
 pub use tools::{
-    AppActionBridge, ApprovalSummary, BulkHostTarget, DelegateMode, DelegateTaskRequest,
-    ExecCommandResult, ForwardExecutor, KnowledgeSearcher, LockedSession, MemoryWriter,
-    RemoteExecutor, RemoteFsExecutor, RuntimeInspector, SkillLoader, SubagentRunner,
+    AppActionBridge, AppBridgeDomain, ApprovalSummary, BulkHostTarget, DelegateMode,
+    DelegateTaskRequest, ExecCommandResult, ForwardExecutor, KnowledgeSearcher, LockedSession,
+    MemoryWriter, RemoteExecutor, RemoteFsExecutor, RuntimeInspector, SkillLoader, SubagentRunner,
     TerminalContextProvider, ToolExecutionCard, ToolRuntimeContext, TransferDirection,
     assess_tool_call,
     plan::{PlanSnapshot, PlanStep, PlanStepStatus},

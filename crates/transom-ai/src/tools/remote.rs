@@ -6,7 +6,7 @@ use rig_agent::tool::{Tool, ToolContext, ToolExecutionError};
 use serde::Deserialize;
 use serde_json::json;
 
-use super::{ToolRuntimeContext, to_rig_err};
+use super::{AppBridgeDomain, ToolRuntimeContext, to_rig_err};
 use crate::error::ToolError;
 use crate::memory::MemoryProposal;
 use crate::policy::{
@@ -108,7 +108,7 @@ impl Tool for RemoteExecTool {
                 "cwd": args.cwd,
                 "timeout_secs": args.timeout_secs,
             });
-            let res = bridge.invoke(Self::NAME, "run", payload).await;
+            let res = bridge.invoke(AppBridgeDomain::RemoteExec, "run", payload).await;
             let elapsed_ms = started.elapsed().as_millis() as u64;
             return match res {
                 Ok(raw) => {
