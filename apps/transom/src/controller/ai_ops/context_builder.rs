@@ -211,6 +211,7 @@ pub(super) async fn prepare_conversation(
         effort: req.effort.as_deref().and_then(ThinkingEffort::parse),
         updated_at: chrono::Utc::now().to_rfc3339(),
         active_leaf_id: Some(header.id.clone()),
+        archived: false,
     });
     (conv_id, title, vec![header])
 }

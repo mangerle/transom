@@ -162,6 +162,52 @@ impl AiStore {
         })
     }
 
+    /// 切换指定对话的归档状态并写回 `index.json`。
+    pub fn set_conversation_archived(
+        &self,
+        conversation_id: &str,
+        archived: bool,
+    ) -> Result<(), AiError> {
+        let mut list = self.load_index()?;
+        let Some(item) = list.iter_mut().find(|item| item.id == conversation_id) else {
+            return Ok(());
+        };
+        item.archived = archived;
+        let path = self.root.join("index.json");
+        let payload =
+            serde_json::to_string_pretty(&list).map_err(|err| AiError::StorageFailed {
+                target: path.display().to_string(),
+                reason: err.to_string(),
+            })?;
+        write_atomic(&path, payload.as_bytes()).map_err(|err| AiError::StorageFailed {
+            target: path.display().to_string(),
+            reason: err.to_string(),
+        })
+    }
+
+    /// 重命名指定对话标题并写回 `index.json`。
+    pub fn rename_conversation(
+        &self,
+        conversation_id: &str,
+        new_title: &str,
+    ) -> Result<(), AiError> {
+        let mut list = self.load_index()?;
+        let Some(item) = list.iter_mut().find(|item| item.id == conversation_id) else {
+            return Ok(());
+        };
+        item.title = new_title.to_owned();
+        let path = self.root.join("index.json");
+        let payload =
+            serde_json::to_string_pretty(&list).map_err(|err| AiError::StorageFailed {
+                target: path.display().to_string(),
+                reason: err.to_string(),
+            })?;
+        write_atomic(&path, payload.as_bytes()).map_err(|err| AiError::StorageFailed {
+            target: path.display().to_string(),
+            reason: err.to_string(),
+        })
+    }
+
     /// 删除指定对话索引及对应的 JSONL 会话文件。
     pub fn delete_conversation(&self, conversation_id: &str) -> Result<(), AiError> {
         let mut list = self.load_index()?;
@@ -404,6 +450,7 @@ mod tests {
                 effort: None,
                 updated_at: "2026-11-26T10:00:00Z".to_owned(),
                 active_leaf_id: None,
+                archived: false,
             })
             .expect("写入索引失败");
 
@@ -415,6 +462,7 @@ mod tests {
                 images: vec![],
                 model: None,
                 tokens_per_sec: None,
+                usage: None,
             },
         );
         store
@@ -425,6 +473,21 @@ mod tests {
             .list_conversations_for_scope(&SessionScope::Host("host-a".to_owned()))
             .expect("查询索引失败");
         assert_eq!(list.len(), 1);
+        assert!(!list[0].archived);
+
+        store
+            .set_conversation_archived(conv_id, true)
+            .expect("归档失败");
+        assert!(store.list_all_conversations().unwrap()[0].archived);
+        store
+            .set_conversation_archived(conv_id, false)
+            .expect("取消归档失败");
+        assert!(!store.list_all_conversations().unwrap()[0].archived);
+
+        store
+            .rename_conversation(conv_id, "生产巡检记录")
+            .expect("重命名失败");
+        assert_eq!(store.list_all_conversations().unwrap()[0].title, "生产巡检记录");
 
         let tree = store.load_session_tree(conv_id).expect("加载会话树失败");
         assert_eq!(tree.all_entries().len(), 1);

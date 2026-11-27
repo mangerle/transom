@@ -10,7 +10,8 @@ use tokio_util::sync::CancellationToken;
 use transom_ai::{
     AcpAgentConfig, AcpRunInput, AgentEvent, AiAuditEntry, ChatRole, HookContext, HookEvent,
     HookExecutor, MemorySnapshot, PlanSnapshot, PlanStepStatus, RunInput, SessionEntry,
-    SessionEntryKind, ToolExecutionCard, ToolRisk, compute_context_breakdown, run_acp_turn,
+    SessionEntryKind, ToolExecutionCard, ToolRisk, TurnUsageRecord, compute_context_breakdown,
+    run_acp_turn,
 };
 use transom_core::{
     AiAppEvent, AiApprovalDecision, AiApprovalDto, AiPlanDto, AiPlanStepDto, AiPlanStepStatus,
@@ -60,6 +61,7 @@ pub(super) async fn execute_and_pump(
             images: Vec::new(),
             model: None,
             tokens_per_sec: None,
+            usage: None,
         },
     );
     last_leaf_id = Some(user_entry.id.clone());
@@ -318,6 +320,13 @@ async fn handle_turn_end(
                 images: Vec::new(),
                 model: Some(ctx.model_name.clone()),
                 tokens_per_sec: turn.tokens_per_sec,
+                usage: Some(TurnUsageRecord {
+                    input_tokens: turn.input_tokens,
+                    cached_input_tokens: turn.cached_input_tokens,
+                    output_tokens: turn.output_tokens,
+                    model_duration_ms: turn.model_duration_ms,
+                    ttft_ms: turn.ttft_ms,
+                }),
             },
         );
         *last_leaf_id = Some(entry.id.clone());

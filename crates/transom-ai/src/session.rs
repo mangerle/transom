@@ -38,6 +38,8 @@ pub struct ConversationSummary {
     pub updated_at: String,
     #[serde(default)]
     pub active_leaf_id: Option<String>,
+    #[serde(default)]
+    pub archived: bool,
 }
 
 /// 树状会话中的单条记录（对应 JSONL 文件中的一行）。
@@ -63,6 +65,21 @@ impl SessionEntry {
     }
 }
 
+/// 单轮助手回复的推理指标持久化记录（写入 JSONL 供历史会话恢复展示）。
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TurnUsageRecord {
+    #[serde(default)]
+    pub input_tokens: u64,
+    #[serde(default)]
+    pub cached_input_tokens: u64,
+    #[serde(default)]
+    pub output_tokens: u64,
+    #[serde(default)]
+    pub model_duration_ms: u64,
+    #[serde(default)]
+    pub ttft_ms: Option<u64>,
+}
+
 /// 会话条目的具体载荷类型。
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "entry_type", rename_all = "snake_case")]
@@ -84,6 +101,8 @@ pub enum SessionEntryKind {
         model: Option<String>,
         #[serde(default)]
         tokens_per_sec: Option<f32>,
+        #[serde(default)]
+        usage: Option<TurnUsageRecord>,
     },
     /// 推理模型的思考块。
     Reasoning { text: String },
@@ -257,6 +276,7 @@ mod tests {
                 images: vec![],
                 model: None,
                 tokens_per_sec: None,
+                usage: None,
             },
         );
         let u1_id = u1.id.clone();
@@ -270,6 +290,7 @@ mod tests {
                 images: vec![],
                 model: None,
                 tokens_per_sec: None,
+                usage: None,
             },
         );
         tree.push(a1);
@@ -283,6 +304,7 @@ mod tests {
                 images: vec![],
                 model: None,
                 tokens_per_sec: None,
+                usage: None,
             },
         );
         tree.push(a2);

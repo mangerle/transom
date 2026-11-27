@@ -128,6 +128,7 @@ mod tests {
                 images: vec![],
                 model: None,
                 tokens_per_sec: None,
+                usage: None,
             },
         );
         let e2 = SessionEntry::new(

@@ -84,7 +84,7 @@ pub use runner::{
 };
 pub use session::{
     ChatRole, ConversationSummary, SessionEntry, SessionEntryKind, SessionScope, SessionTree,
-    extract_host_mentions,
+    TurnUsageRecord, extract_host_mentions,
 };
 pub use skills::{
     SkillDefinition, SkillSummary, builtin_skills, delete_custom_skill, extract_skill_command,
