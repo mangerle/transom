@@ -113,6 +113,8 @@ pub enum SessionEntryKind {
         output: String,
         ok: bool,
         #[serde(default)]
+        duration_ms: u64,
+        #[serde(default)]
         approved: Option<bool>,
         #[serde(default)]
         diff_preview: Option<String>,

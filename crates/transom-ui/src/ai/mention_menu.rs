@@ -1,12 +1,11 @@
 //! AI 输入框 `@` 提及目标（SSH 主机、Docker 容器引擎、本机）自动补全弹层。
 
 use gpui_kit::base::{h_flex, v_flex};
-use gpui_kit::component::input::Position;
+use gpui_kit::component::input::InlineToken;
 use gpui_kit::*;
 use transom_ui_icons::{AppIcon, AppIconElement, CustomIcon, DomainIcon, UiIcon};
 
 use super::slash_menu::step_slash_index;
-use super::state::ComposerChip;
 use super::view::AiAssistantView;
 use crate::palette::Palette;
 use crate::search::any_field_matches;
@@ -191,13 +190,22 @@ pub(super) fn render_mention_popover(
 }
 
 impl AiAssistantView {
-    /// 获取当前输入框匹配的 `@` 提及候选项。
+    /// 获取当前输入框匹配的 `@` 提及候选项（跳过已转换为行内胶囊的片段）。
     pub(super) fn current_mention_items(&self, cx: &App) -> Vec<AiMentionCandidate> {
-        let current_input = self.composer_input.read(cx).value().to_string();
+        let input = self.composer_input.read(cx);
+        let current_input = input.value().to_string();
+        if let Some((pos, _)) = extract_active_mention(&current_input)
+            && input
+                .tokens()
+                .iter()
+                .any(|span| span.range().start <= pos && pos < span.range().end)
+        {
+            return Vec::new();
+        }
         filter_mention_items(&current_input, &self.state.mention_candidates)
     }
 
-    /// 将选中的 `@` 目标转为浅蓝胶囊芯片，替换掉输入框末尾正在输入的 `@query`。
+    /// 将选中的 `@` 目标替换为行内胶囊芯片，保留在同一行内与光标对齐。
     pub(super) fn apply_mention_candidate(
         &mut self,
         token: &str,
@@ -209,18 +217,15 @@ impl AiAssistantView {
         let Some((at_pos, _)) = extract_active_mention(&current) else {
             return;
         };
-        let remaining = current[..at_pos].trim_end().to_owned();
-        let col = remaining.lines().last().unwrap_or("").chars().count() as u32;
-        let line = remaining.lines().count().saturating_sub(1) as u32;
-        let chip = ComposerChip::Mention(format!("@{token}"));
-        if !self.state.composer_chips.contains(&chip) {
-            self.state.composer_chips.push(chip);
-        }
-        self.last_composer_len = remaining.len();
+        let label = format!("@{token}");
+        let inline = InlineToken::new(format!("mention:{label}"), label);
+        let range = at_pos..current.len();
         self.composer_input.update(cx, |i, cx| {
-            i.set_value(remaining, window, cx);
-            i.set_cursor_position(Position::new(line, col), window, cx);
+            if i.replace_range_with_token(range, inline, window, cx).is_ok() {
+                i.insert(" ", window, cx);
+            }
         });
+        self.last_composer_len = self.composer_input.read(cx).value().len();
         cx.notify();
     }
 

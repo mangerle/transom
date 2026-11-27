@@ -377,7 +377,6 @@ impl AiAssistantView {
             .count();
         let v_pill_plan = view.clone();
         let v_pill_tasks = view.clone();
-        let v_rm_chip = view.clone();
         let status_header = super::plan_card::render_status_pills_row(
             super::plan_card::StatusPillsParams {
                 plan: self.state.active_plan.as_ref(),
@@ -420,7 +419,6 @@ impl AiAssistantView {
                 acp_install_status: self.state.acp_install_status.as_ref(),
                 active_popup: self.state.active_popup,
                 toolbar_popover: self.render_toolbar_popover(p, cx),
-                composer_chips: &self.state.composer_chips,
                 pending_attachments: &self.state.pending_attachments,
                 metrics: &self.state.metrics,
                 context_window: self.active_context_window(),
@@ -456,14 +454,6 @@ impl AiAssistantView {
                 }),
                 on_remove_attachment: Box::new(move |id, _, cx| {
                     v_rm_att.update(cx, |this, cx| this.remove_attachment(&id, cx));
-                }),
-                on_remove_chip: Box::new(move |idx, _, cx| {
-                    v_rm_chip.update(cx, |this, cx| {
-                        if idx < this.state.composer_chips.len() {
-                            this.state.composer_chips.remove(idx);
-                            cx.notify();
-                        }
-                    });
                 }),
                 on_paste_item: Box::new(move |item, w, cx| {
                     v_paste.update(cx, |this, cx| this.handle_paste_item(item, w, cx))

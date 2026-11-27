@@ -138,6 +138,7 @@ mod tests {
                 summary: "systemctl status nginx".into(),
                 output: "active (running)".into(),
                 ok: true,
+                duration_ms: 0,
                 approved: Some(true),
                 diff_preview: None,
             },

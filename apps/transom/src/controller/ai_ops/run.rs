@@ -372,6 +372,7 @@ async fn handle_tool_card(
             summary: card.summary.clone(),
             output: card.output.clone(),
             ok: card.ok,
+            duration_ms: card.duration_ms,
             approved: Some(card.approved),
             diff_preview: card.diff_preview.clone(),
         },

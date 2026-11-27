@@ -228,28 +228,19 @@ impl AiAssistantView {
     pub(super) fn send_from_composer(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let text = self.composer_input.read(cx).value().to_string();
         let trimmed = text.trim();
-        if trimmed.is_empty()
-            && self.state.composer_chips.is_empty()
-            && self.state.pending_attachments.is_empty()
-        {
+        if trimmed.is_empty() && self.state.pending_attachments.is_empty() {
             return;
         }
-        let chips = std::mem::take(&mut self.state.composer_chips);
-        let mut parts: Vec<String> = chips.into_iter().map(|c| c.label().to_owned()).collect();
-        if !trimmed.is_empty() {
-            parts.push(text);
-        }
-        let combined = parts.join(" ");
-        let combined_trimmed = combined.trim();
+        let combined = trimmed.to_owned();
         self.composer_input
             .update(cx, |i, cx| i.set_value(String::new(), window, cx));
         self.last_composer_len = 0;
         self.state.active_popup = AiActivePopup::None;
-        if combined_trimmed == "/clear" {
+        if combined == "/clear" {
             self.clear_conversation(cx);
             return;
         }
-        if let Some(rest) = combined_trimmed.strip_prefix("/compact") {
+        if let Some(rest) = combined.strip_prefix("/compact") {
             self.compact_conversation(rest.trim().to_owned(), cx);
             return;
         }
@@ -262,7 +253,6 @@ impl AiAssistantView {
         self.state.active_conversation_id = None;
         self.state.active_conversation_title = None;
         self.state.items.clear();
-        self.state.composer_chips.clear();
         self.state.metrics.reset_session();
         self.state.active_plan = None;
         self.state.active_focus = None;

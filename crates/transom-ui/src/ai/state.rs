@@ -26,21 +26,6 @@ pub(crate) struct ActiveAiSessionInfo {
     pub(crate) connected: bool,
 }
 
-/// 输入框已选中的指令或主机目标胶囊（支持整块退格删除）。
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) enum ComposerChip {
-    SlashCommand(String),
-    Mention(String),
-}
-
-impl ComposerChip {
-    pub(crate) fn label(&self) -> &str {
-        match self {
-            Self::SlashCommand(s) | Self::Mention(s) => s,
-        }
-    }
-}
-
 /// 面板右侧抽屉视图模式。
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(crate) enum AiDrawerTab {
@@ -137,7 +122,6 @@ pub(crate) struct AiPanelState {
     pub(crate) run_started_at: Option<std::time::Instant>,
     pub(crate) active_popup: AiActivePopup,
     pub(crate) status_panel_expanded: bool,
-    pub(crate) composer_chips: Vec<ComposerChip>,
     pub(crate) pending_attachments: Vec<ComposerAttachment>,
     pub(crate) pasted_doc_seq: usize,
     pub(crate) acp_install_status: Option<(String, bool, String)>,
@@ -184,7 +168,6 @@ impl Default for AiPanelState {
             run_started_at: None,
             active_popup: AiActivePopup::None,
             status_panel_expanded: true,
-            composer_chips: Vec::new(),
             pending_attachments: Vec::new(),
             pasted_doc_seq: 0,
             acp_install_status: None,
@@ -253,6 +236,7 @@ impl AiPanelState {
                     summary,
                     output,
                     ok,
+                    duration_ms,
                     diff_preview,
                     ..
                 } => {
@@ -268,7 +252,7 @@ impl AiPanelState {
                         summary,
                         output,
                         ok,
-                        duration_ms: 0,
+                        duration_ms,
                         diff_preview,
                     });
                 }

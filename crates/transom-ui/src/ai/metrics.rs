@@ -92,9 +92,13 @@ impl AiSessionMetrics {
                     fallback_chars = fallback_chars.saturating_add(text.chars().count());
                 }
                 SessionEntryKind::ToolRecord {
-                    summary, output, ..
+                    summary,
+                    output,
+                    duration_ms,
+                    ..
                 } => {
                     self.steps = self.steps.saturating_add(1);
+                    self.tool_duration_ms = self.tool_duration_ms.saturating_add(*duration_ms);
                     fallback_chars = fallback_chars
                         .saturating_add(summary.chars().count())
                         .saturating_add(output.chars().count());

@@ -2,12 +2,12 @@
 
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants as _};
-use gpui_kit::component::input::Position;
+use gpui_kit::component::input::InlineToken;
 use gpui_kit::*;
 use transom_ai::{SkillDefinition, load_skills_with_disabled};
 use transom_ui_icons::{AppIcon, AppIconElement, CustomIcon, UiIcon};
 
-use super::state::{AiDrawerTab, ComposerChip};
+use super::state::AiDrawerTab;
 use super::view::AiAssistantView;
 use crate::palette::Palette;
 use crate::theme::tokens::{space, typography};
@@ -313,9 +313,18 @@ pub(super) fn render_acp_warning_banner(
 }
 
 impl AiAssistantView {
-    /// 获取当前输入框匹配的斜杠命令候选项。
+    /// 获取当前输入框匹配的斜杠命令候选项（跳过已转换为行内胶囊的片段）。
     pub(super) fn current_slash_items(&self, cx: &App) -> Vec<SlashItem> {
-        let current_input = self.composer_input.read(cx).value().to_string();
+        let input = self.composer_input.read(cx);
+        let current_input = input.value().to_string();
+        if let Some((pos, _)) = extract_active_slash(&current_input)
+            && input
+                .tokens()
+                .iter()
+                .any(|span| span.range().start <= pos && pos < span.range().end)
+        {
+            return Vec::new();
+        }
         let skills = load_skills_with_disabled(
             Some(&self.ai_store.custom_skills_dir()),
             &self.state.settings.disabled_skills,
@@ -323,7 +332,7 @@ impl AiAssistantView {
         filter_slash_items(&current_input, &skills)
     }
 
-    /// 将选中的斜杠命令转为浅蓝胶囊芯片（开头的 `/clear` 且无前置芯片时直接清空会话）。
+    /// 将选中的斜杠命令替换为行内胶囊芯片（开头的 `/clear` 且无前置内容时直接清空会话）。
     pub(super) fn apply_slash_command(
         &mut self,
         cmd: &str,
@@ -335,24 +344,20 @@ impl AiAssistantView {
         let slash_pos = extract_active_slash(&current)
             .map(|(pos, _)| pos)
             .unwrap_or(0);
-        if cmd == "/clear" && slash_pos == 0 && self.state.composer_chips.is_empty() {
+        if cmd == "/clear" && slash_pos == 0 && current[..slash_pos].trim().is_empty() {
             self.composer_input
                 .update(cx, |i, cx| i.set_value(String::new(), window, cx));
             self.last_composer_len = 0;
             self.clear_conversation(cx);
         } else {
-            let remaining = current[..slash_pos].trim_end().to_owned();
-            let line = remaining.lines().count().saturating_sub(1) as u32;
-            let col = remaining.lines().last().unwrap_or("").chars().count() as u32;
-            let chip = ComposerChip::SlashCommand(cmd.to_owned());
-            if !self.state.composer_chips.contains(&chip) {
-                self.state.composer_chips.push(chip);
-            }
-            self.last_composer_len = remaining.len();
+            let range = slash_pos..current.len();
+            let token = InlineToken::new(format!("slash:{cmd}"), cmd);
             self.composer_input.update(cx, |i, cx| {
-                i.set_value(remaining, window, cx);
-                i.set_cursor_position(Position::new(line, col), window, cx);
+                if i.replace_range_with_token(range, token, window, cx).is_ok() {
+                    i.insert(" ", window, cx);
+                }
             });
+            self.last_composer_len = self.composer_input.read(cx).value().len();
             cx.notify();
         }
     }
@@ -383,7 +388,7 @@ pub(super) fn register_slash_key_interceptor(cx: &mut Context<AiAssistantView>) 
             return;
         }
         let key = event.keystroke.key.as_str();
-        if !matches!(key, "up" | "down" | "tab" | "enter" | "backspace") {
+        if !matches!(key, "up" | "down" | "tab" | "enter") {
             return;
         }
         let Some(entity) = weak_keys.upgrade() else {
@@ -397,16 +402,6 @@ pub(super) fn register_slash_key_interceptor(cx: &mut Context<AiAssistantView>) 
                     .focus_handle(cx)
                     .is_focused(window)
             {
-                return false;
-            }
-            if key == "backspace" {
-                if this.composer_input.read(cx).value().is_empty()
-                    && !this.state.composer_chips.is_empty()
-                {
-                    this.state.composer_chips.pop();
-                    cx.notify();
-                    return true;
-                }
                 return false;
             }
             let slash_items = this.current_slash_items(cx);
