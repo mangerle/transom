@@ -52,7 +52,7 @@ pub(super) fn spawn_inline_assist(
                 request_id,
                 command: None,
                 explanation: String::new(),
-                error: Some(err),
+                error: Some(err.to_string()),
             },
         };
         let _ = event_tx.send_async(AppEvent::Ai(Box::new(evt))).await;

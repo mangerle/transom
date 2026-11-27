@@ -132,18 +132,32 @@ pub fn build_dyn_model(target: &ModelTarget) -> DynModel<Completion> {
     }
 }
 
-/// 启动一次多轮流式 Agent 运行（可注入自定义/Mock [`DynModel`] 供单测使用）。
-pub async fn run_with_model(model: DynModel<Completion>, input: RunInput) -> Result<(), AiError> {
-    let working_state = SessionWorkingState::from_history(&input.history_branch, &input.prompt);
+fn prepare_initial_history(
+    input: &RunInput,
+    working_state: &SessionWorkingState,
+    keep_recent: usize,
+    max_tool_chars: usize,
+) -> (Vec<SessionEntry>, Option<String>) {
     let refs: Vec<&SessionEntry> = input.history_branch.iter().collect();
-    let (history, ws_markdown) = if needs_compaction(&refs, input.target.context_window) {
+    if needs_compaction(&refs, input.target.context_window) {
         (
-            aggressive_compact_history(&input.history_branch, &working_state, 8, 800),
+            aggressive_compact_history(
+                &input.history_branch,
+                working_state,
+                keep_recent,
+                max_tool_chars,
+            ),
             Some(working_state.render_markdown()),
         )
     } else {
         (input.history_branch.clone(), None)
-    };
+    }
+}
+
+/// 启动一次多轮流式 Agent 运行（可注入自定义/Mock [`DynModel`] 供单测使用）。
+pub async fn run_with_model(model: DynModel<Completion>, input: RunInput) -> Result<(), AiError> {
+    let working_state = SessionWorkingState::from_history(&input.history_branch, &input.prompt);
+    let (history, ws_markdown) = prepare_initial_history(&input, &working_state, 8, 800);
     run_attempt(model, &input, &history, ws_markdown.as_deref()).await
 }
 
@@ -153,15 +167,7 @@ pub async fn run_with_model_factory(
     input: RunInput,
 ) -> Result<(), AiError> {
     let working_state = SessionWorkingState::from_history(&input.history_branch, &input.prompt);
-    let refs: Vec<&SessionEntry> = input.history_branch.iter().collect();
-    let (initial_history, initial_ws) = if needs_compaction(&refs, input.target.context_window) {
-        (
-            aggressive_compact_history(&input.history_branch, &working_state, 8, 800),
-            Some(working_state.render_markdown()),
-        )
-    } else {
-        (input.history_branch.clone(), None)
-    };
+    let (initial_history, initial_ws) = prepare_initial_history(&input, &working_state, 8, 800);
 
     match run_attempt(factory(), &input, &initial_history, initial_ws.as_deref()).await {
         Ok(()) => Ok(()),
@@ -305,19 +311,18 @@ pub async fn run(input: RunInput) -> Result<(), AiError> {
     run_with_model_factory(move || build_dyn_model(&target), input).await
 }
 
-/// 单轮无工具轻量生成终端内联命令（Ctrl/Cmd+I），带 20 秒超时。
-pub async fn generate_inline_command(
+async fn run_single_turn_text(
     target: &ModelTarget,
+    preamble: &str,
     prompt: &str,
-    host_label: &str,
-    platform: &str,
-) -> Result<String, String> {
-    use parking_lot::Mutex;
+    timeout_secs: u64,
+    operation: &str,
+) -> Result<String, AiError> {
     use rig_agent::agent::{AgentHook, HookContext, ModelTurnAction, ModelTurnFinished};
     use rig_core::message::AssistantContent;
 
-    struct InlineCollector(Arc<Mutex<String>>);
-    impl AgentHook for InlineCollector {
+    struct TextCollector(Arc<Mutex<String>>);
+    impl AgentHook for TextCollector {
         async fn on_model_turn_finished(
             &self,
             _ctx: &HookContext,
@@ -334,16 +339,10 @@ pub async fn generate_inline_command(
     }
 
     let model = build_dyn_model(target);
-    let preamble = format!(
-        "你是终端命令行助手。目标主机: {host_label}，平台: {platform}。\n\
-        请把用户的自然语言需求转换为一条可直接执行的单行 Shell 命令。\n\
-        必须严格只输出如下 JSON（不要 markdown 代码块，不要多余文字）：\n\
-        {{\"command\":\"...\",\"explanation\":\"一句话中文解释\"}}"
-    );
     let collected = Arc::new(Mutex::new(String::new()));
     let agent = AgentBuilder::new(model)
-        .preamble(&preamble)
-        .add_hook(InlineCollector(collected.clone()))
+        .preamble(preamble)
+        .add_hook(TextCollector(collected.clone()))
         .build();
     let fut = async {
         let mut stream = agent.prompt(Message::user(prompt.to_owned())).stream();
@@ -351,44 +350,53 @@ pub async fn generate_inline_command(
             match item {
                 Ok(MultiTurnStreamItem::FinalResponse(_)) => break,
                 Ok(_) => {}
-                Err(e) => return Err(e.to_string()),
+                Err(err) => {
+                    return Err(AiError::ModelCallFailed {
+                        protocol: target.protocol.as_str().to_owned(),
+                        model: target.model.clone(),
+                        reason: err.to_string(),
+                    });
+                }
             }
         }
         Ok(collected.lock().clone())
     };
-    match tokio::time::timeout(std::time::Duration::from_secs(20), fut).await {
-        Ok(res) => res,
-        Err(_) => Err("内联命令生成超时（20s）".to_owned()),
-    }
+    tokio::time::timeout(std::time::Duration::from_secs(timeout_secs), fut)
+        .await
+        .map_err(|_| AiError::Timeout {
+            operation: operation.to_owned(),
+            timeout_secs,
+        })?
+}
+
+/// 单轮无工具轻量生成终端内联命令（Ctrl/Cmd+I），带 20 秒超时。
+///
+/// # Errors
+/// 模型调用失败或 20 秒超时时返回 [`AiError`]。
+pub async fn generate_inline_command(
+    target: &ModelTarget,
+    prompt: &str,
+    host_label: &str,
+    platform: &str,
+) -> Result<String, AiError> {
+    let preamble = format!(
+        "你是终端命令行助手。目标主机: {host_label}，平台: {platform}。\n\
+        请把用户的自然语言需求转换为一条可直接执行的单行 Shell 命令。\n\
+        必须严格只输出如下 JSON（不要 markdown 代码块，不要多余文字）：\n\
+        {{\"command\":\"...\",\"explanation\":\"一句话中文解释\"}}"
+    );
+    run_single_turn_text(target, &preamble, prompt, 20, "内联命令生成").await
 }
 
 /// 调用当前模型生成保留指定重点的上下文压缩摘要（`/compact`）。
+///
+/// # Errors
+/// 模型调用失败、返回空摘要或 25 秒超时时返回 [`AiError`]。
 pub async fn summarize_for_compaction(
     target: &ModelTarget,
     transcript: &str,
     focus: &str,
-) -> Result<String, String> {
-    use rig_agent::agent::{AgentHook, HookContext, ModelTurnAction, ModelTurnFinished};
-    use rig_core::message::AssistantContent;
-
-    struct SummaryCollector(Arc<Mutex<String>>);
-    impl AgentHook for SummaryCollector {
-        async fn on_model_turn_finished(
-            &self,
-            _ctx: &HookContext,
-            event: ModelTurnFinished<'_>,
-        ) -> ModelTurnAction {
-            let mut buf = self.0.lock();
-            for item in event.content {
-                if let AssistantContent::Text(t) = item {
-                    buf.push_str(&t.text);
-                }
-            }
-            ModelTurnAction::continue_run()
-        }
-    }
-
-    let model = build_dyn_model(target);
+) -> Result<String, AiError> {
     let focus_line = if focus.trim().is_empty() {
         "请提炼已确认的事实、关键路径/端口/配置变更、已完成事项与未解决的问题。".to_owned()
     } else {
@@ -400,28 +408,16 @@ pub async fn summarize_for_compaction(
     let preamble = format!(
         "你是运维对话上下文压缩器。请将以下长对话记录压缩为精炼、结构化的中文摘要。\n{focus_line}\n只输出摘要正文，不要寒暄。"
     );
-    let collected = Arc::new(Mutex::new(String::new()));
-    let agent = AgentBuilder::new(model)
-        .preamble(&preamble)
-        .add_hook(SummaryCollector(collected.clone()))
-        .build();
-    let fut = async {
-        let mut stream = agent.prompt(Message::user(transcript.to_owned())).stream();
-        while let Some(item) = stream.next().await {
-            match item {
-                Ok(MultiTurnStreamItem::FinalResponse(_)) => break,
-                Ok(_) => {}
-                Err(e) => return Err(e.to_string()),
-            }
-        }
-        Ok(collected.lock().clone())
-    };
-    match tokio::time::timeout(std::time::Duration::from_secs(25), fut).await {
-        Ok(Ok(s)) if !s.trim().is_empty() => Ok(s.trim().to_owned()),
-        Ok(Ok(_)) => Err("模型返回空摘要".to_owned()),
-        Ok(Err(e)) => Err(e),
-        Err(_) => Err("上下文压缩摘要超时（25s）".to_owned()),
+    let raw = run_single_turn_text(target, &preamble, transcript, 25, "上下文压缩摘要").await?;
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return Err(AiError::ModelCallFailed {
+            protocol: target.protocol.as_str().to_owned(),
+            model: target.model.clone(),
+            reason: "模型返回空摘要".to_owned(),
+        });
     }
+    Ok(trimmed.to_owned())
 }
 
 fn to_rig_history(entries: &[SessionEntry]) -> Vec<Message> {
