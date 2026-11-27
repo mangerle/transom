@@ -561,7 +561,7 @@ impl AiAssistantView {
         self.state.settings.acp_agents.push(agent);
         self.state.settings.active_acp_agent_id = Some(agent_id.clone());
         self.state.active_acp_agent_id = Some(agent_id);
-        let _ = self.ai_store.save_settings(&self.state.settings);
+        let _ = self.persist_settings();
         self.state.drawer = AiDrawerTab::Chat;
         cx.notify();
     }
@@ -577,7 +577,7 @@ impl AiAssistantView {
         self.state.active_acp_agent_id = agent_id.clone();
         self.state.settings.active_acp_agent_id = agent_id.clone();
         self.state.active_popup = AiActivePopup::None;
-        let _ = self.ai_store.save_settings(&self.state.settings);
+        let _ = self.persist_settings();
         if let Some(id) = agent_id {
             let _ = self
                 .command_tx

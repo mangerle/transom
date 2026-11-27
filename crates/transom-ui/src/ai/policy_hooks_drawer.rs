@@ -450,7 +450,7 @@ impl AiAssistantView {
         self.policy_hooks_form
             .cmd_input
             .update(cx, |s, cx| s.set_value("", window, cx));
-        let _ = self.ai_store.save_settings(&self.state.settings);
+        let _ = self.persist_settings();
         cx.notify();
     }
 
@@ -473,13 +473,13 @@ impl AiAssistantView {
         });
         self.policy_pattern_input
             .update(cx, |s, cx| s.set_value("", window, cx));
-        let _ = self.ai_store.save_settings(&self.state.settings);
+        let _ = self.persist_settings();
         cx.notify();
     }
 
     pub(super) fn delete_exec_policy_rule(&mut self, id: &str, cx: &mut Context<Self>) {
         self.state.settings.exec_policy_rules.retain(|r| r.id != id);
-        let _ = self.ai_store.save_settings(&self.state.settings);
+        let _ = self.persist_settings();
         cx.notify();
     }
 
@@ -500,7 +500,7 @@ impl AiAssistantView {
             enabled: true,
             block_on_failure: false,
         });
-        let _ = self.ai_store.save_settings(&self.state.settings);
+        let _ = self.persist_settings();
         cx.notify();
     }
 
@@ -523,21 +523,21 @@ impl AiAssistantView {
         });
         self.hook_webhook_input
             .update(cx, |s, cx| s.set_value("", window, cx));
-        let _ = self.ai_store.save_settings(&self.state.settings);
+        let _ = self.persist_settings();
         cx.notify();
     }
 
     pub(super) fn toggle_hook_rule(&mut self, id: &str, cx: &mut Context<Self>) {
         if let Some(rule) = self.state.settings.hooks.iter_mut().find(|r| r.id == id) {
             rule.enabled = !rule.enabled;
-            let _ = self.ai_store.save_settings(&self.state.settings);
+            let _ = self.persist_settings();
             cx.notify();
         }
     }
 
     pub(super) fn delete_hook_rule(&mut self, id: &str, cx: &mut Context<Self>) {
         self.state.settings.hooks.retain(|r| r.id != id);
-        let _ = self.ai_store.save_settings(&self.state.settings);
+        let _ = self.persist_settings();
         cx.notify();
     }
 }

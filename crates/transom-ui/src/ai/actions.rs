@@ -15,6 +15,17 @@ use super::state::{AiActivePopup, AiDrawerTab, UiChatItem};
 use super::view::AiAssistantView;
 
 impl AiAssistantView {
+    /// 通过控制平面异步持久化当前 AI 设置，避免阻塞 GPUI 主线程。
+    pub(super) fn persist_settings(&self) -> Result<(), String> {
+        let settings_json =
+            serde_json::to_string(&self.state.settings).map_err(|err| err.to_string())?;
+        self.command_tx
+            .try_send(AppCommand::Ai(Box::new(AiCommand::SaveSettingsJson {
+                settings_json,
+            })))
+            .map_err(|err| err.to_string())
+    }
+
     pub(super) fn select_conversation(&mut self, conv_id: &str) {
         self.active_nav_dot = None;
         self.editing_title = false;
@@ -51,14 +62,15 @@ impl AiAssistantView {
         archived: bool,
         cx: &mut Context<Self>,
     ) {
-        if let Err(err) = self.ai_store.set_conversation_archived(conv_id, archived) {
-            self.state.status_error = Some(err.to_string());
-            cx.notify();
-            return;
-        }
         if let Some(conv) = self.state.conversations.iter_mut().find(|c| c.id == conv_id) {
             conv.archived = archived;
         }
+        let _ = self.command_tx.try_send(AppCommand::Ai(Box::new(
+            AiCommand::SetConversationArchived {
+                conversation_id: conv_id.to_owned(),
+                archived,
+            },
+        )));
         cx.notify();
     }
 
@@ -88,14 +100,16 @@ impl AiAssistantView {
         if let Some(cid) = self.state.active_conversation_id.clone()
             && !next.is_empty()
         {
-            if let Err(err) = self.ai_store.rename_conversation(&cid, &next) {
-                self.state.status_error = Some(err.to_string());
-            } else {
-                self.state.active_conversation_title = Some(next.clone());
-                if let Some(conv) = self.state.conversations.iter_mut().find(|c| c.id == cid) {
-                    conv.title = next;
-                }
+            self.state.active_conversation_title = Some(next.clone());
+            if let Some(conv) = self.state.conversations.iter_mut().find(|c| c.id == cid) {
+                conv.title = next.clone();
             }
+            let _ = self.command_tx.try_send(AppCommand::Ai(Box::new(
+                AiCommand::RenameConversation {
+                    conversation_id: cid,
+                    title: next,
+                },
+            )));
         }
         cx.notify();
     }
@@ -348,9 +362,9 @@ impl AiAssistantView {
             .providers
             .retain(|p| p.id != provider.id);
         self.state.settings.providers.push(provider);
-        if let Err(err) = self.ai_store.save_settings(&self.state.settings) {
+        if let Err(err) = self.persist_settings() {
             self.state.status_error =
-                Some(rust_i18n::t!("ai.save_config_failed", error = err.to_string()).to_string());
+                Some(rust_i18n::t!("ai.save_config_failed", error = err).to_string());
         } else {
             self.state.status_error = None;
             self.state.drawer = AiDrawerTab::Chat;
@@ -377,26 +391,27 @@ impl AiAssistantView {
                 .unwrap_or_default();
             self.state.settings.default_model = self.state.selected_model_id.clone();
         }
-        let _ = self.ai_store.save_settings(&self.state.settings);
+        let _ = self.persist_settings();
         cx.notify();
     }
 
     pub(super) fn save_memory_from_drawer(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
         let global_md = self.global_mem_input.read(cx).value().to_string();
-        if let Err(err) = self.ai_store.save_global_memory(&global_md) {
-            self.state.status_error = Some(err.to_string());
-        } else {
-            self.state.memory.global_markdown = global_md;
-        }
-        if let Some(session) = &self.state.active_session {
+        self.state.memory.global_markdown = global_md.clone();
+        let (host_id, host_markdown) = if let Some(session) = &self.state.active_session {
             let host_md = self.host_mem_input.read(cx).value().to_string();
-            let sid = session.session_id.to_string();
-            if let Err(err) = self.ai_store.save_host_memory(&sid, &host_md) {
-                self.state.status_error = Some(err.to_string());
-            } else {
-                self.state.memory.host_markdown = host_md;
-            }
-        }
+            self.state.memory.host_markdown = host_md.clone();
+            (Some(session.session_id.to_string()), Some(host_md))
+        } else {
+            (None, None)
+        };
+        let _ = self
+            .command_tx
+            .try_send(AppCommand::Ai(Box::new(AiCommand::SaveMemory {
+                host_id,
+                global_markdown: Some(global_md),
+                host_markdown,
+            })));
         self.state.drawer = AiDrawerTab::Chat;
         cx.notify();
     }
@@ -428,7 +443,7 @@ impl AiAssistantView {
             ExecutionMode::AllowAll => "allow_all",
         };
         self.state.settings.execution_mode = mode;
-        let _ = self.ai_store.save_settings(&self.state.settings);
+        let _ = self.persist_settings();
         let _ = self
             .command_tx
             .try_send(AppCommand::Ai(Box::new(AiCommand::SetExecutionMode {
@@ -463,14 +478,14 @@ impl AiAssistantView {
             self.state.settings.default_model = model_id;
         }
         self.state.active_popup = AiActivePopup::None;
-        let _ = self.ai_store.save_settings(&self.state.settings);
+        let _ = self.persist_settings();
         cx.notify();
     }
 
     pub(super) fn select_effort(&mut self, effort: Option<ThinkingEffort>, cx: &mut Context<Self>) {
         self.state.selected_effort = effort;
         self.state.settings.default_effort = effort;
-        let _ = self.ai_store.save_settings(&self.state.settings);
+        let _ = self.persist_settings();
         cx.notify();
     }
 

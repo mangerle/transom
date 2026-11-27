@@ -25,7 +25,7 @@ use transom_ai::{
     SessionEntryKind, SessionScope, ThinkingEffort, extract_skill_command,
     load_skills_with_disabled, summarize_enabled_skills,
 };
-use transom_core::{AiAppEvent, AiCommand, AiPromptRequest, AppEvent};
+use transom_core::{AiCommand, AiPromptRequest};
 
 use super::state::{ControllerCtx, ControllerState};
 use context_builder::{StoreExt as _, build_tool_context, emit_run_error, prepare_conversation};
@@ -135,9 +135,81 @@ pub(in crate::controller) async fn handle_ai_command(
         }
         AiCommand::DeleteConversation { conversation_id } => {
             state.ai_output_stores.remove(&conversation_id);
-            if let Err(err) = ctx.ai_store.delete_conversation(&conversation_id) {
-                log::warn!("删除 AI 对话失败（{conversation_id}）: {err}");
-            }
+            let store = ctx.ai_store.clone();
+            state.ai_set.spawn(async move {
+                let _ = tokio::task::spawn_blocking(move || {
+                    if let Err(err) = store.delete_conversation(&conversation_id) {
+                        log::warn!("删除 AI 对话失败（{conversation_id}）: {err}");
+                    }
+                })
+                .await;
+            });
+        }
+        AiCommand::SetConversationArchived {
+            conversation_id,
+            archived,
+        } => {
+            let store = ctx.ai_store.clone();
+            state.ai_set.spawn(async move {
+                let _ = tokio::task::spawn_blocking(move || {
+                    if let Err(err) = store.set_conversation_archived(&conversation_id, archived) {
+                        log::warn!("归档 AI 对话失败（{conversation_id}）: {err}");
+                    }
+                })
+                .await;
+            });
+        }
+        AiCommand::RenameConversation {
+            conversation_id,
+            title,
+        } => {
+            let store = ctx.ai_store.clone();
+            state.ai_set.spawn(async move {
+                let _ = tokio::task::spawn_blocking(move || {
+                    if let Err(err) = store.rename_conversation(&conversation_id, &title) {
+                        log::warn!("重命名 AI 对话失败（{conversation_id}）: {err}");
+                    }
+                })
+                .await;
+            });
+        }
+        AiCommand::SaveSettingsJson { settings_json } => {
+            let store = ctx.ai_store.clone();
+            state.ai_set.spawn(async move {
+                let _ = tokio::task::spawn_blocking(move || {
+                    match serde_json::from_str::<transom_ai::AiSettings>(&settings_json) {
+                        Ok(parsed) => {
+                            if let Err(err) = store.save_settings(&parsed) {
+                                log::warn!("异步保存 AI 设置失败: {err}");
+                            }
+                        }
+                        Err(err) => log::warn!("解析待保存 AI 设置 JSON 失败: {err}"),
+                    }
+                })
+                .await;
+            });
+        }
+        AiCommand::SaveMemory {
+            host_id,
+            global_markdown,
+            host_markdown,
+        } => {
+            let store = ctx.ai_store.clone();
+            state.ai_set.spawn(async move {
+                let _ = tokio::task::spawn_blocking(move || {
+                    if let Some(global) = global_markdown
+                        && let Err(err) = store.save_global_memory(&global)
+                    {
+                        log::warn!("异步保存全局 AI 记忆失败: {err}");
+                    }
+                    if let (Some(hid), Some(host_md)) = (host_id, host_markdown)
+                        && let Err(err) = store.save_host_memory(&hid, &host_md)
+                    {
+                        log::warn!("异步保存主机 AI 记忆失败（{hid}）: {err}");
+                    }
+                })
+                .await;
+            });
         }
         AiCommand::DiscoverModels {
             request_id,

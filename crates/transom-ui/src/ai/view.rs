@@ -267,7 +267,7 @@ impl AiAssistantView {
             |this, _, event: &SelectEvent<SearchableVec<ConfigChoice>>, _, cx| {
                 if let SelectEvent::Confirm(Some(val)) = event {
                     this.state.settings.response_language = val.clone();
-                    let _ = this.ai_store.save_settings(&this.state.settings);
+                    let _ = this.persist_settings();
                     cx.notify();
                 }
             },

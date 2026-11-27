@@ -203,6 +203,24 @@ pub enum AiCommand {
     SetExecutionMode { mode: String },
     /// 请求删除指定对话。
     DeleteConversation { conversation_id: String },
+    /// 请求归档或取消归档指定对话。
+    SetConversationArchived {
+        conversation_id: String,
+        archived: bool,
+    },
+    /// 请求重命名指定对话标题。
+    RenameConversation {
+        conversation_id: String,
+        title: String,
+    },
+    /// 异步持久化 AI 设置（JSON 载荷由控制平面校验并落盘）。
+    SaveSettingsJson { settings_json: String },
+    /// 异步持久化全局记忆或指定主机长期记忆。
+    SaveMemory {
+        host_id: Option<String>,
+        global_markdown: Option<String>,
+        host_markdown: Option<String>,
+    },
     /// 向供应商端点拉取可用模型列表。
     DiscoverModels {
         request_id: String,

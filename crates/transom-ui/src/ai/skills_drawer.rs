@@ -87,7 +87,7 @@ impl AiAssistantView {
         } else {
             self.state.settings.disabled_skills.push(clean);
         }
-        let _ = self.ai_store.save_settings(&self.state.settings);
+        let _ = self.persist_settings();
         self.refresh_skills_list();
         cx.notify();
     }

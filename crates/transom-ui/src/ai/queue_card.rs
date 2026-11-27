@@ -309,7 +309,7 @@ impl AiAssistantView {
         cx: &mut Context<Self>,
     ) {
         self.state.settings.running_message_behavior = behavior;
-        let _ = self.ai_store.save_settings(&self.state.settings);
+        let _ = self.persist_settings();
         cx.notify();
     }
 
