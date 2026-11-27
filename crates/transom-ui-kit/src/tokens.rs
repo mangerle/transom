@@ -49,6 +49,8 @@ pub mod size {
     pub const FORWARD_PANEL_WIDTH: f32 = 22.5;
     /// 转发面板最大宽度（标准档 640px）。
     pub const FORWARD_PANEL_MAX_WIDTH: f32 = 40.0;
+    /// 右侧 AI 助手面板宽度（标准档 608px）。
+    pub const AI_PANEL_WIDTH: f32 = 38.0;
     /// SFTP 面板初始宽度（标准档 760px，双栏模式）。
     pub const SFTP_PANEL_WIDTH: f32 = 47.5;
     /// SFTP 面板初始宽度（标准档 480px，仅本地模式）。

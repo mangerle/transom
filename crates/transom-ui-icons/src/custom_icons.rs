@@ -58,6 +58,12 @@ impl CustomIcon {
     pub const VOLUME_OFF: Self = Self("volume_off");
     pub const FULLSCREEN: Self = Self("fullscreen");
     pub const FULLSCREEN_EXIT: Self = Self("fullscreen_exit");
+    pub const AI_SPARKLE: Self = Self("ai_sparkle");
+    pub const ACP_CLAUDE: Self = Self("acp_claude");
+    pub const ACP_CODEX: Self = Self("acp_codex");
+    pub const ACP_KIMI: Self = Self("acp_kimi");
+    pub const SPEEDOMETER: Self = Self("speedometer");
+    pub const SHIELD_CHECK: Self = Self("shield_check");
 
     /// 当前图标的浅色资产路径。
     pub fn light_path(self) -> SharedString {
@@ -127,6 +133,12 @@ mod tests {
             CustomIcon::EYE_OFF,
             CustomIcon::PANEL_WIDEN,
             CustomIcon::PANEL_NARROW,
+            CustomIcon::AI_SPARKLE,
+            CustomIcon::ACP_CLAUDE,
+            CustomIcon::ACP_CODEX,
+            CustomIcon::ACP_KIMI,
+            CustomIcon::SPEEDOMETER,
+            CustomIcon::SHIELD_CHECK,
         ] {
             let light = icon.light_path();
             assert!(asset_data(light.as_ref()).is_some());
