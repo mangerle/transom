@@ -275,6 +275,38 @@ pub(in crate::controller) async fn handle_ai_command(
     }
 }
 
+/// 从已配置模型中挑选可用的轻量快速模型供 `model_tier = "fast"` 子 Agent 使用。
+fn resolve_fast_subagent_target(
+    settings: &transom_ai::AiSettings,
+    primary: &transom_ai::ModelTarget,
+    ctx: &ControllerCtx,
+) -> Option<transom_ai::ModelTarget> {
+    let fast_keywords = ["mini", "flash", "haiku", "lite", "nano", "small"];
+    for (prov, model) in settings.models() {
+        if model.name == primary.model && prov.base_url == primary.base_url {
+            continue;
+        }
+        let low_id = model.id.to_ascii_lowercase();
+        let low_name = model.name.to_ascii_lowercase();
+        if fast_keywords
+            .iter()
+            .any(|k| low_id.contains(k) || low_name.contains(k))
+        {
+            let key = ctx
+                .ai_store
+                .load_provider_api_key(ctx.secret_store.as_ref(), &prov.id)
+                .ok()
+                .flatten()
+                .map(|s| s.to_string())
+                .unwrap_or_default();
+            if let Ok(t) = settings.build_target(&model.id, Some(ThinkingEffort::Low), key) {
+                return Some(t);
+            }
+        }
+    }
+    None
+}
+
 async fn start_ai_run(state: &mut ControllerState, ctx: &ControllerCtx, mut req: AiPromptRequest) {
     let settings = match ctx.ai_store.load_settings() {
         Ok(s) => {
@@ -387,6 +419,7 @@ async fn start_ai_run(state: &mut ControllerState, ctx: &ControllerCtx, mut req:
     let (card_tx, card_rx) = mpsc::channel(64);
     let (plan_tx, plan_rx) = mpsc::channel(32);
 
+    let fast_target = resolve_fast_subagent_target(&settings, &target, ctx);
     let current_turn_entry_id = Arc::new(parking_lot::RwLock::new(None));
     let tool_ctx = build_tool_context(
         state,
@@ -401,6 +434,7 @@ async fn start_ai_run(state: &mut ControllerState, ctx: &ControllerCtx, mut req:
             plan_tx: Some(plan_tx),
             subagent_cfg: Some(context_builder::SubagentConfig {
                 target: &target,
+                fast_target: fast_target.as_ref(),
                 memory: &memory,
                 response_language: Some(settings.response_language.clone()),
                 exec_policy_rules: &settings.exec_policy_rules,

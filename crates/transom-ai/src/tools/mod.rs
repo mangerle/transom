@@ -38,7 +38,7 @@ use crate::session::SessionScope;
 
 pub use app_bridge::{AppActionBridge, AppBridgeDomain};
 pub use assess::{assess_tool_call, assess_tool_call_value};
-pub use delegate::{DelegateMode, DelegateTaskRequest, SubagentRunner};
+pub use delegate::{DelegateMode, DelegateTaskRequest, SubagentModelTier, SubagentRunner};
 pub use skill_tool::SkillLoader;
 
 /// 锁定在单次 Agent 运行期间的会话上下文。

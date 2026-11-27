@@ -9,9 +9,10 @@ use parking_lot::{Mutex, RwLock};
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 use transom_ai::{
-    AgentEvent, DelegateMode, DelegateTaskRequest, EVENT_CHANNEL_CAPACITY, ExecPolicyRule,
-    ExecutionMode, HookExecutor, HookRule, MemorySnapshot, ModelTarget, RunInput, SessionScope,
-    SubagentRunner, ToolError, ToolExecutionCard, ToolRuntimeContext,
+    AgentEvent, ChatRole, DelegateMode, DelegateTaskRequest, EVENT_CHANNEL_CAPACITY,
+    ExecPolicyRule, ExecutionMode, HookExecutor, HookRule, MemorySnapshot, ModelTarget, RunInput,
+    SessionEntry, SessionEntryKind, SessionScope, SubagentModelTier, SubagentRunner, ToolError,
+    ToolExecutionCard, ToolRuntimeContext,
 };
 use transom_core::{AiAppEvent, AiApprovalDecision, AiApprovalDto, AiManagedTaskStatus, AppEvent};
 use uuid::Uuid;
@@ -25,6 +26,7 @@ use super::task_runner::{ManagedTaskHandle, ManagedTaskRegistry};
 
 pub(in crate::controller) struct ControllerSubagentRunner {
     pub(in crate::controller) target: ModelTarget,
+    pub(in crate::controller) fast_target: Option<ModelTarget>,
     pub(in crate::controller) memory: MemorySnapshot,
     pub(in crate::controller) response_language: Option<String>,
     pub(in crate::controller) execution_mode: Arc<RwLock<ExecutionMode>>,
@@ -33,6 +35,7 @@ pub(in crate::controller) struct ControllerSubagentRunner {
     pub(in crate::controller) session_allow_prefixes: Arc<RwLock<HashSet<String>>>,
     pub(in crate::controller) app_bridge_deps: AppBridgeDeps,
     pub(in crate::controller) tasks: Arc<ManagedTaskRegistry>,
+    pub(in crate::controller) subagent_histories: Arc<Mutex<HashMap<String, Vec<SessionEntry>>>>,
     pub(in crate::controller) approvals:
         Arc<Mutex<HashMap<String, oneshot::Sender<AiApprovalDecision>>>>,
     pub(in crate::controller) event_tx: flume::Sender<AppEvent>,
@@ -178,11 +181,34 @@ impl SubagentRunner for ControllerSubagentRunner {
         self.tasks
             .attach_steer_queue(&task_handle.task_id, steer_queue.clone());
 
+        let subagent_id = req
+            .resume_id
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(str::to_owned)
+            .unwrap_or_else(|| task_handle.task_id.clone());
+        let mut history_branch = self
+            .subagent_histories
+            .lock()
+            .get(&subagent_id)
+            .cloned()
+            .unwrap_or_default();
+
+        let chosen_target = match req.model_tier {
+            SubagentModelTier::Fast => self
+                .fast_target
+                .clone()
+                .unwrap_or_else(|| self.target.clone()),
+            SubagentModelTier::Inherit => self.target.clone(),
+        };
+        let used_model = chosen_target.model.clone();
+
         let input = RunInput {
-            target: self.target.clone(),
-            prompt,
+            target: chosen_target,
+            prompt: prompt.clone(),
             images_base64: Vec::new(),
-            history_branch: Vec::new(),
+            history_branch: history_branch.clone(),
             memory: self.memory.clone(),
             active_skill_prompt: Some(mode_instruction.to_owned()),
             available_skills: Vec::new(),
@@ -236,10 +262,50 @@ impl SubagentRunner for ControllerSubagentRunner {
             });
         }
         task_handle.finish(AiManagedTaskStatus::Succeeded, Some(0), "子任务完成");
-        Ok(if final_text.trim().is_empty() {
+
+        let reply_body = if final_text.trim().is_empty() {
             "子任务已执行完成，但未产生文本汇总。".to_owned()
         } else {
             final_text
-        })
+        };
+
+        // 将本轮子代理问答追加至缓存分支，供后续通过 resume_id 继续追问复用。
+        let parent_u = history_branch.last().map(|e| e.id.clone());
+        let user_entry = SessionEntry::new(
+            parent_u,
+            SessionEntryKind::Message {
+                role: ChatRole::User,
+                text: prompt,
+                images: Vec::new(),
+                model: None,
+                tokens_per_sec: None,
+                usage: None,
+            },
+        );
+        let assistant_entry = SessionEntry::new(
+            Some(user_entry.id.clone()),
+            SessionEntryKind::Message {
+                role: ChatRole::Assistant,
+                text: reply_body.clone(),
+                images: Vec::new(),
+                model: Some(used_model),
+                tokens_per_sec: None,
+                usage: None,
+            },
+        );
+        history_branch.push(user_entry);
+        history_branch.push(assistant_entry);
+        {
+            let mut cache = self.subagent_histories.lock();
+            if cache.len() >= 32
+                && !cache.contains_key(&subagent_id)
+                && let Some(oldest_key) = cache.keys().next().cloned()
+            {
+                cache.remove(&oldest_key);
+            }
+            cache.insert(subagent_id.clone(), history_branch);
+        }
+
+        Ok(format!("[subagent_id: {subagent_id}]\n{reply_body}"))
     }
 }

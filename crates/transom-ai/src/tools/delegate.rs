@@ -26,6 +26,15 @@ pub enum DelegateMode {
     Deploy,
 }
 
+/// 子 Agent 模型档位：继承主模型或优先选用轻量快模型。
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SubagentModelTier {
+    #[default]
+    Inherit,
+    Fast,
+}
+
 /// 派发子 Agent 的任务请求。
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DelegateTaskRequest {
@@ -34,6 +43,12 @@ pub struct DelegateTaskRequest {
     pub mode: DelegateMode,
     pub target: Option<String>,
     pub max_turns: usize,
+    /// 可选：传入先前子代理返回的 `subagent_id`，在其既有对话上下文中继续追问。
+    #[serde(default)]
+    pub resume_id: Option<String>,
+    /// 子 Agent 模型档位（`inherit` 继承主模型 / `fast` 优先轻量快模型）。
+    #[serde(default)]
+    pub model_tier: SubagentModelTier,
 }
 
 /// 子 Agent 运行器抽象（由控制平面实现并注册至托管任务中心）。
@@ -52,6 +67,10 @@ pub struct DelegateTaskArgs {
     target: Option<String>,
     #[serde(default)]
     max_turns: Option<usize>,
+    #[serde(default)]
+    resume_id: Option<String>,
+    #[serde(default)]
+    model_tier: SubagentModelTier,
 }
 
 /// 在独立上下文中派发只读调研或独立部署子任务，并汇总结果回主对话。
@@ -100,6 +119,15 @@ impl Tool for DelegateTaskTool {
                 "max_turns": {
                     "type": "integer",
                     "description": "子 Agent 最大轮次，默认 8（上限 15）"
+                },
+                "resume_id": {
+                    "type": "string",
+                    "description": "可选：传入之前子代理返回结果中的 subagent_id，在原上下文中继续追问细节，避免重新探索"
+                },
+                "model_tier": {
+                    "type": "string",
+                    "enum": ["inherit", "fast"],
+                    "description": "模型档位：inherit（默认，继承主模型）或 fast（只读巡检/简单汇总优先用轻量快模型）"
                 }
             },
             "required": ["title", "task"]
@@ -134,6 +162,8 @@ impl Tool for DelegateTaskTool {
             mode: args.mode,
             target: args.target,
             max_turns: args.max_turns.unwrap_or(8).clamp(2, 15),
+            resume_id: args.resume_id.filter(|s| !s.trim().is_empty()),
+            model_tier: args.model_tier,
         };
         let call_id = self
             .ctx

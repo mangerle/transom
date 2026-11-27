@@ -21,6 +21,7 @@ use crate::controller::state::{ControllerCtx, ControllerState};
 /// 子 Agent 继承父级上下文的配置对象。
 pub(super) struct SubagentConfig<'a> {
     pub(super) target: &'a transom_ai::ModelTarget,
+    pub(super) fast_target: Option<&'a transom_ai::ModelTarget>,
     pub(super) memory: &'a transom_ai::MemorySnapshot,
     pub(super) response_language: Option<String>,
     pub(super) exec_policy_rules: &'a [transom_ai::ExecPolicyRule],
@@ -153,6 +154,7 @@ pub(super) fn build_tool_context(
         subagent_cfg.map(|cfg| {
             Arc::new(subagent::ControllerSubagentRunner {
                 target: cfg.target.clone(),
+                fast_target: cfg.fast_target.cloned(),
                 memory: cfg.memory.clone(),
                 response_language: cfg.response_language,
                 execution_mode: state.ai_execution_mode.clone(),
@@ -161,6 +163,7 @@ pub(super) fn build_tool_context(
                 session_allow_prefixes: cfg.session_allow_prefixes,
                 app_bridge_deps: bridge_deps.clone(),
                 tasks: state.ai_tasks.clone(),
+                subagent_histories: state.ai_subagent_histories.clone(),
                 approvals: state.ai_approvals.clone(),
                 event_tx: ctx.event_tx.clone(),
                 parent_cancel: cancel.clone(),

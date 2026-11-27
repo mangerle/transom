@@ -102,7 +102,8 @@ pub use thinking::{
 pub use tools::{
     AppActionBridge, AppBridgeDomain, ApprovalSummary, BulkHostTarget, DelegateMode,
     DelegateTaskRequest, ExecCommandResult, ForwardExecutor, KnowledgeSearcher, LockedSession,
-    MemoryWriter, RemoteExecutor, RemoteFsExecutor, RuntimeInspector, SkillLoader, SubagentRunner,
+    MemoryWriter, RemoteExecutor, RemoteFsExecutor, RuntimeInspector, SkillLoader,
+    SubagentModelTier, SubagentRunner,
     TerminalContextProvider, ToolCapabilities, ToolExecutionCard, ToolRuntimeContext,
     TransferDirection, assess_tool_call,
     plan::{PlanSnapshot, PlanStep, PlanStepStatus},

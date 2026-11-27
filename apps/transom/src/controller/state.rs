@@ -97,6 +97,9 @@ pub(super) struct ControllerState {
     pub(super) ai_set: JoinSet<()>,
     /// 托管后台任务中心（本机/远端命令、传输与子 Agent）。
     pub(super) ai_tasks: Arc<super::ai_ops::task_runner::ManagedTaskRegistry>,
+    /// 子 Agent 上下文历史缓存（`subagent_id -> SessionEntry` 分支），支持 `resume_id` 多轮追问复用。
+    pub(super) ai_subagent_histories:
+        Arc<parking_lot::Mutex<HashMap<String, Vec<transom_ai::SessionEntry>>>>,
     /// 当前 AI 命令执行模式（热更新）。
     pub(super) ai_execution_mode: Arc<parking_lot::RwLock<transom_ai::ExecutionMode>>,
     /// 按对话 ID 复用的超大工具输出句柄池。
@@ -141,6 +144,7 @@ impl ControllerState {
             ai_tasks: Arc::new(super::ai_ops::task_runner::ManagedTaskRegistry::new(
                 event_tx,
             )),
+            ai_subagent_histories: Arc::new(parking_lot::Mutex::new(HashMap::new())),
             ai_execution_mode: Arc::new(parking_lot::RwLock::new(
                 transom_ai::ExecutionMode::Manual,
             )),
