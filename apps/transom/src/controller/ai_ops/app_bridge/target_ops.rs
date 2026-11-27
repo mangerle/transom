@@ -81,16 +81,17 @@ pub(super) async fn handle_remote_fs(
         remote: session.remote.clone(),
         sftp: Some(ensure_sftp(&session).await?),
     };
+    let io = bridge.io_context();
 
     match action {
-        "list" => fs.list_dir(path).await,
-        "read" => fs.read_file(path, MAX_LOCAL_READ_BYTES).await,
+        "list" => fs.list_dir_with_io(path, &io).await,
+        "read" => fs.read_file_with_io(path, MAX_LOCAL_READ_BYTES, &io).await,
         "search" => {
-            fs.search_text(path, args["pattern"].as_str().unwrap_or(""))
+            fs.search_text_with_io(path, args["pattern"].as_str().unwrap_or(""), &io)
                 .await
         }
         "mkdir" => {
-            fs.mkdir(path).await?;
+            fs.mkdir_with_io(path, &io).await?;
             Ok(format!("已创建目录: {path}"))
         }
         "edit" => {
@@ -107,17 +108,17 @@ pub(super) async fn handle_remote_fs(
             {
                 ensure_remote_dir(&session.remote, parent).await?;
             }
-            fs.write_file(path, content, true).await?;
+            fs.write_file_with_io(path, content, true, &io).await?;
             Ok(format!("已写入文件并完成备份: {path}"))
         }
         "rename" => {
             let to = req_str(args, "target_path", "remote_fs")?;
-            fs.rename(path, to).await?;
+            fs.rename_with_io(path, to, &io).await?;
             Ok(format!("已重命名/移动: {path} -> {to}"))
         }
         "delete" => {
             let rec = args["recursive"].as_bool().unwrap_or(false);
-            fs.delete(path, rec).await?;
+            fs.delete_with_io(path, rec, &io).await?;
             Ok(format!("已删除远端路径: {path}"))
         }
         "chmod" => {
@@ -128,7 +129,7 @@ pub(super) async fn handle_remote_fs(
                     reason: format!("无效的八进制权限: {raw}"),
                 }
             })?;
-            fs.chmod(path, mode).await?;
+            fs.chmod_with_io(path, mode, &io).await?;
             Ok(format!("已修改权限 {raw}: {path}"))
         }
         other => Err(ToolError::InvalidArguments {
@@ -160,13 +161,14 @@ pub(super) async fn handle_transfer_file(
             remote: session.remote.clone(),
             sftp: Some(ensure_sftp(&session).await?),
         };
+        let io = bridge.io_context();
         return fs
-            .transfer(
+            .transfer_with_io(
                 TransferDirection::Download,
                 local_raw,
                 remote_raw,
                 overwrite,
-                bridge.deps.runtime.cancel.clone(),
+                &io,
             )
             .await;
     }

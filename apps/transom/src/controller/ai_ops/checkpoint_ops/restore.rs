@@ -1,17 +1,14 @@
 //! 本机与远端文件快照还原。
 
 use std::path::Path;
-use std::time::Duration;
-
-use transom_ai::{FileBackupRecord, RemoteFsExecutor};
+use tokio_util::sync::CancellationToken;
+use transom_ai::{FileBackupRecord, RemoteFsExecutor, ToolIoContext};
 use transom_core::{AiAppEvent, AiToolCardDto, AppEvent};
 use transom_net::{SftpClient, SshRemote};
 
 use super::super::bridge::SshRemoteFsBridge;
-use super::{MAX_CHECKPOINT_BACKUP_BYTES, store_ai_root};
+use super::{MAX_CHECKPOINT_BACKUP_BYTES, REMOTE_RESTORE_TIMEOUT, store_ai_root};
 use crate::controller::state::{ControllerCtx, ControllerState};
-
-const REMOTE_RESTORE_TIMEOUT: Duration = Duration::from_secs(15);
 
 pub(super) async fn restore_local(record: &FileBackupRecord) -> Result<(), String> {
     let destination = Path::new(&record.path);
@@ -39,6 +36,7 @@ pub(super) async fn restore_remote(
     record: &FileBackupRecord,
     remote: &SshRemote,
     sftp: Option<SftpClient>,
+    io: &ToolIoContext,
 ) -> Result<(), String> {
     let fs = SshRemoteFsBridge {
         remote: remote.clone(),
@@ -50,21 +48,16 @@ pub(super) async fn restore_remote(
             .as_deref()
             .ok_or_else(|| format!("缺少远端快照路径: {}", record.path))?;
         let content = read_backup_file(Path::new(backup)).await?;
-        tokio::time::timeout(
-            REMOTE_RESTORE_TIMEOUT,
-            fs.write_file(&record.path, &content, false),
-        )
-        .await
-        .map_err(|_| format!("还原远端文件超时: {}", record.path))?
-        .map_err(|err| format!("还原远端文件失败（{}）: {err}", record.path))
+        fs.write_file_with_io(&record.path, &content, false, io)
+            .await
+            .map_err(|err| format!("还原远端文件失败（{}）: {err}", record.path))
     } else if fs
-        .file_exists(&record.path)
+        .file_exists_with_io(&record.path, io)
         .await
         .map_err(|err| format!("探测远端文件失败（{}）: {err}", record.path))?
     {
-        tokio::time::timeout(REMOTE_RESTORE_TIMEOUT, fs.delete(&record.path, false))
+        fs.delete_with_io(&record.path, false, io)
             .await
-            .map_err(|_| format!("删除远端新增文件超时: {}", record.path))?
             .map_err(|err| format!("删除远端新增文件失败（{}）: {err}", record.path))
     } else {
         Ok(())
@@ -126,24 +119,20 @@ pub(in crate::controller::ai_ops) fn spawn_revert_remote_file(
     let conv_id = conversation_id.unwrap_or_default();
 
     state.ai_set.spawn(async move {
+        let io = ToolIoContext::new(REMOTE_RESTORE_TIMEOUT, CancellationToken::new());
         let (ok, output) = match validate_and_read_backup(&allowed_root, &backup_path).await {
             Ok(content) => match target_session {
                 Some((remote, sftp)) => {
                     let fs = SshRemoteFsBridge { remote, sftp };
-                    match tokio::time::timeout(
-                        REMOTE_RESTORE_TIMEOUT,
-                        fs.write_file(&target_path, &content, false),
-                    )
-                    .await
+                    match fs
+                        .write_file_with_io(&target_path, &content, false, &io)
+                        .await
                     {
-                        Ok(Ok(())) => (
+                        Ok(()) => (
                             true,
                             format!("已成功将远端文件还原至修改前快照: {target_path}"),
                         ),
-                        Ok(Err(err)) => {
-                            (false, format!("还原远端文件失败（{target_path}）: {err}"))
-                        }
-                        Err(_) => (false, format!("还原远端文件超时（{target_path}）")),
+                        Err(err) => (false, format!("还原远端文件失败（{target_path}）: {err}")),
                     }
                 }
                 None => (

@@ -110,7 +110,8 @@ pub(super) async fn deploy_compose_yaml(
             remote: session.remote.clone(),
             sftp: Some(ensure_sftp(&session).await?),
         };
-        fs.write_file(&compose_file, yaml, true).await?;
+        fs.write_file_with_io(&compose_file, yaml, true, &bridge.io_context())
+            .await?;
 
         let pull_flag = if pull { " --pull always" } else { "" };
         let qdir = shell_quote(&dir);

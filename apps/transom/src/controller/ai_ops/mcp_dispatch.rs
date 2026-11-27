@@ -7,7 +7,7 @@ use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
 use transom_ai::{
     PolicyDecision, RemoteExecutor, RemoteFsExecutor, RuntimeInspector, TerminalContextProvider,
-    ToolRisk,
+    ToolIoContext, ToolRisk,
 };
 use transom_core::{AiAppEvent, AiApprovalDto, AppEvent};
 use uuid::Uuid;
@@ -115,24 +115,28 @@ pub(super) async fn dispatch_single_tool(
             };
             let action = args["action"].as_str().unwrap_or("read");
             let path = args["path"].as_str().unwrap_or("");
+            let io = ToolIoContext::new(snap.command_timeout, cancel.clone());
             match action {
-                "list" => fs.list_dir(path).await.map_err(|e| e.to_string()),
+                "list" => fs
+                    .list_dir_with_io(path, &io)
+                    .await
+                    .map_err(|e| e.to_string()),
                 "read" => fs
-                    .read_file(path, 256 * 1024)
+                    .read_file_with_io(path, 256 * 1024, &io)
                     .await
                     .map_err(|e| e.to_string()),
                 "search" => fs
-                    .search_text(path, args["pattern"].as_str().unwrap_or(""))
+                    .search_text_with_io(path, args["pattern"].as_str().unwrap_or(""), &io)
                     .await
                     .map_err(|e| e.to_string()),
                 "mkdir" => fs
-                    .mkdir(path)
+                    .mkdir_with_io(path, &io)
                     .await
                     .map(|()| format!("已创建目录: {path}"))
                     .map_err(|e| e.to_string()),
                 "edit" => {
                     let content = args["content"].as_str().unwrap_or("");
-                    fs.write_file(path, content, true)
+                    fs.write_file_with_io(path, content, true, &io)
                         .await
                         .map(|()| format!("已写入并备份: {path}"))
                         .map_err(|e| e.to_string())
@@ -141,14 +145,14 @@ pub(super) async fn dispatch_single_tool(
                     let to = args["target_path"]
                         .as_str()
                         .ok_or_else(|| "rename 必须提供 target_path".to_owned())?;
-                    fs.rename(path, to)
+                    fs.rename_with_io(path, to, &io)
                         .await
                         .map(|()| format!("已重命名: {path} -> {to}"))
                         .map_err(|e| e.to_string())
                 }
                 "delete" => {
                     let rec = args["recursive"].as_bool().unwrap_or(false);
-                    fs.delete(path, rec)
+                    fs.delete_with_io(path, rec, &io)
                         .await
                         .map(|()| format!("已删除: {path}"))
                         .map_err(|e| e.to_string())
@@ -159,7 +163,7 @@ pub(super) async fn dispatch_single_tool(
                         .ok_or_else(|| "chmod 必须提供八进制 mode".to_owned())?;
                     let mode = u32::from_str_radix(raw.trim_start_matches('0'), 8)
                         .map_err(|_| format!("无效权限: {raw}"))?;
-                    fs.chmod(path, mode)
+                    fs.chmod_with_io(path, mode, &io)
                         .await
                         .map(|()| format!("已修改权限 {raw}: {path}"))
                         .map_err(|e| e.to_string())
@@ -171,18 +175,23 @@ pub(super) async fn dispatch_single_tool(
             let insp = HostRuntimeBridge {
                 remote: target.remote.clone(),
             };
-            insp.host_runtime_snapshot()
-                .await
-                .map_err(|e| e.to_string())
+            insp.host_runtime_snapshot_with_io(&ToolIoContext::new(
+                snap.command_timeout,
+                cancel.clone(),
+            ))
+            .await
+            .map_err(|e| e.to_string())
         }
         "container_ops" => {
             let insp = HostRuntimeBridge {
                 remote: target.remote.clone(),
             };
-            insp.container_action(
+            let io = ToolIoContext::new(snap.command_timeout, cancel.clone());
+            insp.container_action_with_io(
                 args["action"].as_str().unwrap_or("list"),
                 args["container_id"].as_str(),
                 args["tail"].as_u64().map(|n| n as usize),
+                &io,
             )
             .await
             .map_err(|e| e.to_string())

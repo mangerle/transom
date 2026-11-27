@@ -51,7 +51,7 @@ impl Tool for InspectHostRuntimeTool {
             .ok_or_else(|| to_rig_err(ToolError::NoActiveSession))?;
         let started = Instant::now();
         let snapshot = inspector
-            .host_runtime_snapshot()
+            .host_runtime_snapshot_with_io(&self.ctx.io_context())
             .await
             .map_err(to_rig_err)?;
         let clipped = self.ctx.format_tool_output(Self::NAME, &snapshot);
@@ -133,7 +133,12 @@ impl Tool for ContainerOpsTool {
         };
         let started = Instant::now();
         let out = inspector
-            .container_action(&args.action, args.container_id.as_deref(), args.tail)
+            .container_action_with_io(
+                &args.action,
+                args.container_id.as_deref(),
+                args.tail,
+                &self.ctx.io_context(),
+            )
             .await
             .map_err(to_rig_err)?;
         let clipped = self.ctx.format_tool_output(Self::NAME, &out);

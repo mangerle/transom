@@ -10,6 +10,7 @@ mod restore;
 mod rollback;
 
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use transom_ai::ToolError;
 use transom_store::AiStore;
@@ -21,6 +22,7 @@ pub(super) use restore::spawn_revert_remote_file;
 pub(super) use rollback::spawn_rollback_checkpoint;
 
 const MAX_CHECKPOINT_BACKUP_BYTES: usize = 2 * 1024 * 1024;
+pub(super) const REMOTE_RESTORE_TIMEOUT: Duration = Duration::from_secs(15);
 
 pub(super) fn store_ai_root(store: &AiStore) -> PathBuf {
     store

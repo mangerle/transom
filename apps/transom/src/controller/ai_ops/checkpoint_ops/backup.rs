@@ -75,9 +75,12 @@ pub(in crate::controller::ai_ops) async fn record_remote_backup(
     let Some((conversation_id, entry_id)) = checkpoint_context(deps) else {
         return Ok(());
     };
-    let existed_before = fs.file_exists(path).await?;
+    let io = deps.io_context();
+    let existed_before = fs.file_exists_with_io(path, &io).await?;
     let backup_path = if existed_before {
-        let content = fs.read_file(path, MAX_CHECKPOINT_BACKUP_BYTES).await?;
+        let content = fs
+            .read_file_with_io(path, MAX_CHECKPOINT_BACKUP_BYTES, &io)
+            .await?;
         let blob_dir = checkpoint_blob_dir(deps);
         tokio::fs::create_dir_all(&blob_dir)
             .await

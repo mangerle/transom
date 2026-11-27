@@ -3,7 +3,8 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use transom_ai::TurnCheckpoint;
+use tokio_util::sync::CancellationToken;
+use transom_ai::{ToolIoContext, TurnCheckpoint};
 use transom_core::{AiAppEvent, AppEvent};
 use transom_net::{SftpClient, SshRemote};
 use transom_store::AiStore;
@@ -32,6 +33,10 @@ pub(in crate::controller::ai_ops) fn spawn_rollback_checkpoint(
     let session_catalog = ctx.session_store.load().unwrap_or_default();
 
     state.ai_set.spawn(async move {
+        let io = ToolIoContext::new(
+            super::REMOTE_RESTORE_TIMEOUT,
+            CancellationToken::new(),
+        );
         let load_store = store.clone();
         let load_conversation = conversation_id.clone();
         let loaded = tokio::task::spawn_blocking(move || {
@@ -74,7 +79,7 @@ pub(in crate::controller::ai_ops) fn spawn_rollback_checkpoint(
                 } else {
                     match find_remote_session(&sessions, &session_catalog, &record.target) {
                         Some((remote, sftp)) => {
-                            restore_remote(record, remote, sftp.clone()).await
+                            restore_remote(record, remote, sftp.clone(), &io).await
                         }
                         None => Err(format!(
                             "未找到主机「{}」的活跃 SSH 会话，无法还原 {}",

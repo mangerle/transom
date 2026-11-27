@@ -164,15 +164,19 @@ impl Tool for RemoteFsTool {
             .as_ref()
             .ok_or_else(|| to_rig_err(ToolError::NoActiveSession))?;
 
+        let io = self.ctx.io_context();
         let result = match args.action.as_str() {
-            "list" => fs.list_dir(&args.path).await,
-            "read" => fs.read_file(&args.path, MAX_REMOTE_READ_BYTES).await,
+            "list" => fs.list_dir_with_io(&args.path, &io).await,
+            "read" => {
+                fs.read_file_with_io(&args.path, MAX_REMOTE_READ_BYTES, &io)
+                    .await
+            }
             "search" => {
                 let pat = args.pattern.as_deref().unwrap_or("");
-                fs.search_text(&args.path, pat).await
+                fs.search_text_with_io(&args.path, pat, &io).await
             }
             "mkdir" => fs
-                .mkdir(&args.path)
+                .mkdir_with_io(&args.path, &io)
                 .await
                 .map(|()| format!("已创建目录: {}", args.path)),
             "rename" => {
@@ -182,12 +186,12 @@ impl Tool for RemoteFsTool {
                         reason: "rename 必须提供 target_path".to_owned(),
                     })
                 })?;
-                fs.rename(&args.path, to)
+                fs.rename_with_io(&args.path, to, &io)
                     .await
                     .map(|()| format!("已重命名/移动: {} -> {to}", args.path))
             }
             "delete" => fs
-                .delete(&args.path, args.recursive)
+                .delete_with_io(&args.path, args.recursive, &io)
                 .await
                 .map(|()| format!("已删除远端路径: {}", args.path)),
             "chmod" => {
@@ -204,20 +208,22 @@ impl Tool for RemoteFsTool {
                             reason: format!("无效的八进制权限: {raw_mode}"),
                         })
                     })?;
-                fs.chmod(&args.path, parsed_mode)
+                fs.chmod_with_io(&args.path, parsed_mode, &io)
                     .await
                     .map(|()| format!("已修改权限 {raw_mode}: {}", args.path))
             }
             "edit" => {
                 let content = args.content.as_deref().unwrap_or("");
-                let old_read = fs.read_file(&args.path, MAX_REMOTE_READ_BYTES).await;
+                let old_read = fs
+                    .read_file_with_io(&args.path, MAX_REMOTE_READ_BYTES, &io)
+                    .await;
                 let old_text = old_read.as_deref().unwrap_or("");
                 let diff = TextDiff::from_lines(old_text, content)
                     .unified_diff()
                     .header("修改前", "修改后")
                     .to_string();
                 diff_preview = Some(truncate_tool_output(&diff, 3_000));
-                let write_res = fs.write_file(&args.path, content, true).await;
+                let write_res = fs.write_file_with_io(&args.path, content, true, &io).await;
                 if write_res.is_ok()
                     && let Ok(original) = old_read
                 {
@@ -373,12 +379,13 @@ impl Tool for TransferFileTool {
                 .remote_fs
                 .as_ref()
                 .ok_or_else(|| to_rig_err(ToolError::NoActiveSession))?;
-            fs.transfer(
+            let io = self.ctx.io_context();
+            fs.transfer_with_io(
                 args.direction,
                 &args.local_path,
                 &args.remote_path,
                 args.overwrite,
-                self.ctx.cancel.clone(),
+                &io,
             )
             .await
         };

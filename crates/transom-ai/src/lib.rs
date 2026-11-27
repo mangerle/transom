@@ -108,8 +108,9 @@ pub use tools::{
     DelegateTaskRequest, ExecCommandResult, ForwardExecutor, KnowledgeSearcher, LockedSession,
     MemoryWriter, RemoteExecutor, RemoteFsExecutor, RuntimeInspector, SkillLoader,
     SubagentModelTier, SubagentRunner, TerminalContextProvider, ToolCapabilities,
-    ToolExecutionCard, ToolRuntimeContext, TransferDirection, assess_tool_call,
+    ToolExecutionCard, ToolIoContext, ToolRuntimeContext, TransferDirection, assess_tool_call,
     plan::{PlanSnapshot, PlanStep, PlanStepStatus},
+    with_io_guard,
 };
 pub use working_state::{
     SessionWorkingState, aggressive_compact_history, is_context_overflow_error,

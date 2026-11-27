@@ -21,7 +21,7 @@ use parking_lot::Mutex;
 use serde_json::Value;
 use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
-use transom_ai::{AppActionBridge, AppBridgeDomain, ToolError};
+use transom_ai::{AppActionBridge, AppBridgeDomain, ToolError, ToolIoContext};
 use transom_api::{ApiHttpService, ApiProjectStore};
 use transom_core::{
     AiAppEvent, AppEvent, BackupService, GitProjectStore, KnownHostsStore, SecretStore,
@@ -149,6 +149,11 @@ impl AppBridgeDeps {
     pub(in crate::controller) fn set_cancel(&mut self, cancel: CancellationToken) {
         self.runtime.cancel = cancel;
     }
+
+    /// 构造远端 I/O 的统一超时与取消上下文。
+    pub(in crate::controller) fn io_context(&self) -> ToolIoContext {
+        ToolIoContext::new(self.runtime.command_timeout, self.runtime.cancel.clone())
+    }
 }
 
 /// 面向内置 AI 与外部 ACP（MCP）的统一软件操作桥接器。
@@ -159,6 +164,10 @@ pub(in crate::controller) struct ControllerAppActionBridge {
 impl ControllerAppActionBridge {
     pub(in crate::controller) fn new(deps: AppBridgeDeps) -> Self {
         Self { deps }
+    }
+
+    pub(super) fn io_context(&self) -> ToolIoContext {
+        self.deps.io_context()
     }
 
     /// 向 GPUI 界面派发同步动作并等待其通过 `RespondAppAction` 回传结果。
