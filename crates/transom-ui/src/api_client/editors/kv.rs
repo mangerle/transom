@@ -79,9 +79,8 @@ impl KvEditor {
         let blank = blank_entry();
         let target_len = entries.len() + 1;
         let reuse_len = self.rows.len().min(target_len);
-        for index in 0..reuse_len {
+        for (index, row) in self.rows.iter_mut().enumerate().take(reuse_len) {
             let entry = entries.get(index).unwrap_or(&blank);
-            let row = &mut self.rows[index];
             row.enabled = entry.enabled;
             row.name.update(cx, |state, cx| {
                 state.set_value(entry.name.clone(), window, cx)

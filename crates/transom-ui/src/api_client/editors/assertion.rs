@@ -56,9 +56,8 @@ impl AssertionEditor {
         let blank = blank_assertion();
         let target_len = assertions.len() + 1;
         let reuse_len = self.rows.len().min(target_len);
-        for index in 0..reuse_len {
+        for (index, row) in self.rows.iter_mut().enumerate().take(reuse_len) {
             let assertion = assertions.get(index).unwrap_or(&blank);
-            let row = &mut self.rows[index];
             row.enabled = assertion.enabled;
             row.expression.update(cx, |state, cx| {
                 state.set_value(assertion.expression.clone(), window, cx)

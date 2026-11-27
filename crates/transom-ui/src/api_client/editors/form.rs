@@ -74,14 +74,13 @@ impl FormEditor {
         let blank = blank_field();
         let target_len = fields.len() + 1;
         let reuse_len = self.rows.len().min(target_len);
-        for index in 0..reuse_len {
+        for (index, row) in self.rows.iter_mut().enumerate().take(reuse_len) {
             let field = fields.get(index).unwrap_or(&blank);
             let file_path = if field.kind == ApiFormFieldKind::File {
                 path_from_field_value(&field.value)
             } else {
                 None
             };
-            let row = &mut self.rows[index];
             row.enabled = field.enabled;
             row.kind = field.kind;
             row.file_path = file_path;

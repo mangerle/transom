@@ -61,9 +61,8 @@ impl EnvironmentEditor {
         let blank = blank_variable();
         let target_len = variables.len() + 1;
         let reuse_len = self.rows.len().min(target_len);
-        for index in 0..reuse_len {
+        for (index, row) in self.rows.iter_mut().enumerate().take(reuse_len) {
             let variable = variables.get(index).unwrap_or(&blank);
-            let row = &mut self.rows[index];
             row.enabled = variable.enabled;
             row.secret = variable.secret;
             row.name.update(cx, |state, cx| {

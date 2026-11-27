@@ -67,9 +67,8 @@ impl CookieEditor {
         let blank = blank_cookie();
         let target_len = cookies.len() + 1;
         let reuse_len = self.rows.len().min(target_len);
-        for index in 0..reuse_len {
+        for (index, row) in self.rows.iter_mut().enumerate().take(reuse_len) {
             let cookie = cookies.get(index).unwrap_or(&blank);
-            let row = &mut self.rows[index];
             row.secure = cookie.secure;
             row.http_only = cookie.http_only;
             row.expires_at = cookie.expires_at;
