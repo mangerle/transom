@@ -78,7 +78,7 @@ pub use memory::{
     MemoryProposal, MemorySnapshot, append_host_fact, read_memory_file_limited,
     resolve_sandbox_path,
 };
-pub use output_store::ToolOutputStore;
+pub use output_store::{ToolOutputStore, ToolOutputStorePool};
 pub use policy::{
     BlockingCommandHit, CommandPolicyContext, ExecutionMode, HostProtection, MAX_BULK_TARGETS,
     PolicyDecision, ShellCommandAssessment, ToolRisk, assess_shell_command, classify_shell_command,

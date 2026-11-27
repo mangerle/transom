@@ -6,6 +6,7 @@
 //! - 采用条目数上限（64 条）与总字节上限（16 MiB）双保险 LRU 淘汰，彻底杜绝内存无限增长。
 
 use std::collections::{HashMap, VecDeque};
+use std::sync::Arc;
 
 use parking_lot::Mutex;
 use uuid::Uuid;
@@ -19,6 +20,9 @@ pub const MAX_STORED_OUTPUTS: usize = 64;
 
 /// 句柄池总字节上限（16 MiB）。
 pub const MAX_STORE_TOTAL_BYTES: usize = 16 * 1024 * 1024;
+
+/// 全局同时保留的对话级输出池数量上限。
+pub const MAX_CONVERSATION_OUTPUT_STORES: usize = 4;
 
 /// 单次分页读取默认行数。
 pub const DEFAULT_READ_LINES: usize = 120;
@@ -99,7 +103,7 @@ impl ToolOutputStore {
         limit_lines: usize,
         pattern: Option<&str>,
     ) -> Result<String, ToolError> {
-        let guard = self.inner.lock();
+        let mut guard = self.inner.lock();
         let Some(entry) = guard.entries.get(output_id) else {
             return Err(ToolError::InvalidArguments {
                 tool: "read_tool_output",
@@ -159,6 +163,10 @@ impl ToolOutputStore {
             )
         };
 
+        if let Some(pos) = guard.order.iter().position(|id| id == output_id) {
+            guard.order.remove(pos);
+            guard.order.push_back(output_id.to_owned());
+        }
         Ok(clip_head_tail(&body, DEFAULT_TOOL_OUTPUT_LIMIT))
     }
 
@@ -184,9 +192,82 @@ impl ToolOutputStore {
     }
 }
 
+/// 进程级对话输出池 LRU，控制同时存活的对话数量。
+#[derive(Debug)]
+pub struct ToolOutputStorePool {
+    inner: Mutex<OutputStorePoolInner>,
+    max_entries: usize,
+}
+
+#[derive(Debug)]
+struct OutputStorePoolInner {
+    entries: HashMap<String, Arc<ToolOutputStore>>,
+    order: VecDeque<String>,
+}
+
+impl Default for ToolOutputStorePool {
+    fn default() -> Self {
+        Self::new(MAX_CONVERSATION_OUTPUT_STORES)
+    }
+}
+
+impl ToolOutputStorePool {
+    /// 创建最多保留 `max_entries` 个对话输出池的进程级 LRU。
+    pub fn new(max_entries: usize) -> Self {
+        Self {
+            inner: Mutex::new(OutputStorePoolInner {
+                entries: HashMap::with_capacity(max_entries.max(1)),
+                order: VecDeque::with_capacity(max_entries.max(1)),
+            }),
+            max_entries: max_entries.max(1),
+        }
+    }
+
+    /// 获取或创建指定对话的输出池，并刷新其 LRU 位置。
+    pub fn get_or_create(&self, conversation_id: &str) -> Arc<ToolOutputStore> {
+        let mut guard = self.inner.lock();
+        if let Some(store) = guard.entries.get(conversation_id).cloned() {
+            if let Some(pos) = guard.order.iter().position(|id| id == conversation_id) {
+                guard.order.remove(pos);
+            }
+            guard.order.push_back(conversation_id.to_owned());
+            return store;
+        }
+
+        while guard.entries.len() >= self.max_entries {
+            let Some(oldest) = guard.order.pop_front() else {
+                break;
+            };
+            guard.entries.remove(&oldest);
+        }
+        let store = Arc::new(ToolOutputStore::new());
+        guard
+            .entries
+            .insert(conversation_id.to_owned(), store.clone());
+        guard.order.push_back(conversation_id.to_owned());
+        store
+    }
+
+    /// 删除指定对话的输出池。
+    pub fn remove(&self, conversation_id: &str) {
+        let mut guard = self.inner.lock();
+        guard.entries.remove(conversation_id);
+        if let Some(pos) = guard.order.iter().position(|id| id == conversation_id) {
+            guard.order.remove(pos);
+        }
+    }
+
+    /// 清空全部对话输出池。
+    pub fn clear(&self) {
+        let mut guard = self.inner.lock();
+        guard.entries.clear();
+        guard.order.clear();
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{MAX_STORED_OUTPUTS, ToolOutputStore};
+    use super::{MAX_STORED_OUTPUTS, ToolOutputStore, ToolOutputStorePool};
 
     #[test]
     fn small_output_passes_through_without_handle() {
@@ -240,5 +321,48 @@ mod tests {
             }
         }
         assert!(store.read(&first_id, 0, 10, None).is_err());
+    }
+
+    #[test]
+    fn reading_output_refreshes_lru_position() {
+        let store = ToolOutputStore::new();
+        let payload = "a".repeat(200);
+        let mut ids = Vec::with_capacity(MAX_STORED_OUTPUTS);
+        for _ in 0..MAX_STORED_OUTPUTS {
+            let preview = store.store_and_preview("remote_exec", &payload, 100);
+            let pos = preview.find("output_id=").expect("包含句柄") + 10;
+            ids.push(
+                preview[pos..]
+                    .chars()
+                    .take_while(|c| c.is_ascii_alphanumeric() || *c == '-')
+                    .collect::<String>(),
+            );
+        }
+        store.read(&ids[0], 0, 10, None).expect("首次读取应成功");
+        let preview = store.store_and_preview("remote_exec", &payload, 100);
+        assert!(preview.contains("output_id="));
+        assert!(store.read(&ids[0], 0, 10, None).is_ok());
+        assert!(store.read(&ids[1], 0, 10, None).is_err());
+    }
+
+    #[test]
+    fn conversation_pool_evicts_least_recently_used_entry() {
+        let pool = ToolOutputStorePool::new(2);
+        let first = pool.get_or_create("conversation-a");
+        let second = pool.get_or_create("conversation-b");
+        assert!(std::sync::Arc::ptr_eq(
+            &first,
+            &pool.get_or_create("conversation-a")
+        ));
+        let third = pool.get_or_create("conversation-c");
+        assert!(!std::sync::Arc::ptr_eq(&first, &third));
+        assert!(std::sync::Arc::ptr_eq(
+            &first,
+            &pool.get_or_create("conversation-a")
+        ));
+        assert!(!std::sync::Arc::ptr_eq(
+            &second,
+            &pool.get_or_create("conversation-b")
+        ));
     }
 }

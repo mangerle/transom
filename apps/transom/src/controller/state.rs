@@ -102,8 +102,8 @@ pub(super) struct ControllerState {
     /// 子 Agent 上下文历史缓存（`subagent_id -> SessionEntry` 分支），支持 `resume_id` 多轮追问复用。
     pub(super) ai_subagent_histories:
         Arc<parking_lot::Mutex<HashMap<String, Vec<transom_ai::SessionEntry>>>>,
-    /// 按对话 ID 复用的超大工具输出句柄池。
-    pub(super) ai_output_stores: HashMap<String, Arc<transom_ai::ToolOutputStore>>,
+    /// 按对话 ID 复用的全局有界超大工具输出句柄池。
+    pub(super) ai_output_stores: transom_ai::ToolOutputStorePool,
     /// AI 工具后台静默直连的远端 SSH 句柄缓存（不打开 UI 标签页）。
     pub(super) ai_headless_remotes: AiHeadlessRemoteMap,
     /// 已发起 SSH 连接的标签元数据（供反向 MCP Server 列表展示）。
@@ -145,7 +145,7 @@ impl ControllerState {
                 event_tx,
             )),
             ai_subagent_histories: Arc::new(parking_lot::Mutex::new(HashMap::new())),
-            ai_output_stores: HashMap::new(),
+            ai_output_stores: transom_ai::ToolOutputStorePool::default(),
             ai_headless_remotes: Arc::new(parking_lot::Mutex::new(HashMap::new())),
             mcp_session_meta: HashMap::new(),
             mcp_cancel: CancellationToken::new(),

@@ -73,11 +73,7 @@ pub(in crate::controller) fn handle_mcp_snapshot(
         })
         .collect();
 
-    let store = state
-        .ai_output_stores
-        .entry("mcp-external".to_owned())
-        .or_insert_with(|| Arc::new(ToolOutputStore::new()))
-        .clone();
+    let store = state.ai_output_stores.get_or_create("mcp-external");
     let settings = ctx.ai_config.snapshot();
     let timeout_secs = settings.command_timeout_secs.max(5);
     let command_timeout = Duration::from_secs(timeout_secs);
