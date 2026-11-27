@@ -47,6 +47,16 @@ pub(super) fn find_subagent_task<'a>(
         .find(|t| t.dto.kind == "subagent" && t.dto.title == *summary)
 }
 
+/// 统一格式化运行态焦点文案，避免重复拼接“正在执行”前缀。
+pub(super) fn format_running_focus(focus: &str) -> String {
+    let trimmed = focus.trim();
+    if trimmed.starts_with("正在执行") || trimmed.starts_with("Running ") {
+        trimmed.to_owned()
+    } else {
+        rust_i18n::t!("ai.working_running", focus = trimmed).to_string()
+    }
+}
+
 pub(super) fn chat_item_id(item: &UiChatItem) -> &str {
     match item {
         UiChatItem::UserText { id, .. }
@@ -190,13 +200,11 @@ pub(super) fn render_work_group(
             .live_elapsed_secs
             .map(|s| format_duration_zh(s.saturating_mul(1000)))
             .unwrap_or_default();
+        let base = format_running_focus(&focus);
         if elapsed.is_empty() {
-            rust_i18n::t!("ai.working_running", focus = focus).to_string()
+            base
         } else {
-            format!(
-                "{}  {elapsed}",
-                rust_i18n::t!("ai.working_running", focus = focus)
-            )
+            format!("{base}  {elapsed}")
         }
     } else {
         let dur = if params.duration_ms >= 1000 {
@@ -353,15 +361,21 @@ pub(super) fn render_work_group(
             ));
         }
         wrapper = wrapper.child(details);
-    } else if params.in_progress {
-        // 未手动展开工作块时，仍原地透出正在执行中的工具卡片（显示实时耗时与流式输出预览）
-        let running_items: Vec<&UiChatItem> = params
+    } else {
+        // 未手动展开工作块时，原地透出正在执行中的工具卡片，以及所有子代理（delegate_task）卡片，
+        // 避免多个并行或接力执行的子 Agent 在完成后缩进折叠块导致只能看到最后一个。
+        let surfaced_items: Vec<&UiChatItem> = params
             .items
             .iter()
             .copied()
-            .filter(|it| matches!(it, UiChatItem::ToolCard { running: true, .. }))
+            .filter(|it| match it {
+                UiChatItem::ToolCard {
+                    running, tool_name, ..
+                } => *running || tool_name == "delegate_task",
+                _ => false,
+            })
             .collect();
-        if !running_items.is_empty() {
+        if !surfaced_items.is_empty() {
             let mut live_list = v_flex()
                 .w_full()
                 .ml(px(6.0))
@@ -370,7 +384,7 @@ pub(super) fn render_work_group(
                 .gap(px(4.0))
                 .border_l_1()
                 .border_color(p.primary.opacity(0.4));
-            for item in running_items {
+            for item in surfaced_items {
                 let cid = chat_item_id(item).to_owned();
                 let item_expanded = params.expanded_cards.contains(&cid);
                 let full_key = format!("full-out-{cid}");

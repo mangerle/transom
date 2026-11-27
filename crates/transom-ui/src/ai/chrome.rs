@@ -275,7 +275,7 @@ impl AiAssistantView {
                     .filter(|&s| s > 0)
                     .map(|s| format_duration_zh(s.saturating_mul(1000)))
                     .unwrap_or_default();
-                let label = rust_i18n::t!("ai.working_running", focus = focus).to_string();
+                let label = super::work_group::format_running_focus(&focus);
                 let mut row = h_flex()
                     .w_full()
                     .min_w_0()

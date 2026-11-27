@@ -11013,8 +11013,11 @@ ai:
     en: "Worked for %{duration}"
     zh-CN: "耗时 %{duration}"
   work_steps_summary:
-    en: "%{done}/%{total} steps"
-    zh-CN: "%{done}/%{total} 步"
+    en: "%{done}/%{total} ops"
+    zh-CN: "%{done}/%{total} 项"
+  plan_steps_summary:
+    en: "%{done}/%{total} phases"
+    zh-CN: "%{done}/%{total} 阶段"
   history_title:
     en: Conversations
     zh-CN: 会话历史

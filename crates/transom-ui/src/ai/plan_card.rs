@@ -283,7 +283,7 @@ pub(super) fn render_status_pills_row(
             None => (0, 0, 15.0),
         };
         let label = if total > 0 {
-            rust_i18n::t!("ai.work_steps_summary", done = done, total = total).to_string()
+            rust_i18n::t!("ai.plan_steps_summary", done = done, total = total).to_string()
         } else {
             focus
                 .map(str::trim)
