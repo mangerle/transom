@@ -178,21 +178,30 @@ impl AiAssistantView {
         let init_load_task = cx.spawn_in(window, async move |this, cx| {
             let loaded = bg
                 .spawn(async move {
-                    let conversations = init_store.list_all_conversations().unwrap_or_default();
-                    let memory = init_store.load_memory(None).unwrap_or_default();
-                    let totals = init_store.load_usage_totals();
-                    (conversations, memory, totals)
+                    let conversations = init_store.list_all_conversations()?;
+                    let memory = init_store.load_memory(None)?;
+                    let totals = init_store.load_usage_totals()?;
+                    Ok::<_, transom_ai::AiError>((conversations, memory, totals))
                 })
                 .await;
             let _ = this.update(cx, |this, cx| {
-                let (conversations, memory, totals) = loaded;
-                this.state.conversations = conversations;
-                if this.state.memory.global_markdown.is_empty()
-                    && !memory.global_markdown.is_empty()
-                {
-                    this.state.memory.global_markdown = memory.global_markdown;
+                match loaded {
+                    Ok((conversations, memory, totals)) => {
+                        this.state.conversations = conversations;
+                        if this.state.memory.global_markdown.is_empty()
+                            && !memory.global_markdown.is_empty()
+                        {
+                            this.state.memory.global_markdown = memory.global_markdown;
+                        }
+                        this.state.metrics.set_stored_totals(totals);
+                    }
+                    Err(err) => {
+                        this.state.status_error = Some(
+                            rust_i18n::t!("ai.load_local_data_failed", error = err.to_string())
+                                .to_string(),
+                        );
+                    }
                 }
-                this.state.metrics.set_stored_totals(totals);
                 cx.notify();
             });
         });

@@ -12,9 +12,10 @@ use transom_ai::{
 use transom_core::AiPromptRequest;
 
 use super::context_builder::{
-    StoreExt as _, ToolContextBuildParams, build_tool_context, emit_run_error, prepare_conversation,
+    ToolContextBuildParams, build_tool_context, emit_run_error, prepare_conversation,
 };
 use super::run::{PumpContext, execute_and_pump};
+use super::run_recorder::RunRecorder;
 use super::{acp, context_builder, hooks_exec, load_and_expand_skills};
 use crate::controller::state::{ControllerCtx, ControllerState};
 
@@ -133,27 +134,62 @@ pub(super) async fn start_ai_run(
     };
 
     let (conversation_id, title, mut history_branch) =
-        prepare_conversation(ctx, &req, &scope, &target.model).await;
+        match prepare_conversation(ctx, &req, &scope, &target.model).await {
+            Ok(conversation) => conversation,
+            Err(err) => {
+                emit_run_error(
+                    ctx,
+                    req.run_id,
+                    req.conversation_id.unwrap_or_default(),
+                    format!("准备 AI 对话失败: {err}"),
+                )
+                .await;
+                return;
+            }
+        };
     let approval_scope = transom_ai::ApprovalScope::new(
         conversation_id.clone(),
         req.session_id.map(|session_id| session_id.to_string()),
         req.protection,
     );
+    let recorder = RunRecorder::new(ctx.ai_store.clone(), conversation_id.clone());
 
     let host_id_str = req.session_id.map(|s| s.to_string());
-    let memory = ctx
-        .ai_store
-        .load_memory(host_id_str.as_deref())
-        .unwrap_or_default();
+    let memory = match ctx.ai_store.load_memory(host_id_str.as_deref()) {
+        Ok(memory) => memory,
+        Err(err) => {
+            emit_run_error(
+                ctx,
+                req.run_id,
+                conversation_id,
+                format!("加载 AI 记忆失败: {err}"),
+            )
+            .await;
+            return;
+        }
+    };
 
     let (active_skill_prompt, effective_prompt, available_skills) =
         load_and_expand_skills(&ctx.ai_store, &req.prompt, &settings.disabled_skills);
 
     if let Some((label, content)) = req.attachment_text.take() {
         let parent_id = history_branch.last().map(|e| e.id.clone());
-        let att = SessionEntry::new(parent_id, SessionEntryKind::Attachment { label, content });
-        let _ = ctx.store_append_if_ok(&conversation_id, &att);
-        history_branch.push(att);
+        let attachment =
+            SessionEntry::new(parent_id, SessionEntryKind::Attachment { label, content });
+        if let Err(err) = recorder
+            .append_entry("追加 AI 附件上下文", attachment.clone())
+            .await
+        {
+            emit_run_error(
+                ctx,
+                req.run_id,
+                conversation_id,
+                format!("保存 AI 附件上下文失败: {err}"),
+            )
+            .await;
+            return;
+        }
+        history_branch.push(attachment);
     }
 
     let cancel = CancellationToken::new();
@@ -234,7 +270,7 @@ pub(super) async fn start_ai_run(
             .as_ref()
             .map(|a| a.name.clone())
             .unwrap_or(target.model),
-        store: ctx.ai_store.clone(),
+        recorder: recorder.clone(),
         event_tx: ctx.event_tx.clone(),
         approvals: state.ai_approvals.clone(),
         handoffs: state.ai_handoffs.clone(),
@@ -248,6 +284,7 @@ pub(super) async fn start_ai_run(
         context_window: target.context_window,
         history_entries: history_branch,
         current_turn_entry_id,
+        cancel,
     };
 
     state

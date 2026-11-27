@@ -14,6 +14,7 @@ mod mcp_bridge;
 mod mcp_dispatch;
 mod remote_fs_probe;
 mod run;
+mod run_recorder;
 mod runtime_bridge;
 mod subagent;
 pub(in crate::controller) mod task_runner;

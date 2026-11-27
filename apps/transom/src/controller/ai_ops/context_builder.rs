@@ -205,26 +205,44 @@ pub(super) fn build_tool_context(
     }
 }
 
+/// 加载现有对话分支或创建新对话。
+///
+/// # Errors
+/// 会话文件、索引读取失败，或新对话头与索引写入失败时返回
+/// [`transom_ai::AiError::StorageFailed`]；调用方必须中止运行，不得静默切换到新对话。
 pub(super) async fn prepare_conversation(
     ctx: &ControllerCtx,
     req: &AiPromptRequest,
     scope: &SessionScope,
     model_name: &str,
-) -> (String, String, Vec<SessionEntry>) {
-    if let Some(conv_id) = &req.conversation_id
-        && let Ok(tree) = ctx.ai_store.load_session_tree(conv_id)
-    {
+) -> Result<(String, String, Vec<SessionEntry>), transom_ai::AiError> {
+    if let Some(conversation_id) = &req.conversation_id {
+        let tree = ctx
+            .ai_store
+            .load_session_tree(conversation_id)
+            .map_err(|err| transom_ai::AiError::StorageFailed {
+                target: format!("加载 AI 对话 {conversation_id}"),
+                reason: err.to_string(),
+            })?;
         let title = ctx
             .ai_store
             .load_index()
-            .ok()
-            .and_then(|list| list.into_iter().find(|i| &i.id == conv_id).map(|i| i.title))
-            .unwrap_or_else(|| short_title(&req.prompt));
+            .map_err(|err| transom_ai::AiError::StorageFailed {
+                target: "加载 AI 对话索引".to_owned(),
+                reason: err.to_string(),
+            })?
+            .into_iter()
+            .find(|item| &item.id == conversation_id)
+            .map(|item| item.title)
+            .ok_or_else(|| transom_ai::AiError::StorageFailed {
+                target: conversation_id.clone(),
+                reason: "对话文件存在但索引条目缺失".to_owned(),
+            })?;
         let branch = tree.active_branch().into_iter().cloned().collect();
-        return (conv_id.clone(), title, branch);
+        return Ok((conversation_id.clone(), title, branch));
     }
 
-    let conv_id = format!("chat-{}", Uuid::new_v4());
+    let conversation_id = format!("chat-{}", Uuid::new_v4());
     let title = short_title(&req.prompt);
     let header = SessionEntry::new(
         None,
@@ -234,9 +252,10 @@ pub(super) async fn prepare_conversation(
             model_id: model_name.to_owned(),
         },
     );
-    let _ = ctx.ai_store.append_session_entry(&conv_id, &header);
-    let _ = ctx.ai_store.upsert_conversation(ConversationSummary {
-        id: conv_id.clone(),
+    ctx.ai_store
+        .append_session_entry(&conversation_id, &header)?;
+    let summary = ConversationSummary {
+        id: conversation_id.clone(),
         title: title.clone(),
         scope: scope.clone(),
         model_id: req.model_id.clone(),
@@ -244,26 +263,21 @@ pub(super) async fn prepare_conversation(
         updated_at: chrono::Utc::now().to_rfc3339(),
         active_leaf_id: Some(header.id.clone()),
         archived: false,
-    });
-    (conv_id, title, vec![header])
-}
-
-pub(super) trait StoreExt {
-    fn store_append_if_ok(
-        &self,
-        conv_id: &str,
-        entry: &SessionEntry,
-    ) -> Result<(), transom_ai::AiError>;
-}
-
-impl StoreExt for ControllerCtx {
-    fn store_append_if_ok(
-        &self,
-        conv_id: &str,
-        entry: &SessionEntry,
-    ) -> Result<(), transom_ai::AiError> {
-        self.ai_store.append_session_entry(conv_id, entry)
+    };
+    if let Err(err) = ctx.ai_store.upsert_conversation(summary) {
+        let cleanup = ctx.ai_store.delete_conversation(&conversation_id);
+        let reason = match cleanup {
+            Ok(()) => err.to_string(),
+            Err(cleanup_err) => {
+                format!("{err}; 清理未索引对话文件失败: {cleanup_err}")
+            }
+        };
+        return Err(transom_ai::AiError::StorageFailed {
+            target: conversation_id,
+            reason,
+        });
     }
+    Ok((conversation_id, title, vec![header]))
 }
 
 fn short_title(prompt: &str) -> String {
@@ -285,7 +299,7 @@ pub(super) async fn emit_run_error(
     conversation_id: String,
     error: String,
 ) {
-    let _ = ctx
+    if let Err(err) = ctx
         .event_tx
         .send_async(AppEvent::Ai(Box::new(AiAppEvent::RunFinished {
             run_id,
@@ -293,5 +307,8 @@ pub(super) async fn emit_run_error(
             error: Some(error),
             cancelled: false,
         })))
-        .await;
+        .await
+    {
+        log::warn!("发送 AI 运行错误事件失败: {err}");
+    }
 }

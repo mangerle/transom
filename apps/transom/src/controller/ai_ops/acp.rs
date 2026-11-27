@@ -14,7 +14,9 @@ use transom_ai::{
 use transom_core::{AiAppEvent, AiPromptRequest, AppEvent};
 
 use super::context_builder::ToolContextBuildParams;
+use super::context_builder::emit_run_error;
 use super::run::{PumpContext, execute_and_pump};
+use super::run_recorder::RunRecorder;
 use super::{build_tool_context, prepare_conversation};
 use crate::controller::state::{ControllerCtx, ControllerState};
 
@@ -94,12 +96,25 @@ pub(super) async fn start_acp_only_run(
         None => SessionScope::Global,
     };
     let (conversation_id, title, history_branch) =
-        prepare_conversation(ctx, &req, &scope, &agent.name).await;
+        match prepare_conversation(ctx, &req, &scope, &agent.name).await {
+            Ok(conversation) => conversation,
+            Err(err) => {
+                emit_run_error(
+                    ctx,
+                    req.run_id,
+                    req.conversation_id.unwrap_or_default(),
+                    format!("准备 ACP 对话失败: {err}"),
+                )
+                .await;
+                return;
+            }
+        };
     let approval_scope = transom_ai::ApprovalScope::new(
         conversation_id.clone(),
         req.session_id.map(|session_id| session_id.to_string()),
         req.protection,
     );
+    let recorder = RunRecorder::new(ctx.ai_store.clone(), conversation_id.clone());
 
     let cancel = CancellationToken::new();
     state
@@ -183,7 +198,7 @@ pub(super) async fn start_acp_only_run(
         } else {
             effective_model
         },
-        store: ctx.ai_store.clone(),
+        recorder,
         event_tx: ctx.event_tx.clone(),
         approvals: state.ai_approvals.clone(),
         handoffs: state.ai_handoffs.clone(),
@@ -197,6 +212,7 @@ pub(super) async fn start_acp_only_run(
         context_window: 128_000,
         history_entries: history_branch,
         current_turn_entry_id: Arc::new(parking_lot::RwLock::new(None)),
+        cancel,
     };
     state
         .ai_set

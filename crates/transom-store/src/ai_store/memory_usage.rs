@@ -81,37 +81,61 @@ impl AiStore {
     }
 
     /// 读取今日与本月累计 Token 用量（跨日/跨月自动归零）。
-    pub fn load_usage_totals(&self) -> (u64, u64) {
+    ///
+    /// # Errors
+    /// 用量文件读取或反序列化失败时返回 [`AiError::StorageFailed`]。
+    pub fn load_usage_totals(&self) -> Result<(u64, u64), AiError> {
         let _guard = self.usage_lock.lock();
         let (day, month) = current_day_and_month_keys();
-        let mut totals = self.read_usage_totals();
+        let mut totals = self.read_usage_totals()?;
         totals.rollover(&day, &month);
-        (totals.today_tokens, totals.month_tokens)
+        Ok((totals.today_tokens, totals.month_tokens))
     }
 
     /// 累加本次推理消耗的 Token 并持久化到 `usage_totals.json`。
-    pub fn record_token_usage(&self, added_tokens: u64) -> (u64, u64) {
+    ///
+    /// # Errors
+    /// 读取旧统计、序列化或原子写入失败时返回 [`AiError::StorageFailed`]。
+    pub fn record_token_usage(&self, added_tokens: u64) -> Result<(u64, u64), AiError> {
         let _guard = self.usage_lock.lock();
         let (day, month) = current_day_and_month_keys();
-        let mut totals = self.read_usage_totals();
+        let mut totals = self.read_usage_totals()?;
         totals.rollover(&day, &month);
         if added_tokens > 0 {
             totals.today_tokens = totals.today_tokens.saturating_add(added_tokens);
             totals.month_tokens = totals.month_tokens.saturating_add(added_tokens);
             let path = self.root.join("usage_totals.json");
-            if let Ok(payload) = serde_json::to_string_pretty(&totals) {
-                let _ = write_atomic(&path, payload.as_bytes());
-            }
+            let payload =
+                serde_json::to_vec_pretty(&totals).map_err(|err| AiError::StorageFailed {
+                    target: path.display().to_string(),
+                    reason: err.to_string(),
+                })?;
+            write_atomic(&path, &payload).map_err(|err| AiError::StorageFailed {
+                target: path.display().to_string(),
+                reason: err.to_string(),
+            })?;
         }
-        (totals.today_tokens, totals.month_tokens)
+        Ok((totals.today_tokens, totals.month_tokens))
     }
 
-    fn read_usage_totals(&self) -> AiUsageTotals {
+    fn read_usage_totals(&self) -> Result<AiUsageTotals, AiError> {
         let path = self.root.join("usage_totals.json");
-        let Ok(text) = fs::read_to_string(&path) else {
-            return AiUsageTotals::default();
+        let text = match fs::read_to_string(&path) {
+            Ok(text) => text,
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
+                return Ok(AiUsageTotals::default());
+            }
+            Err(err) => {
+                return Err(AiError::StorageFailed {
+                    target: path.display().to_string(),
+                    reason: err.to_string(),
+                });
+            }
         };
-        serde_json::from_str(&text).unwrap_or_default()
+        serde_json::from_str(&text).map_err(|err| AiError::StorageFailed {
+            target: path.display().to_string(),
+            reason: err.to_string(),
+        })
     }
 }
 
@@ -221,10 +245,19 @@ mod tests {
     fn usage_totals_accumulate_and_rollover_on_new_day_or_month() {
         let dir = tempfile::tempdir().expect("创建临时目录失败");
         let store = AiStore::with_root(dir.path().to_path_buf());
-        assert_eq!(store.load_usage_totals(), (0, 0));
-        assert_eq!(store.record_token_usage(1_500), (1_500, 1_500));
-        assert_eq!(store.record_token_usage(500), (2_000, 2_000));
-        assert_eq!(store.load_usage_totals(), (2_000, 2_000));
+        assert_eq!(store.load_usage_totals().expect("读取用量失败"), (0, 0));
+        assert_eq!(
+            store.record_token_usage(1_500).expect("记录用量失败"),
+            (1_500, 1_500)
+        );
+        assert_eq!(
+            store.record_token_usage(500).expect("记录用量失败"),
+            (2_000, 2_000)
+        );
+        assert_eq!(
+            store.load_usage_totals().expect("读取用量失败"),
+            (2_000, 2_000)
+        );
 
         let mut totals = AiUsageTotals {
             day_key: "1999-01-01".to_owned(),

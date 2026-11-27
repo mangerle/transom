@@ -10331,6 +10331,9 @@ ai:
   no_model:
     en: No model configured
     zh-CN: 未配置模型
+  load_local_data_failed:
+    en: 'Failed to load local AI data: %{error}'
+    zh-CN: '加载 AI 本地数据失败: %{error}'
   connected:
     en: Connected
     zh-CN: 已连接
