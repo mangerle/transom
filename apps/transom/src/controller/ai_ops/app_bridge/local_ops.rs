@@ -39,11 +39,11 @@ pub(super) async fn exec_local_shell(
         .kill_on_drop(true);
 
     let title = command.chars().take(60).collect::<String>();
-    let task = bridge.deps.tasks.start_task(
+    let task = bridge.deps.runtime.tasks.start_task(
         "local_exec",
         &title,
         "本机 (Local)",
-        &bridge.deps.cancel,
+        &bridge.deps.runtime.cancel,
         None,
     );
 

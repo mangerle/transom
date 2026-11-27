@@ -44,7 +44,7 @@ pub(super) async fn resolve_or_connect_target(
     let wanted = target.map(str::trim).filter(|s| !s.is_empty());
 
     if wanted.is_none() || wanted == Some("active") {
-        if let Some(tid) = bridge.deps.active_tab_id
+        if let Some(tid) = bridge.deps.target.active_tab_id
             && let Some(found) = snap.sessions.into_iter().find(|s| s.meta.tab_id == tid)
         {
             return Ok(found);
@@ -60,7 +60,7 @@ pub(super) async fn resolve_or_connect_target(
         return Ok(live);
     }
 
-    let store = bridge.deps.session_store.clone();
+    let store = bridge.deps.stores.session_store.clone();
     let wanted_owned = wanted_str.to_owned();
     let (session, ssh) = tokio::task::spawn_blocking(move || -> Result<(Session, SshConnection), ToolError> {
         let catalog = store.load().map_err(|e| ToolError::ExecutionFailed {
@@ -121,6 +121,7 @@ pub(super) async fn resolve_or_connect_target(
     };
     if let Some(cached) = bridge
         .deps
+        .target
         .headless_remotes
         .lock()
         .get(&session.id)
@@ -133,7 +134,7 @@ pub(super) async fn resolve_or_connect_target(
         });
     }
 
-    let secret_store = bridge.deps.secret_store.clone();
+    let secret_store = bridge.deps.stores.secret_store.clone();
     let owner = session.secret_owner();
     let auth = ssh.auth.clone();
     let credentials = tokio::task::spawn_blocking(move || {
@@ -178,13 +179,13 @@ pub(super) async fn resolve_or_connect_target(
         jumps: &[],
         credentials,
         prompter,
-        known_hosts: bridge.deps.known_hosts.clone(),
+        known_hosts: bridge.deps.stores.known_hosts.clone(),
         proxy: OutboundProxy::default(),
         allow_sha1_publickey_auth: true,
     };
     let wait_secs = timeout_secs.clamp(10, 60);
     let remote = tokio::select! {
-        _ = bridge.deps.cancel.cancelled() => return Err(ToolError::Cancelled),
+        _ = bridge.deps.runtime.cancel.cancelled() => return Err(ToolError::Cancelled),
         res = tokio::time::timeout(Duration::from_secs(wait_secs), connect_ssh_remote(params)) => {
             res.map_err(|_| ToolError::ExecutionFailed {
                 tool: "target_resolver",
@@ -199,6 +200,7 @@ pub(super) async fn resolve_or_connect_target(
 
     bridge
         .deps
+        .target
         .headless_remotes
         .lock()
         .insert(session.id, remote.clone());
@@ -227,6 +229,7 @@ async fn fetch_snapshot(
     let (tx, rx) = oneshot::channel();
     bridge
         .deps
+        .runtime
         .internal_tx
         .send_async(Internal::McpSnapshot(tx))
         .await

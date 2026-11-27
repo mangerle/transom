@@ -149,8 +149,8 @@ pub(super) fn build_tool_context(
         command_timeout,
         cancel.clone(),
     );
-    bridge_deps.conversation_id = Some(conversation_id.to_owned());
-    bridge_deps.current_turn_entry_id = current_turn_entry_id;
+    bridge_deps.target.conversation_id = Some(conversation_id.to_owned());
+    bridge_deps.target.current_turn_entry_id = current_turn_entry_id;
     let subagent_runner: Option<Arc<dyn transom_ai::SubagentRunner>> = subagent_cfg.map(|cfg| {
         Arc::new(subagent::ControllerSubagentRunner {
             parent_run_id: cfg.parent_run_id.to_owned(),

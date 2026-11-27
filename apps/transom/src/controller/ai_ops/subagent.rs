@@ -137,7 +137,7 @@ impl SubagentRunner for ControllerSubagentRunner {
         let child_cancel = task_handle.cancel.clone();
 
         let mut deps = self.app_bridge_deps.clone();
-        deps.cancel = child_cancel.clone();
+        deps.set_cancel(child_cancel.clone());
         let app_bridge: Arc<dyn transom_ai::AppActionBridge> =
             Arc::new(ControllerAppActionBridge::new(deps));
 
@@ -150,16 +150,17 @@ impl SubagentRunner for ControllerSubagentRunner {
         );
         tool_ctx.command_timeout = self
             .app_bridge_deps
+            .runtime
             .command_timeout
             .max(Duration::from_secs(30));
         tool_ctx.caps = transom_ai::ToolCapabilities {
             knowledge_searcher: Some(Arc::new(StoreKnowledgeBridge {
-                store: self.app_bridge_deps.ai_store.clone(),
+                store: self.app_bridge_deps.stores.ai_store.clone(),
             })),
             app_bridge: Some(app_bridge),
             skill_loader: Some(Arc::new(StoreSkillLoader {
-                store: self.app_bridge_deps.ai_store.clone(),
-                ai_config: self.app_bridge_deps.ai_config.clone(),
+                store: self.app_bridge_deps.stores.ai_store.clone(),
+                ai_config: self.app_bridge_deps.stores.ai_config.clone(),
             })),
             ..Default::default()
         };
@@ -242,7 +243,7 @@ impl SubagentRunner for ControllerSubagentRunner {
         let mut sink = SubagentPumpSink {
             task_title: req.title.clone(),
             parent_run_id: self.parent_run_id.clone(),
-            conversation_id: self.app_bridge_deps.conversation_id.clone(),
+            conversation_id: self.app_bridge_deps.target.conversation_id.clone(),
             is_readonly,
             task_handle,
             approvals: self.approvals.clone(),
@@ -252,6 +253,7 @@ impl SubagentRunner for ControllerSubagentRunner {
         let subagent_histories = self.subagent_histories.clone();
         let conv_id = self
             .app_bridge_deps
+            .target
             .conversation_id
             .clone()
             .unwrap_or_default();

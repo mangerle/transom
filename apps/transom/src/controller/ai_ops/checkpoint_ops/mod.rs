@@ -31,13 +31,13 @@ pub(super) fn store_ai_root(store: &AiStore) -> PathBuf {
 }
 
 fn checkpoint_context(deps: &AppBridgeDeps) -> Option<(String, String)> {
-    let conversation_id = deps.conversation_id.clone()?;
-    let entry_id = deps.current_turn_entry_id.read().clone()?;
+    let conversation_id = deps.target.conversation_id.clone()?;
+    let entry_id = deps.target.current_turn_entry_id.read().clone()?;
     Some((conversation_id, entry_id))
 }
 
 fn checkpoint_blob_dir(deps: &AppBridgeDeps) -> PathBuf {
-    store_ai_root(&deps.ai_store)
+    store_ai_root(&deps.stores.ai_store)
         .join("checkpoints")
         .join("blobs")
 }

@@ -104,7 +104,7 @@ async fn create_api_request(
     let url = req_arg(args, "url")?.to_owned();
     let method = parse_method(args["method"].as_str().unwrap_or("GET"));
     let body = args["body"].as_str().unwrap_or("").to_owned();
-    let store = bridge.deps.api_projects.clone();
+    let store = bridge.deps.projects.api_projects.clone();
     let created_id = tokio::task::spawn_blocking(move || {
         let mut reg = store.load()?;
         let proj = reg
@@ -143,7 +143,7 @@ async fn delete_api_request(
     args: &Value,
 ) -> Result<String, ToolError> {
     let rid = req_arg(args, "request_id")?.to_owned();
-    let store = bridge.deps.api_projects.clone();
+    let store = bridge.deps.projects.api_projects.clone();
     tokio::task::spawn_blocking(move || {
         let mut reg = store.load()?;
         let mut removed = false;
@@ -220,16 +220,16 @@ async fn send_api_request(
         reason: e.to_string(),
     })?;
 
-    let resp =
-        bridge
-            .deps
-            .api_http
-            .execute(&plan)
-            .await
-            .map_err(|e| ToolError::ExecutionFailed {
-                tool: "api_client",
-                reason: e.to_string(),
-            })?;
+    let resp = bridge
+        .deps
+        .projects
+        .api_http
+        .execute(&plan)
+        .await
+        .map_err(|e| ToolError::ExecutionFailed {
+            tool: "api_client",
+            reason: e.to_string(),
+        })?;
     to_json_str(&json!({
         "status": resp.status,
         "status_text": resp.status_text,
@@ -242,7 +242,7 @@ async fn send_api_request(
 async fn load_api_registry(
     bridge: &ControllerAppActionBridge,
 ) -> Result<transom_api::ApiRegistry, ToolError> {
-    let store = bridge.deps.api_projects.clone();
+    let store = bridge.deps.projects.api_projects.clone();
     tokio::task::spawn_blocking(move || store.load())
         .await
         .map_err(|e| ToolError::ExecutionFailed {

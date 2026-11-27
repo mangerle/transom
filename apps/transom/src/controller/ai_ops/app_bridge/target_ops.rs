@@ -29,7 +29,7 @@ pub(super) async fn handle_remote_exec(
     if let Some(hit) = detect_blocking_command(command) {
         return Ok(format_blocking_command_hint(&hit));
     }
-    let default_timeout = bridge.deps.command_timeout.as_secs().max(30);
+    let default_timeout = bridge.deps.runtime.command_timeout.as_secs().max(30);
     let timeout_secs = args["timeout_secs"]
         .as_u64()
         .unwrap_or(default_timeout)
@@ -45,14 +45,14 @@ pub(super) async fn handle_remote_exec(
     guard_readonly(&session, risk != ToolRisk::SafeRead)?;
     let exec = SshRemoteExecutor {
         remote: session.remote.clone(),
-        tasks: Some(bridge.deps.tasks.clone()),
+        tasks: Some(bridge.deps.runtime.tasks.clone()),
         host_label: session.meta.host_name.clone(),
     };
     let out = exec
         .exec(
             command,
             Duration::from_secs(timeout_secs),
-            bridge.deps.cancel.clone(),
+            bridge.deps.runtime.cancel.clone(),
         )
         .await?;
     Ok(format_exit_output(out.exit_code, &out.stdout, &out.stderr))
@@ -166,7 +166,7 @@ pub(super) async fn handle_transfer_file(
                 local_raw,
                 remote_raw,
                 overwrite,
-                bridge.deps.cancel.clone(),
+                bridge.deps.runtime.cancel.clone(),
             )
             .await;
     }
@@ -208,11 +208,11 @@ pub(super) async fn handle_transfer_file(
     }
 
     // 目录上传：采用显式栈迭代遍历，严禁递归爆栈，跳过 .git 目录，并纳入托管任务实时推送进度。
-    let task = bridge.deps.tasks.start_task(
+    let task = bridge.deps.runtime.tasks.start_task(
         "transfer",
         &format!("上传目录 {local_raw}"),
         &session.meta.host_name,
-        &bridge.deps.cancel,
+        &bridge.deps.runtime.cancel,
         None,
     );
     ensure_remote_dir(&session.remote, remote_root).await?;

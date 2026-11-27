@@ -110,7 +110,8 @@ fn append_record(
     entry_id: &str,
     record: FileBackupRecord,
 ) -> Result<(), ToolError> {
-    deps.ai_store
+    deps.stores
+        .ai_store
         .append_checkpoint_record(conversation_id, entry_id, record)
         .map_err(|err| checkpoint_error(format!("写入检查点清单失败: {err}")))
 }

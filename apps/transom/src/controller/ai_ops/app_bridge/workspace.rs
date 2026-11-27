@@ -48,7 +48,7 @@ pub(super) async fn handle_monitor(
 }
 
 async fn monitor_snapshot(bridge: &ControllerAppActionBridge) -> Result<String, ToolError> {
-    if let Some(remote) = &bridge.deps.active_remote {
+    if let Some(remote) = &bridge.deps.target.active_remote {
         let out = remote
             .exec_command_capture(
                 "uname -a; uptime; free -m; df -hT -x tmpfs -x devtmpfs; ss -tulnp 2>/dev/null | head -n 30",
@@ -61,7 +61,7 @@ async fn monitor_snapshot(bridge: &ControllerAppActionBridge) -> Result<String, 
         return Ok(out.stdout);
     }
 
-    let sampler = bridge.deps.local_processes.clone();
+    let sampler = bridge.deps.runtime.local_processes.clone();
     tokio::task::spawn_blocking(move || {
         let mut guard = sampler.lock();
         let procs = guard.sample();
@@ -92,7 +92,7 @@ async fn monitor_snapshot(bridge: &ControllerAppActionBridge) -> Result<String, 
 }
 
 async fn list_processes(bridge: &ControllerAppActionBridge) -> Result<String, ToolError> {
-    if let Some(remote) = &bridge.deps.active_remote {
+    if let Some(remote) = &bridge.deps.target.active_remote {
         let out = remote
             .exec_command_capture("ps -eo pid,ppid,user,%cpu,%mem,comm --sort=-%cpu | head -n 60")
             .await
@@ -103,7 +103,7 @@ async fn list_processes(bridge: &ControllerAppActionBridge) -> Result<String, To
         return Ok(out.stdout);
     }
 
-    let sampler = bridge.deps.local_processes.clone();
+    let sampler = bridge.deps.runtime.local_processes.clone();
     tokio::task::spawn_blocking(move || {
         let mut guard = sampler.lock();
         let mut procs = guard.sample();
@@ -150,7 +150,7 @@ async fn kill_process(
         _ => "15",
     };
 
-    if let Some(remote) = &bridge.deps.active_remote {
+    if let Some(remote) = &bridge.deps.target.active_remote {
         let out = remote
             .exec_command_capture(&format!("kill -{signal} {pid}"))
             .await
@@ -168,7 +168,7 @@ async fn kill_process(
     }
 
     let force = signal == "9";
-    let sampler = bridge.deps.local_processes.clone();
+    let sampler = bridge.deps.runtime.local_processes.clone();
     tokio::task::spawn_blocking(move || sampler.lock().kill(pid as u32, force))
         .await
         .map_err(|e| ToolError::ExecutionFailed {

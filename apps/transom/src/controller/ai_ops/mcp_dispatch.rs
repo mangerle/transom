@@ -90,7 +90,7 @@ pub(super) async fn dispatch_single_tool(
             let cmd = args["command"].as_str().unwrap_or("");
             let exec = SshRemoteExecutor {
                 remote: target.remote.clone(),
-                tasks: Some(snap.app_bridge_deps.tasks.clone()),
+                tasks: Some(snap.app_bridge_deps.runtime.tasks.clone()),
                 host_label: target.meta.host_name.clone(),
             };
             let out = exec

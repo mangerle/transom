@@ -171,7 +171,7 @@ pub(super) async fn handle_git(
     args: &Value,
 ) -> Result<String, ToolError> {
     if action == "list_projects" {
-        let store = bridge.deps.git_projects.clone();
+        let store = bridge.deps.projects.git_projects.clone();
         let reg = tokio::task::spawn_blocking(move || store.load())
             .await
             .map_err(|e| ToolError::ExecutionFailed {
@@ -197,7 +197,7 @@ pub(super) async fn handle_git(
     }
 
     let path = resolve_git_path(bridge, args).await?;
-    let cfg = Arc::new(bridge.deps.git_config.read().clone());
+    let cfg = Arc::new(bridge.deps.projects.git_config.read().clone());
     let repo = Repo::with_config(path, cfg);
 
     match action {
@@ -311,7 +311,7 @@ async fn resolve_git_path(
         return Ok(PathBuf::from(p));
     }
     if let Some(pid) = args["project_id"].as_str().filter(|s| !s.is_empty()) {
-        let store = bridge.deps.git_projects.clone();
+        let store = bridge.deps.projects.git_projects.clone();
         let pid_owned = pid.to_owned();
         let reg = tokio::task::spawn_blocking(move || store.load())
             .await

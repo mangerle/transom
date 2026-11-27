@@ -277,7 +277,7 @@ pub(super) async fn handle_memory_skills(
     action: &str,
     args: &Value,
 ) -> Result<String, ToolError> {
-    let store = bridge.deps.ai_store.clone();
+    let store = bridge.deps.stores.ai_store.clone();
     let scope = args["scope"].as_str().unwrap_or("global").to_owned();
     let host_id = args["host_id"].as_str().map(str::to_owned);
     let content = args["content"].as_str().unwrap_or("").to_owned();
@@ -285,7 +285,7 @@ pub(super) async fn handle_memory_skills(
     let title = args["title"].as_str().unwrap_or("").to_owned();
     let description = args["description"].as_str().unwrap_or("").to_owned();
     let act = action.to_owned();
-    let disabled_skills = bridge.deps.ai_config.snapshot().disabled_skills;
+    let disabled_skills = bridge.deps.stores.ai_config.snapshot().disabled_skills;
 
     tokio::task::spawn_blocking(move || match act.as_str() {
         "read_memory" => {

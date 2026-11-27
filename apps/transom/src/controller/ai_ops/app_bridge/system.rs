@@ -20,7 +20,7 @@ pub(super) async fn handle_sftp_transfer(
                 .await
         }
         "sync_preview" | "sync_apply" => {
-            let Some(sftp) = &bridge.deps.active_sftp else {
+            let Some(sftp) = &bridge.deps.target.active_sftp else {
                 return Err(ToolError::NoActiveSession);
             };
             let local_dir = args["local_dir"]
@@ -120,7 +120,7 @@ pub(super) async fn handle_settings(
 }
 
 async fn list_snippets(bridge: &ControllerAppActionBridge) -> Result<String, ToolError> {
-    let store = bridge.deps.settings_store.clone();
+    let store = bridge.deps.stores.settings_store.clone();
     let settings = tokio::task::spawn_blocking(move || store.load())
         .await
         .map_err(|e| ToolError::ExecutionFailed {
@@ -198,7 +198,7 @@ async fn mutate_settings_and_reload(
     + Send
     + 'static,
 ) -> Result<(), ToolError> {
-    let store = bridge.deps.settings_store.clone();
+    let store = bridge.deps.stores.settings_store.clone();
     let settings = tokio::task::spawn_blocking(move || {
         let mut settings = store.load()?;
         mutator(&mut settings)?;
@@ -256,7 +256,7 @@ async fn delete_snippet(
 }
 
 async fn get_settings(bridge: &ControllerAppActionBridge) -> Result<String, ToolError> {
-    let store = bridge.deps.settings_store.clone();
+    let store = bridge.deps.stores.settings_store.clone();
     let s = tokio::task::spawn_blocking(move || store.load())
         .await
         .map_err(|e| ToolError::ExecutionFailed {
@@ -305,7 +305,7 @@ async fn handle_sync(
     bridge: &ControllerAppActionBridge,
     action: &str,
 ) -> Result<String, ToolError> {
-    let settings_store = bridge.deps.settings_store.clone();
+    let settings_store = bridge.deps.stores.settings_store.clone();
     let settings = tokio::task::spawn_blocking(move || settings_store.load())
         .await
         .map_err(|e| ToolError::ExecutionFailed {
@@ -359,8 +359,8 @@ async fn export_backup(
         })?
         .to_owned();
     let path = PathBuf::from(output_path);
-    let session_store = bridge.deps.session_store.clone();
-    let backup = bridge.deps.backup.clone();
+    let session_store = bridge.deps.stores.session_store.clone();
+    let backup = bridge.deps.stores.backup.clone();
     let report = tokio::task::spawn_blocking(move || {
         let catalog = session_store.load()?;
         let opts = BackupExportOptions {

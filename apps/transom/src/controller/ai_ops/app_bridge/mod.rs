@@ -41,31 +41,55 @@ use uuid::Uuid;
 
 use super::super::state::{ControllerCtx, ControllerState};
 
-/// 桥接层所需全部共享依赖（通过 `Arc` 与轻量服务句柄按需复用）。
+/// 桥接层依赖组合根，按能力域隔离存储、项目服务、运行时与当前目标。
 #[derive(Clone)]
 pub(in crate::controller) struct AppBridgeDeps {
+    pub(in crate::controller) stores: AppBridgeStores,
+    pub(in crate::controller) projects: AppBridgeProjects,
+    pub(in crate::controller) runtime: AppBridgeRuntime,
+    pub(in crate::controller) target: AppBridgeTarget,
+}
+
+/// 持久化与凭证服务集合。
+#[derive(Clone)]
+pub(in crate::controller) struct AppBridgeStores {
     pub(in crate::controller) known_hosts: Arc<dyn KnownHostsStore>,
     pub(in crate::controller) secret_store: Arc<dyn SecretStore>,
     pub(in crate::controller) session_store: Arc<dyn SessionStore>,
     pub(in crate::controller) settings_store: Arc<dyn SettingsStore>,
     pub(in crate::controller) backup: Arc<dyn BackupService>,
+    pub(in crate::controller) ai_store: Arc<AiStore>,
+    pub(in crate::controller) ai_config: Arc<AiConfigService>,
+}
+
+/// Git/API 项目目录服务集合。
+#[derive(Clone)]
+pub(in crate::controller) struct AppBridgeProjects {
     pub(in crate::controller) git_projects: Arc<dyn GitProjectStore>,
     pub(in crate::controller) api_projects: Arc<dyn ApiProjectStore>,
     pub(in crate::controller) api_http: ApiHttpService,
-    pub(in crate::controller) ai_store: Arc<AiStore>,
-    pub(in crate::controller) ai_config: Arc<AiConfigService>,
     pub(in crate::controller) git_config: Arc<parking_lot::RwLock<GitConfig>>,
+}
+
+/// 执行期事件、取消、任务与本地采样依赖。
+#[derive(Clone)]
+pub(in crate::controller) struct AppBridgeRuntime {
     pub(in crate::controller) local_processes: Arc<Mutex<ProcessSampler>>,
     pub(in crate::controller) event_tx: flume::Sender<AppEvent>,
     pub(in crate::controller) internal_tx: flume::Sender<crate::controller::Internal>,
     pub(in crate::controller) app_action_reqs: AppActionReqMap,
-    pub(in crate::controller) active_tab_id: Option<TabId>,
-    pub(in crate::controller) active_remote: Option<SshRemote>,
-    pub(in crate::controller) active_sftp: Option<transom_net::SftpClient>,
     pub(in crate::controller) command_timeout: Duration,
     pub(in crate::controller) cancel: CancellationToken,
     pub(in crate::controller) tasks:
         Arc<crate::controller::ai_ops::task_runner::ManagedTaskRegistry>,
+}
+
+/// 当前工具调用绑定的标签、连接与对话上下文。
+#[derive(Clone)]
+pub(in crate::controller) struct AppBridgeTarget {
+    pub(in crate::controller) active_tab_id: Option<TabId>,
+    pub(in crate::controller) active_remote: Option<SshRemote>,
+    pub(in crate::controller) active_sftp: Option<transom_net::SftpClient>,
     pub(in crate::controller) conversation_id: Option<String>,
     pub(in crate::controller) current_turn_entry_id: Arc<parking_lot::RwLock<Option<String>>>,
     pub(in crate::controller) headless_remotes: crate::controller::state::AiHeadlessRemoteMap,
@@ -81,36 +105,49 @@ impl AppBridgeDeps {
     ) -> Self {
         let active_sftp = active_tab_id
             .and_then(|tid| state.sessions.get(&tid))
-            .and_then(|m| m.sftp_client.clone());
+            .and_then(|managed| managed.sftp_client.clone());
         let active_remote = active_tab_id
             .and_then(|tid| state.sessions.get(&tid))
-            .and_then(|m| m.remote.clone());
+            .and_then(|managed| managed.remote.clone());
         Self {
-            known_hosts: ctx.known_hosts.clone(),
-            secret_store: ctx.secret_store.clone(),
-            session_store: ctx.session_store.clone(),
-            settings_store: ctx.settings_store.clone(),
-            backup: ctx.backup.clone(),
-            git_projects: ctx.git_projects.clone(),
-            api_projects: ctx.api_projects.clone(),
-            api_http: ctx.api_http.clone(),
-            ai_store: ctx.ai_store.clone(),
-            ai_config: ctx.ai_config.clone(),
-            git_config: ctx.git_config.clone(),
-            local_processes: ctx.local_processes.clone(),
-            event_tx: ctx.event_tx.clone(),
-            internal_tx: ctx.internal_tx.clone(),
-            app_action_reqs: state.ai_app_action_reqs.clone(),
-            active_tab_id,
-            active_remote,
-            active_sftp,
-            command_timeout,
-            cancel,
-            tasks: state.ai_tasks.clone(),
-            conversation_id: None,
-            current_turn_entry_id: Arc::new(parking_lot::RwLock::new(None)),
-            headless_remotes: state.ai_headless_remotes.clone(),
+            stores: AppBridgeStores {
+                known_hosts: ctx.known_hosts.clone(),
+                secret_store: ctx.secret_store.clone(),
+                session_store: ctx.session_store.clone(),
+                settings_store: ctx.settings_store.clone(),
+                backup: ctx.backup.clone(),
+                ai_store: ctx.ai_store.clone(),
+                ai_config: ctx.ai_config.clone(),
+            },
+            projects: AppBridgeProjects {
+                git_projects: ctx.git_projects.clone(),
+                api_projects: ctx.api_projects.clone(),
+                api_http: ctx.api_http.clone(),
+                git_config: ctx.git_config.clone(),
+            },
+            runtime: AppBridgeRuntime {
+                local_processes: ctx.local_processes.clone(),
+                event_tx: ctx.event_tx.clone(),
+                internal_tx: ctx.internal_tx.clone(),
+                app_action_reqs: state.ai_app_action_reqs.clone(),
+                command_timeout,
+                cancel,
+                tasks: state.ai_tasks.clone(),
+            },
+            target: AppBridgeTarget {
+                active_tab_id,
+                active_remote,
+                active_sftp,
+                conversation_id: None,
+                current_turn_entry_id: Arc::new(parking_lot::RwLock::new(None)),
+                headless_remotes: state.ai_headless_remotes.clone(),
+            },
         }
+    }
+
+    /// 替换运行时取消令牌，供派生运行或子 Agent 隔离生命周期。
+    pub(in crate::controller) fn set_cancel(&mut self, cancel: CancellationToken) {
+        self.runtime.cancel = cancel;
     }
 }
 
@@ -134,6 +171,7 @@ impl ControllerAppActionBridge {
         let request_id = Uuid::new_v4().to_string();
         let (tx, rx) = oneshot::channel();
         self.deps
+            .runtime
             .app_action_reqs
             .lock()
             .insert(request_id.clone(), tx);
@@ -144,8 +182,8 @@ impl ControllerAppActionBridge {
             action: action.to_owned(),
             args_json: args.to_string(),
         }));
-        if self.deps.event_tx.send_async(evt).await.is_err() {
-            self.deps.app_action_reqs.lock().remove(&request_id);
+        if self.deps.runtime.event_tx.send_async(evt).await.is_err() {
+            self.deps.runtime.app_action_reqs.lock().remove(&request_id);
             return Err(ToolError::ExecutionFailed {
                 tool: domain,
                 reason: "界面事件通道已关闭".to_owned(),
@@ -159,14 +197,14 @@ impl ControllerAppActionBridge {
                 reason,
             }),
             Ok(Err(_)) => {
-                self.deps.app_action_reqs.lock().remove(&request_id);
+                self.deps.runtime.app_action_reqs.lock().remove(&request_id);
                 Err(ToolError::ExecutionFailed {
                     tool: domain,
                     reason: "界面未能返回操作结果".to_owned(),
                 })
             }
             Err(_) => {
-                self.deps.app_action_reqs.lock().remove(&request_id);
+                self.deps.runtime.app_action_reqs.lock().remove(&request_id);
                 Err(ToolError::ExecutionTimeout { timeout_secs: 10 })
             }
         }

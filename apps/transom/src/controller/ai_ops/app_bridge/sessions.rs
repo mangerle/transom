@@ -34,7 +34,7 @@ pub(super) async fn handle(
 }
 
 async fn list_catalog(bridge: &ControllerAppActionBridge) -> Result<String, ToolError> {
-    let store = bridge.deps.session_store.clone();
+    let store = bridge.deps.stores.session_store.clone();
     let catalog = tokio::task::spawn_blocking(move || store.load())
         .await
         .map_err(|e| ToolError::ExecutionFailed {
@@ -155,7 +155,7 @@ async fn mutate_catalog_and_reload(
     + Send
     + 'static,
 ) -> Result<(), ToolError> {
-    let store = bridge.deps.session_store.clone();
+    let store = bridge.deps.stores.session_store.clone();
     let catalog = tokio::task::spawn_blocking(move || {
         let mut catalog = store.load()?;
         mutator(&mut catalog)?;
@@ -358,7 +358,7 @@ async fn delete_folder(
 }
 
 async fn list_known_hosts(bridge: &ControllerAppActionBridge) -> Result<String, ToolError> {
-    let kh = bridge.deps.known_hosts.clone();
+    let kh = bridge.deps.stores.known_hosts.clone();
     let records = tokio::task::spawn_blocking(move || kh.list())
         .await
         .map_err(|e| ToolError::ExecutionFailed {
@@ -377,7 +377,7 @@ async fn remove_known_host(
 ) -> Result<String, ToolError> {
     let host = req_str(args, "host")?.to_owned();
     let port = args["port"].as_u64().unwrap_or(22) as u16;
-    let kh = bridge.deps.known_hosts.clone();
+    let kh = bridge.deps.stores.known_hosts.clone();
     tokio::task::spawn_blocking(move || kh.remove(&host, port))
         .await
         .map_err(|e| ToolError::ExecutionFailed {
@@ -395,7 +395,7 @@ async fn deploy_public_key(
     bridge: &ControllerAppActionBridge,
     args: &Value,
 ) -> Result<String, ToolError> {
-    let Some(remote) = &bridge.deps.active_remote else {
+    let Some(remote) = &bridge.deps.target.active_remote else {
         return Err(ToolError::NoActiveSession);
     };
     let pub_path = args["public_key_path"]
