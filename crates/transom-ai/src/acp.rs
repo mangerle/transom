@@ -304,7 +304,14 @@ mod tests {
         assert!(!is_acp_command_available(
             "definitely-nonexistent-acp-bin-xyz"
         ));
-        assert!(is_acp_command_available("sh"));
-        assert!(is_acp_command_available("/bin/sh"));
+        #[cfg(unix)]
+        {
+            assert!(is_acp_command_available("sh"));
+            assert!(is_acp_command_available("/bin/sh"));
+        }
+        #[cfg(windows)]
+        {
+            assert!(is_acp_command_available("cmd"));
+        }
     }
 }
