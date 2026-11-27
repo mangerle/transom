@@ -75,18 +75,20 @@ impl Tool for ReadToolOutputTool {
                 args.pattern.as_deref(),
             )
             .map_err(to_rig_err)?;
-        self.ctx.record_card(ToolExecutionCard {
-            tool_name: Self::NAME.to_owned(),
-            host_label: String::new(),
-            risk: ToolRisk::SafeRead,
-            summary: format!("读取输出句柄 {}", args.output_id),
-            output: out.clone(),
-            ok: true,
-            approved: true,
-            duration_ms: started.elapsed().as_millis() as u64,
-            diff_preview: None,
-            ..Default::default()
-        });
+        self.ctx
+            .record_card(ToolExecutionCard {
+                tool_name: Self::NAME.to_owned(),
+                host_label: String::new(),
+                risk: ToolRisk::SafeRead,
+                summary: format!("读取输出句柄 {}", args.output_id),
+                output: out.clone(),
+                ok: true,
+                approved: true,
+                duration_ms: started.elapsed().as_millis() as u64,
+                diff_preview: None,
+                ..Default::default()
+            })
+            .await;
         Ok(out)
     }
 }
@@ -176,7 +178,8 @@ impl Tool for RemoteExecBulkTool {
         let bulk_host_label = format!("批量 {} 台主机", targets.len());
         let call_id = self
             .ctx
-            .emit_tool_started(Self::NAME, &bulk_host_label, risk, &args.command);
+            .emit_tool_started(Self::NAME, &bulk_host_label, risk, &args.command)
+            .await;
 
         let results: Vec<(String, String, bool)> = futures::stream::iter(targets)
             .map(|target| {
@@ -226,20 +229,22 @@ impl Tool for RemoteExecBulkTool {
             .join("\n\n");
 
         let clipped = self.ctx.format_tool_output(Self::NAME, &combined);
-        self.ctx.record_card(ToolExecutionCard {
-            call_id,
-            running: false,
-            tool_name: Self::NAME.to_owned(),
-            host_label: bulk_host_label,
-            risk,
-            summary: args.command,
-            output: combined,
-            ok: all_ok,
-            approved: true,
-            duration_ms: started.elapsed().as_millis() as u64,
-            diff_preview: None,
-            ..Default::default()
-        });
+        self.ctx
+            .record_card(ToolExecutionCard {
+                call_id,
+                running: false,
+                tool_name: Self::NAME.to_owned(),
+                host_label: bulk_host_label,
+                risk,
+                summary: args.command,
+                output: combined,
+                ok: all_ok,
+                approved: true,
+                duration_ms: started.elapsed().as_millis() as u64,
+                diff_preview: None,
+                ..Default::default()
+            })
+            .await;
         Ok(clipped)
     }
 }
@@ -331,18 +336,20 @@ impl Tool for PortForwardTool {
                 }));
             }
         };
-        self.ctx.record_card(ToolExecutionCard {
-            tool_name: Self::NAME.to_owned(),
-            host_label: String::new(),
-            risk,
-            summary: format!("端口转发 {}", args.action),
-            output: out.clone(),
-            ok: true,
-            approved: true,
-            duration_ms: started.elapsed().as_millis() as u64,
-            diff_preview: None,
-            ..Default::default()
-        });
+        self.ctx
+            .record_card(ToolExecutionCard {
+                tool_name: Self::NAME.to_owned(),
+                host_label: String::new(),
+                risk,
+                summary: format!("端口转发 {}", args.action),
+                output: out.clone(),
+                ok: true,
+                approved: true,
+                duration_ms: started.elapsed().as_millis() as u64,
+                diff_preview: None,
+                ..Default::default()
+            })
+            .await;
         Ok(out)
     }
 }

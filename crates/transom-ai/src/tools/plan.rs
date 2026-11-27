@@ -114,7 +114,6 @@ impl Tool for UpdatePlanTool {
         _context: &mut ToolContext,
         args: Self::Args,
     ) -> Result<Self::Output, Self::Error> {
-        let started = Instant::now();
         let mut lines = Vec::with_capacity(args.steps.len() + 1);
         if let Some(title) = args.title.as_deref().filter(|t| !t.trim().is_empty()) {
             lines.push(format!("计划: {}", title.trim()));
@@ -135,28 +134,13 @@ impl Tool for UpdatePlanTool {
             });
         }
         let rendered = lines.join("\n");
-        if let Some(tx) = &self.ctx.plan_tx {
-            let _ = tx.try_send(PlanSnapshot {
+        self.ctx
+            .emit_plan(PlanSnapshot {
                 title: args.title,
                 steps: parsed_steps,
                 focus: args.focus,
-            });
-        } else {
-            self.ctx.record_card(ToolExecutionCard {
-                tool_name: Self::NAME.to_owned(),
-                host_label: String::new(),
-                risk: ToolRisk::SafeRead,
-                summary: args
-                    .title
-                    .unwrap_or_else(|| format!("更新执行计划（{} 步）", args.steps.len())),
-                output: rendered.clone(),
-                ok: true,
-                approved: true,
-                duration_ms: started.elapsed().as_millis() as u64,
-                diff_preview: None,
-                ..Default::default()
-            });
-        }
+            })
+            .await;
         Ok(format!("执行计划已更新：\n{rendered}"))
     }
 }
@@ -216,18 +200,20 @@ impl Tool for RequestUserInputTool {
         } else {
             format!("{}\n可选项: {}", args.question, args.options.join(" / "))
         };
-        self.ctx.record_card(ToolExecutionCard {
-            tool_name: Self::NAME.to_owned(),
-            host_label: String::new(),
-            risk: ToolRisk::SafeRead,
-            summary: args.question.clone(),
-            output: detail.clone(),
-            ok: true,
-            approved: true,
-            duration_ms: started.elapsed().as_millis() as u64,
-            diff_preview: None,
-            ..Default::default()
-        });
+        self.ctx
+            .record_card(ToolExecutionCard {
+                tool_name: Self::NAME.to_owned(),
+                host_label: String::new(),
+                risk: ToolRisk::SafeRead,
+                summary: args.question.clone(),
+                output: detail.clone(),
+                ok: true,
+                approved: true,
+                duration_ms: started.elapsed().as_millis() as u64,
+                diff_preview: None,
+                ..Default::default()
+            })
+            .await;
         Ok(format!(
             "请在当前回复中直接向用户输出以下问题并停止继续猜测执行：\n{detail}"
         ))
@@ -295,18 +281,20 @@ impl Tool for SearchKnowledgeTool {
             .await
             .map_err(to_rig_err)?;
         let clipped = self.ctx.format_tool_output(Self::NAME, &out);
-        self.ctx.record_card(ToolExecutionCard {
-            tool_name: Self::NAME.to_owned(),
-            host_label: String::new(),
-            risk: ToolRisk::SafeRead,
-            summary: format!("检索知识库: {}", args.query),
-            output: clipped.clone(),
-            ok: true,
-            approved: true,
-            duration_ms: started.elapsed().as_millis() as u64,
-            diff_preview: None,
-            ..Default::default()
-        });
+        self.ctx
+            .record_card(ToolExecutionCard {
+                tool_name: Self::NAME.to_owned(),
+                host_label: String::new(),
+                risk: ToolRisk::SafeRead,
+                summary: format!("检索知识库: {}", args.query),
+                output: clipped.clone(),
+                ok: true,
+                approved: true,
+                duration_ms: started.elapsed().as_millis() as u64,
+                diff_preview: None,
+                ..Default::default()
+            })
+            .await;
         Ok(clipped)
     }
 }

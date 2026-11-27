@@ -38,7 +38,8 @@ use crate::policy::ExecutionMode;
 use crate::runner_gate::Gate;
 use crate::session::{ChatRole, SessionEntry};
 use crate::thinking::build_request_params;
-use crate::tools::{ApprovalSummary, ToolRuntimeContext, attach_tools};
+use crate::tools::plan::PlanSnapshot;
+use crate::tools::{ApprovalSummary, ToolExecutionCard, ToolRuntimeContext, attach_tools};
 use crate::working_state::{
     SessionWorkingState, aggressive_compact_history, is_context_overflow_error,
 };
@@ -47,11 +48,16 @@ use crate::working_state::{
 pub const EVENT_CHANNEL_CAPACITY: usize = 256;
 
 /// 发往控制平面 / UI 的流式运行时事件。
+///
+/// 所有会改变会话状态的事件共用一个有序有界通道；调用方必须等待发送完成，
+/// 从而保证工具卡片、计划与轮次终态不会因多通道竞争而乱序。
 pub enum AgentEvent {
     TextDelta(String),
     ReasoningDelta(String),
     FocusUpdated(String),
     TurnEnd(TurnOutput),
+    ToolCard(ToolExecutionCard),
+    Plan(PlanSnapshot),
     Approval(ApprovalRequest),
     TerminalHandoff(HandoffRequest),
 }

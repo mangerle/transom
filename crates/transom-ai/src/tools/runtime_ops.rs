@@ -55,18 +55,20 @@ impl Tool for InspectHostRuntimeTool {
             .await
             .map_err(to_rig_err)?;
         let clipped = self.ctx.format_tool_output(Self::NAME, &snapshot);
-        self.ctx.record_card(ToolExecutionCard {
-            tool_name: Self::NAME.to_owned(),
-            host_label: String::new(),
-            risk: ToolRisk::SafeRead,
-            summary: "采集主机运行时快照".to_owned(),
-            output: clipped.clone(),
-            ok: true,
-            approved: true,
-            duration_ms: started.elapsed().as_millis() as u64,
-            diff_preview: None,
-            ..Default::default()
-        });
+        self.ctx
+            .record_card(ToolExecutionCard {
+                tool_name: Self::NAME.to_owned(),
+                host_label: String::new(),
+                risk: ToolRisk::SafeRead,
+                summary: "采集主机运行时快照".to_owned(),
+                output: clipped.clone(),
+                ok: true,
+                approved: true,
+                duration_ms: started.elapsed().as_millis() as u64,
+                diff_preview: None,
+                ..Default::default()
+            })
+            .await;
         Ok(clipped)
     }
 }
@@ -135,18 +137,20 @@ impl Tool for ContainerOpsTool {
             .await
             .map_err(to_rig_err)?;
         let clipped = self.ctx.format_tool_output(Self::NAME, &out);
-        self.ctx.record_card(ToolExecutionCard {
-            tool_name: Self::NAME.to_owned(),
-            host_label: String::new(),
-            risk,
-            summary: format!("容器 {}", args.action),
-            output: clipped.clone(),
-            ok: true,
-            approved: true,
-            duration_ms: started.elapsed().as_millis() as u64,
-            diff_preview: None,
-            ..Default::default()
-        });
+        self.ctx
+            .record_card(ToolExecutionCard {
+                tool_name: Self::NAME.to_owned(),
+                host_label: String::new(),
+                risk,
+                summary: format!("容器 {}", args.action),
+                output: clipped.clone(),
+                ok: true,
+                approved: true,
+                duration_ms: started.elapsed().as_millis() as u64,
+                diff_preview: None,
+                ..Default::default()
+            })
+            .await;
         Ok(clipped)
     }
 }

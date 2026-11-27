@@ -6,9 +6,9 @@ use std::time::Duration;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 use transom_ai::{
-    BulkHostTarget, ConversationSummary, LockedSession, MAX_BULK_TARGETS, PlanSnapshot,
-    SessionEntry, SessionEntryKind, SessionPromptContext, SessionScope, ThinkingEffort,
-    ToolOutputStore, ToolRuntimeContext,
+    AgentEvent, BulkHostTarget, ConversationSummary, LockedSession, MAX_BULK_TARGETS, SessionEntry,
+    SessionEntryKind, SessionPromptContext, SessionScope, ThinkingEffort, ToolOutputStore,
+    ToolRuntimeContext,
 };
 use transom_core::{AiAppEvent, AiPromptRequest, AppEvent};
 use uuid::Uuid;
@@ -37,8 +37,7 @@ pub(super) struct ToolContextBuildParams<'a> {
     pub(super) conversation_id: &'a str,
     pub(super) timeout_secs: u64,
     pub(super) cancel: CancellationToken,
-    pub(super) card_tx: mpsc::Sender<transom_ai::ToolExecutionCard>,
-    pub(super) plan_tx: Option<mpsc::Sender<PlanSnapshot>>,
+    pub(super) events: mpsc::Sender<AgentEvent>,
     pub(super) subagent_cfg: Option<SubagentConfig<'a>>,
     pub(super) current_turn_entry_id: Arc<parking_lot::RwLock<Option<String>>>,
 }
@@ -54,8 +53,7 @@ pub(super) fn build_tool_context(
         conversation_id,
         timeout_secs,
         cancel,
-        card_tx,
-        plan_tx,
+        events,
         subagent_cfg,
         current_turn_entry_id,
     } = params;
@@ -180,8 +178,7 @@ pub(super) fn build_tool_context(
         output_store,
         command_timeout,
         cancel,
-        card_tx,
-        plan_tx,
+        events,
         snapshot_dir: Some(
             super::checkpoint_ops::store_ai_root(&ctx.ai_store)
                 .join("checkpoints")

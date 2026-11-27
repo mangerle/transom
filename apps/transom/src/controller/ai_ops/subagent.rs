@@ -12,7 +12,7 @@ use transom_ai::{
     AgentEvent, ChatRole, DelegateMode, DelegateTaskRequest, EVENT_CHANNEL_CAPACITY,
     ExecPolicyRule, ExecutionMode, HookExecutor, HookRule, MemorySnapshot, ModelTarget, RunInput,
     SessionEntry, SessionEntryKind, SessionScope, SubagentModelTier, SubagentRunner, ToolError,
-    ToolExecutionCard, ToolRuntimeContext,
+    ToolRuntimeContext,
 };
 use transom_core::{AiAppEvent, AiApprovalDecision, AiApprovalDto, AiManagedTaskStatus, AppEvent};
 use uuid::Uuid;
@@ -54,19 +54,19 @@ struct SubagentPumpSink {
 
 #[async_trait]
 impl AgentPumpSink for SubagentPumpSink {
-    async fn on_card(&mut self, card: ToolExecutionCard) {
-        let status = if card.ok { "OK" } else { "ERR" };
-        self.task_handle.emit_chunk(&format!(
-            "[{}] {} ({status})\n",
-            card.tool_name, card.summary
-        ));
-    }
-
     async fn on_event(&mut self, event: AgentEvent) {
         match event {
-            AgentEvent::TextDelta(d) => {
-                self.task_handle.emit_chunk(&d);
+            AgentEvent::TextDelta(delta) => {
+                self.task_handle.emit_chunk(&delta);
             }
+            AgentEvent::ToolCard(card) => {
+                let status = if card.ok { "OK" } else { "ERR" };
+                self.task_handle.emit_chunk(&format!(
+                    "[{}] {} ({status})\n",
+                    card.tool_name, card.summary
+                ));
+            }
+            AgentEvent::Plan(_) | AgentEvent::FocusUpdated(_) | AgentEvent::TerminalHandoff(_) => {}
             AgentEvent::TurnEnd(turn) => {
                 if !turn.text.trim().is_empty() {
                     self.final_text = turn.text;
@@ -137,10 +137,12 @@ impl SubagentRunner for ControllerSubagentRunner {
             Arc::new(ControllerAppActionBridge::new(deps));
 
         let (event_tx, event_rx) = mpsc::channel(EVENT_CHANNEL_CAPACITY);
-        let (card_tx, card_rx) = mpsc::channel(32);
 
-        let mut tool_ctx =
-            ToolRuntimeContext::minimal(SessionScope::Global, card_tx, child_cancel.clone());
+        let mut tool_ctx = ToolRuntimeContext::minimal(
+            SessionScope::Global,
+            event_tx.clone(),
+            child_cancel.clone(),
+        );
         tool_ctx.command_timeout = self
             .app_bridge_deps
             .command_timeout
@@ -254,8 +256,6 @@ impl SubagentRunner for ControllerSubagentRunner {
             let runner_err = drive_agent_pump(
                 Some(runner),
                 event_rx,
-                card_rx,
-                None,
                 None,
                 "子 Agent 任务异常中断",
                 &mut sink,

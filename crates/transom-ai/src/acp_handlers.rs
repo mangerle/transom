@@ -127,27 +127,37 @@ pub(crate) async fn handle_acp_update(
                     .or(done.input_summary)
                     .unwrap_or_else(|| "外部 Agent 工具".to_owned());
                 let out_text = done.output.unwrap_or_else(|| format!("状态: {status}"));
-                let _ = input.card_tx.try_send(ToolExecutionCard {
-                    tool_name: tool_label,
-                    host_label: input.agent.name.clone(),
-                    risk: ToolRisk::Write,
-                    summary,
-                    output: out_text,
-                    ok: status == "completed",
-                    approved: true,
-                    duration_ms: done.started_at.elapsed().as_millis() as u64,
-                    diff_preview: None,
-                    ..Default::default()
-                });
+                if let Err(err) = input
+                    .events
+                    .send(AgentEvent::ToolCard(ToolExecutionCard {
+                        tool_name: tool_label,
+                        host_label: input.agent.name.clone(),
+                        risk: ToolRisk::Write,
+                        summary,
+                        output: out_text,
+                        ok: status == "completed",
+                        approved: true,
+                        duration_ms: done.started_at.elapsed().as_millis() as u64,
+                        diff_preview: None,
+                        ..Default::default()
+                    }))
+                    .await
+                {
+                    log::warn!("发送 ACP 工具卡片失败: {err}");
+                }
             }
         }
         AcpStreamChunk::Plan(steps) => {
-            if let Some(tx) = &input.plan_tx {
-                let _ = tx.try_send(PlanSnapshot {
+            if let Err(err) = input
+                .events
+                .send(AgentEvent::Plan(PlanSnapshot {
                     title: None,
                     steps,
                     focus: None,
-                });
+                }))
+                .await
+            {
+                log::warn!("发送 ACP 计划更新失败: {err}");
             }
         }
     }

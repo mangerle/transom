@@ -10,9 +10,8 @@ use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 use transom_ai::{
     AcpAgentConfig, AcpRunInput, AgentEvent, AiAuditEntry, ChatRole, HookContext, HookEvent,
-    HookExecutor, MemorySnapshot, PlanSnapshot, PlanStepStatus, RunInput, SessionEntry,
-    SessionEntryKind, ToolExecutionCard, ToolRisk, TurnUsageRecord, compute_context_breakdown,
-    run_acp_turn,
+    HookExecutor, MemorySnapshot, PlanStepStatus, RunInput, SessionEntry, SessionEntryKind,
+    ToolExecutionCard, ToolRisk, TurnUsageRecord, compute_context_breakdown, run_acp_turn,
 };
 use transom_core::{
     AiAppEvent, AiApprovalDecision, AiApprovalDto, AiPlanDto, AiPlanStepDto, AiPlanStepStatus,
@@ -48,8 +47,6 @@ pub(super) struct PumpContext {
 /// 驱动 `transom_ai::run` 并同步泵送事件回 UI，同时负责 JSONL 与审计落盘。
 pub(super) async fn execute_and_pump(
     input: RunInput,
-    card_rx: mpsc::Receiver<ToolExecutionCard>,
-    plan_rx: mpsc::Receiver<PlanSnapshot>,
     event_rx: mpsc::Receiver<AgentEvent>,
     mut ctx: PumpContext,
 ) {
@@ -114,8 +111,6 @@ pub(super) async fn execute_and_pump(
             cwd: None,
             mcp_stdio_exe: exe,
             events: input.events.clone(),
-            card_tx: input.tool_ctx.card_tx.clone(),
-            plan_tx: input.tool_ctx.plan_tx.clone(),
             execution_mode: input.execution_mode.clone(),
             protection: input.tool_ctx.protection(),
             plan_mode: input.plan_mode,
@@ -138,8 +133,6 @@ pub(super) async fn execute_and_pump(
     let runner_err = drive_agent_pump(
         Some(runner_handle),
         event_rx,
-        card_rx,
-        Some(plan_rx),
         Some(Duration::from_millis(25)),
         "AI 运行任务异常中断",
         &mut sink,
@@ -191,43 +184,41 @@ impl AgentPumpSink for MainAgentPumpSink {
         flush_deltas(&self.ctx, &mut self.text_buf, &mut self.reasoning_buf).await;
     }
 
-    async fn on_card(&mut self, card: ToolExecutionCard) {
-        handle_tool_card(&mut self.ctx, &mut self.last_leaf_id, card).await;
-    }
-
-    async fn on_plan(&mut self, plan: PlanSnapshot) {
-        let dto = AiPlanDto {
-            title: plan.title,
-            focus: plan.focus,
-            steps: plan
-                .steps
-                .into_iter()
-                .map(|s| AiPlanStepDto {
-                    text: s.text,
-                    status: match s.status {
-                        PlanStepStatus::Pending => AiPlanStepStatus::Pending,
-                        PlanStepStatus::InProgress => AiPlanStepStatus::InProgress,
-                        PlanStepStatus::Done => AiPlanStepStatus::Done,
-                        PlanStepStatus::Failed => AiPlanStepStatus::Failed,
-                    },
-                })
-                .collect(),
-        };
-        let _ = self
-            .ctx
-            .event_tx
-            .send_async(AppEvent::Ai(Box::new(AiAppEvent::PlanUpdated {
-                run_id: self.ctx.run_id.clone(),
-                conversation_id: self.ctx.conversation_id.clone(),
-                plan: dto,
-            })))
-            .await;
-    }
-
     async fn on_event(&mut self, event: AgentEvent) {
         match event {
-            AgentEvent::TextDelta(d) => self.text_buf.push_str(&d),
-            AgentEvent::ReasoningDelta(d) => self.reasoning_buf.push_str(&d),
+            AgentEvent::TextDelta(delta) => self.text_buf.push_str(&delta),
+            AgentEvent::ReasoningDelta(delta) => self.reasoning_buf.push_str(&delta),
+            AgentEvent::ToolCard(card) => {
+                handle_tool_card(&mut self.ctx, &mut self.last_leaf_id, card).await;
+            }
+            AgentEvent::Plan(plan) => {
+                let dto = AiPlanDto {
+                    title: plan.title,
+                    focus: plan.focus,
+                    steps: plan
+                        .steps
+                        .into_iter()
+                        .map(|s| AiPlanStepDto {
+                            text: s.text,
+                            status: match s.status {
+                                PlanStepStatus::Pending => AiPlanStepStatus::Pending,
+                                PlanStepStatus::InProgress => AiPlanStepStatus::InProgress,
+                                PlanStepStatus::Done => AiPlanStepStatus::Done,
+                                PlanStepStatus::Failed => AiPlanStepStatus::Failed,
+                            },
+                        })
+                        .collect(),
+                };
+                let _ = self
+                    .ctx
+                    .event_tx
+                    .send_async(AppEvent::Ai(Box::new(AiAppEvent::PlanUpdated {
+                        run_id: self.ctx.run_id.clone(),
+                        conversation_id: self.ctx.conversation_id.clone(),
+                        plan: dto,
+                    })))
+                    .await;
+            }
             AgentEvent::FocusUpdated(focus) => {
                 let _ = self
                     .ctx

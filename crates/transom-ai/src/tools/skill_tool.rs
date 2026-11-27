@@ -85,33 +85,37 @@ impl Tool for LoadSkillTool {
         {
             Ok(out) => {
                 let clipped = self.ctx.format_tool_output(Self::NAME, &out);
-                self.ctx.record_card(ToolExecutionCard {
-                    tool_name: Self::NAME.to_owned(),
-                    host_label: String::new(),
-                    risk: ToolRisk::SafeRead,
-                    summary,
-                    output: clipped.clone(),
-                    ok: true,
-                    approved: true,
-                    duration_ms: started.elapsed().as_millis() as u64,
-                    diff_preview: None,
-                    ..Default::default()
-                });
+                self.ctx
+                    .record_card(ToolExecutionCard {
+                        tool_name: Self::NAME.to_owned(),
+                        host_label: String::new(),
+                        risk: ToolRisk::SafeRead,
+                        summary,
+                        output: clipped.clone(),
+                        ok: true,
+                        approved: true,
+                        duration_ms: started.elapsed().as_millis() as u64,
+                        diff_preview: None,
+                        ..Default::default()
+                    })
+                    .await;
                 Ok(clipped)
             }
             Err(err) => {
-                self.ctx.record_card(ToolExecutionCard {
-                    tool_name: Self::NAME.to_owned(),
-                    host_label: String::new(),
-                    risk: ToolRisk::SafeRead,
-                    summary,
-                    output: err.to_string(),
-                    ok: false,
-                    approved: true,
-                    duration_ms: started.elapsed().as_millis() as u64,
-                    diff_preview: None,
-                    ..Default::default()
-                });
+                self.ctx
+                    .record_card(ToolExecutionCard {
+                        tool_name: Self::NAME.to_owned(),
+                        host_label: String::new(),
+                        risk: ToolRisk::SafeRead,
+                        summary,
+                        output: err.to_string(),
+                        ok: false,
+                        approved: true,
+                        duration_ms: started.elapsed().as_millis() as u64,
+                        diff_preview: None,
+                        ..Default::default()
+                    })
+                    .await;
                 Err(to_rig_err(err))
             }
         }

@@ -133,7 +133,8 @@ impl Tool for CompareHostsTool {
         let started = Instant::now();
         let call_id = self
             .ctx
-            .emit_tool_started(Self::NAME, &host_label, risk, &summary);
+            .emit_tool_started(Self::NAME, &host_label, risk, &summary)
+            .await;
         let timeout = self.ctx.command_timeout;
         let cancel = self.ctx.cancel.clone();
 
@@ -179,20 +180,22 @@ impl Tool for CompareHostsTool {
         let errors: Vec<String> = err_a.into_iter().chain(err_b).collect();
         if !errors.is_empty() {
             let err_text = errors.join("\n");
-            self.ctx.record_card(ToolExecutionCard {
-                call_id,
-                running: false,
-                tool_name: Self::NAME.to_owned(),
-                host_label,
-                risk,
-                summary,
-                output: err_text.clone(),
-                ok: false,
-                approved: true,
-                duration_ms: elapsed_ms,
-                diff_preview: None,
-                ..Default::default()
-            });
+            self.ctx
+                .record_card(ToolExecutionCard {
+                    call_id,
+                    running: false,
+                    tool_name: Self::NAME.to_owned(),
+                    host_label,
+                    risk,
+                    summary,
+                    output: err_text.clone(),
+                    ok: false,
+                    approved: true,
+                    duration_ms: elapsed_ms,
+                    diff_preview: None,
+                    ..Default::default()
+                })
+                .await;
             return Ok(err_text);
         }
 
@@ -233,20 +236,22 @@ impl Tool for CompareHostsTool {
             None => output_text.clone(),
         };
 
-        self.ctx.record_card(ToolExecutionCard {
-            call_id,
-            running: false,
-            tool_name: Self::NAME.to_owned(),
-            host_label,
-            risk,
-            summary,
-            output: output_text,
-            ok: true,
-            approved: true,
-            duration_ms: elapsed_ms,
-            diff_preview,
-            ..Default::default()
-        });
+        self.ctx
+            .record_card(ToolExecutionCard {
+                call_id,
+                running: false,
+                tool_name: Self::NAME.to_owned(),
+                host_label,
+                risk,
+                summary,
+                output: output_text,
+                ok: true,
+                approved: true,
+                duration_ms: elapsed_ms,
+                diff_preview,
+                ..Default::default()
+            })
+            .await;
 
         Ok(model_reply)
     }
@@ -326,8 +331,15 @@ mod tests {
         assert!(out.contains("-worker_processes 4;"));
         assert!(out.contains("+worker_processes 8;"));
 
-        let _started = rx.recv().await.expect("应发出运行中卡片");
+        let started = rx.recv().await.expect("应发出运行中卡片");
+        let crate::runner::AgentEvent::ToolCard(started) = started else {
+            panic!("期望运行中工具卡片");
+        };
+        assert!(started.running);
         let done = rx.recv().await.expect("应发出完成态卡片");
+        let crate::runner::AgentEvent::ToolCard(done) = done else {
+            panic!("期望完成态工具卡片");
+        };
         assert_eq!(done.tool_name, "compare_hosts");
         assert_eq!(done.host_label, "prod-01 ↔ prod-02");
         assert!(done.diff_preview.is_some());

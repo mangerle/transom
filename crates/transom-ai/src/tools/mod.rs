@@ -30,7 +30,7 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use tokio::sync::mpsc;
+use tokio::sync::mpsc::{self, error::TrySendError};
 use tokio_util::sync::CancellationToken;
 
 use crate::compaction::{DEFAULT_TOOL_OUTPUT_LIMIT, SessionPromptContext};
@@ -38,7 +38,9 @@ use crate::error::ToolError;
 use crate::memory::MemoryProposal;
 use crate::output_store::ToolOutputStore;
 use crate::policy::{HostProtection, ToolRisk};
+use crate::runner::AgentEvent;
 use crate::session::SessionScope;
+use crate::tools::plan::PlanSnapshot;
 
 pub use app_bridge::{AppActionBridge, AppBridgeDomain};
 pub use assess::{assess_tool_call, assess_tool_call_value};
@@ -273,8 +275,7 @@ pub struct ToolRuntimeContext {
     pub output_store: Arc<ToolOutputStore>,
     pub command_timeout: Duration,
     pub cancel: CancellationToken,
-    pub card_tx: mpsc::Sender<ToolExecutionCard>,
-    pub plan_tx: Option<mpsc::Sender<plan::PlanSnapshot>>,
+    pub events: mpsc::Sender<AgentEvent>,
     /// 远端写操作前保存快照的本地目录。
     pub snapshot_dir: Option<std::path::PathBuf>,
     pub caps: ToolCapabilities,
@@ -284,7 +285,7 @@ impl ToolRuntimeContext {
     /// 构造最小可用的工具运行上下文（其余可选能力均默认置空）。
     pub fn minimal(
         scope: SessionScope,
-        card_tx: mpsc::Sender<ToolExecutionCard>,
+        events: mpsc::Sender<AgentEvent>,
         cancel: CancellationToken,
     ) -> Self {
         Self {
@@ -294,8 +295,7 @@ impl ToolRuntimeContext {
             output_store: Arc::new(ToolOutputStore::new()),
             command_timeout: Duration::from_secs(60),
             cancel,
-            card_tx,
-            plan_tx: None,
+            events,
             snapshot_dir: None,
             caps: ToolCapabilities::default(),
         }
@@ -332,15 +332,21 @@ impl ToolRuntimeContext {
             .unwrap_or(HostProtection::Normal)
     }
 
-    pub fn record_card(&self, mut card: ToolExecutionCard) {
+    /// 等待有界事件流接收工具卡片。
+    ///
+    /// 最终卡片不得使用 `try_send`：通道饱和时必须施加背压，否则 UI、会话 JSONL
+    /// 与审计日志会静默缺失同一次工具执行记录。
+    pub async fn record_card(&self, mut card: ToolExecutionCard) {
         if card.host_label.is_empty() {
             card.host_label = self.host_label();
         }
-        let _ = self.card_tx.try_send(card);
+        if let Err(err) = self.events.send(AgentEvent::ToolCard(card)).await {
+            log::warn!("发送 AI 工具执行卡片失败: {err}");
+        }
     }
 
     /// 推送工具开始执行的运行态预览卡片，返回用于后续原地刷新的 `call_id`。
-    pub fn emit_tool_started(
+    pub async fn emit_tool_started(
         &self,
         tool_name: &str,
         host_label: &str,
@@ -361,7 +367,8 @@ impl ToolRuntimeContext {
             duration_ms: 0,
             diff_preview: None,
             ..Default::default()
-        });
+        })
+        .await;
         call_id
     }
 }
@@ -383,7 +390,7 @@ impl ToolRuntimeContext {
     /// 推送工具执行过程中的实时末尾输出预览与已耗时（原地更新同 `call_id` 卡片）。
     pub fn emit_tool_progress(&self, params: ToolProgressParams<'_>) {
         let preview = clip_tail_lines(params.tail_output, 5, 160);
-        self.record_card(ToolExecutionCard {
+        let card = ToolExecutionCard {
             call_id: params.call_id.to_owned(),
             running: true,
             tool_name: params.tool_name.to_owned(),
@@ -396,7 +403,23 @@ impl ToolRuntimeContext {
             duration_ms: params.elapsed_ms,
             diff_preview: None,
             ..Default::default()
-        });
+        };
+        // 进度预览是可合并的尽力事件；通道饱和时允许丢弃，但最终卡片始终通过异步背压发送。
+        match self.events.try_send(AgentEvent::ToolCard(card)) {
+            Ok(()) | Err(TrySendError::Full(_)) => {}
+            Err(TrySendError::Closed(_)) => {
+                log::warn!("AI 工具进度事件通道已关闭");
+            }
+        }
+    }
+
+    /// 推送最新计划快照；与工具卡片、轮次终态共用有序事件流。
+    ///
+    /// 使用异步发送等待背压，避免最终计划在通道拥堵时被静默丢弃。
+    pub async fn emit_plan(&self, plan: PlanSnapshot) {
+        if let Err(err) = self.events.send(AgentEvent::Plan(plan)).await {
+            log::warn!("发送 AI 计划更新失败: {err}");
+        }
     }
 
     /// 清洗 ANSI 并通过会话级输出句柄池生成预览（超限则保留 `output_id`）。
@@ -407,8 +430,8 @@ impl ToolRuntimeContext {
 
     /// 构造仅用于导出工具 Schema 的空上下文（不关联任何连接或任务）。
     pub(crate) fn dummy_for_schema() -> Self {
-        let (card_tx, _card_rx) = mpsc::channel(1);
-        Self::minimal(SessionScope::Global, card_tx, CancellationToken::new())
+        let (events, _event_rx) = mpsc::channel(1);
+        Self::minimal(SessionScope::Global, events, CancellationToken::new())
     }
 }
 

@@ -120,34 +120,38 @@ impl Tool for RemoteFsTool {
             return match res {
                 Ok(text) => {
                     let clipped = self.ctx.format_tool_output(Self::NAME, &text);
-                    self.ctx.record_card(crate::tools::ToolExecutionCard {
-                        tool_name: Self::NAME.to_owned(),
-                        host_label,
-                        risk,
-                        summary: format!("{} {}", args.action, args.path),
-                        output: clipped.clone(),
-                        ok: true,
-                        approved: true,
-                        duration_ms: elapsed,
-                        diff_preview: None,
-                        ..Default::default()
-                    });
+                    self.ctx
+                        .record_card(crate::tools::ToolExecutionCard {
+                            tool_name: Self::NAME.to_owned(),
+                            host_label,
+                            risk,
+                            summary: format!("{} {}", args.action, args.path),
+                            output: clipped.clone(),
+                            ok: true,
+                            approved: true,
+                            duration_ms: elapsed,
+                            diff_preview: None,
+                            ..Default::default()
+                        })
+                        .await;
                     Ok(clipped)
                 }
                 Err(err) => {
                     let msg = err.to_string();
-                    self.ctx.record_card(crate::tools::ToolExecutionCard {
-                        tool_name: Self::NAME.to_owned(),
-                        host_label,
-                        risk,
-                        summary: format!("{} {}", args.action, args.path),
-                        output: msg,
-                        ok: false,
-                        approved: true,
-                        duration_ms: elapsed,
-                        diff_preview: None,
-                        ..Default::default()
-                    });
+                    self.ctx
+                        .record_card(crate::tools::ToolExecutionCard {
+                            tool_name: Self::NAME.to_owned(),
+                            host_label,
+                            risk,
+                            summary: format!("{} {}", args.action, args.path),
+                            output: msg,
+                            ok: false,
+                            approved: true,
+                            duration_ms: elapsed,
+                            diff_preview: None,
+                            ..Default::default()
+                        })
+                        .await;
                     Err(to_rig_err(err))
                 }
             };
@@ -232,36 +236,40 @@ impl Tool for RemoteFsTool {
         match result {
             Ok(text) => {
                 let clipped = self.ctx.format_tool_output(Self::NAME, &text);
-                self.ctx.record_card(crate::tools::ToolExecutionCard {
-                    tool_name: Self::NAME.to_owned(),
-                    host_label: String::new(),
-                    risk,
-                    summary: format!("{} {}", args.action, args.path),
-                    output: clipped.clone(),
-                    ok: true,
-                    approved: true,
-                    duration_ms: elapsed,
-                    diff_preview,
-                    revert_target_path,
-                    revert_backup_path,
-                    ..Default::default()
-                });
+                self.ctx
+                    .record_card(crate::tools::ToolExecutionCard {
+                        tool_name: Self::NAME.to_owned(),
+                        host_label: String::new(),
+                        risk,
+                        summary: format!("{} {}", args.action, args.path),
+                        output: clipped.clone(),
+                        ok: true,
+                        approved: true,
+                        duration_ms: elapsed,
+                        diff_preview,
+                        revert_target_path,
+                        revert_backup_path,
+                        ..Default::default()
+                    })
+                    .await;
                 Ok(clipped)
             }
             Err(err) => {
                 let msg = err.to_string();
-                self.ctx.record_card(crate::tools::ToolExecutionCard {
-                    tool_name: Self::NAME.to_owned(),
-                    host_label: String::new(),
-                    risk,
-                    summary: format!("{} {}", args.action, args.path),
-                    output: msg,
-                    ok: false,
-                    approved: true,
-                    duration_ms: elapsed,
-                    diff_preview,
-                    ..Default::default()
-                });
+                self.ctx
+                    .record_card(crate::tools::ToolExecutionCard {
+                        tool_name: Self::NAME.to_owned(),
+                        host_label: String::new(),
+                        risk,
+                        summary: format!("{} {}", args.action, args.path),
+                        output: msg,
+                        ok: false,
+                        approved: true,
+                        duration_ms: elapsed,
+                        diff_preview,
+                        ..Default::default()
+                    })
+                    .await;
                 Err(to_rig_err(err))
             }
         }
@@ -378,33 +386,37 @@ impl Tool for TransferFileTool {
         let elapsed = started.elapsed().as_millis() as u64;
         match res {
             Ok(out) => {
-                self.ctx.record_card(crate::tools::ToolExecutionCard {
-                    tool_name: Self::NAME.to_owned(),
-                    host_label,
-                    risk: ToolRisk::Write,
-                    summary,
-                    output: out.clone(),
-                    ok: true,
-                    approved: true,
-                    duration_ms: elapsed,
-                    diff_preview: None,
-                    ..Default::default()
-                });
+                self.ctx
+                    .record_card(crate::tools::ToolExecutionCard {
+                        tool_name: Self::NAME.to_owned(),
+                        host_label,
+                        risk: ToolRisk::Write,
+                        summary,
+                        output: out.clone(),
+                        ok: true,
+                        approved: true,
+                        duration_ms: elapsed,
+                        diff_preview: None,
+                        ..Default::default()
+                    })
+                    .await;
                 Ok(out)
             }
             Err(err) => {
-                self.ctx.record_card(crate::tools::ToolExecutionCard {
-                    tool_name: Self::NAME.to_owned(),
-                    host_label,
-                    risk: ToolRisk::Write,
-                    summary,
-                    output: err.to_string(),
-                    ok: false,
-                    approved: true,
-                    duration_ms: elapsed,
-                    diff_preview: None,
-                    ..Default::default()
-                });
+                self.ctx
+                    .record_card(crate::tools::ToolExecutionCard {
+                        tool_name: Self::NAME.to_owned(),
+                        host_label,
+                        risk: ToolRisk::Write,
+                        summary,
+                        output: err.to_string(),
+                        ok: false,
+                        approved: true,
+                        duration_ms: elapsed,
+                        diff_preview: None,
+                        ..Default::default()
+                    })
+                    .await;
                 Err(to_rig_err(err))
             }
         }

@@ -97,7 +97,8 @@ impl Tool for RemoteExecTool {
         };
         let call_id = self
             .ctx
-            .emit_tool_started(Self::NAME, &host_label, risk, &args.command);
+            .emit_tool_started(Self::NAME, &host_label, risk, &args.command)
+            .await;
 
         let outcome: Result<(String, bool, Option<i32>), ToolError> = if use_bridge {
             let bridge = self
@@ -165,20 +166,22 @@ impl Tool for RemoteExecTool {
         match outcome {
             Ok((raw, ok, exit_code)) => {
                 let clipped = self.ctx.format_tool_output(Self::NAME, &raw);
-                self.ctx.record_card(crate::tools::ToolExecutionCard {
-                    call_id,
-                    running: false,
-                    tool_name: Self::NAME.to_owned(),
-                    host_label,
-                    risk,
-                    summary: args.command,
-                    output: clipped.clone(),
-                    ok,
-                    approved: true,
-                    duration_ms: elapsed_ms,
-                    diff_preview: None,
-                    ..Default::default()
-                });
+                self.ctx
+                    .record_card(crate::tools::ToolExecutionCard {
+                        call_id,
+                        running: false,
+                        tool_name: Self::NAME.to_owned(),
+                        host_label,
+                        risk,
+                        summary: args.command,
+                        output: clipped.clone(),
+                        ok,
+                        approved: true,
+                        duration_ms: elapsed_ms,
+                        diff_preview: None,
+                        ..Default::default()
+                    })
+                    .await;
                 match exit_code {
                     Some(code) => Ok(format!("退出码: {code}\n{clipped}")),
                     None => Ok(clipped),
@@ -186,20 +189,22 @@ impl Tool for RemoteExecTool {
             }
             Err(err) => {
                 let msg = err.to_string();
-                self.ctx.record_card(crate::tools::ToolExecutionCard {
-                    call_id,
-                    running: false,
-                    tool_name: Self::NAME.to_owned(),
-                    host_label,
-                    risk,
-                    summary: args.command,
-                    output: msg,
-                    ok: false,
-                    approved: true,
-                    duration_ms: elapsed_ms,
-                    diff_preview: None,
-                    ..Default::default()
-                });
+                self.ctx
+                    .record_card(crate::tools::ToolExecutionCard {
+                        call_id,
+                        running: false,
+                        tool_name: Self::NAME.to_owned(),
+                        host_label,
+                        risk,
+                        summary: args.command,
+                        output: msg,
+                        ok: false,
+                        approved: true,
+                        duration_ms: elapsed_ms,
+                        diff_preview: None,
+                        ..Default::default()
+                    })
+                    .await;
                 Err(to_rig_err(err))
             }
         }
@@ -266,18 +271,20 @@ impl Tool for GetRecentBlocksTool {
             .await
             .map_err(to_rig_err)?;
         let clipped = self.ctx.format_tool_output(Self::NAME, &raw);
-        self.ctx.record_card(crate::tools::ToolExecutionCard {
-            tool_name: Self::NAME.to_owned(),
-            host_label: String::new(),
-            risk: ToolRisk::SafeRead,
-            summary: format!("读取最近 {} 个命令块", args.limit),
-            output: clipped.clone(),
-            ok: true,
-            approved: true,
-            duration_ms: started.elapsed().as_millis() as u64,
-            diff_preview: None,
-            ..Default::default()
-        });
+        self.ctx
+            .record_card(crate::tools::ToolExecutionCard {
+                tool_name: Self::NAME.to_owned(),
+                host_label: String::new(),
+                risk: ToolRisk::SafeRead,
+                summary: format!("读取最近 {} 个命令块", args.limit),
+                output: clipped.clone(),
+                ok: true,
+                approved: true,
+                duration_ms: started.elapsed().as_millis() as u64,
+                diff_preview: None,
+                ..Default::default()
+            })
+            .await;
         Ok(clipped)
     }
 }
@@ -343,18 +350,20 @@ impl Tool for ReadTerminalTool {
             .await
             .map_err(to_rig_err)?;
         let clipped = self.ctx.format_tool_output(Self::NAME, &raw);
-        self.ctx.record_card(crate::tools::ToolExecutionCard {
-            tool_name: Self::NAME.to_owned(),
-            host_label: String::new(),
-            risk: ToolRisk::SensitiveRead,
-            summary: format!("读取终端末尾 {} 行", args.lines),
-            output: clipped.clone(),
-            ok: true,
-            approved: true,
-            duration_ms: started.elapsed().as_millis() as u64,
-            diff_preview: None,
-            ..Default::default()
-        });
+        self.ctx
+            .record_card(crate::tools::ToolExecutionCard {
+                tool_name: Self::NAME.to_owned(),
+                host_label: String::new(),
+                risk: ToolRisk::SensitiveRead,
+                summary: format!("读取终端末尾 {} 行", args.lines),
+                output: clipped.clone(),
+                ok: true,
+                approved: true,
+                duration_ms: started.elapsed().as_millis() as u64,
+                diff_preview: None,
+                ..Default::default()
+            })
+            .await;
         Ok(clipped)
     }
 }
@@ -431,18 +440,20 @@ impl Tool for ProposeHostMemoryTool {
             })
             .await
             .map_err(to_rig_err)?;
-        self.ctx.record_card(crate::tools::ToolExecutionCard {
-            tool_name: Self::NAME.to_owned(),
-            host_label: String::new(),
-            risk: ToolRisk::Write,
-            summary: format!("写入主机记忆: {}", args.fact),
-            output: out.clone(),
-            ok: true,
-            approved: true,
-            duration_ms: started.elapsed().as_millis() as u64,
-            diff_preview: None,
-            ..Default::default()
-        });
+        self.ctx
+            .record_card(crate::tools::ToolExecutionCard {
+                tool_name: Self::NAME.to_owned(),
+                host_label: String::new(),
+                risk: ToolRisk::Write,
+                summary: format!("写入主机记忆: {}", args.fact),
+                output: out.clone(),
+                ok: true,
+                approved: true,
+                duration_ms: started.elapsed().as_millis() as u64,
+                diff_preview: None,
+                ..Default::default()
+            })
+            .await;
         Ok(out)
     }
 }

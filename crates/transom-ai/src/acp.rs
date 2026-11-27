@@ -32,8 +32,6 @@ use crate::error::AiError;
 use crate::exec_policy::ExecPolicyRule;
 use crate::policy::{ExecutionMode, HostProtection};
 use crate::runner::AgentEvent;
-use crate::tools::ToolExecutionCard;
-use crate::tools::plan::PlanSnapshot;
 
 const ACP_HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(20);
 const ACP_TURN_TIMEOUT: Duration = Duration::from_secs(300);
@@ -46,8 +44,6 @@ pub struct AcpRunInput {
     pub cwd: Option<String>,
     pub mcp_stdio_exe: Option<String>,
     pub events: mpsc::Sender<AgentEvent>,
-    pub card_tx: mpsc::Sender<ToolExecutionCard>,
-    pub plan_tx: Option<mpsc::Sender<PlanSnapshot>>,
     pub execution_mode: Arc<parking_lot::RwLock<ExecutionMode>>,
     pub protection: HostProtection,
     pub plan_mode: bool,

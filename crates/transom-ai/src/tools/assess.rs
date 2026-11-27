@@ -393,8 +393,8 @@ mod tests {
     use crate::tools::ToolRuntimeContext;
 
     fn dummy_ctx() -> ToolRuntimeContext {
-        let (card_tx, _card_rx) = mpsc::channel(4);
-        ToolRuntimeContext::minimal(SessionScope::Global, card_tx, CancellationToken::new())
+        let (event_tx, _event_rx) = mpsc::channel(4);
+        ToolRuntimeContext::minimal(SessionScope::Global, event_tx, CancellationToken::new())
     }
 
     #[test]

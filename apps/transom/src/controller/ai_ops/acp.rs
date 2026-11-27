@@ -107,8 +107,6 @@ pub(super) async fn start_acp_only_run(
         .lock()
         .insert(req.run_id.clone(), cancel.clone());
     let (event_tx, event_rx) = mpsc::channel(EVENT_CHANNEL_CAPACITY);
-    let (card_tx, card_rx) = mpsc::channel(64);
-    let (plan_tx, plan_rx) = mpsc::channel(32);
     let tool_ctx = build_tool_context(
         state,
         ctx,
@@ -118,8 +116,7 @@ pub(super) async fn start_acp_only_run(
             conversation_id: &conversation_id,
             timeout_secs: 60,
             cancel: cancel.clone(),
-            card_tx,
-            plan_tx: Some(plan_tx),
+            events: event_tx.clone(),
             subagent_cfg: None,
             current_turn_entry_id: Arc::new(parking_lot::RwLock::new(None)),
         },
@@ -201,9 +198,9 @@ pub(super) async fn start_acp_only_run(
         history_entries: history_branch,
         current_turn_entry_id: Arc::new(parking_lot::RwLock::new(None)),
     };
-    state.ai_set.spawn(execute_and_pump(
-        input, card_rx, plan_rx, event_rx, pump_ctx,
-    ));
+    state
+        .ai_set
+        .spawn(execute_and_pump(input, event_rx, pump_ctx));
 }
 
 pub(super) fn spawn_install_acp_agent(

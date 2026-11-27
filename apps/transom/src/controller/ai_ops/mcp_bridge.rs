@@ -223,10 +223,10 @@ impl McpServerBackend for ControllerMcpBackend {
             }
         }
 
-        let (card_tx, _card_rx) = mpsc::channel(8);
+        let (event_tx, _event_rx) = mpsc::channel(8);
         let mut ctx = ToolRuntimeContext::minimal(
             SessionScope::Host(sid.to_owned()),
-            card_tx,
+            event_tx,
             self.cancel.clone(),
         );
         ctx.locked_session = Some(LockedSession {
@@ -303,9 +303,9 @@ impl ControllerMcpBackend {
             deps.active_remote = Some(target.remote.clone());
             deps.active_sftp = target.sftp.clone();
         }
-        let (card_tx, _card_rx) = mpsc::channel(4);
+        let (event_tx, _event_rx) = mpsc::channel(4);
         let mut ctx =
-            ToolRuntimeContext::minimal(SessionScope::Global, card_tx, self.cancel.clone());
+            ToolRuntimeContext::minimal(SessionScope::Global, event_tx, self.cancel.clone());
         ctx.output_store = snap.output_store.clone();
         ctx.command_timeout = snap.command_timeout;
         let args_json = arguments.to_string();

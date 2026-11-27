@@ -177,45 +177,50 @@ impl Tool for DelegateTaskTool {
         };
         let call_id = self
             .ctx
-            .emit_tool_started(Self::NAME, &host_label, risk, &args.title);
+            .emit_tool_started(Self::NAME, &host_label, risk, &args.title)
+            .await;
         let started = Instant::now();
         let res = runner.run_subagent(req).await;
         let elapsed = started.elapsed().as_millis() as u64;
         match res {
             Ok(out) => {
                 let clipped = self.ctx.format_tool_output(Self::NAME, &out);
-                self.ctx.record_card(ToolExecutionCard {
-                    call_id,
-                    running: false,
-                    tool_name: Self::NAME.to_owned(),
-                    host_label,
-                    risk,
-                    summary: args.title,
-                    output: clipped.clone(),
-                    ok: true,
-                    approved: true,
-                    duration_ms: elapsed,
-                    diff_preview: None,
-                    ..Default::default()
-                });
+                self.ctx
+                    .record_card(ToolExecutionCard {
+                        call_id,
+                        running: false,
+                        tool_name: Self::NAME.to_owned(),
+                        host_label,
+                        risk,
+                        summary: args.title,
+                        output: clipped.clone(),
+                        ok: true,
+                        approved: true,
+                        duration_ms: elapsed,
+                        diff_preview: None,
+                        ..Default::default()
+                    })
+                    .await;
                 Ok(clipped)
             }
             Err(err) => {
                 let msg = err.to_string();
-                self.ctx.record_card(ToolExecutionCard {
-                    call_id,
-                    running: false,
-                    tool_name: Self::NAME.to_owned(),
-                    host_label,
-                    risk,
-                    summary: args.title,
-                    output: msg,
-                    ok: false,
-                    approved: true,
-                    duration_ms: elapsed,
-                    diff_preview: None,
-                    ..Default::default()
-                });
+                self.ctx
+                    .record_card(ToolExecutionCard {
+                        call_id,
+                        running: false,
+                        tool_name: Self::NAME.to_owned(),
+                        host_label,
+                        risk,
+                        summary: args.title,
+                        output: msg,
+                        ok: false,
+                        approved: true,
+                        duration_ms: elapsed,
+                        diff_preview: None,
+                        ..Default::default()
+                    })
+                    .await;
                 Err(to_rig_err(err))
             }
         }

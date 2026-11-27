@@ -61,7 +61,8 @@ pub(crate) async fn invoke_app_tool(
                 duration_ms: elapsed,
                 diff_preview: None,
                 ..Default::default()
-            });
+            })
+            .await;
             Ok(clipped)
         }
         Err(err) => {
@@ -77,7 +78,8 @@ pub(crate) async fn invoke_app_tool(
                 duration_ms: elapsed,
                 diff_preview: None,
                 ..Default::default()
-            });
+            })
+            .await;
             Err(to_rig_err(err))
         }
     }
@@ -325,9 +327,9 @@ mod tests {
 
     #[tokio::test]
     async fn invokes_app_bridge_and_emits_card() {
-        let (card_tx, mut card_rx) = mpsc::channel(8);
+        let (event_tx, mut event_rx) = mpsc::channel(8);
         let mut ctx =
-            ToolRuntimeContext::minimal(SessionScope::Global, card_tx, CancellationToken::new());
+            ToolRuntimeContext::minimal(SessionScope::Global, event_tx, CancellationToken::new());
         ctx.command_timeout = Duration::from_secs(30);
         ctx.caps.app_bridge = Some(Arc::new(FakeBridge));
 
@@ -347,7 +349,10 @@ mod tests {
             .expect("调用必须成功");
         assert!(out.contains("ok:session_catalog:create:prod-api"));
 
-        let card = card_rx.try_recv().expect("必须产出执行卡片");
+        let event = event_rx.try_recv().expect("必须产出执行卡片");
+        let crate::runner::AgentEvent::ToolCard(card) = event else {
+            panic!("期望工具卡片事件");
+        };
         assert_eq!(card.tool_name, "session_catalog");
         assert!(card.ok);
         let _ = HashMap::<String, String>::new();

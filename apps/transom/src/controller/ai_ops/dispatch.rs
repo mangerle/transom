@@ -168,8 +168,6 @@ pub(super) async fn start_ai_run(
         .insert(req.run_id.clone(), steer_queue.clone());
 
     let (event_tx, event_rx) = mpsc::channel(EVENT_CHANNEL_CAPACITY);
-    let (card_tx, card_rx) = mpsc::channel(64);
-    let (plan_tx, plan_rx) = mpsc::channel(32);
 
     let fast_target = resolve_fast_subagent_target(&settings, &target, ctx);
     let current_turn_entry_id = Arc::new(parking_lot::RwLock::new(None));
@@ -182,8 +180,7 @@ pub(super) async fn start_ai_run(
             conversation_id: &conversation_id,
             timeout_secs: settings.command_timeout_secs,
             cancel: cancel.clone(),
-            card_tx,
-            plan_tx: Some(plan_tx),
+            events: event_tx.clone(),
             subagent_cfg: Some(context_builder::SubagentConfig {
                 target: &target,
                 fast_target: fast_target.as_ref(),
@@ -253,9 +250,9 @@ pub(super) async fn start_ai_run(
         current_turn_entry_id,
     };
 
-    state.ai_set.spawn(execute_and_pump(
-        input, card_rx, plan_rx, event_rx, pump_ctx,
-    ));
+    state
+        .ai_set
+        .spawn(execute_and_pump(input, event_rx, pump_ctx));
 }
 
 /// 停机时取消所有在途 AI 运行与反向 MCP 服务并限时等待回收。
