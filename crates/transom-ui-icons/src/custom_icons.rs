@@ -64,6 +64,7 @@ impl CustomIcon {
     pub const ACP_KIMI: Self = Self("acp_kimi");
     pub const SPEEDOMETER: Self = Self("speedometer");
     pub const SHIELD_CHECK: Self = Self("shield_check");
+    pub const TOKENS: Self = Self("tokens");
 
     /// 当前图标的浅色资产路径。
     pub fn light_path(self) -> SharedString {
