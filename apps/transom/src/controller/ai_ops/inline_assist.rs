@@ -14,13 +14,7 @@ pub(super) fn spawn_inline_assist(
     platform: String,
 ) {
     let event_tx = ctx.event_tx.clone();
-    let settings = match ctx.ai_store.load_settings() {
-        Ok(s) => s,
-        Err(err) => {
-            send_err(&mut state.ai_set, event_tx, request_id, err.to_string());
-            return;
-        }
-    };
+    let settings = ctx.ai_config.snapshot();
     let Some((provider, model_cfg)) = settings.resolve_model("") else {
         send_err(
             &mut state.ai_set,
@@ -35,7 +29,11 @@ pub(super) fn spawn_inline_assist(
         .load_provider_api_key(ctx.secret_store.as_ref(), &provider.id)
     {
         Ok(Some(secret)) => secret.to_string(),
-        _ => String::new(),
+        Ok(None) => String::new(),
+        Err(err) => {
+            send_err(&mut state.ai_set, event_tx, request_id, err.to_string());
+            return;
+        }
     };
     let target = match settings.build_target(&model_cfg.id, None, api_key) {
         Ok(t) => t,

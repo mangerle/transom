@@ -5,7 +5,7 @@ use std::sync::Arc;
 use gpui_kit::base::v_flex;
 use gpui_kit::component::input::{InputEvent, InputState, TextareaState};
 use gpui_kit::*;
-use transom_core::{AppCommand, SecretStore};
+use transom_core::{AiCommand, AppCommand, SecretStore};
 use transom_store::AiStore;
 
 use super::AiPanelEvent;
@@ -65,25 +65,15 @@ impl AiAssistantView {
         cx: &mut Context<Self>,
     ) -> Self {
         let mut state = AiPanelState::default();
-        if let Ok(settings) = ai_store.load_settings() {
-            state.selected_model_id = settings.default_model.clone();
-            state.selected_effort = settings.default_effort;
-            state.execution_mode = settings.execution_mode;
-            state.active_acp_agent_id = settings.active_acp_agent_id.clone();
-            if let Some((prov, _)) = settings.resolve_model(&state.selected_model_id) {
-                state.selected_protocol = prov.protocol;
-            }
-            state.settings = settings;
-        }
-        if state.selected_model_id.is_empty()
-            && let Some((_, m)) = state.settings.models().next()
-        {
-            state.selected_model_id = m.id.clone();
-        }
-        if let Some(agent_id) = state.active_acp_agent_id.clone() {
-            let _ = command_tx.try_send(AppCommand::Ai(Box::new(
-                transom_core::AiCommand::ProbeAcpModels { agent_id },
-            )));
+        let settings_request_id = uuid::Uuid::new_v4().to_string();
+        state.pending_settings_load = Some(settings_request_id.clone());
+        if let Err(err) = command_tx.try_send(AppCommand::Ai(Box::new(AiCommand::LoadSettings {
+            request_id: settings_request_id,
+        }))) {
+            state.pending_settings_load = None;
+            state.status_error = Some(
+                rust_i18n::t!("ai.load_config_request_failed", error = err.to_string()).to_string(),
+            );
         }
 
         let composer_input = cx.new(|cx| {
@@ -91,13 +81,7 @@ impl AiAssistantView {
                 .submit_on_enter(true)
                 .placeholder(rust_i18n::t!("ai.composer_placeholder").to_string())
         });
-        let (config_form, form_subs) = ConfigFormState::new(
-            &state.settings,
-            &ai_store,
-            secret_store.as_ref(),
-            window,
-            cx,
-        );
+        let (config_form, form_subs) = ConfigFormState::new(window, cx);
         let memory_form = MemoryFormState::new(&state.memory.global_markdown, window, cx);
         let approval_feedback_input = cx.new(|cx| {
             InputState::new(window, cx)

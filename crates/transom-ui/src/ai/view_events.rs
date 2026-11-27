@@ -7,7 +7,12 @@ use super::view::AiAssistantView;
 
 impl AiAssistantView {
     /// 处理控制平面推送的 AI 事件。
-    pub(crate) fn handle_app_event(&mut self, event: AiAppEvent, cx: &mut Context<Self>) {
+    pub(crate) fn handle_app_event(
+        &mut self,
+        event: AiAppEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         if !self.state.accepts_event(&event) {
             return;
         }
@@ -78,7 +83,21 @@ impl AiAssistantView {
             self.auto_scroll_locked = false;
             self.active_nav_dot = None;
         }
-        self.state.apply_app_event(event);
+        let outcome = self.state.apply_app_event(event);
+        if let Some(settings) = outcome.settings_snapshot {
+            if let Err(err) = self.config_form.apply_settings(
+                &settings,
+                self.ai_store.as_ref(),
+                self.secret_store.as_ref(),
+                window,
+                cx,
+            ) {
+                self.state.status_error =
+                    Some(rust_i18n::t!("ai.load_config_failed", error = err).to_string());
+            }
+            self.refresh_skills_list();
+            self.probe_active_acp_agent(cx);
+        }
         if should_scroll_bottom && !self.auto_scroll_locked {
             self.msg_scroll_handle.scroll_to_bottom();
         }

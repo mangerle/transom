@@ -25,6 +25,8 @@ use transom_core::{
 use transom_git::{GitConfig, Repo};
 use transom_net::SshRemote;
 use transom_store::AiStore;
+
+use super::ai_ops::AiConfigService;
 use transom_sync::CloudSyncService;
 
 /// AI 工具在后台静默建立的无标签页远端 SSH 连接缓存表（避免主动打开 UI 标签页）。
@@ -100,8 +102,6 @@ pub(super) struct ControllerState {
     /// 子 Agent 上下文历史缓存（`subagent_id -> SessionEntry` 分支），支持 `resume_id` 多轮追问复用。
     pub(super) ai_subagent_histories:
         Arc<parking_lot::Mutex<HashMap<String, Vec<transom_ai::SessionEntry>>>>,
-    /// 当前 AI 命令执行模式（热更新）。
-    pub(super) ai_execution_mode: Arc<parking_lot::RwLock<transom_ai::ExecutionMode>>,
     /// 按对话 ID 复用的超大工具输出句柄池。
     pub(super) ai_output_stores: HashMap<String, Arc<transom_ai::ToolOutputStore>>,
     /// AI 工具后台静默直连的远端 SSH 句柄缓存（不打开 UI 标签页）。
@@ -145,9 +145,6 @@ impl ControllerState {
                 event_tx,
             )),
             ai_subagent_histories: Arc::new(parking_lot::Mutex::new(HashMap::new())),
-            ai_execution_mode: Arc::new(parking_lot::RwLock::new(
-                transom_ai::ExecutionMode::Manual,
-            )),
             ai_output_stores: HashMap::new(),
             ai_headless_remotes: Arc::new(parking_lot::Mutex::new(HashMap::new())),
             mcp_session_meta: HashMap::new(),
@@ -218,6 +215,7 @@ pub(super) struct ControllerCtx {
     pub(super) api_projects: Arc<dyn transom_api::ApiProjectStore>,
     pub(super) api_http: transom_api::ApiHttpService,
     pub(super) ai_store: Arc<AiStore>,
+    pub(super) ai_config: Arc<AiConfigService>,
     pub(super) event_tx: flume::Sender<AppEvent>,
     pub(super) internal_tx: flume::Sender<Internal>,
     pub(super) cloud_sync: Arc<CloudSyncService>,

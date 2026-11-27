@@ -350,6 +350,7 @@ async fn run_controller(wiring: ControlPlaneWiring) {
         container,
         shutdown_tx,
     } = wiring;
+    let ai_config = Arc::new(ai_ops::AiConfigService::load(ai_store.clone()).await);
     let ctx = ControllerCtx {
         known_hosts,
         secret_store,
@@ -360,6 +361,7 @@ async fn run_controller(wiring: ControlPlaneWiring) {
         api_projects,
         api_http,
         ai_store,
+        ai_config,
         event_tx,
         internal_tx,
         cloud_sync,

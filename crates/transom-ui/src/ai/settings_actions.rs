@@ -9,14 +9,44 @@ use super::view::AiAssistantView;
 
 impl AiAssistantView {
     /// 通过控制平面异步持久化当前 AI 设置，避免阻塞 GPUI 主线程。
-    pub(super) fn persist_settings(&self) -> Result<(), String> {
+    pub(super) fn persist_settings(&mut self) -> Result<(), String> {
         let settings_json =
             serde_json::to_string(&self.state.settings).map_err(|err| err.to_string())?;
+        let request_id = uuid::Uuid::new_v4().to_string();
         self.command_tx
             .try_send(AppCommand::Ai(Box::new(AiCommand::SaveSettingsJson {
+                request_id: request_id.clone(),
                 settings_json,
             })))
-            .map_err(|err| err.to_string())
+            .map_err(|err| err.to_string())?;
+        self.state.pending_settings_save = Some(request_id);
+        Ok(())
+    }
+
+    /// 发送配置保存命令；发送失败或序列化失败时立即在当前面板展示中文错误。
+    pub(super) fn persist_settings_reported(&mut self, cx: &mut Context<Self>) {
+        if let Err(err) = self.persist_settings() {
+            self.state.status_error =
+                Some(rust_i18n::t!("ai.save_config_failed", error = err).to_string());
+        }
+        cx.notify();
+    }
+
+    /// 请求控制平面探测当前 ACP Agent 的可用模型。
+    pub(super) fn probe_active_acp_agent(&mut self, cx: &mut Context<Self>) {
+        let Some(agent_id) = self.state.active_acp_agent_id.clone() else {
+            return;
+        };
+        if let Err(err) =
+            self.command_tx
+                .try_send(AppCommand::Ai(Box::new(AiCommand::ProbeAcpModels {
+                    agent_id,
+                })))
+        {
+            self.state.status_error =
+                Some(rust_i18n::t!("ai.probe_acp_failed", error = err.to_string()).to_string());
+        }
+        cx.notify();
     }
 
     pub(super) fn save_provider_from_drawer(
@@ -139,8 +169,7 @@ impl AiAssistantView {
                 .unwrap_or_default();
             self.state.settings.default_model = self.state.selected_model_id.clone();
         }
-        let _ = self.persist_settings();
-        cx.notify();
+        self.persist_settings_reported(cx);
     }
 
     pub(super) fn save_memory_from_drawer(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
@@ -170,39 +199,22 @@ impl AiAssistantView {
     }
 
     pub(super) fn toggle_popup(&mut self, popup: AiActivePopup, cx: &mut Context<Self>) {
-        self.state.active_popup =
-            if self.state.active_popup == popup {
-                AiActivePopup::None
-            } else {
-                if popup == AiActivePopup::Model
-                    && let Some(agent_id) = self.state.active_acp_agent_id.clone()
-                {
-                    let _ = self.command_tx.try_send(AppCommand::Ai(Box::new(
-                        AiCommand::ProbeAcpModels { agent_id },
-                    )));
-                }
-                popup
-            };
+        self.state.active_popup = if self.state.active_popup == popup {
+            AiActivePopup::None
+        } else {
+            if popup == AiActivePopup::Model && self.state.active_acp_agent_id.is_some() {
+                self.probe_active_acp_agent(cx);
+            }
+            popup
+        };
         cx.notify();
     }
 
     pub(super) fn select_execution_mode(&mut self, mode: ExecutionMode, cx: &mut Context<Self>) {
         self.state.execution_mode = mode;
         self.state.active_popup = AiActivePopup::None;
-        let mode_str = match mode {
-            ExecutionMode::Manual => "manual",
-            ExecutionMode::SafeReadAuto => "safe_read_auto",
-            ExecutionMode::Auto => "auto",
-            ExecutionMode::AllowAll => "allow_all",
-        };
         self.state.settings.execution_mode = mode;
-        let _ = self.persist_settings();
-        let _ = self
-            .command_tx
-            .try_send(AppCommand::Ai(Box::new(AiCommand::SetExecutionMode {
-                mode: mode_str.to_owned(),
-            })));
-        cx.notify();
+        self.persist_settings_reported(cx);
     }
 
     pub(super) fn select_model(&mut self, model_id: String, cx: &mut Context<Self>) {
@@ -231,15 +243,13 @@ impl AiAssistantView {
             self.state.settings.default_model = model_id;
         }
         self.state.active_popup = AiActivePopup::None;
-        let _ = self.persist_settings();
-        cx.notify();
+        self.persist_settings_reported(cx);
     }
 
     pub(super) fn select_effort(&mut self, effort: Option<ThinkingEffort>, cx: &mut Context<Self>) {
         self.state.selected_effort = effort;
         self.state.settings.default_effort = effort;
-        let _ = self.persist_settings();
-        cx.notify();
+        self.persist_settings_reported(cx);
     }
 
     /// 优先使用输入框当前填写的 API Key；为空时从系统密钥库回读匹配供应商的已保存密钥。
@@ -359,7 +369,7 @@ impl AiAssistantView {
         self.state.settings.acp_agents.push(agent);
         self.state.settings.active_acp_agent_id = Some(agent_id.clone());
         self.state.active_acp_agent_id = Some(agent_id);
-        let _ = self.persist_settings();
+        self.persist_settings_reported(cx);
         self.state.drawer = AiDrawerTab::Chat;
         cx.notify();
     }
@@ -375,14 +385,9 @@ impl AiAssistantView {
         self.state.active_acp_agent_id = agent_id.clone();
         self.state.settings.active_acp_agent_id = agent_id.clone();
         self.state.active_popup = AiActivePopup::None;
-        let _ = self.persist_settings();
-        if let Some(id) = agent_id {
-            let _ = self
-                .command_tx
-                .try_send(AppCommand::Ai(Box::new(AiCommand::ProbeAcpModels {
-                    agent_id: id,
-                })));
+        self.persist_settings_reported(cx);
+        if agent_id.is_some() {
+            self.probe_active_acp_agent(cx);
         }
-        cx.notify();
     }
 }

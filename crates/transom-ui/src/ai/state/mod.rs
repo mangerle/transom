@@ -10,12 +10,19 @@ pub(crate) use super::state_types::{
     ActiveAiRun, ActiveAiSessionInfo, AiActivePopup, AiConfigSection, AiDrawerTab, UiChatItem,
 };
 use transom_ai::{
-    AiSettings, ConversationSummary, ExecutionMode, MemorySnapshot, ProviderProtocol, SessionEntry,
-    SessionEntryKind, SessionScope, ThinkingEffort,
+    AiSettings, ConversationSummary, ExecutionMode, MemorySnapshot, ProviderProtocol, SessionScope,
+    ThinkingEffort,
 };
 use transom_core::{AiAppEvent, AiApprovalDto, AiPlanDto, TabId};
 
 pub(crate) use super::mention_menu::{AiMentionCandidate, AiMentionKind};
+
+/// 一次 AI 事件处理产生、需要视图层继续同步控件的结果。
+#[derive(Default)]
+pub(crate) struct AiEventOutcome {
+    /// 收到有效配置快照时返回，供表单与技能列表按同一份设置重建。
+    pub(crate) settings_snapshot: Option<AiSettings>,
+}
 
 /// AI 助手面板运行状态。
 pub(crate) struct AiPanelState {
@@ -39,6 +46,10 @@ pub(crate) struct AiPanelState {
     pub(crate) pending_approvals: Vec<AiApprovalDto>,
     pub(crate) memory: MemorySnapshot,
     pub(crate) status_error: Option<String>,
+    /// 最近一次设置加载请求 ID，用于丢弃过期或迟到快照。
+    pub(crate) pending_settings_load: Option<String>,
+    /// 最近一次设置保存请求 ID，用于忽略迟到或旧的保存确认。
+    pub(crate) pending_settings_save: Option<String>,
     /// 后台对话运行失败时暂存的通知，切换回该对话后展示。
     pub(crate) background_run_errors: HashMap<String, String>,
     pub(crate) discovery_status: Option<String>,
@@ -86,6 +97,8 @@ impl Default for AiPanelState {
             pending_approvals: Vec::new(),
             memory: MemorySnapshot::default(),
             status_error: None,
+            pending_settings_load: None,
+            pending_settings_save: None,
             background_run_errors: HashMap::new(),
             discovery_status: None,
             discovered_models: Vec::new(),
@@ -111,7 +124,9 @@ impl Default for AiPanelState {
     }
 }
 
+mod history;
 mod run;
+mod settings;
 #[cfg(test)]
 mod tests;
 
@@ -124,100 +139,12 @@ impl AiPanelState {
         }
     }
 
-    /// 把从 JSONL 加载的树状会话主分支还原为 UI 消息列表，并恢复该会话的推理指标。
-    pub(crate) fn load_entries(&mut self, entries: Vec<SessionEntry>) {
-        self.items.clear();
-        self.metrics.restore_from_entries(&entries);
-        for entry in entries {
-            match entry.kind {
-                SessionEntryKind::Message {
-                    role,
-                    text,
-                    model,
-                    tokens_per_sec,
-                    ..
-                } => match role {
-                    transom_ai::ChatRole::User => {
-                        self.items.push(UiChatItem::UserText {
-                            id: entry.id,
-                            text,
-                            timestamp: Some(entry.timestamp),
-                        });
-                    }
-                    transom_ai::ChatRole::Assistant => {
-                        let cached_segments = Some(Arc::new(parse_markdown_segments(&text)));
-                        self.items.push(UiChatItem::AssistantText {
-                            id: entry.id,
-                            text,
-                            model,
-                            tokens_per_sec,
-                            streaming: false,
-                            cached_segments,
-                        });
-                    }
-                },
-                SessionEntryKind::Reasoning { text } => {
-                    self.items.push(UiChatItem::Reasoning {
-                        id: entry.id,
-                        text,
-                        streaming: false,
-                    });
-                }
-                SessionEntryKind::ToolRecord {
-                    tool_name,
-                    summary,
-                    output,
-                    ok,
-                    duration_ms,
-                    diff_preview,
-                    revert_target_path,
-                    revert_backup_path,
-                    ..
-                } => {
-                    self.items.push(UiChatItem::ToolCard {
-                        id: entry.id,
-                        call_id: String::new(),
-                        running: false,
-                        tool_name,
-                        host_label: self
-                            .active_session
-                            .as_ref()
-                            .map(|s| s.host_name.clone())
-                            .unwrap_or_else(|| rust_i18n::t!("ai.general_label").to_string()),
-                        risk_label: String::new(),
-                        summary,
-                        output,
-                        ok,
-                        duration_ms,
-                        diff_preview,
-                        revert_target_path,
-                        revert_backup_path,
-                    });
-                }
-                SessionEntryKind::AuditNotice {
-                    approved,
-                    label,
-                    host_label,
-                } => {
-                    self.items.push(UiChatItem::AuditNotice {
-                        id: entry.id,
-                        approved,
-                        label,
-                        host_label,
-                    });
-                }
-                SessionEntryKind::Header { .. }
-                | SessionEntryKind::Compaction { .. }
-                | SessionEntryKind::Attachment { .. } => {}
-            }
-        }
-    }
-
     /// 消费来自控制平面的流式事件并更新界面消息流。
-    pub(crate) fn apply_app_event(&mut self, event: AiAppEvent) {
+    pub(crate) fn apply_app_event(&mut self, event: AiAppEvent) -> AiEventOutcome {
         if !self.accepts_event(&event) {
-            return;
+            return AiEventOutcome::default();
         }
+        let mut outcome = AiEventOutcome::default();
         match event {
             AiAppEvent::RunStarted {
                 run_id,
@@ -369,6 +296,20 @@ impl AiPanelState {
             }
             AiAppEvent::TerminalContextRequested { .. } | AiAppEvent::AppActionRequested { .. } => {
             }
+            AiAppEvent::SettingsSaved {
+                request_id,
+                revision: _,
+                error,
+            } => self.handle_settings_saved(request_id, error),
+            AiAppEvent::SettingsSnapshot {
+                request_id,
+                settings_json,
+                revision: _,
+                error,
+            } => {
+                outcome.settings_snapshot =
+                    self.handle_settings_snapshot(request_id, settings_json, error);
+            }
             AiAppEvent::ModelsDiscovered { models, error, .. } => {
                 if let Some(err) = error {
                     self.discovery_status = Some(err);
@@ -463,5 +404,6 @@ impl AiPanelState {
             }
             AiAppEvent::InlineCommandResult { .. } | AiAppEvent::SubagentCompleted { .. } => {}
         }
+        outcome
     }
 }

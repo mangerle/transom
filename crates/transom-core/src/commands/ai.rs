@@ -221,8 +221,6 @@ pub enum AiCommand {
         request_id: String,
         result: Result<String, String>,
     },
-    /// 热切换执行模式（`manual` / `safe_read_auto` / `auto`）。
-    SetExecutionMode { mode: String },
     /// 请求删除指定对话。
     DeleteConversation { conversation_id: String },
     /// 请求归档或取消归档指定对话。
@@ -235,8 +233,13 @@ pub enum AiCommand {
         conversation_id: String,
         title: String,
     },
-    /// 异步持久化 AI 设置（JSON 载荷由控制平面校验并落盘）。
-    SaveSettingsJson { settings_json: String },
+    /// 读取控制平面当前 AI 配置快照；`request_id` 用于 UI 丢弃过期响应。
+    LoadSettings { request_id: String },
+    /// 持久化 AI 设置；`request_id` 用于 UI 匹配成功或失败确认。
+    SaveSettingsJson {
+        request_id: String,
+        settings_json: String,
+    },
     /// 异步持久化全局记忆或指定主机长期记忆。
     SaveMemory {
         host_id: Option<String>,
@@ -336,6 +339,19 @@ pub enum AiAppEvent {
         error: Option<String>,
         /// 是否因用户取消或异常中断而结束（用于决定是否暂停自动出队）。
         cancelled: bool,
+    },
+    /// 控制平面当前配置快照；加载失败时仍会返回默认配置，并通过 `error` 说明原因。
+    SettingsSnapshot {
+        request_id: String,
+        settings_json: Option<String>,
+        revision: u64,
+        error: Option<String>,
+    },
+    /// AI 配置保存结果；`revision` 为保存后的当前版本。
+    SettingsSaved {
+        request_id: String,
+        revision: u64,
+        error: Option<String>,
     },
     ModelsDiscovered {
         request_id: String,

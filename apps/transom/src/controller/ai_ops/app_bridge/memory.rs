@@ -11,27 +11,27 @@ use transom_ai::{
 };
 use transom_store::AiStore;
 
+use crate::controller::ai_ops::AiConfigService;
+
 use super::ControllerAppActionBridge;
 
 /// 按需加载技能 SOP 与同目录参考资源的桥接器（实现渐进式披露）。
 pub(in crate::controller::ai_ops) struct StoreSkillLoader {
     pub(in crate::controller::ai_ops) store: Arc<AiStore>,
+    pub(in crate::controller::ai_ops) ai_config: Arc<AiConfigService>,
 }
 
 #[async_trait]
 impl SkillLoader for StoreSkillLoader {
     async fn load_skill(&self, name: &str, resource: Option<&str>) -> Result<String, ToolError> {
         let store = self.store.clone();
+        let disabled = self.ai_config.snapshot().disabled_skills;
         let wanted = name.trim().trim_start_matches('/').to_owned();
         let res_rel = resource
             .map(str::trim)
             .filter(|s| !s.is_empty())
             .map(str::to_owned);
         tokio::task::spawn_blocking(move || {
-            let disabled = store
-                .load_settings()
-                .map(|s| s.disabled_skills)
-                .unwrap_or_default();
             let skills = load_skills_with_disabled(Some(&store.custom_skills_dir()), &disabled);
             let skill = skills
                 .iter()
@@ -285,6 +285,7 @@ pub(super) async fn handle_memory_skills(
     let title = args["title"].as_str().unwrap_or("").to_owned();
     let description = args["description"].as_str().unwrap_or("").to_owned();
     let act = action.to_owned();
+    let disabled_skills = bridge.deps.ai_config.snapshot().disabled_skills;
 
     tokio::task::spawn_blocking(move || match act.as_str() {
         "read_memory" => {
@@ -338,11 +339,7 @@ pub(super) async fn handle_memory_skills(
             }
         }
         "list_skills" => {
-            let disabled = store
-                .load_settings()
-                .map(|s| s.disabled_skills)
-                .unwrap_or_default();
-            let all = load_skills_with_disabled(Some(&store.custom_skills_dir()), &disabled);
+            let all = load_skills_with_disabled(Some(&store.custom_skills_dir()), &disabled_skills);
             let rows: Vec<Value> = all
                 .into_iter()
                 .map(|s| {

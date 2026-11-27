@@ -5,6 +5,7 @@ pub(in crate::controller) mod app_bridge;
 mod bridge;
 mod checkpoint_ops;
 mod compact;
+mod config_service;
 mod context_builder;
 mod dispatch;
 mod event_pump;
@@ -19,10 +20,11 @@ mod runtime_bridge;
 mod subagent;
 pub(in crate::controller) mod task_runner;
 
-use transom_ai::{ExecutionMode, SkillSummary, extract_skill_command, load_skills_with_disabled};
+use transom_ai::{SkillSummary, extract_skill_command, load_skills_with_disabled};
 use transom_core::AiCommand;
 
 use super::state::{ControllerCtx, ControllerState};
+pub(in crate::controller) use config_service::AiConfigService;
 use context_builder::{build_tool_context, prepare_conversation};
 pub(in crate::controller) use dispatch::shutdown_ai_runs;
 pub(in crate::controller) use mcp_bridge::{
@@ -82,6 +84,7 @@ pub(in crate::controller) async fn handle_ai_command(
         } => compact::spawn_compact_conversation(
             &mut state.ai_set,
             ctx.ai_store.clone(),
+            ctx.ai_config.clone(),
             ctx.secret_store.clone(),
             ctx.event_tx.clone(),
             conversation_id,
@@ -139,15 +142,6 @@ pub(in crate::controller) async fn handle_ai_command(
                 let _ = sender.send(result);
             }
         }
-        AiCommand::SetExecutionMode { mode } => {
-            let parsed = match mode.as_str() {
-                "safe_read_auto" => ExecutionMode::SafeReadAuto,
-                "auto" => ExecutionMode::Auto,
-                "allow_all" => ExecutionMode::AllowAll,
-                _ => ExecutionMode::Manual,
-            };
-            *state.ai_execution_mode.write() = parsed;
-        }
         AiCommand::DeleteConversation { conversation_id } => {
             state.ai_output_stores.remove(&conversation_id);
             state
@@ -192,21 +186,52 @@ pub(in crate::controller) async fn handle_ai_command(
                 .await;
             });
         }
-        AiCommand::SaveSettingsJson { settings_json } => {
-            let store = ctx.ai_store.clone();
-            state.ai_set.spawn(async move {
-                let _ = tokio::task::spawn_blocking(move || {
-                    match serde_json::from_str::<transom_ai::AiSettings>(&settings_json) {
-                        Ok(parsed) => {
-                            if let Err(err) = store.save_settings(&parsed) {
-                                log::warn!("异步保存 AI 设置失败: {err}");
-                            }
-                        }
-                        Err(err) => log::warn!("解析待保存 AI 设置 JSON 失败: {err}"),
-                    }
-                })
-                .await;
-            });
+        AiCommand::SaveSettingsJson {
+            request_id,
+            settings_json,
+        } => {
+            let result = ctx.ai_config.replace_json(&settings_json).await;
+            let (revision, error) = match result {
+                Ok(revision) => (revision, None),
+                Err(err) => (ctx.ai_config.revision(), Some(err.to_string())),
+            };
+            if let Err(err) = ctx
+                .event_tx
+                .send_async(transom_core::AppEvent::Ai(Box::new(
+                    transom_core::AiAppEvent::SettingsSaved {
+                        request_id,
+                        revision,
+                        error,
+                    },
+                )))
+                .await
+            {
+                log::warn!("发送 AI 配置保存结果失败: {err}");
+            }
+        }
+        AiCommand::LoadSettings { request_id } => {
+            let (settings_json, revision, error) = match ctx.ai_config.snapshot_json() {
+                Ok(snapshot) => (
+                    Some(snapshot.settings_json),
+                    snapshot.revision,
+                    snapshot.load_error,
+                ),
+                Err(err) => (None, 0, Some(err.to_string())),
+            };
+            if let Err(err) = ctx
+                .event_tx
+                .send_async(transom_core::AppEvent::Ai(Box::new(
+                    transom_core::AiAppEvent::SettingsSnapshot {
+                        request_id,
+                        settings_json,
+                        revision,
+                        error,
+                    },
+                )))
+                .await
+            {
+                log::warn!("发送 AI 配置快照失败: {err}");
+            }
         }
         AiCommand::SaveMemory {
             host_id,

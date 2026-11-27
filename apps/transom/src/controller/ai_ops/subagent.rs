@@ -159,6 +159,7 @@ impl SubagentRunner for ControllerSubagentRunner {
             app_bridge: Some(app_bridge),
             skill_loader: Some(Arc::new(StoreSkillLoader {
                 store: self.app_bridge_deps.ai_store.clone(),
+                ai_config: self.app_bridge_deps.ai_config.clone(),
             })),
             ..Default::default()
         };

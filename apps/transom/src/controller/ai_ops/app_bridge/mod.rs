@@ -35,6 +35,8 @@ use transom_git::GitConfig;
 use transom_net::SshRemote;
 use transom_platform::system::ProcessSampler;
 use transom_store::AiStore;
+
+use crate::controller::ai_ops::AiConfigService;
 use uuid::Uuid;
 
 use super::super::state::{ControllerCtx, ControllerState};
@@ -51,6 +53,7 @@ pub(in crate::controller) struct AppBridgeDeps {
     pub(in crate::controller) api_projects: Arc<dyn ApiProjectStore>,
     pub(in crate::controller) api_http: ApiHttpService,
     pub(in crate::controller) ai_store: Arc<AiStore>,
+    pub(in crate::controller) ai_config: Arc<AiConfigService>,
     pub(in crate::controller) git_config: Arc<parking_lot::RwLock<GitConfig>>,
     pub(in crate::controller) local_processes: Arc<Mutex<ProcessSampler>>,
     pub(in crate::controller) event_tx: flume::Sender<AppEvent>,
@@ -92,6 +95,7 @@ impl AppBridgeDeps {
             api_projects: ctx.api_projects.clone(),
             api_http: ctx.api_http.clone(),
             ai_store: ctx.ai_store.clone(),
+            ai_config: ctx.ai_config.clone(),
             git_config: ctx.git_config.clone(),
             local_processes: ctx.local_processes.clone(),
             event_tx: ctx.event_tx.clone(),

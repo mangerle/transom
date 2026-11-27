@@ -59,13 +59,18 @@ mod work_group_summary;
 pub(crate) use state::ActiveAiSessionInfo;
 pub(crate) use view::AiAssistantView;
 
-use gpui_kit::App;
+use gpui_kit::{App, Window};
 use transom_core::{AiAppEvent, AiCommand, AiTerminalContextKind, AppCommand};
 
 use crate::app::AppState;
 
 /// 分发控制平面推送的 AI 事件，并处理反向终端上下文采集请求。
-pub(crate) fn dispatch_ai_event(state: &mut AppState, event: AiAppEvent, cx: &mut App) {
+pub(crate) fn dispatch_ai_event(
+    state: &mut AppState,
+    event: AiAppEvent,
+    window: &mut Window,
+    cx: &mut App,
+) {
     if let AiAppEvent::TerminalContextRequested {
         request_id,
         tab_id,
@@ -128,7 +133,7 @@ pub(crate) fn dispatch_ai_event(state: &mut AppState, event: AiAppEvent, cx: &mu
     state
         .features
         .ai_panel
-        .update(cx, |panel, cx| panel.handle_app_event(event, cx));
+        .update(cx, |panel, cx| panel.handle_app_event(event, window, cx));
 }
 
 /// AI 面板向应用外壳发出的意图事件（事件自带全部所需数据，外壳禁止回读面板）。

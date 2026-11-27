@@ -10334,6 +10334,21 @@ ai:
   load_local_data_failed:
     en: 'Failed to load local AI data: %{error}'
     zh-CN: '加载 AI 本地数据失败: %{error}'
+  load_config_failed:
+    en: 'Failed to load AI config: %{error}'
+    zh-CN: '加载 AI 配置失败: %{error}'
+  load_config_request_failed:
+    en: 'Failed to request the AI config snapshot: %{error}'
+    zh-CN: '请求控制平面配置快照失败: %{error}'
+  invalid_config_snapshot:
+    en: 'The AI config snapshot is invalid: %{error}'
+    zh-CN: 'AI 配置快照格式无效: %{error}'
+  load_provider_key_failed:
+    en: 'Failed to load API Key for provider %{provider}: %{error}'
+    zh-CN: '读取供应商 %{provider} 的 API Key 失败: %{error}'
+  probe_acp_failed:
+    en: 'Failed to request ACP model discovery: %{error}'
+    zh-CN: '发送 ACP 模型探测请求失败: %{error}'
   background_run_active:
     en: Another conversation is running. Wait for it to finish before sending here.
     zh-CN: 另一个对话正在运行，请等待完成后再在此对话发送消息。

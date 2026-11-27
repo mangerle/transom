@@ -79,9 +79,8 @@ impl AiAssistantView {
         } else {
             self.state.settings.disabled_skills.push(clean);
         }
-        let _ = self.persist_settings();
         self.refresh_skills_list();
-        cx.notify();
+        self.persist_settings_reported(cx);
     }
 
     pub(super) fn open_skill_editor(

@@ -172,7 +172,9 @@ impl AiPanelState {
             | AiAppEvent::AcpModelsProbed { .. }
             | AiAppEvent::ManagedTaskStarted(_)
             | AiAppEvent::ManagedTaskOutput { .. }
-            | AiAppEvent::ManagedTaskFinished { .. } => true,
+            | AiAppEvent::ManagedTaskFinished { .. }
+            | AiAppEvent::SettingsSnapshot { .. }
+            | AiAppEvent::SettingsSaved { .. } => true,
         }
     }
 }

@@ -7,14 +7,18 @@
 use std::sync::Arc;
 
 use transom_ai::{
-    SessionEntry, SessionEntryKind, build_local_compaction_summary, summarize_for_compaction,
+    AiSettings, SessionEntry, SessionEntryKind, build_local_compaction_summary,
+    summarize_for_compaction,
 };
 use transom_core::{AiAppEvent, AppEvent, SecretStore};
 use transom_store::AiStore;
 
+use super::AiConfigService;
+
 pub(super) fn spawn_compact_conversation(
     ai_set: &mut tokio::task::JoinSet<()>,
     store: Arc<AiStore>,
+    ai_config: Arc<AiConfigService>,
     secret_store: Arc<dyn SecretStore>,
     event_tx: flume::Sender<AppEvent>,
     conversation_id: String,
@@ -27,9 +31,16 @@ pub(super) fn spawn_compact_conversation(
         let branch: Vec<&SessionEntry> = tree.active_branch();
         let first_kept = branch.last().map(|e| e.id.clone()).unwrap_or_default();
         let local_fallback = build_local_compaction_summary(&branch, &focus_instructions);
-        let summary = try_llm_summary(&store, secret_store.as_ref(), &branch, &focus_instructions)
-            .await
-            .unwrap_or(local_fallback);
+        let settings = ai_config.snapshot();
+        let summary = try_llm_summary(
+            &store,
+            secret_store.as_ref(),
+            &settings,
+            &branch,
+            &focus_instructions,
+        )
+        .await
+        .unwrap_or(local_fallback);
 
         let parent_id = tree.active_leaf_id().map(str::to_owned);
         let entry = SessionEntry::new(
@@ -72,10 +83,10 @@ pub(super) fn spawn_compact_conversation(
 async fn try_llm_summary(
     store: &AiStore,
     secret_store: &dyn SecretStore,
+    settings: &AiSettings,
     entries: &[&SessionEntry],
     focus: &str,
 ) -> Option<String> {
-    let settings = store.load_settings().ok()?;
     let (provider, model_cfg) = settings.resolve_model("")?;
     let api_key = store
         .load_provider_api_key(secret_store, &provider.id)

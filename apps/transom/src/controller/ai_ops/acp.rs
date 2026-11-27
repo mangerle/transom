@@ -144,8 +144,8 @@ pub(super) async fn start_acp_only_run(
         .filter(|m| !m.is_empty())
         .map(str::to_owned)
         .unwrap_or_else(|| agent.default_model.clone());
-    let settings = ctx.ai_store.load_settings().unwrap_or_default();
-    *state.ai_execution_mode.write() = settings.execution_mode;
+    let settings = ctx.ai_config.snapshot();
+    let execution_mode = Arc::new(parking_lot::RwLock::new(settings.execution_mode));
     let (active_skill_prompt, mut effective_prompt, _) =
         super::load_and_expand_skills(&ctx.ai_store, &req.prompt, &settings.disabled_skills);
     if let Some(skill_body) = active_skill_prompt.as_deref() {
@@ -177,7 +177,7 @@ pub(super) async fn start_acp_only_run(
         active_skill_prompt,
         available_skills: Vec::new(),
         response_language: Some(settings.response_language),
-        execution_mode: state.ai_execution_mode.clone(),
+        execution_mode,
         plan_mode: req.plan_mode,
         exec_policy_rules: settings.exec_policy_rules.clone(),
         approval_scope,
@@ -307,8 +307,7 @@ pub(super) fn spawn_probe_acp_models(
     ctx: &ControllerCtx,
     agent_id: String,
 ) {
-    let settings = ctx.ai_store.load_settings().unwrap_or_default();
-    *state.ai_execution_mode.write() = settings.execution_mode;
+    let settings = ctx.ai_config.snapshot();
     let Some(agent) = settings
         .acp_agents
         .into_iter()

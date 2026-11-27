@@ -212,3 +212,119 @@ fn background_finish_does_not_clear_current_conversation_view() {
         Some("后台错误")
     );
 }
+
+#[test]
+fn stale_settings_save_result_does_not_clear_current_request() {
+    let mut state = AiPanelState {
+        pending_settings_save: Some("new-save".to_owned()),
+        ..AiPanelState::default()
+    };
+
+    state.apply_app_event(AiAppEvent::SettingsSaved {
+        request_id: "old-save".to_owned(),
+        revision: 1,
+        error: Some("旧错误".to_owned()),
+    });
+    assert_eq!(state.pending_settings_save.as_deref(), Some("new-save"));
+    assert!(state.status_error.is_none());
+
+    state.apply_app_event(AiAppEvent::SettingsSaved {
+        request_id: "new-save".to_owned(),
+        revision: 2,
+        error: Some("磁盘不可写".to_owned()),
+    });
+    assert!(state.pending_settings_save.is_none());
+    assert!(
+        state
+            .status_error
+            .as_deref()
+            .is_some_and(|error| error.contains("磁盘不可写"))
+    );
+    assert!(
+        rust_i18n::t!(
+            "ai.save_config_failed",
+            locale = "zh-CN",
+            error = "磁盘不可写"
+        )
+        .contains("保存 AI 配置失败")
+    );
+}
+
+#[test]
+fn settings_snapshot_replaces_runtime_defaults() {
+    let settings = transom_ai::AiSettings {
+        default_model: "provider:model-1".to_owned(),
+        execution_mode: transom_ai::ExecutionMode::AllowAll,
+        ..transom_ai::AiSettings::default()
+    };
+    let mut state = AiPanelState {
+        pending_settings_load: Some("load-1".to_owned()),
+        ..AiPanelState::default()
+    };
+
+    let outcome = state.apply_app_event(AiAppEvent::SettingsSnapshot {
+        request_id: "load-1".to_owned(),
+        settings_json: Some(serde_json::to_string(&settings).expect("序列化设置失败")),
+        revision: 3,
+        error: None,
+    });
+
+    assert_eq!(outcome.settings_snapshot, Some(settings.clone()));
+    assert!(state.pending_settings_load.is_none());
+    assert_eq!(state.settings, settings);
+    assert_eq!(state.selected_model_id, "provider:model-1");
+    assert_eq!(state.execution_mode, transom_ai::ExecutionMode::AllowAll);
+    assert!(state.status_error.is_none());
+}
+
+#[test]
+fn settings_load_failure_applies_default_snapshot_and_reports_error() {
+    let settings = transom_ai::AiSettings::default();
+    let mut state = AiPanelState {
+        pending_settings_load: Some("load-1".to_owned()),
+        ..AiPanelState::default()
+    };
+
+    let outcome = state.apply_app_event(AiAppEvent::SettingsSnapshot {
+        request_id: "load-1".to_owned(),
+        settings_json: Some(serde_json::to_string(&settings).expect("序列化设置失败")),
+        revision: 0,
+        error: Some("config.json 内容损坏".to_owned()),
+    });
+
+    assert_eq!(outcome.settings_snapshot, Some(settings));
+    assert!(state.pending_settings_load.is_none());
+    assert!(
+        state
+            .status_error
+            .as_deref()
+            .is_some_and(|error| error.contains("config.json 内容损坏"))
+    );
+    assert!(
+        rust_i18n::t!(
+            "ai.load_config_failed",
+            locale = "zh-CN",
+            error = "config.json 内容损坏"
+        )
+        .contains("加载 AI 配置失败")
+    );
+}
+
+#[test]
+fn stale_settings_snapshot_is_ignored() {
+    let mut state = AiPanelState {
+        pending_settings_load: Some("new-load".to_owned()),
+        ..AiPanelState::default()
+    };
+
+    let outcome = state.apply_app_event(AiAppEvent::SettingsSnapshot {
+        request_id: "old-load".to_owned(),
+        settings_json: Some("{}".to_owned()),
+        revision: 1,
+        error: Some("旧加载错误".to_owned()),
+    });
+
+    assert!(outcome.settings_snapshot.is_none());
+    assert_eq!(state.pending_settings_load.as_deref(), Some("new-load"));
+    assert!(state.status_error.is_none());
+}

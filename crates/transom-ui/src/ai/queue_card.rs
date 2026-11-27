@@ -311,8 +311,7 @@ impl AiAssistantView {
         cx: &mut Context<Self>,
     ) {
         self.state.settings.running_message_behavior = behavior;
-        let _ = self.persist_settings();
-        cx.notify();
+        self.persist_settings_reported(cx);
     }
 
     pub(super) fn respond_approval(

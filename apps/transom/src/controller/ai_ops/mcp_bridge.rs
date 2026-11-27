@@ -78,48 +78,50 @@ pub(in crate::controller) fn handle_mcp_snapshot(
         .entry("mcp-external".to_owned())
         .or_insert_with(|| Arc::new(ToolOutputStore::new()))
         .clone();
-    let timeout_secs = ctx
-        .ai_store
-        .load_settings()
-        .map(|s| s.command_timeout_secs)
-        .unwrap_or(60)
-        .max(5);
+    let settings = ctx.ai_config.snapshot();
+    let timeout_secs = settings.command_timeout_secs.max(5);
 
-    let _ = tx.send(McpControllerSnapshot {
-        sessions,
-        execution_mode: *state.ai_execution_mode.read(),
-        command_timeout: Duration::from_secs(timeout_secs),
-        output_store: store,
-        approvals: state.ai_approvals.clone(),
-        terminal_reqs: state.ai_terminal_reqs.clone(),
-        event_tx: ctx.event_tx.clone(),
-        ai_store: ctx.ai_store.clone(),
-        app_bridge_deps: AppBridgeDeps {
-            known_hosts: ctx.known_hosts.clone(),
-            secret_store: ctx.secret_store.clone(),
-            session_store: ctx.session_store.clone(),
-            settings_store: ctx.settings_store.clone(),
-            backup: ctx.backup.clone(),
-            git_projects: ctx.git_projects.clone(),
-            api_projects: ctx.api_projects.clone(),
-            api_http: ctx.api_http.clone(),
-            ai_store: ctx.ai_store.clone(),
-            git_config: ctx.git_config.clone(),
-            local_processes: ctx.local_processes.clone(),
-            event_tx: ctx.event_tx.clone(),
-            internal_tx: ctx.internal_tx.clone(),
-            app_action_reqs: state.ai_app_action_reqs.clone(),
-            active_tab_id: None,
-            active_remote: None,
-            active_sftp: None,
+    if tx
+        .send(McpControllerSnapshot {
+            sessions,
+            execution_mode: settings.execution_mode,
             command_timeout: Duration::from_secs(timeout_secs),
-            cancel: state.mcp_cancel.clone(),
-            tasks: state.ai_tasks.clone(),
-            conversation_id: None,
-            current_turn_entry_id: Arc::new(parking_lot::RwLock::new(None)),
-            headless_remotes: state.ai_headless_remotes.clone(),
-        },
-    });
+            output_store: store,
+            approvals: state.ai_approvals.clone(),
+            terminal_reqs: state.ai_terminal_reqs.clone(),
+            event_tx: ctx.event_tx.clone(),
+            ai_store: ctx.ai_store.clone(),
+            app_bridge_deps: AppBridgeDeps {
+                known_hosts: ctx.known_hosts.clone(),
+                secret_store: ctx.secret_store.clone(),
+                session_store: ctx.session_store.clone(),
+                settings_store: ctx.settings_store.clone(),
+                backup: ctx.backup.clone(),
+                git_projects: ctx.git_projects.clone(),
+                api_projects: ctx.api_projects.clone(),
+                api_http: ctx.api_http.clone(),
+                ai_store: ctx.ai_store.clone(),
+                ai_config: ctx.ai_config.clone(),
+                git_config: ctx.git_config.clone(),
+                local_processes: ctx.local_processes.clone(),
+                event_tx: ctx.event_tx.clone(),
+                internal_tx: ctx.internal_tx.clone(),
+                app_action_reqs: state.ai_app_action_reqs.clone(),
+                active_tab_id: None,
+                active_remote: None,
+                active_sftp: None,
+                command_timeout: Duration::from_secs(timeout_secs),
+                cancel: state.mcp_cancel.clone(),
+                tasks: state.ai_tasks.clone(),
+                conversation_id: None,
+                current_turn_entry_id: Arc::new(parking_lot::RwLock::new(None)),
+                headless_remotes: state.ai_headless_remotes.clone(),
+            },
+        })
+        .is_err()
+    {
+        log::debug!("MCP 快照请求方已取消，丢弃本次快照");
+    }
 }
 
 /// 启动本地反向 MCP Socket 服务端，并将取消令牌与句柄纳入 `ControllerState`。

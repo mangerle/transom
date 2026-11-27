@@ -56,22 +56,8 @@ pub(super) async fn start_ai_run(
     ctx: &ControllerCtx,
     mut req: AiPromptRequest,
 ) {
-    let settings = match ctx.ai_store.load_settings() {
-        Ok(s) => {
-            *state.ai_execution_mode.write() = s.execution_mode;
-            s
-        }
-        Err(err) => {
-            emit_run_error(
-                ctx,
-                req.run_id,
-                req.conversation_id.unwrap_or_default(),
-                err.to_string(),
-            )
-            .await;
-            return;
-        }
-    };
+    let settings = ctx.ai_config.snapshot();
+    let execution_mode = Arc::new(parking_lot::RwLock::new(settings.execution_mode));
 
     let acp_agent: Option<AcpAgentConfig> = req.acp_agent_id.as_deref().and_then(|wanted| {
         settings
@@ -227,6 +213,7 @@ pub(super) async fn start_ai_run(
                 hooks: &settings.hooks,
                 approval_scope: &approval_scope,
                 approval_grants: state.ai_approval_grants.clone(),
+                execution_mode: execution_mode.clone(),
             }),
             current_turn_entry_id: current_turn_entry_id.clone(),
         },
@@ -249,7 +236,7 @@ pub(super) async fn start_ai_run(
         active_skill_prompt,
         available_skills,
         response_language: Some(settings.response_language.clone()),
-        execution_mode: state.ai_execution_mode.clone(),
+        execution_mode,
         plan_mode: req.plan_mode,
         exec_policy_rules: settings.exec_policy_rules.clone(),
         approval_scope,

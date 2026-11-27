@@ -29,6 +29,7 @@ pub(super) struct SubagentConfig<'a> {
     pub(super) hooks: &'a [transom_ai::HookRule],
     pub(super) approval_scope: &'a transom_ai::ApprovalScope,
     pub(super) approval_grants: Arc<parking_lot::RwLock<transom_ai::ApprovalGrantStore>>,
+    pub(super) execution_mode: Arc<parking_lot::RwLock<transom_ai::ExecutionMode>>,
 }
 
 /// 装配 [`ToolRuntimeContext`] 所需的参数对象。
@@ -157,7 +158,7 @@ pub(super) fn build_tool_context(
             fast_target: cfg.fast_target.cloned(),
             memory: cfg.memory.clone(),
             response_language: cfg.response_language,
-            execution_mode: state.ai_execution_mode.clone(),
+            execution_mode: cfg.execution_mode.clone(),
             exec_policy_rules: cfg.exec_policy_rules.to_vec(),
             hooks: cfg.hooks.to_vec(),
             approval_scope: cfg.approval_scope.clone(),
@@ -202,6 +203,7 @@ pub(super) fn build_tool_context(
             subagent_runner,
             skill_loader: Some(Arc::new(StoreSkillLoader {
                 store: ctx.ai_store.clone(),
+                ai_config: ctx.ai_config.clone(),
             })),
         },
     }

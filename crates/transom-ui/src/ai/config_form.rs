@@ -25,10 +25,10 @@ pub(super) struct ConfigFormState {
 }
 
 impl ConfigFormState {
+    /// 创建空表单；配置快照到达后再调用 [`Self::apply_settings`] 回填。
+    ///
+    /// 该分离避免 UI 构造阶段同步读取配置或钥匙串，也确保表单只显示控制平面确认过的快照。
     pub(super) fn new(
-        settings: &AiSettings,
-        ai_store: &AiStore,
-        secret_store: &dyn SecretStore,
         window: &mut Window,
         cx: &mut Context<AiAssistantView>,
     ) -> (Self, Vec<Subscription>) {
@@ -38,58 +38,16 @@ impl ConfigFormState {
         });
         let api_key_input = cx.new(|cx| InputState::new(window, cx).placeholder("sk-..."));
         let base_url_input = cx.new(|cx| InputState::new(window, cx).placeholder("https://..."));
-        let mut draft_models = Vec::new();
-        if let Some(first_prov) = settings.providers.first() {
-            let pname = first_prov.name.clone();
-            let purl = first_prov.base_url.clone();
-            provider_name_input.update(cx, |i, cx| i.set_value(pname, window, cx));
-            base_url_input.update(cx, |i, cx| i.set_value(purl, window, cx));
-            if let Ok(Some(saved_key)) =
-                ai_store.load_provider_api_key(secret_store, &first_prov.id)
-                && !saved_key.trim().is_empty()
-            {
-                api_key_input.update(cx, |i, cx| i.set_value(saved_key.as_str(), window, cx));
-            }
-            for m in &first_prov.models {
-                draft_models.push(make_draft_model_row(
-                    &m.display_name,
-                    &m.name,
-                    m.context_window,
-                    m.efforts.first().copied(),
-                    window,
-                    cx,
-                ));
-            }
-        }
-        if draft_models.is_empty() {
-            draft_models.push(make_draft_model_row(
-                "",
-                "",
-                Some(128_000),
-                None,
-                window,
-                cx,
-            ));
-        }
         let acp_cmd_input = cx.new(|cx| InputState::new(window, cx).placeholder("claude-code-acp"));
 
-        let cur_lang = settings.response_language.clone();
         let lang_select = cx.new(|cx| {
             let items = vec![
                 ConfigChoice::new("zh", rust_i18n::t!("ai.cfg_lang_zh").to_string()),
                 ConfigChoice::new("en", rust_i18n::t!("ai.cfg_lang_en").to_string()),
                 ConfigChoice::new("auto", rust_i18n::t!("ai.cfg_lang_auto").to_string()),
             ];
-            let mut s =
-                SelectState::new(SearchableVec::new(items), None, window, cx).searchable(false);
-            s.set_selected_value(&cur_lang, window, cx);
-            s
+            SelectState::new(SearchableVec::new(items), None, window, cx).searchable(false)
         });
-        let cur_beh_val = match settings.running_message_behavior {
-            RunningMessageBehavior::Queue => "queue",
-            RunningMessageBehavior::Steer => "steer",
-            RunningMessageBehavior::Interrupt => "interrupt",
-        };
         let running_behavior_select = cx.new(|cx| {
             let items = vec![
                 ConfigChoice::new("queue", rust_i18n::t!("ai.running_msg_queue").to_string()),
@@ -99,10 +57,7 @@ impl ConfigFormState {
                     rust_i18n::t!("ai.running_msg_interrupt").to_string(),
                 ),
             ];
-            let mut s =
-                SelectState::new(SearchableVec::new(items), None, window, cx).searchable(false);
-            s.set_selected_value(&cur_beh_val.to_owned(), window, cx);
-            s
+            SelectState::new(SearchableVec::new(items), None, window, cx).searchable(false)
         });
 
         let lang_sub = cx.subscribe_in(
@@ -111,8 +66,7 @@ impl ConfigFormState {
             |this, _, event: &SelectEvent<SearchableVec<ConfigChoice>>, _, cx| {
                 if let SelectEvent::Confirm(Some(val)) = event {
                     this.state.settings.response_language = val.clone();
-                    let _ = this.persist_settings();
-                    cx.notify();
+                    this.persist_settings_reported(cx);
                 }
             },
         );
@@ -121,12 +75,12 @@ impl ConfigFormState {
             window,
             |this, _, event: &SelectEvent<SearchableVec<ConfigChoice>>, _, cx| {
                 if let SelectEvent::Confirm(Some(val)) = event {
-                    let beh = match val.as_str() {
+                    let behavior = match val.as_str() {
                         "steer" => RunningMessageBehavior::Steer,
                         "interrupt" => RunningMessageBehavior::Interrupt,
                         _ => RunningMessageBehavior::Queue,
                     };
-                    this.set_running_message_behavior(beh, cx);
+                    this.set_running_message_behavior(behavior, cx);
                 }
             },
         );
@@ -135,12 +89,140 @@ impl ConfigFormState {
             provider_name_input,
             api_key_input,
             base_url_input,
-            draft_models,
+            draft_models: Vec::new(),
             acp_cmd_input,
             selected_acp_idx: 0,
             lang_select,
             running_behavior_select,
         };
         (form, vec![lang_sub, beh_sub])
+    }
+
+    /// 使用控制平面快照重建表单中的输入控件与供应商草稿。
+    ///
+    /// # Errors
+    ///
+    /// 当已保存的 API Key 无法从系统钥匙串读取时返回中文错误；调用方应展示该错误，
+    /// 而不是继续显示可能属于其他供应商的旧密钥。
+    pub(super) fn apply_settings(
+        &mut self,
+        settings: &AiSettings,
+        ai_store: &AiStore,
+        secret_store: &dyn SecretStore,
+        window: &mut Window,
+        cx: &mut Context<AiAssistantView>,
+    ) -> Result<(), String> {
+        self.draft_models.clear();
+        let Some(provider) = settings.providers.first() else {
+            self.provider_name_input
+                .update(cx, |input, cx| input.set_value(String::new(), window, cx));
+            self.base_url_input
+                .update(cx, |input, cx| input.set_value(String::new(), window, cx));
+            self.api_key_input
+                .update(cx, |input, cx| input.set_value(String::new(), window, cx));
+            self.draft_models.push(make_draft_model_row(
+                "",
+                "",
+                Some(128_000),
+                None,
+                window,
+                cx,
+            ));
+            self.apply_selects(settings, window, cx);
+            return Ok(());
+        };
+
+        let provider_name = provider.name.clone();
+        let base_url = provider.base_url.clone();
+        self.provider_name_input
+            .update(cx, |input, cx| input.set_value(provider_name, window, cx));
+        self.base_url_input
+            .update(cx, |input, cx| input.set_value(base_url, window, cx));
+        let api_key = ai_store
+            .load_provider_api_key(secret_store, &provider.id)
+            .map_err(|err| {
+                rust_i18n::t!(
+                    "ai.load_provider_key_failed",
+                    provider = provider.name.as_str(),
+                    error = err.to_string()
+                )
+                .to_string()
+            })?;
+        self.api_key_input.update(cx, |input, cx| {
+            input.set_value(
+                api_key.map(|key| key.to_string()).unwrap_or_default(),
+                window,
+                cx,
+            )
+        });
+        self.draft_models
+            .extend(provider.models.iter().map(|model| {
+                make_draft_model_row(
+                    &model.display_name,
+                    &model.name,
+                    model.context_window,
+                    model.efforts.first().copied(),
+                    window,
+                    cx,
+                )
+            }));
+        if self.draft_models.is_empty() {
+            self.draft_models.push(make_draft_model_row(
+                "",
+                "",
+                Some(128_000),
+                None,
+                window,
+                cx,
+            ));
+        }
+
+        self.selected_acp_idx = settings
+            .active_acp_agent_id
+            .as_deref()
+            .and_then(|active| {
+                transom_ai::default_acp_presets()
+                    .iter()
+                    .position(|preset| preset.id == active)
+            })
+            .unwrap_or(0);
+        let acp_command = settings
+            .active_acp_agent_id
+            .as_deref()
+            .and_then(|active| settings.acp_agents.iter().find(|agent| agent.id == active))
+            .map(format_acp_command)
+            .unwrap_or_default();
+        self.acp_cmd_input
+            .update(cx, |input, cx| input.set_value(acp_command, window, cx));
+        self.apply_selects(settings, window, cx);
+        Ok(())
+    }
+
+    fn apply_selects(
+        &self,
+        settings: &AiSettings,
+        window: &mut Window,
+        cx: &mut Context<AiAssistantView>,
+    ) {
+        let language = settings.response_language.clone();
+        self.lang_select.update(cx, |select, cx| {
+            select.set_selected_value(&language, window, cx)
+        });
+        let behavior = match settings.running_message_behavior {
+            RunningMessageBehavior::Queue => "queue",
+            RunningMessageBehavior::Steer => "steer",
+            RunningMessageBehavior::Interrupt => "interrupt",
+        };
+        self.running_behavior_select.update(cx, |select, cx| {
+            select.set_selected_value(&behavior.to_owned(), window, cx)
+        });
+    }
+}
+
+fn format_acp_command(agent: &transom_ai::AcpAgentConfig) -> String {
+    if agent.args.is_empty() {
+        agent.command.clone()
+    } else {
+        format!("{} {}", agent.command, agent.args.join(" "))
     }
 }
