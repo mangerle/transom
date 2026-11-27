@@ -75,6 +75,8 @@ pub(crate) enum UiChatItem {
     },
     ToolCard {
         id: String,
+        call_id: String,
+        running: bool,
         tool_name: String,
         host_label: String,
         risk_label: String,

@@ -126,6 +126,7 @@ impl Tool for RemoteFsTool {
                         approved: true,
                         duration_ms: elapsed,
                         diff_preview: None,
+                        ..Default::default()
                     });
                     Ok(clipped)
                 }
@@ -141,6 +142,7 @@ impl Tool for RemoteFsTool {
                         approved: true,
                         duration_ms: elapsed,
                         diff_preview: None,
+                        ..Default::default()
                     });
                     Err(to_rig_err(err))
                 }
@@ -233,6 +235,7 @@ impl Tool for RemoteFsTool {
                     approved: true,
                     duration_ms: elapsed,
                     diff_preview,
+                    ..Default::default()
                 });
                 Ok(clipped)
             }
@@ -248,6 +251,7 @@ impl Tool for RemoteFsTool {
                     approved: true,
                     duration_ms: elapsed,
                     diff_preview,
+                    ..Default::default()
                 });
                 Err(to_rig_err(err))
             }
@@ -372,6 +376,7 @@ impl Tool for TransferFileTool {
                     approved: true,
                     duration_ms: elapsed,
                     diff_preview: None,
+                    ..Default::default()
                 });
                 Ok(out)
             }
@@ -386,6 +391,7 @@ impl Tool for TransferFileTool {
                     approved: true,
                     duration_ms: elapsed,
                     diff_preview: None,
+                    ..Default::default()
                 });
                 Err(to_rig_err(err))
             }

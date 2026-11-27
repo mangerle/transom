@@ -36,6 +36,29 @@ impl RemoteExecutor for SshRemoteExecutor {
         timeout: Duration,
         cancel: CancellationToken,
     ) -> Result<ExecCommandResult, ToolError> {
+        self.exec_inner(command, timeout, cancel, None).await
+    }
+
+    async fn exec_with_progress(
+        &self,
+        command: &str,
+        timeout: Duration,
+        cancel: CancellationToken,
+        on_progress: transom_ai::tools::ExecProgressCallback,
+    ) -> Result<ExecCommandResult, ToolError> {
+        self.exec_inner(command, timeout, cancel, Some(on_progress))
+            .await
+    }
+}
+
+impl SshRemoteExecutor {
+    async fn exec_inner(
+        &self,
+        command: &str,
+        timeout: Duration,
+        cancel: CancellationToken,
+        on_progress: Option<transom_ai::tools::ExecProgressCallback>,
+    ) -> Result<ExecCommandResult, ToolError> {
         let Some(tasks) = &self.tasks else {
             let fut = self.remote.exec_command_capture(command);
             return tokio::select! {
@@ -74,10 +97,41 @@ impl RemoteExecutor for SshRemoteExecutor {
         let task_cancel = task.cancel.clone();
         let task_detach = task.detach.clone();
         let (tx, rx) = tokio::sync::oneshot::channel();
+        let progress_state = on_progress.map(|cb| {
+            Arc::new(Mutex::new((
+                String::new(),
+                std::time::Instant::now() - Duration::from_millis(300),
+                cb,
+            )))
+        });
         tokio::spawn(async move {
             let res = remote_bg
                 .exec_command_stream(&wrapped, timeout, task_cancel.clone(), |chunk, _is_err| {
                     task.emit_chunk(chunk);
+                    if let Some(state) = &progress_state {
+                        let maybe_snapshot = {
+                            let mut guard = state.lock();
+                            guard.0.push_str(chunk);
+                            // 仅保留末尾 2KB 缓冲，避免长输出内存积压
+                            if guard.0.len() > 2048 {
+                                let keep_from = guard.0.len().saturating_sub(2048);
+                                let mut valid_start = keep_from;
+                                while !guard.0.is_char_boundary(valid_start) {
+                                    valid_start += 1;
+                                }
+                                guard.0.drain(..valid_start);
+                            }
+                            if guard.1.elapsed() >= Duration::from_millis(250) {
+                                guard.1 = std::time::Instant::now();
+                                Some((guard.0.clone(), guard.2.clone()))
+                            } else {
+                                None
+                            }
+                        };
+                        if let Some((buf, cb)) = maybe_snapshot {
+                            cb(&buf);
+                        }
+                    }
                 })
                 .await;
             let mapped = match res {

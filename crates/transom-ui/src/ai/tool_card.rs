@@ -35,6 +35,7 @@ pub(super) fn render_tool_card(
     let p = params.p;
     let UiChatItem::ToolCard {
         id,
+        running,
         tool_name,
         host_label,
         risk_label,
@@ -43,6 +44,7 @@ pub(super) fn render_tool_card(
         ok,
         duration_ms,
         diff_preview,
+        ..
     } = params.item
     else {
         return div().into_any_element();
@@ -81,8 +83,21 @@ pub(super) fn render_tool_card(
                 .child(
                     div()
                         .flex_shrink_0()
-                        .text_color(if *ok { p.text.muted } else { p.danger })
-                        .child(AppIconElement::new(tool_row_icon(tool_name)).small()),
+                        .text_color(if *running {
+                            p.primary
+                        } else if *ok {
+                            p.text.muted
+                        } else {
+                            p.danger
+                        })
+                        .child(
+                            AppIconElement::new(if *running {
+                                AppIcon::Ui(UiIcon::REFRESH)
+                            } else {
+                                tool_row_icon(tool_name)
+                            })
+                            .small(),
+                        ),
                 )
                 .child({
                     let mut title_el = div()
@@ -116,7 +131,18 @@ pub(super) fn render_tool_card(
                 .child(dur_str),
         );
     }
-    if !*ok {
+    if *running {
+        right = right.child(
+            div()
+                .px(px(5.0))
+                .py(px(1.0))
+                .rounded_full()
+                .bg(p.primary.opacity(0.12))
+                .text_size(rems(typography::CAPTION))
+                .text_color(p.primary)
+                .child("执行中"),
+        );
+    } else if !*ok {
         right = right.child(
             div()
                 .text_color(p.danger)
@@ -149,6 +175,35 @@ pub(super) fn render_tool_card(
         }
     }
     if !params.expanded {
+        if *running {
+            let mut live_box = v_flex()
+                .w_full()
+                .max_h(rems(7.5))
+                .overflow_hidden()
+                .px(rems(space::SM))
+                .py(rems(space::XS))
+                .gap(px(2.0))
+                .rounded(p.radius.md)
+                .bg(p.secondary)
+                .border_1()
+                .border_color(p.primary.opacity(0.3))
+                .font_family("monospace")
+                .text_size(rems(typography::CAPTION));
+            if is_cmd && !summary.trim().is_empty() {
+                live_box =
+                    live_box.child(div().text_color(p.text.muted).child(format!("$ {summary}")));
+            }
+            if output.trim().is_empty() {
+                live_box = live_box.child(
+                    div()
+                        .text_color(p.text.muted)
+                        .child("正在执行，等待输出…"),
+                );
+            } else {
+                live_box = live_box.child(div().text_color(p.foreground).child(output.clone()));
+            }
+            root = root.child(live_box);
+        }
         return root.into_any_element();
     }
 

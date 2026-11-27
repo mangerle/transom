@@ -60,6 +60,7 @@ pub(crate) async fn invoke_app_tool(
                 approved: true,
                 duration_ms: elapsed,
                 diff_preview: None,
+                ..Default::default()
             });
             Ok(clipped)
         }
@@ -75,6 +76,7 @@ pub(crate) async fn invoke_app_tool(
                 approved: true,
                 duration_ms: elapsed,
                 diff_preview: None,
+                ..Default::default()
             });
             Err(to_rig_err(err))
         }

@@ -169,6 +169,8 @@ impl AiPanelState {
                 } => {
                     self.items.push(UiChatItem::ToolCard {
                         id: entry.id,
+                        call_id: String::new(),
+                        running: false,
                         tool_name,
                         host_label: self
                             .active_session
@@ -273,11 +275,13 @@ impl AiPanelState {
                 self.finalize_turn(reasoning, text, tokens_per_sec);
             }
             AiAppEvent::ToolCard(dto) => {
-                self.metrics.steps = self.metrics.steps.saturating_add(1);
-                self.metrics.tool_duration_ms = self
-                    .metrics
-                    .tool_duration_ms
-                    .saturating_add(dto.duration_ms);
+                if !dto.running {
+                    self.metrics.steps = self.metrics.steps.saturating_add(1);
+                    self.metrics.tool_duration_ms = self
+                        .metrics
+                        .tool_duration_ms
+                        .saturating_add(dto.duration_ms);
+                }
                 self.push_tool_card(dto);
             }
             AiAppEvent::ApprovalRequested(dto) => {
@@ -304,6 +308,9 @@ impl AiPanelState {
                             if cached_segments.is_none() {
                                 *cached_segments = Some(Arc::new(parse_markdown_segments(text)));
                             }
+                        }
+                        UiChatItem::ToolCard { running, .. } => {
+                            *running = false;
                         }
                         _ => {}
                     }
@@ -443,8 +450,37 @@ impl AiPanelState {
     }
 
     fn push_tool_card(&mut self, dto: AiToolCardDto) {
+        if !dto.call_id.is_empty()
+            && let Some(UiChatItem::ToolCard {
+                running,
+                tool_name,
+                host_label,
+                risk_label,
+                summary,
+                output,
+                ok,
+                duration_ms,
+                diff_preview,
+                ..
+            }) = self.items.iter_mut().rev().find(|it| {
+                matches!(it, UiChatItem::ToolCard { call_id, .. } if call_id == &dto.call_id)
+            })
+        {
+            *running = dto.running;
+            *tool_name = dto.tool_name;
+            *host_label = dto.host_label;
+            *risk_label = dto.risk_label;
+            *summary = dto.summary;
+            *output = dto.output;
+            *ok = dto.ok;
+            *duration_ms = dto.duration_ms;
+            *diff_preview = dto.diff_preview;
+            return;
+        }
         self.items.push(UiChatItem::ToolCard {
             id: format!("tool-{}", self.items.len()),
+            call_id: dto.call_id,
+            running: dto.running,
             tool_name: dto.tool_name,
             host_label: dto.host_label,
             risk_label: dto.risk_label,
@@ -454,5 +490,62 @@ impl AiPanelState {
             duration_ms: dto.duration_ms,
             diff_preview: dto.diff_preview,
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::AiPanelState;
+    use crate::ai::state_types::UiChatItem;
+    use transom_core::{AiAppEvent, AiToolCardDto};
+
+    #[test]
+    fn tool_card_updates_in_place_by_call_id() {
+        let mut st = AiPanelState::default();
+        st.apply_app_event(AiAppEvent::ToolCard(AiToolCardDto {
+            conversation_id: "c1".to_owned(),
+            call_id: "call-1".to_owned(),
+            running: true,
+            tool_name: "remote_exec".to_owned(),
+            host_label: "web-01".to_owned(),
+            risk_label: "只读".to_owned(),
+            summary: "tail -n 5 /var/log/syslog".to_owned(),
+            output: "line 1".to_owned(),
+            ok: true,
+            duration_ms: 300,
+            diff_preview: None,
+        }));
+        assert_eq!(st.items.len(), 1);
+        assert_eq!(st.metrics.steps, 0);
+
+        st.apply_app_event(AiAppEvent::ToolCard(AiToolCardDto {
+            conversation_id: "c1".to_owned(),
+            call_id: "call-1".to_owned(),
+            running: false,
+            tool_name: "remote_exec".to_owned(),
+            host_label: "web-01".to_owned(),
+            risk_label: "只读".to_owned(),
+            summary: "tail -n 5 /var/log/syslog".to_owned(),
+            output: "line 1\nline 2".to_owned(),
+            ok: true,
+            duration_ms: 820,
+            diff_preview: None,
+        }));
+        assert_eq!(st.items.len(), 1);
+        assert_eq!(st.metrics.steps, 1);
+        assert_eq!(st.metrics.tool_duration_ms, 820);
+        match &st.items[0] {
+            UiChatItem::ToolCard {
+                running,
+                output,
+                duration_ms,
+                ..
+            } => {
+                assert!(!*running);
+                assert_eq!(output, "line 1\nline 2");
+                assert_eq!(*duration_ms, 820);
+            }
+            _ => panic!("期望为 ToolCard"),
+        }
     }
 }

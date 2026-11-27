@@ -85,6 +85,7 @@ impl Tool for ReadToolOutputTool {
             approved: true,
             duration_ms: started.elapsed().as_millis() as u64,
             diff_preview: None,
+            ..Default::default()
         });
         Ok(out)
     }
@@ -172,6 +173,13 @@ impl Tool for RemoteExecBulkTool {
         let timeout = self.ctx.command_timeout;
         let cancel = self.ctx.cancel.clone();
         let command = args.command.clone();
+        let bulk_host_label = format!("批量 {} 台主机", targets.len());
+        let call_id = self.ctx.emit_tool_started(
+            Self::NAME,
+            &bulk_host_label,
+            risk,
+            &args.command,
+        );
 
         let results: Vec<(String, String, bool)> = futures::stream::iter(targets)
             .map(|target| {
@@ -214,7 +222,6 @@ impl Tool for RemoteExecBulkTool {
             .await;
 
         let all_ok = results.iter().all(|(_, _, ok)| *ok);
-        let host_count = results.len();
         let combined = results
             .into_iter()
             .map(|(header, body, _)| format!("=== [{header}] ===\n{body}"))
@@ -223,8 +230,10 @@ impl Tool for RemoteExecBulkTool {
 
         let clipped = self.ctx.format_tool_output(Self::NAME, &combined);
         self.ctx.record_card(ToolExecutionCard {
+            call_id,
+            running: false,
             tool_name: Self::NAME.to_owned(),
-            host_label: format!("批量 {host_count} 台主机"),
+            host_label: bulk_host_label,
             risk,
             summary: args.command,
             output: combined,
@@ -334,6 +343,7 @@ impl Tool for PortForwardTool {
             approved: true,
             duration_ms: started.elapsed().as_millis() as u64,
             diff_preview: None,
+            ..Default::default()
         });
         Ok(out)
     }

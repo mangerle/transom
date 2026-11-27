@@ -154,6 +154,7 @@ impl Tool for UpdatePlanTool {
                 approved: true,
                 duration_ms: started.elapsed().as_millis() as u64,
                 diff_preview: None,
+                ..Default::default()
             });
         }
         Ok(format!("执行计划已更新：\n{rendered}"))
@@ -225,6 +226,7 @@ impl Tool for RequestUserInputTool {
             approved: true,
             duration_ms: started.elapsed().as_millis() as u64,
             diff_preview: None,
+            ..Default::default()
         });
         Ok(format!(
             "请在当前回复中直接向用户输出以下问题并停止继续猜测执行：\n{detail}"
@@ -303,6 +305,7 @@ impl Tool for SearchKnowledgeTool {
             approved: true,
             duration_ms: started.elapsed().as_millis() as u64,
             diff_preview: None,
+            ..Default::default()
         });
         Ok(clipped)
     }

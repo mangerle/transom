@@ -65,6 +65,7 @@ impl Tool for InspectHostRuntimeTool {
             approved: true,
             duration_ms: started.elapsed().as_millis() as u64,
             diff_preview: None,
+            ..Default::default()
         });
         Ok(clipped)
     }
@@ -144,6 +145,7 @@ impl Tool for ContainerOpsTool {
             approved: true,
             duration_ms: started.elapsed().as_millis() as u64,
             diff_preview: None,
+            ..Default::default()
         });
         Ok(clipped)
     }

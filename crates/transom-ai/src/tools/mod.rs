@@ -63,9 +63,13 @@ pub struct ApprovalSummary {
     pub requires_fresh_approval: bool,
 }
 
-/// 工具执行完成后推送给控制平面与 UI 的卡片载荷。
+/// 工具执行完成后（或运行中流式进度）推送给控制平面与 UI 的卡片载荷。
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ToolExecutionCard {
+    #[serde(default)]
+    pub call_id: String,
+    #[serde(default)]
+    pub running: bool,
     pub tool_name: String,
     pub host_label: String,
     pub risk: ToolRisk,
@@ -78,6 +82,24 @@ pub struct ToolExecutionCard {
     pub diff_preview: Option<String>,
 }
 
+impl Default for ToolExecutionCard {
+    fn default() -> Self {
+        Self {
+            call_id: String::new(),
+            running: false,
+            tool_name: String::new(),
+            host_label: String::new(),
+            risk: ToolRisk::SafeRead,
+            summary: String::new(),
+            output: String::new(),
+            ok: true,
+            approved: true,
+            duration_ms: 0,
+            diff_preview: None,
+        }
+    }
+}
+
 /// 远端命令执行结果。
 #[derive(Clone, Debug)]
 pub struct ExecCommandResult {
@@ -85,6 +107,9 @@ pub struct ExecCommandResult {
     pub stderr: String,
     pub exit_code: i32,
 }
+
+/// 远端命令实时输出进度回调。
+pub type ExecProgressCallback = Arc<dyn Fn(&str) + Send + Sync>;
 
 /// 远端命令执行器抽象（由控制平面复用 `SshRemote` 实现）。
 #[async_trait]
@@ -95,6 +120,17 @@ pub trait RemoteExecutor: Send + Sync {
         timeout: Duration,
         cancel: CancellationToken,
     ) -> Result<ExecCommandResult, ToolError>;
+
+    /// 带实时输出流预览的远端命令执行（默认回退到 `exec`）。
+    async fn exec_with_progress(
+        &self,
+        command: &str,
+        timeout: Duration,
+        cancel: CancellationToken,
+        _on_progress: ExecProgressCallback,
+    ) -> Result<ExecCommandResult, ToolError> {
+        self.exec(command, timeout, cancel).await
+    }
 }
 
 /// 远端文件系统与传输执行器抽象（由控制平面复用 `SftpClient` + `sudo_write` 实现）。
@@ -265,6 +301,58 @@ impl ToolRuntimeContext {
         let _ = self.card_tx.try_send(card);
     }
 
+    /// 推送工具开始执行的运行态预览卡片，返回用于后续原地刷新的 `call_id`。
+    pub fn emit_tool_started(
+        &self,
+        tool_name: &str,
+        host_label: &str,
+        risk: ToolRisk,
+        summary: &str,
+    ) -> String {
+        let call_id = uuid::Uuid::new_v4().to_string();
+        self.record_card(ToolExecutionCard {
+            call_id: call_id.clone(),
+            running: true,
+            tool_name: tool_name.to_owned(),
+            host_label: host_label.to_owned(),
+            risk,
+            summary: summary.to_owned(),
+            output: String::new(),
+            ok: true,
+            approved: true,
+            duration_ms: 0,
+            diff_preview: None,
+        });
+        call_id
+    }
+
+    /// 推送工具执行过程中的实时末尾输出预览与已耗时（原地更新同 `call_id` 卡片）。
+    pub fn emit_tool_progress(
+        &self,
+        call_id: &str,
+        tool_name: &str,
+        host_label: &str,
+        risk: ToolRisk,
+        summary: &str,
+        tail_output: &str,
+        elapsed_ms: u64,
+    ) {
+        let preview = clip_tail_lines(tail_output, 5, 160);
+        self.record_card(ToolExecutionCard {
+            call_id: call_id.to_owned(),
+            running: true,
+            tool_name: tool_name.to_owned(),
+            host_label: host_label.to_owned(),
+            risk,
+            summary: summary.to_owned(),
+            output: preview,
+            ok: true,
+            approved: true,
+            duration_ms: elapsed_ms,
+            diff_preview: None,
+        });
+    }
+
     /// 清洗 ANSI 并通过会话级输出句柄池生成预览（超限则保留 `output_id`）。
     pub fn format_tool_output(&self, tool_name: &str, raw: &str) -> String {
         self.output_store
@@ -394,5 +482,39 @@ pub(crate) fn to_rig_err(err: ToolError) -> rig_agent::tool::ToolExecutionError 
         }
         ToolError::Cancelled => rig_agent::tool::ToolExecutionError::cancelled(err.to_string()),
         other => rig_agent::tool::ToolExecutionError::other(other.to_string()),
+    }
+}
+
+/// 截取多行输出的末尾 `max_lines` 行，并将每行限长至 `max_chars` 字符，用于运行态流式预览。
+pub(crate) fn clip_tail_lines(raw: &str, max_lines: usize, max_chars: usize) -> String {
+    if raw.is_empty() || max_lines == 0 {
+        return String::new();
+    }
+    let lines: Vec<&str> = raw.lines().filter(|l| !l.trim().is_empty()).collect();
+    let start = lines.len().saturating_sub(max_lines);
+    lines[start..]
+        .iter()
+        .map(|line| {
+            let mut chars = line.chars();
+            let head: String = chars.by_ref().take(max_chars).collect();
+            if chars.next().is_some() {
+                format!("{head}…")
+            } else {
+                head
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::clip_tail_lines;
+
+    #[test]
+    fn clips_tail_lines_and_long_line() {
+        let raw = "l1\n\nl2\nl3\nl4\nl5\nl6\n1234567890";
+        let res = clip_tail_lines(raw, 3, 5);
+        assert_eq!(res, "l5\nl6\n12345…");
     }
 }

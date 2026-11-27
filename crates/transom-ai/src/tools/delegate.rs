@@ -135,6 +135,9 @@ impl Tool for DelegateTaskTool {
             target: args.target,
             max_turns: args.max_turns.unwrap_or(8).clamp(2, 15),
         };
+        let call_id = self
+            .ctx
+            .emit_tool_started(Self::NAME, &host_label, risk, &args.title);
         let started = Instant::now();
         let res = runner.run_subagent(req).await;
         let elapsed = started.elapsed().as_millis() as u64;
@@ -142,6 +145,8 @@ impl Tool for DelegateTaskTool {
             Ok(out) => {
                 let clipped = self.ctx.format_tool_output(Self::NAME, &out);
                 self.ctx.record_card(ToolExecutionCard {
+                    call_id,
+                    running: false,
                     tool_name: Self::NAME.to_owned(),
                     host_label,
                     risk,
@@ -157,6 +162,8 @@ impl Tool for DelegateTaskTool {
             Err(err) => {
                 let msg = err.to_string();
                 self.ctx.record_card(ToolExecutionCard {
+                    call_id,
+                    running: false,
                     tool_name: Self::NAME.to_owned(),
                     host_label,
                     risk,

@@ -95,6 +95,9 @@ impl Tool for RemoteExecTool {
             Some(t) => t.to_owned(),
             None => String::new(),
         };
+        let call_id = self
+            .ctx
+            .emit_tool_started(Self::NAME, &host_label, risk, &args.command);
 
         let outcome: Result<(String, bool, Option<i32>), ToolError> = if use_bridge {
             let bridge = self
@@ -124,8 +127,24 @@ impl Tool for RemoteExecTool {
                 .timeout_secs
                 .map(|s| std::time::Duration::from_secs(s.clamp(5, 600)))
                 .unwrap_or(self.ctx.command_timeout);
+            let ctx_cb = self.ctx.clone();
+            let cid_cb = call_id.clone();
+            let host_cb = host_label.clone();
+            let cmd_cb = args.command.clone();
+            let on_progress: crate::tools::ExecProgressCallback =
+                std::sync::Arc::new(move |tail: &str| {
+                    ctx_cb.emit_tool_progress(
+                        &cid_cb,
+                        Self::NAME,
+                        &host_cb,
+                        risk,
+                        &cmd_cb,
+                        tail,
+                        started.elapsed().as_millis() as u64,
+                    );
+                });
             executor
-                .exec(&args.command, timeout, self.ctx.cancel.clone())
+                .exec_with_progress(&args.command, timeout, self.ctx.cancel.clone(), on_progress)
                 .await
                 .map(|out| {
                     let mut combined = String::new();
@@ -147,6 +166,8 @@ impl Tool for RemoteExecTool {
             Ok((raw, ok, exit_code)) => {
                 let clipped = self.ctx.format_tool_output(Self::NAME, &raw);
                 self.ctx.record_card(crate::tools::ToolExecutionCard {
+                    call_id,
+                    running: false,
                     tool_name: Self::NAME.to_owned(),
                     host_label,
                     risk,
@@ -165,6 +186,8 @@ impl Tool for RemoteExecTool {
             Err(err) => {
                 let msg = err.to_string();
                 self.ctx.record_card(crate::tools::ToolExecutionCard {
+                    call_id,
+                    running: false,
                     tool_name: Self::NAME.to_owned(),
                     host_label,
                     risk,
@@ -251,6 +274,7 @@ impl Tool for GetRecentBlocksTool {
             approved: true,
             duration_ms: started.elapsed().as_millis() as u64,
             diff_preview: None,
+            ..Default::default()
         });
         Ok(clipped)
     }
@@ -327,6 +351,7 @@ impl Tool for ReadTerminalTool {
             approved: true,
             duration_ms: started.elapsed().as_millis() as u64,
             diff_preview: None,
+            ..Default::default()
         });
         Ok(clipped)
     }
@@ -414,6 +439,7 @@ impl Tool for ProposeHostMemoryTool {
             approved: true,
             duration_ms: started.elapsed().as_millis() as u64,
             diff_preview: None,
+            ..Default::default()
         });
         Ok(out)
     }

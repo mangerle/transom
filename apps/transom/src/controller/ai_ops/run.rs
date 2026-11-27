@@ -398,6 +398,27 @@ async fn handle_tool_card(
     last_leaf_id: &mut Option<String>,
     card: ToolExecutionCard,
 ) {
+    if card.running {
+        let dto = AiToolCardDto {
+            conversation_id: ctx.conversation_id.clone(),
+            call_id: card.call_id,
+            running: true,
+            tool_name: card.tool_name,
+            host_label: card.host_label,
+            risk_label: card.risk.label().to_owned(),
+            summary: card.summary,
+            output: card.output,
+            ok: card.ok,
+            duration_ms: card.duration_ms,
+            diff_preview: card.diff_preview,
+        };
+        let _ = ctx
+            .event_tx
+            .send_async(AppEvent::Ai(Box::new(AiAppEvent::ToolCard(dto))))
+            .await;
+        return;
+    }
+
     let entry = SessionEntry::new(
         last_leaf_id.clone(),
         SessionEntryKind::ToolRecord {
@@ -441,6 +462,8 @@ async fn handle_tool_card(
 
     let dto = AiToolCardDto {
         conversation_id: ctx.conversation_id.clone(),
+        call_id: card.call_id,
+        running: false,
         tool_name: card.tool_name,
         host_label: card.host_label,
         risk_label: card.risk.label().to_owned(),

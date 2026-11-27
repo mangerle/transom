@@ -137,6 +137,7 @@ pub(crate) async fn handle_acp_update(
                     approved: true,
                     duration_ms: done.started_at.elapsed().as_millis() as u64,
                     diff_preview: None,
+                    ..Default::default()
                 });
             }
         }

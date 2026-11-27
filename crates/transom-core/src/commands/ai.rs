@@ -118,10 +118,14 @@ pub struct AiHostTargetDto {
     pub protection: HostProtection,
 }
 
-/// 已执行的工具结果卡片 DTO。
+/// 已执行或正在执行的工具卡片 DTO。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AiToolCardDto {
     pub conversation_id: String,
+    /// 同一次工具调用的唯一标识（用于进行中卡片原地刷新）。
+    pub call_id: String,
+    /// 工具是否仍在执行中（`true` 表示运行态预览，`false` 表示最终完成态）。
+    pub running: bool,
     pub tool_name: String,
     pub host_label: String,
     pub risk_label: String,

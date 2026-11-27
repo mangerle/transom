@@ -93,11 +93,14 @@ pub(super) fn group_chat_items(items: &[UiChatItem], is_running: bool) -> Vec<Di
             let mut work_items = Vec::with_capacity(work_slice.len());
             for item in work_slice {
                 if let UiChatItem::ToolCard {
-                    ok, duration_ms: d, ..
+                    running,
+                    ok,
+                    duration_ms: d,
+                    ..
                 } = item
                 {
                     tool_steps += 1;
-                    if *ok {
+                    if !*running && *ok {
                         ok_steps += 1;
                     }
                     duration_ms = duration_ms.saturating_add(*d);
@@ -311,6 +314,44 @@ pub(super) fn render_work_group(
             ));
         }
         wrapper = wrapper.child(details);
+    } else if params.in_progress {
+        // 未手动展开工作块时，仍原地透出正在执行中的工具卡片（显示实时耗时与流式输出预览）
+        let running_items: Vec<&UiChatItem> = params
+            .items
+            .iter()
+            .copied()
+            .filter(|it| matches!(it, UiChatItem::ToolCard { running: true, .. }))
+            .collect();
+        if !running_items.is_empty() {
+            let mut live_list = v_flex()
+                .w_full()
+                .ml(px(6.0))
+                .pl(rems(space::SM))
+                .py(px(2.0))
+                .gap(px(4.0))
+                .border_l_1()
+                .border_color(p.primary.opacity(0.4));
+            for item in running_items {
+                let cid = chat_item_id(item).to_owned();
+                let item_expanded = params.expanded_cards.contains(&cid);
+                let t = on_toggle_id.clone();
+                live_list = live_list.child(render_chat_item(
+                    ChatItemRenderParams {
+                        item,
+                        expanded: item_expanded,
+                        copied_key: params.copied_key,
+                        has_active_terminal: params.has_active_terminal,
+                        p,
+                    },
+                    ChatItemCallbacks {
+                        on_toggle_expand: Rc::new(move |w, cx| t(cid.clone(), w, cx)),
+                        on_rollback: Rc::new(|_, _, _| {}),
+                        code: code_callbacks.clone(),
+                    },
+                ));
+            }
+            wrapper = wrapper.child(live_list);
+        }
     }
     wrapper.into_any_element()
 }
@@ -364,6 +405,8 @@ mod tests {
             },
             UiChatItem::ToolCard {
                 id: "t1".to_owned(),
+                call_id: String::new(),
+                running: false,
                 tool_name: "remote_exec".to_owned(),
                 host_label: "web-01".to_owned(),
                 risk_label: "只读".to_owned(),
