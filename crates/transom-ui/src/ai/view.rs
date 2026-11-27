@@ -51,6 +51,8 @@ pub(crate) struct AiAssistantView {
     pub(super) copied_key: Option<String>,
     pub(super) _copy_reset_task: Option<Task<()>>,
     pub(super) _attachment_task: Option<Task<()>>,
+    pub(super) _init_load_task: Option<Task<()>>,
+    pub(super) _refresh_index_task: Option<Task<()>>,
     pub(super) skills_drawer: SkillsDrawerState,
     pub(super) policy_hooks_form: super::policy_hooks_drawer::PolicyHooksFormState,
     pub(super) model_picker: super::model_picker::ModelPickerState,
@@ -93,11 +95,6 @@ impl AiAssistantView {
                 transom_core::AiCommand::ProbeAcpModels { agent_id },
             )));
         }
-        state.conversations = ai_store.list_all_conversations().unwrap_or_default();
-        state.memory = ai_store.load_memory(None).unwrap_or_default();
-        state
-            .metrics
-            .set_stored_totals(ai_store.load_usage_totals());
 
         let composer_input = cx.new(|cx| {
             TextareaState::new(window, cx)
@@ -294,6 +291,30 @@ impl AiAssistantView {
             },
         );
 
+        let init_store = ai_store.clone();
+        let bg = cx.background_executor().clone();
+        let init_load_task = cx.spawn_in(window, async move |this, cx| {
+            let loaded = bg
+                .spawn(async move {
+                    let conversations = init_store.list_all_conversations().unwrap_or_default();
+                    let memory = init_store.load_memory(None).unwrap_or_default();
+                    let totals = init_store.load_usage_totals();
+                    (conversations, memory, totals)
+                })
+                .await;
+            let _ = this.update(cx, |this, cx| {
+                let (conversations, memory, totals) = loaded;
+                this.state.conversations = conversations;
+                if this.state.memory.global_markdown.is_empty()
+                    && !memory.global_markdown.is_empty()
+                {
+                    this.state.memory.global_markdown = memory.global_markdown;
+                }
+                this.state.metrics.set_stored_totals(totals);
+                cx.notify();
+            });
+        });
+
         Self {
             state,
             ai_store,
@@ -320,6 +341,8 @@ impl AiAssistantView {
             copied_key: None,
             _copy_reset_task: None,
             _attachment_task: None,
+            _init_load_task: Some(init_load_task),
+            _refresh_index_task: None,
             skills_drawer,
             policy_hooks_form,
             model_picker,
@@ -356,7 +379,17 @@ impl AiAssistantView {
             self.select_conversation(&cid);
         }
         if refresh_index {
-            self.state.conversations = self.ai_store.list_all_conversations().unwrap_or_default();
+            let store = self.ai_store.clone();
+            let bg = cx.background_executor().clone();
+            self._refresh_index_task = Some(cx.spawn(async move |this, cx| {
+                let conversations = bg
+                    .spawn(async move { store.list_all_conversations().unwrap_or_default() })
+                    .await;
+                let _ = this.update(cx, |this, cx| {
+                    this.state.conversations = conversations;
+                    cx.notify();
+                });
+            }));
         }
         if let Some(cancelled) = finished_cancelled {
             self.maybe_drain_queue_after_finish(cancelled, cx);

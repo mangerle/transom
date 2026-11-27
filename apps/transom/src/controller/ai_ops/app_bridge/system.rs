@@ -4,9 +4,7 @@ use std::path::PathBuf;
 
 use serde_json::{Value, json};
 use transom_ai::ToolError;
-use transom_core::{
-    BackupExportOptions, CloudPullMode, CloudPushMode, Snippet, SnippetId, SyncTrigger,
-};
+use transom_core::{BackupExportOptions, Snippet, SnippetId};
 
 use super::ControllerAppActionBridge;
 
@@ -176,9 +174,7 @@ async fn save_snippet(
             reason: "快捷指令名称（<=40字）或命令长度超出限制".to_owned(),
         });
     }
-    let store = bridge.deps.settings_store.clone();
-    tokio::task::spawn_blocking(move || {
-        let mut settings = store.load()?;
+    mutate_settings_and_reload(bridge, move |settings| {
         if let Some(pos) = settings
             .snippets
             .items
@@ -189,8 +185,25 @@ async fn save_snippet(
         } else {
             settings.snippets.items.push(snippet);
         }
-        settings.snippets = settings.snippets.sanitized();
-        store.save(&settings)
+        settings.snippets = std::mem::take(&mut settings.snippets).sanitized();
+        Ok(())
+    })
+    .await?;
+    Ok(format!("已保存快捷指令「{name}」"))
+}
+
+async fn mutate_settings_and_reload(
+    bridge: &ControllerAppActionBridge,
+    mutator: impl FnOnce(&mut transom_core::AppSettings) -> Result<(), transom_core::AppError>
+    + Send
+    + 'static,
+) -> Result<(), ToolError> {
+    let store = bridge.deps.settings_store.clone();
+    let settings = tokio::task::spawn_blocking(move || {
+        let mut settings = store.load()?;
+        mutator(&mut settings)?;
+        store.save(&settings)?;
+        Ok::<_, transom_core::AppError>(settings)
     })
     .await
     .map_err(|e| ToolError::ExecutionFailed {
@@ -201,10 +214,12 @@ async fn save_snippet(
         tool: "app_settings_ops",
         reason: e.to_string(),
     })?;
+
+    let payload = json!({ "settings": settings });
     let _ = bridge
-        .request_ui_action("app_settings_ops", "reload_settings", &json!({}))
+        .request_ui_action("app_settings_ops", "reload_settings", &payload)
         .await;
-    Ok(format!("已保存快捷指令「{name}」"))
+    Ok(())
 }
 
 async fn delete_snippet(
@@ -221,36 +236,23 @@ async fn delete_snippet(
             reason: "delete_snippet 必须提供 snippet_id 或 name".to_owned(),
         })?
         .to_owned();
-    let store = bridge.deps.settings_store.clone();
-    let target_cloned = target.clone();
-    tokio::task::spawn_blocking(move || {
-        let mut settings = store.load()?;
+    let target_out = target.clone();
+    mutate_settings_and_reload(bridge, move |settings| {
         let before = settings.snippets.items.len();
         settings
             .snippets
             .items
-            .retain(|s| s.id.to_string() != target_cloned && s.name != target_cloned);
+            .retain(|s| s.id.to_string() != target && s.name != target);
         if settings.snippets.items.len() == before {
             return Err(transom_core::AppError::with_detail(
                 transom_core::ErrorCode::Configuration,
-                format!("未找到快捷指令: {target_cloned}"),
+                format!("未找到快捷指令: {target}"),
             ));
         }
-        store.save(&settings)
+        Ok(())
     })
-    .await
-    .map_err(|e| ToolError::ExecutionFailed {
-        tool: "app_settings_ops",
-        reason: e.to_string(),
-    })?
-    .map_err(|e| ToolError::ExecutionFailed {
-        tool: "app_settings_ops",
-        reason: e.to_string(),
-    })?;
-    let _ = bridge
-        .request_ui_action("app_settings_ops", "reload_settings", &json!({}))
-        .await;
-    Ok(format!("已删除快捷指令: {target}"))
+    .await?;
+    Ok(format!("已删除快捷指令: {target_out}"))
 }
 
 async fn get_settings(bridge: &ControllerAppActionBridge) -> Result<String, ToolError> {
@@ -286,29 +288,16 @@ async fn update_settings(
 ) -> Result<String, ToolError> {
     let lang = args["language"].as_str().map(str::to_owned);
     let theme = args["theme"].as_str().map(str::to_owned);
-    let store = bridge.deps.settings_store.clone();
-    tokio::task::spawn_blocking(move || {
-        let mut s = store.load()?;
+    mutate_settings_and_reload(bridge, move |s| {
         if let Some(l) = lang {
             s.language = l;
         }
         if let Some(t) = theme {
             s.appearance.ui_theme = t;
         }
-        store.save(&s)
+        Ok(())
     })
-    .await
-    .map_err(|e| ToolError::ExecutionFailed {
-        tool: "app_settings_ops",
-        reason: e.to_string(),
-    })?
-    .map_err(|e| ToolError::ExecutionFailed {
-        tool: "app_settings_ops",
-        reason: e.to_string(),
-    })?;
-    let _ = bridge
-        .request_ui_action("app_settings_ops", "reload_settings", &json!({}))
-        .await;
+    .await?;
     Ok("已更新应用设置并通知界面刷新".to_owned())
 }
 
@@ -317,21 +306,16 @@ async fn handle_sync(
     action: &str,
 ) -> Result<String, ToolError> {
     let settings_store = bridge.deps.settings_store.clone();
-    let session_store = bridge.deps.session_store.clone();
-    let (settings, catalog) = tokio::task::spawn_blocking(move || {
-        let s = settings_store.load()?;
-        let c = session_store.load()?;
-        Ok::<_, transom_core::AppError>((s, c))
-    })
-    .await
-    .map_err(|e| ToolError::ExecutionFailed {
-        tool: "app_settings_ops",
-        reason: e.to_string(),
-    })?
-    .map_err(|e| ToolError::ExecutionFailed {
-        tool: "app_settings_ops",
-        reason: e.to_string(),
-    })?;
+    let settings = tokio::task::spawn_blocking(move || settings_store.load())
+        .await
+        .map_err(|e| ToolError::ExecutionFailed {
+            tool: "app_settings_ops",
+            reason: e.to_string(),
+        })?
+        .map_err(|e| ToolError::ExecutionFailed {
+            tool: "app_settings_ops",
+            reason: e.to_string(),
+        })?;
 
     if action == "sync_status" {
         return serde_json::to_string_pretty(&json!({
@@ -344,23 +328,12 @@ async fn handle_sync(
         });
     }
 
-    let cmd = if action == "sync_push" {
-        transom_core::SyncCommand::CloudSyncPush {
-            settings: settings.sync,
-            catalog,
-            trigger: SyncTrigger::Manual,
-            mode: CloudPushMode::Merge,
-        }
-    } else {
-        transom_core::SyncCommand::CloudSyncPull {
-            settings: settings.sync,
-            trigger: SyncTrigger::Manual,
-            mode: CloudPullMode::Merge,
-        }
-    };
-    let _ = cmd;
     bridge
-        .request_ui_action("app_settings_ops", action, &json!({}))
+        .request_ui_action(
+            "app_settings_ops",
+            action,
+            &json!({ "sync_settings": settings.sync }),
+        )
         .await
 }
 

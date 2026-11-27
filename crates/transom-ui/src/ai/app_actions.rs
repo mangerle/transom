@@ -24,8 +24,8 @@ pub(crate) fn handle_app_action(
 ) -> Result<String, String> {
     let args: Value = serde_json::from_str(args_json).unwrap_or(Value::Null);
     match domain {
-        "session_catalog" => handle_catalog(state, action),
-        "app_settings_ops" => handle_settings(state, action, cx),
+        "session_catalog" => handle_catalog(state, action, &args),
+        "app_settings_ops" => handle_settings(state, action, &args, cx),
         "workspace_control" => handle_workspace(state, action, &args, cx),
         "host_monitor" => handle_monitor(state, action, &args, cx),
         "port_forward_ops" => handle_forwards(state, action, &args),
@@ -35,37 +35,45 @@ pub(crate) fn handle_app_action(
     }
 }
 
-fn handle_catalog(state: &mut AppState, action: &str) -> Result<String, String> {
+fn handle_catalog(state: &mut AppState, action: &str, args: &Value) -> Result<String, String> {
     if action != "reload_catalog" {
         return Err(format!("Unknown session_catalog UI action: {action}"));
     }
-    let catalog = state
-        .runtime
-        .services
-        .session_store
-        .load()
-        .map_err(|e| e.to_string())?;
+    let catalog_val = args
+        .get("catalog")
+        .ok_or_else(|| "reload_catalog missing catalog payload".to_owned())?;
+    let catalog: transom_core::SessionCatalog =
+        serde_json::from_value(catalog_val.clone()).map_err(|e| e.to_string())?;
     state.session.catalog = catalog;
     state.session.catalog_revision = state.session.catalog_revision.saturating_add(1);
     state.session.sidebar.rows_cache = None;
     Ok("Catalog reloaded".to_owned())
 }
 
-fn handle_settings(state: &mut AppState, action: &str, cx: &mut App) -> Result<String, String> {
-    let loaded = state
-        .runtime
-        .services
-        .settings_store
-        .load()
-        .map_err(|e| e.to_string())?;
+fn handle_settings(
+    state: &mut AppState,
+    action: &str,
+    args: &Value,
+    cx: &mut App,
+) -> Result<String, String> {
     match action {
         "reload_settings" => {
+            let settings_val = args
+                .get("settings")
+                .ok_or_else(|| "reload_settings missing settings payload".to_owned())?;
+            let loaded: transom_core::AppSettings =
+                serde_json::from_value(settings_val.clone()).map_err(|e| e.to_string())?;
             update_app_settings(cx, |s| *s = loaded);
             Ok("Settings reloaded".to_owned())
         }
         "sync_push" => {
+            let sync_val = args
+                .get("sync_settings")
+                .ok_or_else(|| "sync_push missing sync_settings payload".to_owned())?;
+            let sync_settings: transom_core::SyncSettings =
+                serde_json::from_value(sync_val.clone()).map_err(|e| e.to_string())?;
             state.send_command(SyncCommand::CloudSyncPush {
-                settings: loaded.sync,
+                settings: sync_settings,
                 catalog: state.session.catalog.clone(),
                 trigger: SyncTrigger::Manual,
                 mode: CloudPushMode::Merge,
@@ -73,8 +81,13 @@ fn handle_settings(state: &mut AppState, action: &str, cx: &mut App) -> Result<S
             Ok("Cloud sync push queued".to_owned())
         }
         "sync_pull" => {
+            let sync_val = args
+                .get("sync_settings")
+                .ok_or_else(|| "sync_pull missing sync_settings payload".to_owned())?;
+            let sync_settings: transom_core::SyncSettings =
+                serde_json::from_value(sync_val.clone()).map_err(|e| e.to_string())?;
             state.send_command(SyncCommand::CloudSyncPull {
-                settings: loaded.sync,
+                settings: sync_settings,
                 trigger: SyncTrigger::Manual,
                 mode: CloudPullMode::Merge,
             });

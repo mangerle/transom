@@ -141,11 +141,26 @@ async fn create_session(
     }
     let created_id = session.id.to_string();
 
-    let store = bridge.deps.session_store.clone();
-    tokio::task::spawn_blocking(move || {
-        let mut catalog = store.load()?;
+    mutate_catalog_and_reload(bridge, move |catalog| {
         catalog.sessions.push(session);
-        store.save(&catalog)
+        Ok(())
+    })
+    .await?;
+    Ok(format!("已创建会话「{name}」，session_id: {created_id}"))
+}
+
+async fn mutate_catalog_and_reload(
+    bridge: &ControllerAppActionBridge,
+    mutator: impl FnOnce(&mut transom_core::SessionCatalog) -> Result<(), transom_core::AppError>
+    + Send
+    + 'static,
+) -> Result<(), ToolError> {
+    let store = bridge.deps.session_store.clone();
+    let catalog = tokio::task::spawn_blocking(move || {
+        let mut catalog = store.load()?;
+        mutator(&mut catalog)?;
+        store.save(&catalog)?;
+        Ok::<_, transom_core::AppError>(catalog)
     })
     .await
     .map_err(|e| ToolError::ExecutionFailed {
@@ -157,10 +172,11 @@ async fn create_session(
         reason: e.to_string(),
     })?;
 
+    let payload = serde_json::json!({ "catalog": catalog });
     let _ = bridge
-        .request_ui_action("session_catalog", "reload_catalog", &json!({}))
+        .request_ui_action("session_catalog", "reload_catalog", &payload)
         .await;
-    Ok(format!("已创建会话「{name}」，session_id: {created_id}"))
+    Ok(())
 }
 
 fn build_connection(kind: &str, args: &Value) -> Result<Connection, ToolError> {
@@ -223,9 +239,7 @@ async fn update_session(
             reason: "update 必须提供有效的 session_id".to_owned(),
         })?;
     let args_cloned = args.clone();
-    let store = bridge.deps.session_store.clone();
-    tokio::task::spawn_blocking(move || {
-        let mut catalog = store.load()?;
+    mutate_catalog_and_reload(bridge, move |catalog| {
         let session = catalog
             .sessions
             .iter_mut()
@@ -271,21 +285,9 @@ async fn update_session(
             }
         }
         session.touch();
-        store.save(&catalog)
+        Ok(())
     })
-    .await
-    .map_err(|e| ToolError::ExecutionFailed {
-        tool: "session_catalog",
-        reason: e.to_string(),
-    })?
-    .map_err(|e| ToolError::ExecutionFailed {
-        tool: "session_catalog",
-        reason: e.to_string(),
-    })?;
-
-    let _ = bridge
-        .request_ui_action("session_catalog", "reload_catalog", &json!({}))
-        .await;
+    .await?;
     Ok(format!("已更新会话配置: {sid}"))
 }
 
@@ -300,9 +302,7 @@ async fn delete_session(
             tool: "session_catalog",
             reason: "delete 必须提供有效的 session_id".to_owned(),
         })?;
-    let store = bridge.deps.session_store.clone();
-    tokio::task::spawn_blocking(move || {
-        let mut catalog = store.load()?;
+    mutate_catalog_and_reload(bridge, move |catalog| {
         let before = catalog.sessions.len();
         catalog.sessions.retain(|s| s.id != sid);
         if catalog.sessions.len() == before {
@@ -311,21 +311,9 @@ async fn delete_session(
                 format!("未找到会话: {sid}"),
             ));
         }
-        store.save(&catalog)
+        Ok(())
     })
-    .await
-    .map_err(|e| ToolError::ExecutionFailed {
-        tool: "session_catalog",
-        reason: e.to_string(),
-    })?
-    .map_err(|e| ToolError::ExecutionFailed {
-        tool: "session_catalog",
-        reason: e.to_string(),
-    })?;
-
-    let _ = bridge
-        .request_ui_action("session_catalog", "reload_catalog", &json!({}))
-        .await;
+    .await?;
     Ok(format!("已删除会话: {sid}"))
 }
 
@@ -338,25 +326,11 @@ async fn create_folder(
     let folder = SessionFolder::new(name.clone(), parent);
     let fid = folder.id.to_string();
 
-    let store = bridge.deps.session_store.clone();
-    tokio::task::spawn_blocking(move || {
-        let mut catalog = store.load()?;
+    mutate_catalog_and_reload(bridge, move |catalog| {
         catalog.folders.push(folder);
-        store.save(&catalog)
+        Ok(())
     })
-    .await
-    .map_err(|e| ToolError::ExecutionFailed {
-        tool: "session_catalog",
-        reason: e.to_string(),
-    })?
-    .map_err(|e| ToolError::ExecutionFailed {
-        tool: "session_catalog",
-        reason: e.to_string(),
-    })?;
-
-    let _ = bridge
-        .request_ui_action("session_catalog", "reload_catalog", &json!({}))
-        .await;
+    .await?;
     Ok(format!("已创建分组目录「{name}」，folder_id: {fid}"))
 }
 
@@ -371,30 +345,18 @@ async fn delete_folder(
             tool: "session_catalog",
             reason: "delete_folder 必须提供有效的 folder_id".to_owned(),
         })?;
-    let store = bridge.deps.session_store.clone();
-    tokio::task::spawn_blocking(move || {
-        let mut catalog = store.load()?;
-        catalog.delete_folder(fid).map_err(|e| {
-            transom_core::AppError::with_detail(
-                transom_core::ErrorCode::Configuration,
-                e.to_string(),
-            )
-        })?;
-        store.save(&catalog)
+    mutate_catalog_and_reload(bridge, move |catalog| {
+        catalog
+            .delete_folder(fid)
+            .map(|_| ())
+            .map_err(|e| {
+                transom_core::AppError::with_detail(
+                    transom_core::ErrorCode::Configuration,
+                    e.to_string(),
+                )
+            })
     })
-    .await
-    .map_err(|e| ToolError::ExecutionFailed {
-        tool: "session_catalog",
-        reason: e.to_string(),
-    })?
-    .map_err(|e| ToolError::ExecutionFailed {
-        tool: "session_catalog",
-        reason: e.to_string(),
-    })?;
-
-    let _ = bridge
-        .request_ui_action("session_catalog", "reload_catalog", &json!({}))
-        .await;
+    .await?;
     Ok(format!("已删除分组目录: {fid}"))
 }
 
