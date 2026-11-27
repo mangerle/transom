@@ -283,6 +283,7 @@ impl Tool for SearchKnowledgeTool {
     ) -> Result<Self::Output, Self::Error> {
         let searcher = self
             .ctx
+            .caps
             .knowledge_searcher
             .as_ref()
             .ok_or_else(|| to_rig_err(ToolError::NoActiveSession))?;

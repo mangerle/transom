@@ -95,9 +95,10 @@ impl Tool for RemoteFsTool {
             None => String::new(),
         };
 
-        if target_trimmed.is_some() || self.ctx.remote_fs.is_none() {
+        if target_trimmed.is_some() || self.ctx.caps.remote_fs.is_none() {
             let bridge = self
                 .ctx
+                .caps
                 .app_bridge
                 .as_ref()
                 .ok_or_else(|| to_rig_err(ToolError::NoActiveSession))?;
@@ -148,6 +149,7 @@ impl Tool for RemoteFsTool {
 
         let fs = self
             .ctx
+            .caps
             .remote_fs
             .as_ref()
             .ok_or_else(|| to_rig_err(ToolError::NoActiveSession))?;
@@ -317,7 +319,7 @@ impl Tool for TransferFileTool {
             .filter(|s| !s.is_empty());
         let is_dir_upload = args.direction == TransferDirection::Upload
             && std::path::Path::new(&args.local_path).is_dir();
-        let use_bridge = target_trimmed.is_some() || is_dir_upload || self.ctx.remote_fs.is_none();
+        let use_bridge = target_trimmed.is_some() || is_dir_upload || self.ctx.caps.remote_fs.is_none();
         let started = Instant::now();
         let summary = format!("{} -> {}", args.local_path, args.remote_path);
         let host_label = target_trimmed.unwrap_or("").to_owned();
@@ -325,6 +327,7 @@ impl Tool for TransferFileTool {
         let res = if use_bridge {
             let bridge = self
                 .ctx
+                .caps
                 .app_bridge
                 .as_ref()
                 .ok_or_else(|| to_rig_err(ToolError::NoActiveSession))?;
@@ -342,6 +345,7 @@ impl Tool for TransferFileTool {
         } else {
             let fs = self
                 .ctx
+                .caps
                 .remote_fs
                 .as_ref()
                 .ok_or_else(|| to_rig_err(ToolError::NoActiveSession))?;

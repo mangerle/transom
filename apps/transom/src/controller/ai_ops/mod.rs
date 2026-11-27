@@ -400,7 +400,7 @@ async fn start_ai_run(state: &mut ControllerState, ctx: &ControllerCtx, mut req:
         .then(|| {
             Arc::new(hooks_exec::ControllerHookExecutor {
                 rules: settings.hooks.clone(),
-                remote_exec: tool_ctx.remote_exec.clone(),
+                remote_exec: tool_ctx.caps.remote_exec.clone(),
                 cancel: cancel.clone(),
             }) as Arc<dyn transom_ai::HookExecutor>
         });

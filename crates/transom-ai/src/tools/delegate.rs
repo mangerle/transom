@@ -111,7 +111,7 @@ impl Tool for DelegateTaskTool {
         _context: &mut ToolContext,
         args: Self::Args,
     ) -> Result<Self::Output, Self::Error> {
-        let runner = self.ctx.subagent_runner.as_ref().ok_or_else(|| {
+        let runner = self.ctx.caps.subagent_runner.as_ref().ok_or_else(|| {
             to_rig_err(ToolError::ExecutionFailed {
                 tool: Self::NAME,
                 reason: "当前运行上下文不支持子 Agent 派发".to_owned(),

@@ -24,7 +24,7 @@ pub(crate) async fn invoke_app_tool(
     risk: ToolRisk,
     args: AppActionArgs,
 ) -> Result<String, ToolExecutionError> {
-    let bridge = ctx.app_bridge.as_ref().ok_or_else(|| {
+    let bridge = ctx.caps.app_bridge.as_ref().ok_or_else(|| {
         to_rig_err(ToolError::ExecutionFailed {
             tool: tool_name,
             reason: "当前运行上下文未挂载软件操作桥接器".to_owned(),
@@ -386,7 +386,6 @@ mod tests {
     use tokio_util::sync::CancellationToken;
 
     use super::{AppActionArgs, SessionCatalogTool};
-    use crate::output_store::ToolOutputStore;
     use crate::session::SessionScope;
     use crate::tools::{AppActionBridge, AppBridgeDomain, ToolError, ToolRuntimeContext};
 
@@ -410,26 +409,13 @@ mod tests {
     #[tokio::test]
     async fn invokes_app_bridge_and_emits_card() {
         let (card_tx, mut card_rx) = mpsc::channel(8);
-        let ctx = ToolRuntimeContext {
-            scope: SessionScope::Global,
-            locked_session: None,
-            bulk_hosts: Vec::new(),
-            output_store: Arc::new(ToolOutputStore::new()),
-            command_timeout: Duration::from_secs(30),
-            cancel: CancellationToken::new(),
+        let mut ctx = ToolRuntimeContext::minimal(
+            SessionScope::Global,
             card_tx,
-            plan_tx: None,
-            remote_exec: None,
-            remote_fs: None,
-            terminal: None,
-            runtime_inspector: None,
-            forwarder: None,
-            memory_writer: None,
-            knowledge_searcher: None,
-            app_bridge: Some(Arc::new(FakeBridge)),
-            subagent_runner: None,
-            skill_loader: None,
-        };
+            CancellationToken::new(),
+        );
+        ctx.command_timeout = Duration::from_secs(30);
+        ctx.caps.app_bridge = Some(Arc::new(FakeBridge));
 
         let tool = SessionCatalogTool::new(ctx);
         let mut tool_ctx = ToolContext::new();

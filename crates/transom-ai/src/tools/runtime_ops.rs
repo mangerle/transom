@@ -45,6 +45,7 @@ impl Tool for InspectHostRuntimeTool {
     ) -> Result<Self::Output, Self::Error> {
         let inspector = self
             .ctx
+            .caps
             .runtime_inspector
             .as_ref()
             .ok_or_else(|| to_rig_err(ToolError::NoActiveSession))?;
@@ -118,6 +119,7 @@ impl Tool for ContainerOpsTool {
     ) -> Result<Self::Output, Self::Error> {
         let inspector = self
             .ctx
+            .caps
             .runtime_inspector
             .as_ref()
             .ok_or_else(|| to_rig_err(ToolError::NoActiveSession))?;

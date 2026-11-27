@@ -178,22 +178,24 @@ pub(super) fn build_tool_context(
         cancel,
         card_tx,
         plan_tx,
-        remote_exec,
-        remote_fs,
-        terminal,
-        runtime_inspector,
-        forwarder: None,
-        memory_writer: Some(Arc::new(StoreMemoryBridge {
-            store: ctx.ai_store.clone(),
-        })),
-        knowledge_searcher: Some(Arc::new(StoreKnowledgeBridge {
-            store: ctx.ai_store.clone(),
-        })),
-        app_bridge: Some(app_bridge),
-        subagent_runner,
-        skill_loader: Some(Arc::new(StoreSkillLoader {
-            store: ctx.ai_store.clone(),
-        })),
+        caps: transom_ai::ToolCapabilities {
+            remote_exec,
+            remote_fs,
+            terminal,
+            runtime_inspector,
+            forwarder: None,
+            memory_writer: Some(Arc::new(StoreMemoryBridge {
+                store: ctx.ai_store.clone(),
+            })),
+            knowledge_searcher: Some(Arc::new(StoreKnowledgeBridge {
+                store: ctx.ai_store.clone(),
+            })),
+            app_bridge: Some(app_bridge),
+            subagent_runner,
+            skill_loader: Some(Arc::new(StoreSkillLoader {
+                store: ctx.ai_store.clone(),
+            })),
+        },
     }
 }
 

@@ -292,6 +292,7 @@ impl Tool for PortForwardTool {
     ) -> Result<Self::Output, Self::Error> {
         let forwarder = self
             .ctx
+            .caps
             .forwarder
             .as_ref()
             .ok_or_else(|| to_rig_err(ToolError::NoActiveSession))?;

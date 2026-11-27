@@ -109,40 +109,17 @@ pub fn assess_app_tool(
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
-    use std::time::Duration;
-
     use tokio::sync::mpsc;
     use tokio_util::sync::CancellationToken;
 
     use super::assess_app_tool;
-    use crate::output_store::ToolOutputStore;
     use crate::policy::ToolRisk;
     use crate::session::SessionScope;
     use crate::tools::ToolRuntimeContext;
 
     fn dummy_ctx() -> ToolRuntimeContext {
         let (card_tx, _card_rx) = mpsc::channel(4);
-        ToolRuntimeContext {
-            scope: SessionScope::Global,
-            locked_session: None,
-            bulk_hosts: Vec::new(),
-            output_store: Arc::new(ToolOutputStore::new()),
-            command_timeout: Duration::from_secs(30),
-            cancel: CancellationToken::new(),
-            card_tx,
-            plan_tx: None,
-            remote_exec: None,
-            remote_fs: None,
-            terminal: None,
-            runtime_inspector: None,
-            forwarder: None,
-            memory_writer: None,
-            knowledge_searcher: None,
-            app_bridge: None,
-            subagent_runner: None,
-            skill_loader: None,
-        }
+        ToolRuntimeContext::minimal(SessionScope::Global, card_tx, CancellationToken::new())
     }
 
     #[test]

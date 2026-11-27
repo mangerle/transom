@@ -195,17 +195,9 @@ pub struct BulkHostTarget {
     pub executor: Arc<dyn RemoteExecutor>,
 }
 
-/// 工具运行上下文：汇集绑定会话、超时配置、取消令牌与各后端句柄。
-#[derive(Clone)]
-pub struct ToolRuntimeContext {
-    pub scope: SessionScope,
-    pub locked_session: Option<LockedSession>,
-    pub bulk_hosts: Vec<BulkHostTarget>,
-    pub output_store: Arc<ToolOutputStore>,
-    pub command_timeout: Duration,
-    pub cancel: CancellationToken,
-    pub card_tx: mpsc::Sender<ToolExecutionCard>,
-    pub plan_tx: Option<mpsc::Sender<plan::PlanSnapshot>>,
+/// 工具运行期挂载的可选后端能力句柄集合（全部默认 `None`，按作用域装配）。
+#[derive(Clone, Default)]
+pub struct ToolCapabilities {
     pub remote_exec: Option<Arc<dyn RemoteExecutor>>,
     pub remote_fs: Option<Arc<dyn RemoteFsExecutor>>,
     pub terminal: Option<Arc<dyn TerminalContextProvider>>,
@@ -218,7 +210,40 @@ pub struct ToolRuntimeContext {
     pub skill_loader: Option<Arc<dyn SkillLoader>>,
 }
 
+/// 工具运行上下文：汇集绑定会话、超时配置、取消令牌与各后端能力句柄。
+#[derive(Clone)]
+pub struct ToolRuntimeContext {
+    pub scope: SessionScope,
+    pub locked_session: Option<LockedSession>,
+    pub bulk_hosts: Vec<BulkHostTarget>,
+    pub output_store: Arc<ToolOutputStore>,
+    pub command_timeout: Duration,
+    pub cancel: CancellationToken,
+    pub card_tx: mpsc::Sender<ToolExecutionCard>,
+    pub plan_tx: Option<mpsc::Sender<plan::PlanSnapshot>>,
+    pub caps: ToolCapabilities,
+}
+
 impl ToolRuntimeContext {
+    /// 构造最小可用的工具运行上下文（其余可选能力均默认置空）。
+    pub fn minimal(
+        scope: SessionScope,
+        card_tx: mpsc::Sender<ToolExecutionCard>,
+        cancel: CancellationToken,
+    ) -> Self {
+        Self {
+            scope,
+            locked_session: None,
+            bulk_hosts: Vec::new(),
+            output_store: Arc::new(ToolOutputStore::new()),
+            command_timeout: Duration::from_secs(60),
+            cancel,
+            card_tx,
+            plan_tx: None,
+            caps: ToolCapabilities::default(),
+        }
+    }
+
     pub fn host_label(&self) -> String {
         self.locked_session
             .as_ref()
@@ -249,26 +274,7 @@ impl ToolRuntimeContext {
     /// 构造仅用于导出工具 Schema 的空上下文（不关联任何连接或任务）。
     pub(crate) fn dummy_for_schema() -> Self {
         let (card_tx, _card_rx) = mpsc::channel(1);
-        Self {
-            scope: SessionScope::Global,
-            locked_session: None,
-            bulk_hosts: Vec::new(),
-            output_store: Arc::new(ToolOutputStore::new()),
-            command_timeout: Duration::from_secs(60),
-            cancel: CancellationToken::new(),
-            card_tx,
-            plan_tx: None,
-            remote_exec: None,
-            remote_fs: None,
-            terminal: None,
-            runtime_inspector: None,
-            forwarder: None,
-            memory_writer: None,
-            knowledge_searcher: None,
-            app_bridge: None,
-            subagent_runner: None,
-            skill_loader: None,
-        }
+        Self::minimal(SessionScope::Global, card_tx, CancellationToken::new())
     }
 }
 
@@ -323,16 +329,16 @@ pub fn attach_tools(
         .tool(extra::ReadToolOutputTool::new(ctx.clone()))
         .tool(plan::UpdatePlanTool::new(ctx.clone()))
         .tool(plan::RequestUserInputTool::new(ctx.clone()));
-    if ctx.knowledge_searcher.is_some() {
+    if ctx.caps.knowledge_searcher.is_some() {
         builder = builder.tool(plan::SearchKnowledgeTool::new(ctx.clone()));
     }
-    if ctx.subagent_runner.is_some() {
+    if ctx.caps.subagent_runner.is_some() {
         builder = builder.tool(delegate::DelegateTaskTool::new(ctx.clone()));
     }
-    if ctx.skill_loader.is_some() {
+    if ctx.caps.skill_loader.is_some() {
         builder = builder.tool(skill_tool::LoadSkillTool::new(ctx.clone()));
     }
-    if ctx.app_bridge.is_some() {
+    if ctx.caps.app_bridge.is_some() {
         builder = builder
             .tool(app_tools::SessionCatalogTool::new(ctx.clone()))
             .tool(app_tools::WorkspaceControlTool::new(ctx.clone()))
@@ -345,10 +351,10 @@ pub fn attach_tools(
             .tool(app_tools_dev::AppSettingsOpsTool::new(ctx.clone()))
             .tool(app_tools_dev::AiMemorySkillsTool::new(ctx.clone()));
     }
-    if ctx.app_bridge.is_some() || ctx.remote_exec.is_some() {
+    if ctx.caps.app_bridge.is_some() || ctx.caps.remote_exec.is_some() {
         builder = builder.tool(remote::RemoteExecTool::new(ctx.clone()));
     }
-    if ctx.app_bridge.is_some() || ctx.remote_fs.is_some() {
+    if ctx.caps.app_bridge.is_some() || ctx.caps.remote_fs.is_some() {
         builder = builder
             .tool(ops::RemoteFsTool::new(ctx.clone()))
             .tool(ops::TransferFileTool::new(ctx.clone()));

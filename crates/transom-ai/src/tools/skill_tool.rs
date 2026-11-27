@@ -68,7 +68,7 @@ impl Tool for LoadSkillTool {
         _context: &mut ToolContext,
         args: Self::Args,
     ) -> Result<Self::Output, Self::Error> {
-        let loader = self.ctx.skill_loader.as_ref().ok_or_else(|| {
+        let loader = self.ctx.caps.skill_loader.as_ref().ok_or_else(|| {
             to_rig_err(ToolError::ExecutionFailed {
                 tool: Self::NAME,
                 reason: "当前运行上下文未配置技能加载器".to_owned(),

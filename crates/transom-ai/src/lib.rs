@@ -102,8 +102,8 @@ pub use tools::{
     AppActionBridge, AppBridgeDomain, ApprovalSummary, BulkHostTarget, DelegateMode,
     DelegateTaskRequest, ExecCommandResult, ForwardExecutor, KnowledgeSearcher, LockedSession,
     MemoryWriter, RemoteExecutor, RemoteFsExecutor, RuntimeInspector, SkillLoader, SubagentRunner,
-    TerminalContextProvider, ToolExecutionCard, ToolRuntimeContext, TransferDirection,
-    assess_tool_call,
+    TerminalContextProvider, ToolCapabilities, ToolExecutionCard, ToolRuntimeContext,
+    TransferDirection, assess_tool_call,
     plan::{PlanSnapshot, PlanStep, PlanStepStatus},
 };
 pub use working_state::{

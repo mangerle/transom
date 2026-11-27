@@ -11,7 +11,7 @@ use tokio_util::sync::CancellationToken;
 use transom_ai::{
     AgentEvent, DelegateMode, DelegateTaskRequest, EVENT_CHANNEL_CAPACITY, ExecPolicyRule,
     ExecutionMode, HookExecutor, HookRule, MemorySnapshot, ModelTarget, RunInput, SessionScope,
-    SubagentRunner, ToolError, ToolExecutionCard, ToolOutputStore, ToolRuntimeContext,
+    SubagentRunner, ToolError, ToolExecutionCard, ToolRuntimeContext,
 };
 use transom_core::{AiAppEvent, AiApprovalDecision, AiApprovalDto, AiManagedTaskStatus, AppEvent};
 use uuid::Uuid;
@@ -131,32 +131,21 @@ impl SubagentRunner for ControllerSubagentRunner {
         let (event_tx, event_rx) = mpsc::channel(EVENT_CHANNEL_CAPACITY);
         let (card_tx, card_rx) = mpsc::channel(32);
 
-        let tool_ctx = ToolRuntimeContext {
-            scope: SessionScope::Global,
-            locked_session: None,
-            bulk_hosts: Vec::new(),
-            output_store: Arc::new(ToolOutputStore::new()),
-            command_timeout: self
-                .app_bridge_deps
-                .command_timeout
-                .max(Duration::from_secs(30)),
-            cancel: child_cancel.clone(),
-            card_tx,
-            plan_tx: None,
-            remote_exec: None,
-            remote_fs: None,
-            terminal: None,
-            runtime_inspector: None,
-            forwarder: None,
-            memory_writer: None,
+        let mut tool_ctx =
+            ToolRuntimeContext::minimal(SessionScope::Global, card_tx, child_cancel.clone());
+        tool_ctx.command_timeout = self
+            .app_bridge_deps
+            .command_timeout
+            .max(Duration::from_secs(30));
+        tool_ctx.caps = transom_ai::ToolCapabilities {
             knowledge_searcher: Some(Arc::new(StoreKnowledgeBridge {
                 store: self.app_bridge_deps.ai_store.clone(),
             })),
             app_bridge: Some(app_bridge),
-            subagent_runner: None,
             skill_loader: Some(Arc::new(StoreSkillLoader {
                 store: self.app_bridge_deps.ai_store.clone(),
             })),
+            ..Default::default()
         };
 
         let is_readonly = req.mode == DelegateMode::Readonly;

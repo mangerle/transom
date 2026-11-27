@@ -224,34 +224,22 @@ impl McpServerBackend for ControllerMcpBackend {
         }
 
         let (card_tx, _card_rx) = mpsc::channel(8);
-        let ctx = ToolRuntimeContext {
-            scope: SessionScope::Host(sid.to_owned()),
-            locked_session: Some(LockedSession {
-                session_id: sid.to_owned(),
-                prompt_ctx: SessionPromptContext {
-                    host_name: target.meta.host_name.clone(),
-                    login: target.meta.login.clone(),
-                    os_platform: target.meta.platform.clone(),
-                    protection: target.meta.protection,
-                },
-            }),
-            bulk_hosts: Vec::new(),
-            output_store: snap.output_store.clone(),
-            command_timeout: snap.command_timeout,
-            cancel: self.cancel.clone(),
+        let mut ctx = ToolRuntimeContext::minimal(
+            SessionScope::Host(sid.to_owned()),
             card_tx,
-            plan_tx: None,
-            remote_exec: None,
-            remote_fs: None,
-            terminal: None,
-            runtime_inspector: None,
-            forwarder: None,
-            memory_writer: None,
-            knowledge_searcher: None,
-            app_bridge: None,
-            subagent_runner: None,
-            skill_loader: None,
-        };
+            self.cancel.clone(),
+        );
+        ctx.locked_session = Some(LockedSession {
+            session_id: sid.to_owned(),
+            prompt_ctx: SessionPromptContext {
+                host_name: target.meta.host_name.clone(),
+                login: target.meta.login.clone(),
+                os_platform: target.meta.platform.clone(),
+                protection: target.meta.protection,
+            },
+        });
+        ctx.output_store = snap.output_store.clone();
+        ctx.command_timeout = snap.command_timeout;
 
         let args_json = arguments.to_string();
         let assessment = assess_tool_call(name, &args_json, &ctx);
@@ -316,26 +304,10 @@ impl ControllerMcpBackend {
             deps.active_sftp = target.sftp.clone();
         }
         let (card_tx, _card_rx) = mpsc::channel(4);
-        let ctx = ToolRuntimeContext {
-            scope: SessionScope::Global,
-            locked_session: None,
-            bulk_hosts: Vec::new(),
-            output_store: snap.output_store.clone(),
-            command_timeout: snap.command_timeout,
-            cancel: self.cancel.clone(),
-            card_tx,
-            plan_tx: None,
-            remote_exec: None,
-            remote_fs: None,
-            terminal: None,
-            runtime_inspector: None,
-            forwarder: None,
-            memory_writer: None,
-            knowledge_searcher: None,
-            app_bridge: None,
-            subagent_runner: None,
-            skill_loader: None,
-        };
+        let mut ctx =
+            ToolRuntimeContext::minimal(SessionScope::Global, card_tx, self.cancel.clone());
+        ctx.output_store = snap.output_store.clone();
+        ctx.command_timeout = snap.command_timeout;
         let args_json = arguments.to_string();
         let assessment = assess_tool_call(name, &args_json, &ctx);
         let protection = matched
