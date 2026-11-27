@@ -76,9 +76,9 @@ pub use memory::{
 };
 pub use output_store::ToolOutputStore;
 pub use policy::{
-    BlockingCommandHit, ExecutionMode, HostProtection, MAX_BULK_TARGETS, PolicyDecision, ToolRisk,
-    classify_shell_command, detect_blocking_command, evaluate_bulk_policy, evaluate_policy,
-    format_blocking_command_hint,
+    BlockingCommandHit, CommandPolicyContext, ExecutionMode, HostProtection, MAX_BULK_TARGETS,
+    PolicyDecision, ToolRisk, classify_shell_command, detect_blocking_command,
+    evaluate_bulk_policy, evaluate_command_policy, evaluate_policy, format_blocking_command_hint,
 };
 pub use redact::redact_secrets_for_model;
 pub use runner::{

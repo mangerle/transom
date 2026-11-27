@@ -195,6 +195,68 @@ pub use crate::policy_rules::{
     format_blocking_command_hint,
 };
 
+/// 统一策略裁决输入上下文（供内置 `Gate` 与外部 ACP 权限协商共用）。
+pub struct CommandPolicyContext<'a> {
+    pub protection: HostProtection,
+    pub mode: ExecutionMode,
+    pub plan_mode: bool,
+    pub base_risk: ToolRisk,
+    pub force_confirm: bool,
+    pub command: Option<&'a str>,
+    pub exec_policy_rules: &'a [crate::exec_policy::ExecPolicyRule],
+    pub session_allow_prefixes: &'a std::collections::HashSet<String>,
+}
+
+/// 统一计算单次工具/命令调用的策略裁决结果。
+///
+/// 依次执行：
+/// 1. `plan_mode` 只读硬拦截；
+/// 2. 命令链静态规则与会话前缀白名单评估（若提供 `command`）；
+/// 3. 基础 [`evaluate_policy`] 裁决与非破坏性白名单放行。
+pub fn evaluate_command_policy(ctx: &CommandPolicyContext<'_>) -> PolicyDecision {
+    if ctx.plan_mode && matches!(ctx.base_risk, ToolRisk::Write | ToolRisk::Destructive) {
+        return PolicyDecision::Deny {
+            reason: "当前处于只读规划（Plan）模式，已拦截变更操作。请仅执行只读探测，并通过 `update_plan` 输出完整方案等待用户确认后再执行。".to_owned(),
+        };
+    }
+
+    let mut effective_risk = ctx.base_risk;
+    let mut chain_allowlisted = false;
+    let mut force_ask = ctx.force_confirm;
+
+    if let Some(cmd) = ctx.command {
+        let chain = crate::exec_policy::evaluate_command_chain(
+            cmd,
+            ctx.exec_policy_rules,
+            ctx.session_allow_prefixes,
+        );
+        if let Some(denied) = chain.denied_reason {
+            return PolicyDecision::Deny { reason: denied };
+        }
+        if chain.worst_risk > effective_risk {
+            effective_risk = chain.worst_risk;
+        }
+        chain_allowlisted = chain.all_allowlisted;
+        force_ask = force_ask || chain.force_ask;
+        if ctx.plan_mode && matches!(effective_risk, ToolRisk::Write | ToolRisk::Destructive) {
+            return PolicyDecision::Deny {
+                reason: "当前处于只读规划（Plan）模式，已拦截变更命令。".to_owned(),
+            };
+        }
+    }
+
+    let base = evaluate_policy(ctx.protection, ctx.mode, effective_risk, force_ask);
+    if base == PolicyDecision::RequireApproval
+        && chain_allowlisted
+        && ctx.protection != HostProtection::ReadOnly
+        && effective_risk != ToolRisk::Destructive
+    {
+        PolicyDecision::Allow
+    } else {
+        base
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{

@@ -21,8 +21,9 @@ use crate::exec_policy::{
 };
 use crate::hooks::{HookContext, HookEvent, HookExecutor};
 use crate::policy::{
-    ExecutionMode, HostProtection, PolicyDecision, ToolRisk, detect_blocking_command,
-    evaluate_bulk_policy, evaluate_policy, format_blocking_command_hint,
+    CommandPolicyContext, ExecutionMode, HostProtection, PolicyDecision, ToolRisk,
+    detect_blocking_command, evaluate_bulk_policy, evaluate_command_policy,
+    format_blocking_command_hint,
 };
 use crate::runner::{AgentEvent, ApprovalRequest, HandoffRequest, TurnOutput};
 use crate::tools::{ToolRiskAssessment, ToolRuntimeContext, assess_tool_call_value};
@@ -274,28 +275,22 @@ impl Gate {
         assessment: &ToolRiskAssessment,
     ) -> Result<PolicyDecision, DispatchAction> {
         let mode = *self.execution_mode.read();
-        let mut effective_risk = assessment.risk;
-        let mut chain_allowlisted = false;
-        let mut force_ask = assessment.force_confirm;
-
-        if matches!(tool_name, "remote_exec" | "remote_exec_bulk")
-            && let Some(cmd) = cmd_str
-        {
-            let chain = {
-                let prefixes = self.session_allow_prefixes.read();
-                evaluate_command_chain(cmd, &self.exec_policy_rules, &prefixes)
-            };
-            if let Some(denied) = chain.denied_reason {
-                return Err(DispatchAction::skip(denied));
-            }
-            if chain.worst_risk > effective_risk {
-                effective_risk = chain.worst_risk;
-            }
-            chain_allowlisted = chain.all_allowlisted;
-            force_ask = force_ask || chain.force_ask;
-        }
+        let command = matches!(tool_name, "remote_exec" | "remote_exec_bulk")
+            .then_some(cmd_str)
+            .flatten();
 
         if tool_name == "remote_exec_bulk" {
+            let mut effective_risk = assessment.risk;
+            if let Some(cmd) = command {
+                let prefixes = self.session_allow_prefixes.read();
+                let chain = evaluate_command_chain(cmd, &self.exec_policy_rules, &prefixes);
+                if let Some(denied) = chain.denied_reason {
+                    return Err(DispatchAction::skip(denied));
+                }
+                if chain.worst_risk > effective_risk {
+                    effective_risk = chain.worst_risk;
+                }
+            }
             let requested: Option<Vec<&str>> = parsed["host_names"]
                 .as_array()
                 .map(|arr| arr.iter().filter_map(|v| v.as_str()).collect());
@@ -312,16 +307,17 @@ impl Gate {
             return Ok(evaluate_bulk_policy(&targets, mode, effective_risk).0);
         }
 
-        let base = evaluate_policy(self.tool_ctx.protection(), mode, effective_risk, force_ask);
-        if base == PolicyDecision::RequireApproval
-            && chain_allowlisted
-            && self.tool_ctx.protection() != HostProtection::ReadOnly
-            && effective_risk != ToolRisk::Destructive
-        {
-            Ok(PolicyDecision::Allow)
-        } else {
-            Ok(base)
-        }
+        let prefixes = self.session_allow_prefixes.read();
+        Ok(evaluate_command_policy(&CommandPolicyContext {
+            protection: self.tool_ctx.protection(),
+            mode,
+            plan_mode: self.plan_mode,
+            base_risk: assessment.risk,
+            force_confirm: assessment.force_confirm,
+            command,
+            exec_policy_rules: &self.exec_policy_rules,
+            session_allow_prefixes: &prefixes,
+        }))
     }
 
     /// 挂起等待用户审批决策；若用户选择移交终端，则进一步等待终端接管结果。

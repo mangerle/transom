@@ -6,7 +6,7 @@
 //! - 子进程统一配置 `kill_on_drop(true)`，并在取消、完成或异常退出时显式执行 `kill` + `wait`
 //!   收割进程控制块，杜绝僵尸进程与脱缰孤儿进程。
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::env;
 use std::io::ErrorKind;
 use std::process::Stdio;
@@ -27,7 +27,11 @@ use crate::acp_probe::augmented_path_env;
 pub use crate::acp_probe::{acp_tools_bin_dir, is_acp_command_available};
 use crate::config::AcpAgentConfig;
 use crate::error::AiError;
-use crate::policy::{ExecutionMode, ToolRisk, classify_shell_command};
+use crate::exec_policy::{ExecPolicyRule, explain_command_impact, extract_command_prefix};
+use crate::policy::{
+    CommandPolicyContext, ExecutionMode, HostProtection, PolicyDecision, ToolRisk,
+    classify_shell_command, evaluate_command_policy,
+};
 use crate::runner::{AgentEvent, ApprovalRequest, TurnOutput};
 use crate::tools::plan::PlanSnapshot;
 use crate::tools::{ApprovalSummary, ToolExecutionCard};
@@ -46,6 +50,10 @@ pub struct AcpRunInput {
     pub card_tx: mpsc::Sender<ToolExecutionCard>,
     pub plan_tx: Option<mpsc::Sender<PlanSnapshot>>,
     pub execution_mode: Arc<parking_lot::RwLock<ExecutionMode>>,
+    pub protection: HostProtection,
+    pub plan_mode: bool,
+    pub exec_policy_rules: Vec<ExecPolicyRule>,
+    pub session_allow_prefixes: Arc<parking_lot::RwLock<HashSet<String>>>,
     pub cancel: CancellationToken,
 }
 
@@ -377,42 +385,67 @@ async fn drive_acp_protocol(
                     .unwrap_or("");
                 let option_id = pick_acp_allow_option(msg.pointer("/params/options"));
                 let mode = *input.execution_mode.read();
-                let risk = classify_shell_command(&title);
-                let auto_approve = match mode {
-                    ExecutionMode::AllowAll => true,
-                    ExecutionMode::Auto => risk != ToolRisk::Destructive,
-                    ExecutionMode::SafeReadAuto => {
-                        matches!(tool_kind, "read" | "search" | "fetch")
-                            || risk == ToolRisk::SafeRead
-                    }
-                    ExecutionMode::Manual => false,
-                };
-                let approved = if auto_approve {
-                    true
+                let cmd_risk = classify_shell_command(&title);
+                let base_risk = if matches!(tool_kind, "read" | "search" | "fetch")
+                    && cmd_risk == ToolRisk::Write
+                {
+                    ToolRisk::SafeRead
                 } else {
-                    let (tx, rx) = oneshot::channel();
-                    let summary = ApprovalSummary {
-                        tool_name: format!("acp:{}", input.agent.id),
-                        host_label: input.agent.name.clone(),
-                        protection: crate::policy::HostProtection::Normal,
-                        risk,
-                        title: format!("{} 请求执行权限", input.agent.name),
-                        detail: title,
-                        diff_preview: None,
-                        requires_fresh_approval: false,
-                    };
-                    let _ = input
-                        .events
-                        .send(AgentEvent::Approval(ApprovalRequest {
-                            summary,
-                            suggested_prefix: None,
-                            impact_note: None,
-                            respond: tx,
-                        }))
-                        .await;
-                    tokio::select! {
-                        _ = input.cancel.cancelled() => return Err(AiError::Cancelled),
-                        res = rx => matches!(res, Ok(transom_core::AiApprovalDecision::AllowOnce | transom_core::AiApprovalDecision::AllowPrefix { .. })),
+                    cmd_risk
+                };
+                let decision = {
+                    let prefixes = input.session_allow_prefixes.read();
+                    evaluate_command_policy(&CommandPolicyContext {
+                        protection: input.protection,
+                        mode,
+                        plan_mode: input.plan_mode,
+                        base_risk,
+                        force_confirm: false,
+                        command: Some(&title),
+                        exec_policy_rules: &input.exec_policy_rules,
+                        session_allow_prefixes: &prefixes,
+                    })
+                };
+                let approved = match decision {
+                    PolicyDecision::Allow => true,
+                    PolicyDecision::Deny { .. } => false,
+                    PolicyDecision::RequireApproval => {
+                        let suggested_prefix = extract_command_prefix(&title);
+                        let impact_note = explain_command_impact(&title);
+                        let (tx, rx) = oneshot::channel();
+                        let summary = ApprovalSummary {
+                            tool_name: format!("acp:{}", input.agent.id),
+                            host_label: input.agent.name.clone(),
+                            protection: input.protection,
+                            risk: base_risk,
+                            title: format!("{} 请求执行权限", input.agent.name),
+                            detail: title,
+                            diff_preview: None,
+                            requires_fresh_approval: false,
+                        };
+                        let _ = input
+                            .events
+                            .send(AgentEvent::Approval(ApprovalRequest {
+                                summary,
+                                suggested_prefix,
+                                impact_note,
+                                respond: tx,
+                            }))
+                            .await;
+                        let reply = tokio::select! {
+                            _ = input.cancel.cancelled() => return Err(AiError::Cancelled),
+                            res = rx => res.ok(),
+                        };
+                        match reply {
+                            Some(transom_core::AiApprovalDecision::AllowOnce) => true,
+                            Some(transom_core::AiApprovalDecision::AllowPrefix { prefix }) => {
+                                if !prefix.trim().is_empty() {
+                                    input.session_allow_prefixes.write().insert(prefix);
+                                }
+                                true
+                            }
+                            _ => false,
+                        }
                     }
                 };
                 let reply = if approved {

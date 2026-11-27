@@ -118,6 +118,10 @@ pub(super) async fn execute_and_pump(
             card_tx: input.tool_ctx.card_tx.clone(),
             plan_tx: input.tool_ctx.plan_tx.clone(),
             execution_mode: input.execution_mode.clone(),
+            protection: input.tool_ctx.protection(),
+            plan_mode: input.plan_mode,
+            exec_policy_rules: input.exec_policy_rules.clone(),
+            session_allow_prefixes: input.session_allow_prefixes.clone(),
             cancel: input.cancel.clone(),
         };
         tokio::spawn(async move { run_acp_turn(acp_input).await })
