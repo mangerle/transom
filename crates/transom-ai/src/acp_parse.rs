@@ -56,6 +56,13 @@ fn non_empty_str(val: Option<&Value>) -> Option<String> {
         .map(str::to_owned)
 }
 
+/// 保留流式增量文本中的原始空白字符与换行，仅过滤完全空字符串。
+fn raw_non_empty_str(val: Option<&Value>) -> Option<String> {
+    val.and_then(Value::as_str)
+        .filter(|s| !s.is_empty())
+        .map(str::to_owned)
+}
+
 fn summarize_raw_input(raw: &Value) -> Option<String> {
     for key in [
         "command",
@@ -109,10 +116,10 @@ pub(crate) fn parse_acp_update(params: &Value) -> Option<AcpStreamChunk> {
     let kind = update.get("sessionUpdate").and_then(Value::as_str)?;
     match kind {
         "agent_message_chunk" => {
-            non_empty_str(update.pointer("/content/text")).map(AcpStreamChunk::Text)
+            raw_non_empty_str(update.pointer("/content/text")).map(AcpStreamChunk::Text)
         }
         "agent_thought_chunk" => {
-            non_empty_str(update.pointer("/content/text")).map(AcpStreamChunk::Reasoning)
+            raw_non_empty_str(update.pointer("/content/text")).map(AcpStreamChunk::Reasoning)
         }
         "tool_call" | "tool_call_update" => {
             let tool_call_id = non_empty_str(update.get("toolCallId"))
@@ -318,6 +325,28 @@ mod tests {
         assert_eq!(
             parse_acp_update(&msg),
             Some(AcpStreamChunk::Text("hello".to_owned()))
+        );
+
+        let ws_chunk = json!({
+            "update": {
+                "sessionUpdate": "agent_message_chunk",
+                "content": { "type": "text", "text": " world\n  " }
+            }
+        });
+        assert_eq!(
+            parse_acp_update(&ws_chunk),
+            Some(AcpStreamChunk::Text(" world\n  ".to_owned()))
+        );
+
+        let newline_thought = json!({
+            "update": {
+                "sessionUpdate": "agent_thought_chunk",
+                "content": { "type": "text", "text": "\n" }
+            }
+        });
+        assert_eq!(
+            parse_acp_update(&newline_thought),
+            Some(AcpStreamChunk::Reasoning("\n".to_owned()))
         );
 
         let tool_start = json!({
