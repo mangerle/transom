@@ -312,6 +312,7 @@ mod tests {
         #[cfg(windows)]
         {
             assert!(is_acp_command_available("cmd"));
+            assert!(is_acp_command_available("cmd.exe"));
         }
     }
 }

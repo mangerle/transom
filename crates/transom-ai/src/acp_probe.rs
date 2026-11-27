@@ -44,6 +44,20 @@ pub(crate) fn augmented_path_env() -> Option<OsString> {
     env::join_paths(augmented_path_dirs()).ok()
 }
 
+#[cfg(windows)]
+fn is_executable_file(candidate: &Path) -> bool {
+    candidate.is_file()
+        || (candidate.extension().is_none()
+            && ["exe", "cmd", "bat", "com"]
+                .iter()
+                .any(|ext| candidate.with_extension(ext).is_file()))
+}
+
+#[cfg(not(windows))]
+fn is_executable_file(candidate: &Path) -> bool {
+    candidate.is_file()
+}
+
 /// 检测外部 ACP Agent 可执行命令是否在当前 `PATH`（或用户级 `.transom/acp-tools/bin`）中可用。
 pub fn is_acp_command_available(command: &str) -> bool {
     let trimmed = command.trim();
@@ -51,11 +65,11 @@ pub fn is_acp_command_available(command: &str) -> bool {
         return false;
     }
     if trimmed.contains(std::path::MAIN_SEPARATOR) || trimmed.contains('/') {
-        return Path::new(trimmed).is_file();
+        return is_executable_file(Path::new(trimmed));
     }
     augmented_path_dirs()
         .into_iter()
-        .any(|dir| dir.join(trimmed).is_file())
+        .any(|dir| is_executable_file(&dir.join(trimmed)))
 }
 
 /// 外部 ACP Agent 模型探测结果。
