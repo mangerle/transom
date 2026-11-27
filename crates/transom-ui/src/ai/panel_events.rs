@@ -164,7 +164,7 @@ pub(crate) fn on_ai_panel_event(
                     .push_toast(rust_i18n::t!("ai.sent_to_terminal").to_string(), true);
             }
         }
-        AiPanelEvent::JumpToTerminalTab { host_label } => {
+        AiPanelEvent::JumpToTerminal { host_label } => {
             let target_tid = state
                 .workspace
                 .tabs
@@ -175,15 +175,16 @@ pub(crate) fn on_ai_panel_event(
                 .map(|t| t.id);
             if let Some(tid) = target_tid {
                 state.workspace.active_tab = Some(tid);
-                state
-                    .ui
-                    .window_requests
-                    .push_toast(format!("已跳转至「{host_label}」终端标签页"), true);
+                state.ui.window_requests.push_toast(
+                    rust_i18n::t!("ai.jump_terminal_ok", host = host_label.as_str()).to_string(),
+                    true,
+                );
             } else {
-                state
-                    .ui
-                    .window_requests
-                    .push_toast(format!("未找到「{host_label}」的活跃终端标签页"), false);
+                state.ui.window_requests.push_toast(
+                    rust_i18n::t!("ai.jump_terminal_missing", host = host_label.as_str())
+                        .to_string(),
+                    false,
+                );
             }
         }
         AiPanelEvent::FocusTerminalForHandoff { command } => {

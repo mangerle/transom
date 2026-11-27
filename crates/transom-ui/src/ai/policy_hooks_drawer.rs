@@ -67,10 +67,7 @@ pub(super) fn render_policy_hooks_section(
 
     let mut policy_card =
         section_card(rust_i18n::t!("ai.exec_policy_title").to_string(), None, p)
-            .child(field_label(
-                "按命令前缀快速放行或拦截 AI 的远端命令调用".to_owned(),
-                p,
-            ))
+            .child(field_label(rust_i18n::t!("ai.policy_desc").to_string(), p))
             .child(
                 h_flex()
                     .w_full()
@@ -92,7 +89,7 @@ pub(super) fn render_policy_hooks_section(
                                     .child(div().text_color(p.success).child(
                                         AppIconElement::new(AppIcon::Ui(UiIcon::CHECK)).small(),
                                     ))
-                                    .child("放行"),
+                                    .child(rust_i18n::t!("ai.policy_allow").to_string()),
                             )
                             .on_click(cx.listener(|this, _, w, cx| {
                                 this.add_exec_policy_rule(ExecPolicyAction::Allow, w, cx);
@@ -109,7 +106,7 @@ pub(super) fn render_policy_hooks_section(
                                     .child(div().text_color(p.danger).child(
                                         AppIconElement::new(AppIcon::Ui(UiIcon::CLOSE)).small(),
                                     ))
-                                    .child("拦截"),
+                                    .child(rust_i18n::t!("ai.policy_deny").to_string()),
                             )
                             .on_click(cx.listener(|this, _, w, cx| {
                                 this.add_exec_policy_rule(ExecPolicyAction::Deny, w, cx);
@@ -127,7 +124,7 @@ pub(super) fn render_policy_hooks_section(
                 .bg(p.secondary)
                 .text_size(rems(typography::CAPTION))
                 .text_color(p.text.muted)
-                .child("暂无自定义前缀规则，当前遵循执行模式默认策略。"),
+                .child(rust_i18n::t!("ai.policy_empty_hint").to_string()),
         );
     }
 
@@ -283,7 +280,7 @@ fn render_hooks_card(
     let preset_btn = Button::new("ai-add-nginx-hook")
         .ghost()
         .small()
-        .label("Nginx 校验预设")
+        .label(rust_i18n::t!("ai.hook_nginx_preset").to_string())
         .on_click(cx.listener(|this, _, _, cx| {
             this.add_preset_nginx_hook(cx);
         }))
@@ -298,7 +295,10 @@ fn render_hooks_card(
         v_flex()
             .w_full()
             .gap(rems(space::XS))
-            .child(field_label("Shell 校验钩子".to_owned(), p))
+            .child(field_label(
+                rust_i18n::t!("ai.hook_shell_label").to_string(),
+                p,
+            ))
             .child(
                 h_flex()
                     .w_full()
@@ -348,7 +348,7 @@ fn render_hooks_card(
                                     .gap(px(4.0))
                                     .items_center()
                                     .child(AppIconElement::new(AppIcon::Ui(UiIcon::ADD)).small())
-                                    .child("添加钩子"),
+                                    .child(rust_i18n::t!("ai.hook_add_btn").to_string()),
                             )
                             .on_click(cx.listener(|this, _, w, cx| {
                                 this.add_custom_shell_hook(w, cx);
@@ -363,7 +363,10 @@ fn render_hooks_card(
             .gap(rems(space::XS))
             .border_t_1()
             .border_color(p.divider(p.border))
-            .child(field_label("Webhook 结束通知".to_owned(), p))
+            .child(field_label(
+                rust_i18n::t!("ai.hook_webhook_label").to_string(),
+                p,
+            ))
             .child(
                 h_flex()
                     .w_full()
@@ -384,7 +387,7 @@ fn render_hooks_card(
                                     .gap(px(4.0))
                                     .items_center()
                                     .child(AppIconElement::new(AppIcon::Ui(UiIcon::ADD)).small())
-                                    .child("添加通知"),
+                                    .child(rust_i18n::t!("ai.hook_add_notify_btn").to_string()),
                             )
                             .on_click(cx.listener(|this, _, w, cx| {
                                 this.add_webhook_stop_hook(w, cx);

@@ -70,8 +70,14 @@ pub(super) fn render_history_drawer(
         .rounded(p.radius.md)
         .bg(p.secondary);
     for (is_arch_tab, label) in [
-        (false, format!("历史 ({active_count})")),
-        (true, format!("已归档 ({archived_count})")),
+        (
+            false,
+            rust_i18n::t!("ai.history_tab_active", count = active_count).to_string(),
+        ),
+        (
+            true,
+            rust_i18n::t!("ai.history_tab_archived", count = archived_count).to_string(),
+        ),
     ] {
         let on_sw = actions.on_switch_archived.clone();
         let active_tab = show_archived == is_arch_tab;
@@ -124,7 +130,7 @@ pub(super) fn render_history_drawer(
 
     if filtered.is_empty() {
         let empty_text = if show_archived {
-            "暂无已归档会话".to_owned()
+            rust_i18n::t!("ai.history_archived_empty").to_string()
         } else {
             rust_i18n::t!("ai.history_empty").to_string()
         };
@@ -150,11 +156,11 @@ pub(super) fn render_history_drawer(
         let select_btn = actions.on_select.clone();
         let toggle_arch = actions.on_toggle_archive.clone();
         let delete = actions.on_delete.clone();
-        let open_tip = "打开会话".to_owned();
+        let open_tip = rust_i18n::t!("ai.history_open_tip").to_string();
         let arch_tip = if conv.archived {
-            "取消归档".to_owned()
+            rust_i18n::t!("ai.history_unarchive_tip").to_string()
         } else {
-            "归档会话".to_owned()
+            rust_i18n::t!("ai.history_archive_tip").to_string()
         };
         let arch_icon = if conv.archived {
             UiIcon::RESTORE

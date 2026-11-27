@@ -146,11 +146,11 @@ fn format_relative_timestamp(raw: &str, now: chrono::DateTime<chrono::Utc>) -> S
     let utc = dt.with_timezone(&chrono::Utc);
     let secs = now.signed_duration_since(utc).num_seconds();
     if secs < 60 {
-        "刚刚".to_owned()
+        rust_i18n::t!("ai.time_just_now").to_string()
     } else if secs < 3600 {
-        format!("{} 分钟前", secs / 60)
+        rust_i18n::t!("ai.time_mins_ago", count = secs / 60).to_string()
     } else if secs < 86_400 {
-        format!("{} 小时前", secs / 3600)
+        rust_i18n::t!("ai.time_hours_ago", count = secs / 3600).to_string()
     } else {
         dt.with_timezone(&chrono::Local)
             .format("%m-%d %H:%M")
@@ -416,15 +416,15 @@ mod tests {
 
         assert_eq!(
             format_relative_timestamp("2026-11-27T09:59:30Z", now),
-            "刚刚"
+            rust_i18n::t!("ai.time_just_now").as_ref()
         );
         assert_eq!(
             format_relative_timestamp("2026-11-27T09:45:00Z", now),
-            "15 分钟前"
+            rust_i18n::t!("ai.time_mins_ago", count = 15).as_ref()
         );
         assert_eq!(
             format_relative_timestamp("2026-11-27T07:00:00Z", now),
-            "3 小时前"
+            rust_i18n::t!("ai.time_hours_ago", count = 3).as_ref()
         );
         let older = format_relative_timestamp("2026-11-25T08:30:00Z", now);
         assert!(!older.is_empty() && older.contains(':'));

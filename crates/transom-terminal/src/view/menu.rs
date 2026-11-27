@@ -43,7 +43,7 @@ impl TerminalView {
                     // 菜单项不写死键位：提示符跳跃是工作区动作，用户可在快捷键设置里
                     // 改绑，标签里嵌一个"(Cmd+Up)"会变成第二套口径。
                     menu.item(
-                        PopupMenuItem::new("引用选区/报错块到 AI".to_owned())
+                        PopupMenuItem::new(rust_i18n::t!("ai.terminal_send_to_ai").to_string())
                             .icon(AppIcon::Ui(UiIcon::SEARCH))
                             .on_click(move |_, _, cx| {
                                 app_ai.update(cx, |view, cx| {

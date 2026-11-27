@@ -11084,3 +11084,219 @@ ai:
   cfg_request_placeholder:
     en: "e.g. deepseek-chat"
     zh-CN: "例如：deepseek-chat"
+  local_host:
+    en: Local
+    zh-CN: 本机
+  terminal_send_to_ai:
+    en: Send Selection / Error Block to AI
+    zh-CN: 引用选区/报错块到 AI
+  jump_terminal_ok:
+    en: "Switched to terminal tab \"%{host}\""
+    zh-CN: "已跳转至「%{host}」终端标签页"
+  jump_terminal_missing:
+    en: "No active terminal tab found for \"%{host}\""
+    zh-CN: "未找到「%{host}」的活跃终端标签页"
+  policy_desc:
+    en: Allow or deny remote AI commands by command prefix
+    zh-CN: 按命令前缀快速放行或拦截 AI 的远端命令调用
+  policy_allow:
+    en: Allow
+    zh-CN: 放行
+  policy_deny:
+    en: Deny
+    zh-CN: 拦截
+  policy_empty_hint:
+    en: No custom prefix rules yet; using execution mode defaults.
+    zh-CN: 暂无自定义前缀规则，当前遵循执行模式默认策略。
+  hook_nginx_preset:
+    en: Nginx Check Preset
+    zh-CN: Nginx 校验预设
+  hook_shell_label:
+    en: Shell Validation Hooks
+    zh-CN: Shell 校验钩子
+  hook_add_btn:
+    en: Add Hook
+    zh-CN: 添加钩子
+  hook_webhook_label:
+    en: Webhook Stop Notification
+    zh-CN: Webhook 结束通知
+  hook_add_notify_btn:
+    en: Add Notification
+    zh-CN: 添加通知
+  approval_allowed_once:
+    en: "Allowed: %{title}"
+    zh-CN: "已允许执行：%{title}"
+  approval_allowed_prefix:
+    en: "Allowed prefix for session: %{prefix}"
+    zh-CN: "已允许本会话同类前缀：%{prefix}"
+  approval_handoff_manual:
+    en: "Handed off to terminal: %{title}"
+    zh-CN: "已移交终端手动执行：%{title}"
+  approval_rejected:
+    en: "Rejected: %{title}"
+    zh-CN: "已拒绝：%{title}"
+  approval_rejected_reason:
+    en: "Rejected: %{title} · %{reason}"
+    zh-CN: "已拒绝：%{title} · %{reason}"
+  skill_form_new:
+    en: New Skill
+    zh-CN: 新建技能
+  skill_form_edit:
+    en: Edit Skill
+    zh-CN: 编辑技能
+  skill_form_id:
+    en: Skill ID (Slash Command)
+    zh-CN: 技能 ID（斜杠命令）
+  skill_form_title:
+    en: Skill Name
+    zh-CN: 技能名称
+  skill_form_desc:
+    en: Short Description
+    zh-CN: 简短描述
+  skill_form_tags:
+    en: Tags (comma-separated, optional)
+    zh-CN: 标签（逗号分隔，可选）
+  skill_form_prompt:
+    en: Prompt Template
+    zh-CN: 提示词模板（Prompt）
+  scope_global_label:
+    en: General Session
+    zh-CN: 通用会话
+  scope_local_label:
+    en: Local
+    zh-CN: 本机 (Local)
+  tool_running_badge:
+    en: Running
+    zh-CN: 执行中
+  tool_waiting_output:
+    en: Running, waiting for output…
+    zh-CN: 正在执行，等待输出…
+  tool_revert_remote:
+    en: Revert Remote File
+    zh-CN: 还原远端文件
+  tool_jump_terminal:
+    en: Jump to Terminal
+    zh-CN: 跳转终端
+  subagent_status_running:
+    en: Subagent Running
+    zh-CN: 子代理运行中
+  subagent_status_succeeded:
+    en: Subagent Succeeded
+    zh-CN: 子代理已完成
+  subagent_status_failed:
+    en: Subagent Failed
+    zh-CN: 子代理失败
+  subagent_status_cancelled:
+    en: Subagent Stopped
+    zh-CN: 子代理已停止
+  subagent_target_line:
+    en: "%{status} · Target: %{target}"
+    zh-CN: "%{status} · 目标: %{target}"
+  subagent_followup_tooltip:
+    en: Send composer text as follow-up instructions to subagent
+    zh-CN: 将下方输入框文本作为补充指令发送给子代理
+  subagent_followup_btn:
+    en: Follow-up
+    zh-CN: 追加指令
+  subagent_stop_btn:
+    en: Stop Subagent
+    zh-CN: 停止子代理
+  tool_compare_equal:
+    en: Both hosts have identical config/output
+    zh-CN: 两台主机配置/输出完全一致
+  title_input_placeholder:
+    en: Enter conversation title
+    zh-CN: 输入会话名称
+  subagent_done_ok:
+    en: succeeded
+    zh-CN: 完成
+  subagent_done_err:
+    en: failed
+    zh-CN: 失败
+  subagent_wake_notice:
+    en: "[Background Subagent Notice]\nSubtask \"%{title}\"%{id_note} has %{status}, summary:\n\n%{summary}"
+    zh-CN: "[后台子代理完成通知]\n子任务「%{title}」%{id_note} 已%{status}，结果如下：\n\n%{summary}"
+  wg_running_fallback:
+    en: Running
+    zh-CN: 正在执行
+  wg_file_ops:
+    en: "File ops %{count}"
+    zh-CN: "文件操作 %{count}"
+  wg_cmd_ops:
+    en: "Commands %{count}"
+    zh-CN: "执行命令 %{count}"
+  wg_subtasks:
+    en: "Subtasks %{count}"
+    zh-CN: "子任务 %{count}"
+  wg_hosts_more:
+    en: "%{h1}, %{h2} and %{total} hosts"
+    zh-CN: "%{h1}, %{h2} 等 %{total} 台"
+  att_terminal_ctx:
+    en: Terminal Context
+    zh-CN: 终端上下文
+  att_terminal_ctx_host:
+    en: "Terminal Context (%{host})"
+    zh-CN: "终端上下文 (%{host})"
+  time_just_now:
+    en: Just now
+    zh-CN: 刚刚
+  time_mins_ago:
+    en: "%{count}m ago"
+    zh-CN: "%{count} 分钟前"
+  time_hours_ago:
+    en: "%{count}h ago"
+    zh-CN: "%{count} 小时前"
+  title_click_edit:
+    en: Click to rename conversation
+    zh-CN: 点击修改会话名称
+  cfg_tab_models:
+    en: Models & Providers
+    zh-CN: 模型与供应商
+  cfg_tab_general:
+    en: General & Agent
+    zh-CN: 通用与 Agent
+  cfg_tab_policy:
+    en: Policy & Hooks
+    zh-CN: 策略与钩子
+  cfg_provider_section:
+    en: Provider Configuration
+    zh-CN: 供应商配置
+  cfg_status_failed_kw:
+    en: failed
+    zh-CN: 失败
+  pref_section_title:
+    en: Preferences
+    zh-CN: 交互与偏好
+  acp_installed:
+    en: Installed
+    zh-CN: 已安装
+  acp_download_install:
+    en: Install
+    zh-CN: 下载安装
+  diff_preview_title:
+    en: Diff Preview
+    zh-CN: 变更预览
+  diff_log_collapse:
+    en: "%{total} lines · Click to collapse head"
+    zh-CN: "共 %{total} 行 · 点击折叠前部输出"
+  diff_log_expand:
+    en: "%{total} lines (%{hidden} hidden) · Click to expand all"
+    zh-CN: "共 %{total} 行（已折叠前 %{hidden} 行）· 点击展开全部"
+  history_tab_active:
+    en: "Active (%{count})"
+    zh-CN: "历史 (%{count})"
+  history_tab_archived:
+    en: "Archived (%{count})"
+    zh-CN: "已归档 (%{count})"
+  history_archived_empty:
+    en: No archived conversations
+    zh-CN: 暂无已归档会话
+  history_open_tip:
+    en: Open conversation
+    zh-CN: 打开会话
+  history_unarchive_tip:
+    en: Unarchive
+    zh-CN: 取消归档
+  history_archive_tip:
+    en: Archive conversation
+    zh-CN: 归档会话

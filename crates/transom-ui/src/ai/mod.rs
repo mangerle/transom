@@ -18,11 +18,13 @@ mod chrome_header;
 mod composer;
 mod composer_triggers;
 mod config_drawer;
+mod config_drawer_general;
 mod config_form;
 mod context_popup;
 mod diff_view;
 mod empty_state;
 mod handoff_banner;
+mod handoff_render;
 mod history_drawer;
 pub(crate) mod inline_assist;
 mod markdown_blocks;
@@ -43,12 +45,15 @@ mod skills_drawer;
 mod skills_drawer_render;
 mod slash_menu;
 mod state;
+mod state_turn;
 mod state_types;
 mod task_bar;
 mod tool_card;
+mod tool_card_body;
 mod turn_nav;
 mod view;
 mod work_group;
+mod work_group_summary;
 
 pub(crate) use state::ActiveAiSessionInfo;
 pub(crate) use view::AiAssistantView;
@@ -140,5 +145,5 @@ pub(crate) enum AiPanelEvent {
     /// 请求在采集活动终端最新输出后恢复或取消终端接管。
     ResumeHandoffRequested { run_id: String, cancelled: bool },
     /// 请求工作区切换到指定主机名关联的终端 Tab。
-    JumpToTerminalTab { host_label: String },
+    JumpToTerminal { host_label: String },
 }

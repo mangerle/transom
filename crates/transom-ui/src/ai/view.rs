@@ -158,7 +158,10 @@ impl AiAssistantView {
 
         let key_sub = register_slash_key_interceptor(cx);
 
-        let title_input = cx.new(|cx| InputState::new(window, cx).placeholder("输入会话名称"));
+        let title_input = cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder(rust_i18n::t!("ai.title_input_placeholder").to_string())
+        });
         let title_sub = cx.subscribe_in(
             &title_input,
             window,
@@ -251,15 +254,26 @@ impl AiAssistantView {
                 ok,
                 summary,
             } if self.state.active_conversation_id.as_deref() == Some(conversation_id.as_str()) => {
-                let status = if *ok { "完成" } else { "失败" };
+                let status = if *ok {
+                    rust_i18n::t!("ai.subagent_done_ok").to_string()
+                } else {
+                    rust_i18n::t!("ai.subagent_done_err").to_string()
+                };
                 let id_note = if subagent_id.is_empty() {
                     String::new()
                 } else {
                     format!(" (subagent_id: {subagent_id})")
                 };
-                Some(format!(
-                    "[后台子代理完成通知]\n子任务「{title}」{id_note} 已{status}，结果如下：\n\n{summary}"
-                ))
+                Some(
+                    rust_i18n::t!(
+                        "ai.subagent_wake_notice",
+                        title = title.as_str(),
+                        id_note = id_note.as_str(),
+                        status = status.as_str(),
+                        summary = summary.as_str()
+                    )
+                    .to_string(),
+                )
             }
             _ => None,
         };
@@ -356,7 +370,7 @@ impl AiAssistantView {
             let v_cont = cx.entity();
             let v_canc = cx.entity();
             container = container.child(div().px(rems(space::SM)).pb(rems(space::XS)).child(
-                super::handoff_banner::render_handoff_banner(
+                super::handoff_render::render_handoff_banner(
                     host,
                     cmd,
                     p,

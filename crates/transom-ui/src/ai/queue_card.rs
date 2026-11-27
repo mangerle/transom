@@ -332,21 +332,42 @@ impl AiAssistantView {
             .unwrap_or_default();
         if let Some(approval) = matched {
             let (approved, label) = match &decision {
-                transom_core::AiApprovalDecision::AllowOnce => {
-                    (true, format!("已允许执行：{}", approval.title))
-                }
-                transom_core::AiApprovalDecision::AllowPrefix { prefix } => {
-                    (true, format!("已允许本会话同类前缀：{prefix}"))
-                }
-                transom_core::AiApprovalDecision::HandoffToTerminal => {
-                    (true, format!("已移交终端手动执行：{}", approval.title))
-                }
+                transom_core::AiApprovalDecision::AllowOnce => (
+                    true,
+                    rust_i18n::t!("ai.approval_allowed_once", title = approval.title.as_str())
+                        .to_string(),
+                ),
+                transom_core::AiApprovalDecision::AllowPrefix { prefix } => (
+                    true,
+                    rust_i18n::t!("ai.approval_allowed_prefix", prefix = prefix.as_str())
+                        .to_string(),
+                ),
+                transom_core::AiApprovalDecision::HandoffToTerminal => (
+                    true,
+                    rust_i18n::t!(
+                        "ai.approval_handoff_manual",
+                        title = approval.title.as_str()
+                    )
+                    .to_string(),
+                ),
                 transom_core::AiApprovalDecision::RejectWithFeedback { reason } => {
                     let r = reason.trim();
                     if r.is_empty() {
-                        (false, format!("已拒绝：{}", approval.title))
+                        (
+                            false,
+                            rust_i18n::t!("ai.approval_rejected", title = approval.title.as_str())
+                                .to_string(),
+                        )
                     } else {
-                        (false, format!("已拒绝：{} · {r}", approval.title))
+                        (
+                            false,
+                            rust_i18n::t!(
+                                "ai.approval_rejected_reason",
+                                title = approval.title.as_str(),
+                                reason = r
+                            )
+                            .to_string(),
+                        )
                     }
                 }
             };

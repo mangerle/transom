@@ -11,22 +11,11 @@ use transom_ui_icons::{AppIcon, AppIconElement, DomainIcon, UiIcon};
 
 use super::cards::{ChatItemCallbacks, ChatItemRenderParams};
 use super::state::UiChatItem;
+use super::tool_card_body::{
+    render_compare_equal_banner, render_subagent_footer_actions, render_subagent_task_block,
+    tool_row_icon,
+};
 use crate::theme::tokens::{space, typography};
-
-fn tool_row_icon(tool_name: &str) -> AppIcon {
-    match tool_name {
-        "remote_exec" | "remote_exec_bulk" | "container_ops" => {
-            AppIcon::Domain(DomainIcon::TERMINAL)
-        }
-        "remote_fs" | "transfer_file" | "read_output" => AppIcon::Ui(UiIcon::LIST_FILES),
-        "session_catalog" => AppIcon::Ui(UiIcon::WEB_SERVER),
-        "workspace_control" => AppIcon::Ui(UiIcon::LAYOUT),
-        "delegate_task" => AppIcon::Ui(UiIcon::DATAFLOW),
-        "compare_hosts" => AppIcon::Ui(UiIcon::DIFF),
-        "search_knowledge" => AppIcon::Ui(UiIcon::SEARCH),
-        _ => AppIcon::Ui(UiIcon::DEPENDENCIES),
-    }
-}
 
 /// 渲染对话流中的工具调用单行与可点击展开的 Shell / 详情框。
 pub(super) fn render_tool_card(
@@ -122,7 +111,7 @@ pub(super) fn render_tool_card(
 
     let mut right = h_flex().flex_shrink_0().gap(px(6.0)).items_center();
     let trimmed_host = host_label.trim();
-    if !trimmed_host.is_empty() && trimmed_host != "通用会话" {
+    if !trimmed_host.is_empty() && trimmed_host != rust_i18n::t!("ai.scope_global_label").as_ref() {
         right = right.child(
             div()
                 .px(px(5.0))
@@ -153,10 +142,10 @@ pub(super) fn render_tool_card(
                 .px(px(5.0))
                 .py(px(1.0))
                 .rounded_full()
-                .bg(p.primary.opacity(0.12))
+                .bg(p.tone.primary_subtle)
                 .text_size(rems(typography::CAPTION))
                 .text_color(p.primary)
-                .child("执行中"),
+                .child(rust_i18n::t!("ai.tool_running_badge").to_string()),
         );
     } else if !*ok {
         right = right.child(
@@ -219,8 +208,11 @@ pub(super) fn render_tool_card(
                 output.clone()
             };
             if live_output.trim().is_empty() {
-                live_box =
-                    live_box.child(div().text_color(p.text.muted).child("正在执行，等待输出…"));
+                live_box = live_box.child(
+                    div()
+                        .text_color(p.text.muted)
+                        .child(rust_i18n::t!("ai.tool_waiting_output").to_string()),
+                );
             } else {
                 live_box = live_box.child(div().text_color(p.foreground).child(live_output));
             }
@@ -292,76 +284,15 @@ pub(super) fn render_tool_card(
         body = body.child(div().text_color(p.text.muted).child(format!("$ {summary}")));
     }
     if tool_name == "delegate_task"
-        && let Some(sub) = params.subagent_task
+        && let Some(sub_el) =
+            render_subagent_task_block(params, callbacks.on_toggle_full_output.clone(), p)
     {
-        let (st_label, st_color) = match sub.dto.status {
-            transom_core::AiManagedTaskStatus::Running => ("子代理运行中", p.primary),
-            transom_core::AiManagedTaskStatus::Succeeded => ("子代理已完成", p.success),
-            transom_core::AiManagedTaskStatus::Failed => ("子代理失败", p.danger),
-            transom_core::AiManagedTaskStatus::Cancelled => ("子代理已停止", p.text.muted),
-        };
-        body = body.child(
-            h_flex()
-                .w_full()
-                .px(rems(space::XS))
-                .py(px(4.0))
-                .justify_between()
-                .items_center()
-                .rounded(p.radius.sm)
-                .bg(p.surface.floating)
-                .border_1()
-                .border_color(p.divider(p.border))
-                .child(
-                    div()
-                        .text_size(rems(typography::CAPTION))
-                        .text_color(st_color)
-                        .font_weight(FontWeight::MEDIUM)
-                        .child(format!("{st_label} · 目标: {}", sub.dto.target_label)),
-                )
-                .child(
-                    div()
-                        .text_size(rems(typography::CAPTION))
-                        .text_color(p.text.muted)
-                        .child(sub.dto.task_id.clone()),
-                ),
-        );
-        if !sub.log.trim().is_empty() {
-            let on_full = callbacks.on_toggle_full_output.clone();
-            body = body.child(super::diff_view::render_log_output(
-                &sub.dto.task_id,
-                &sub.log,
-                params.full_output_expanded,
-                p,
-                move |w, cx| on_full(w, cx),
-            ));
-        }
+        body = body.child(sub_el);
     }
     if let Some(diff) = diff_preview {
         body = body.child(super::diff_view::render_diff_block(diff, p));
     } else if tool_name == "compare_hosts" && *ok {
-        body = body.child(
-            h_flex()
-                .w_full()
-                .px(rems(space::SM))
-                .py(px(6.0))
-                .gap(px(6.0))
-                .items_center()
-                .rounded(p.radius.sm)
-                .bg(p.success.opacity(0.10))
-                .border_1()
-                .border_color(p.success.opacity(0.28))
-                .child(
-                    div()
-                        .text_color(p.success)
-                        .child(AppIconElement::new(AppIcon::Ui(UiIcon::CHECK)).small()),
-                )
-                .child(
-                    div()
-                        .text_size(rems(typography::CAPTION))
-                        .text_color(p.success)
-                        .child("两台主机配置/输出完全一致"),
-                ),
-        );
+        body = body.child(render_compare_equal_banner(p));
     }
     if !output.trim().is_empty() {
         let on_full = callbacks.on_toggle_full_output;
@@ -461,12 +392,13 @@ pub(super) fn render_tool_card(
                             div()
                                 .text_size(rems(typography::CAPTION))
                                 .text_color(p.foreground)
-                                .child("还原远端文件"),
+                                .child(rust_i18n::t!("ai.tool_revert_remote").to_string()),
                         ),
                 );
             }
             if !host_label.trim().is_empty()
-                && !matches!(host_label.as_str(), "通用会话" | "本机 (Local)")
+                && host_label.as_str() != rust_i18n::t!("ai.scope_global_label").as_ref()
+                && host_label.as_str() != rust_i18n::t!("ai.scope_local_label").as_ref()
                 && !host_label.contains('↔')
             {
                 let jump_host = host_label.clone();
@@ -494,7 +426,7 @@ pub(super) fn render_tool_card(
                             div()
                                 .text_size(rems(typography::CAPTION))
                                 .text_color(p.foreground)
-                                .child("跳转终端"),
+                                .child(rust_i18n::t!("ai.tool_jump_terminal").to_string()),
                         ),
                 );
             }
@@ -502,63 +434,13 @@ pub(super) fn render_tool_card(
                 && let Some(sub) = params.subagent_task
                 && sub.dto.status == transom_core::AiManagedTaskStatus::Running
             {
-                let tid_f = sub.dto.task_id.clone();
-                let tid_s = sub.dto.task_id.clone();
-                let on_f = callbacks.code.on_subagent_action.clone();
-                let on_s = callbacks.code.on_subagent_action.clone();
-                left_actions = left_actions
-                    .child(
-                        h_flex()
-                            .id(SharedString::from(format!("ai-sub-steer-{id}")))
-                            .px(px(6.0))
-                            .py(px(2.0))
-                            .gap(px(4.0))
-                            .items_center()
-                            .rounded(p.radius.sm)
-                            .border_1()
-                            .border_color(p.primary.opacity(0.45))
-                            .bg(p.surface.floating)
-                            .cursor_pointer()
-                            .hover(|s| s.bg(p.surface.hover))
-                            .tooltip(|w, cx| {
-                                gpui_kit::component::tooltip::Tooltip::new(
-                                    "将下方输入框文本作为补充指令发送给子代理",
-                                )
-                                .build(w, cx)
-                            })
-                            .on_click(move |_, w, cx| {
-                                on_f("followup".to_owned(), tid_f.clone(), w, cx);
-                            })
-                            .child(
-                                div()
-                                    .text_size(rems(typography::CAPTION))
-                                    .text_color(p.primary)
-                                    .child("追加指令"),
-                            ),
-                    )
-                    .child(
-                        h_flex()
-                            .id(SharedString::from(format!("ai-sub-stop-{id}")))
-                            .px(px(6.0))
-                            .py(px(2.0))
-                            .gap(px(4.0))
-                            .items_center()
-                            .rounded(p.radius.sm)
-                            .border_1()
-                            .border_color(p.danger.opacity(0.45))
-                            .bg(p.surface.floating)
-                            .cursor_pointer()
-                            .hover(|s| s.bg(p.surface.hover))
-                            .on_click(move |_, w, cx| {
-                                on_s("stop".to_owned(), tid_s.clone(), w, cx);
-                            })
-                            .child(
-                                div()
-                                    .text_size(rems(typography::CAPTION))
-                                    .text_color(p.danger)
-                                    .child("停止子代理"),
-                            ),
-                    );
+                let (followup_btn, stop_btn) = render_subagent_footer_actions(
+                    id,
+                    &sub.dto.task_id,
+                    p,
+                    callbacks.code.on_subagent_action.clone(),
+                );
+                left_actions = left_actions.child(followup_btn).child(stop_btn);
             }
             footer = footer.child(left_actions);
             footer.child(

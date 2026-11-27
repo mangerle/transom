@@ -96,7 +96,7 @@ impl ComposerAttachment {
                     let short: String = cmd.chars().take(24).collect();
                     parts.push(short);
                 } else {
-                    parts.push("终端上下文".to_owned());
+                    parts.push(rust_i18n::t!("ai.att_terminal_ctx").to_string());
                 }
                 parts.join(" · ")
             }
@@ -228,7 +228,8 @@ pub(super) fn pack_attachments_for_request(
                 output,
                 ..
             } => {
-                let title = format!("终端上下文 ({host})");
+                let title =
+                    rust_i18n::t!("ai.att_terminal_ctx_host", host = host.as_str()).to_string();
                 titles.push(title.clone());
                 let mut meta = vec![format!("host: {host}")];
                 if let Some(c) = cwd.as_deref().filter(|s| !s.is_empty()) {

@@ -5,7 +5,7 @@ use std::rc::Rc;
 
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::*;
-use transom_ui_icons::{AppIcon, AppIconElement, DomainIcon, UiIcon};
+use transom_ui_icons::{AppIcon, AppIconElement, UiIcon};
 
 use super::cards::{ChatItemCallbacks, ChatItemRenderParams, render_chat_item};
 use super::markdown_blocks::CodeBlockCallbacks;
@@ -50,7 +50,9 @@ pub(super) fn find_subagent_task<'a>(
 /// 统一格式化运行态焦点文案，避免重复拼接“正在执行”前缀。
 pub(super) fn format_running_focus(focus: &str) -> String {
     let trimmed = focus.trim();
-    if trimmed.starts_with("正在执行") || trimmed.starts_with("Running ") {
+    if trimmed.starts_with(rust_i18n::t!("ai.wg_running_fallback").as_ref())
+        || trimmed.starts_with("Running ")
+    {
         trimmed.to_owned()
     } else {
         rust_i18n::t!("ai.working_running", focus = trimmed).to_string()
@@ -418,81 +420,7 @@ pub(super) fn render_work_group(
     wrapper.into_any_element()
 }
 
-fn summarize_work_group_compact(items: &[&UiChatItem]) -> String {
-    let mut cmd_count = 0usize;
-    let mut file_count = 0usize;
-    let mut sub_count = 0usize;
-    let mut hosts: Vec<&str> = Vec::new();
-
-    for item in items {
-        if let UiChatItem::ToolCard {
-            tool_name,
-            host_label,
-            ..
-        } = item
-        {
-            match tool_name.as_str() {
-                "remote_exec" | "remote_exec_bulk" | "container_ops" => cmd_count += 1,
-                "remote_fs" | "transfer_file" | "read_output" => file_count += 1,
-                "delegate_task" => sub_count += 1,
-                _ => {}
-            }
-            let h = host_label.trim();
-            if !h.is_empty() && h != "通用会话" && !hosts.contains(&h) {
-                hosts.push(h);
-            }
-        }
-    }
-
-    let mut parts = Vec::new();
-    if file_count > 0 {
-        parts.push(format!("文件操作 {file_count}"));
-    }
-    if cmd_count > 0 {
-        parts.push(format!("执行命令 {cmd_count}"));
-    }
-    if sub_count > 0 {
-        parts.push(format!("子任务 {sub_count}"));
-    }
-    if !hosts.is_empty() {
-        let host_text = if hosts.len() <= 2 {
-            hosts.join(", ")
-        } else {
-            format!("{}, {} 等 {} 台", hosts[0], hosts[1], hosts.len())
-        };
-        parts.push(host_text);
-    }
-    parts.join(" · ")
-}
-
-fn summarize_tool_activity(items: &[&UiChatItem]) -> Option<(AppIcon, String)> {
-    let mut has_cmd = false;
-    let mut has_file = false;
-    for item in items {
-        if let UiChatItem::ToolCard { tool_name, .. } = item {
-            match tool_name.as_str() {
-                "remote_exec" | "remote_exec_bulk" | "container_ops" => has_cmd = true,
-                "remote_fs" | "transfer_file" | "read_output" => has_file = true,
-                _ => {}
-            }
-        }
-    }
-    match (has_file, has_cmd) {
-        (true, true) => Some((
-            AppIcon::Ui(UiIcon::LIST_FILES),
-            rust_i18n::t!("ai.wg_read_and_ran").to_string(),
-        )),
-        (true, false) => Some((
-            AppIcon::Ui(UiIcon::LIST_FILES),
-            rust_i18n::t!("ai.wg_read_files").to_string(),
-        )),
-        (false, true) => Some((
-            AppIcon::Domain(DomainIcon::TERMINAL),
-            rust_i18n::t!("ai.wg_ran_commands").to_string(),
-        )),
-        (false, false) => None,
-    }
-}
+use super::work_group_summary::{summarize_tool_activity, summarize_work_group_compact};
 
 #[cfg(test)]
 mod tests {

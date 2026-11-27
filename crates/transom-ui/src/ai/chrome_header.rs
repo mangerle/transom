@@ -50,7 +50,9 @@ impl AiAssistantView {
                 .rounded(p.radius.sm)
                 .cursor_pointer()
                 .hover(|s| s.bg(p.surface.hover))
-                .tooltip(|w, cx| Tooltip::new("点击修改会话名称").build(w, cx))
+                .tooltip(|w, cx| {
+                    Tooltip::new(rust_i18n::t!("ai.title_click_edit").to_string()).build(w, cx)
+                })
                 .on_click(move |_, w, cx| {
                     v_title.update(cx, |this, cx| this.start_editing_title(w, cx));
                 })

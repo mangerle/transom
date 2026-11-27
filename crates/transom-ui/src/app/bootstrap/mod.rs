@@ -274,7 +274,7 @@ impl AppShell {
         self.state.runtime.tasks.subscriptions.known_hosts = Some(cx.subscribe(
             &self.state.ui.modals.connection.known_hosts,
             |shell, _, event: &KnownHostsEvent, cx| {
-                crate::app::events::on_known_hosts_event(&mut shell.state, event, cx)
+                on_known_hosts_event(&mut shell.state, event, cx)
             },
         ));
         self.state.runtime.tasks.subscriptions.connection_prompts = Some(cx.subscribe(
@@ -442,4 +442,21 @@ impl AppShell {
             }
         }));
     }
+}
+
+/// 已知主机弹窗上报的删除结果：成功写状态栏，失败进应用通知队列。
+fn on_known_hosts_event(
+    app_state: &mut crate::app::AppState,
+    event: &crate::keys::KnownHostsEvent,
+    cx: &mut Context<AppShell>,
+) {
+    match event {
+        crate::keys::KnownHostsEvent::Removed { error: Some(error) } => {
+            app_state.set_error(crate::palette::localized_error(error))
+        }
+        crate::keys::KnownHostsEvent::Removed { error: None } => {
+            app_state.set_transient_status(rust_i18n::t!("known_hosts.deleted"), cx);
+        }
+    }
+    cx.notify();
 }

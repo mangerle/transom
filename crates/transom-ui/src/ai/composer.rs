@@ -396,7 +396,7 @@ fn render_inline_chip(token_ctx: &InlineTokenContext, p: &Palette) -> AnyElement
     let (bg, border) = if token_ctx.is_selected() {
         (p.primary.opacity(0.24), p.primary)
     } else {
-        (p.primary.opacity(0.12), p.primary.opacity(0.32))
+        (p.tone.primary_subtle, p.primary.opacity(0.32))
     };
     h_flex()
         .h(token_ctx.line_height())

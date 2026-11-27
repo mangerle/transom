@@ -453,7 +453,7 @@ impl AppShell {
                 let host = tab
                     .and_then(|t| t.session())
                     .map(|s| s.name.clone())
-                    .unwrap_or_else(|| "本机".to_owned());
+                    .unwrap_or_else(|| rust_i18n::t!("ai.local_host").to_string());
                 let cwd = tab.and_then(|t| t.cwd().map(ToOwned::to_owned));
                 self.state.features.ai_panel_open = true;
                 self.state.features.ai_panel.update(cx, |panel, cx| {
@@ -487,21 +487,4 @@ impl AppShell {
         }
         cx.notify();
     }
-}
-
-/// 已知主机弹窗上报的删除结果：成功写状态栏，失败进应用通知队列。
-pub(crate) fn on_known_hosts_event(
-    app_state: &mut crate::app::AppState,
-    event: &crate::keys::KnownHostsEvent,
-    cx: &mut Context<AppShell>,
-) {
-    match event {
-        crate::keys::KnownHostsEvent::Removed { error: Some(error) } => {
-            app_state.set_error(crate::palette::localized_error(error))
-        }
-        crate::keys::KnownHostsEvent::Removed { error: None } => {
-            app_state.set_transient_status(rust_i18n::t!("known_hosts.deleted"), cx);
-        }
-    }
-    cx.notify();
 }

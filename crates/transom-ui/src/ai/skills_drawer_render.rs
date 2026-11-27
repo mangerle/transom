@@ -253,9 +253,9 @@ impl AiAssistantView {
             .as_deref()
             .is_some_and(str::is_empty);
         let form_title = if is_new {
-            "新建技能".to_owned()
+            rust_i18n::t!("ai.skill_form_new").to_string()
         } else {
-            "编辑技能".to_owned()
+            rust_i18n::t!("ai.skill_form_edit").to_string()
         };
 
         let card = section_card(form_title, None, p)
@@ -265,28 +265,28 @@ impl AiAssistantView {
                     .gap(rems(space::SM))
                     .items_start()
                     .child(div().flex_1().min_w_0().child(field_group(
-                        "技能 ID（斜杠命令）".to_owned(),
+                        rust_i18n::t!("ai.skill_form_id").to_string(),
                         Input::new(&self.skills_drawer.id_input).small(),
                         p,
                     )))
                     .child(div().flex_1().min_w_0().child(field_group(
-                        "技能名称".to_owned(),
+                        rust_i18n::t!("ai.skill_form_title").to_string(),
                         Input::new(&self.skills_drawer.title_input).small(),
                         p,
                     ))),
             )
             .child(field_group(
-                "简短描述".to_owned(),
+                rust_i18n::t!("ai.skill_form_desc").to_string(),
                 Input::new(&self.skills_drawer.desc_input).small(),
                 p,
             ))
             .child(field_group(
-                "标签（逗号分隔，可选）".to_owned(),
+                rust_i18n::t!("ai.skill_form_tags").to_string(),
                 Input::new(&self.skills_drawer.tags_input).small(),
                 p,
             ))
             .child(field_group(
-                "提示词模板（Prompt）".to_owned(),
+                rust_i18n::t!("ai.skill_form_prompt").to_string(),
                 div()
                     .w_full()
                     .p(rems(space::XS))

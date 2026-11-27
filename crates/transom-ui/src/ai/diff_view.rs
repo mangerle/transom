@@ -179,7 +179,7 @@ pub(super) fn render_diff_block(raw: &str, p: &Palette) -> AnyElement {
             div()
                 .text_size(rems(typography::CAPTION))
                 .text_color(p.text.muted)
-                .child("变更预览"),
+                .child(rust_i18n::t!("ai.diff_preview_title").to_string()),
         )
         .child(
             div()
@@ -279,9 +279,14 @@ pub(super) fn render_log_output(
 
     if need_collapse {
         let toggle_label = if show_full {
-            format!("共 {total_lines} 行 · 点击折叠前部输出")
+            rust_i18n::t!("ai.diff_log_collapse", total = total_lines).to_string()
         } else {
-            format!("共 {total_lines} 行（已折叠前 {hidden_count} 行）· 点击展开全部")
+            rust_i18n::t!(
+                "ai.diff_log_expand",
+                total = total_lines,
+                hidden = hidden_count
+            )
+            .to_string()
         };
         box_el = box_el.child(
             div()
