@@ -17,6 +17,7 @@ pub mod extra;
 pub mod ops;
 pub mod plan;
 pub mod remote;
+pub mod runtime_ops;
 pub mod skill_tool;
 
 use std::sync::Arc;
