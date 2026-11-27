@@ -244,6 +244,66 @@ impl ToolRuntimeContext {
         self.output_store
             .store_and_preview(tool_name, raw, DEFAULT_TOOL_OUTPUT_LIMIT)
     }
+
+    /// 构造仅用于导出工具 Schema 的空上下文（不关联任何连接或任务）。
+    pub(crate) fn dummy_for_schema() -> Self {
+        let (card_tx, _card_rx) = mpsc::channel(1);
+        Self {
+            scope: SessionScope::Global,
+            locked_session: None,
+            bulk_hosts: Vec::new(),
+            output_store: Arc::new(ToolOutputStore::new()),
+            command_timeout: Duration::from_secs(60),
+            cancel: CancellationToken::new(),
+            card_tx,
+            plan_tx: None,
+            remote_exec: None,
+            remote_fs: None,
+            terminal: None,
+            runtime_inspector: None,
+            forwarder: None,
+            memory_writer: None,
+            knowledge_searcher: None,
+            app_bridge: None,
+            subagent_runner: None,
+            skill_loader: None,
+        }
+    }
+}
+
+/// 构造单个工具的 MCP JSON Schema 条目。
+fn mcp_schema_entry<T: rig_agent::tool::Tool>(tool: &T) -> serde_json::Value {
+    serde_json::json!({
+        "name": T::NAME,
+        "description": tool.description(),
+        "inputSchema": tool.parameters(),
+    })
+}
+
+/// 从真实 `Tool` 实现中统一导出反向 MCP Server 暴露的工具 Schema 清单，杜绝双份维护漂移。
+pub(crate) fn export_mcp_tool_schemas() -> Vec<serde_json::Value> {
+    let ctx = ToolRuntimeContext::dummy_for_schema();
+    vec![
+        mcp_schema_entry(&remote::RemoteExecTool::new(ctx.clone())),
+        mcp_schema_entry(&extra::RemoteExecBulkTool::new(ctx.clone())),
+        mcp_schema_entry(&ops::RemoteFsTool::new(ctx.clone())),
+        mcp_schema_entry(&ops::TransferFileTool::new(ctx.clone())),
+        mcp_schema_entry(&ops::InspectHostRuntimeTool::new(ctx.clone())),
+        mcp_schema_entry(&ops::ContainerOpsTool::new(ctx.clone())),
+        mcp_schema_entry(&remote::GetRecentBlocksTool::new(ctx.clone())),
+        mcp_schema_entry(&remote::ReadTerminalTool::new(ctx.clone())),
+        mcp_schema_entry(&extra::ReadToolOutputTool::new(ctx.clone())),
+        mcp_schema_entry(&app_tools::SessionCatalogTool::new(ctx.clone())),
+        mcp_schema_entry(&app_tools::WorkspaceControlTool::new(ctx.clone())),
+        mcp_schema_entry(&app_tools::SftpTransferTool::new(ctx.clone())),
+        mcp_schema_entry(&app_tools::HostMonitorTool::new(ctx.clone())),
+        mcp_schema_entry(&app_tools::PortForwardOpsTool::new(ctx.clone())),
+        mcp_schema_entry(&app_tools_dev::ContainerWorkspaceTool::new(ctx.clone())),
+        mcp_schema_entry(&app_tools_dev::GitWorkspaceTool::new(ctx.clone())),
+        mcp_schema_entry(&app_tools_dev::ApiClientTool::new(ctx.clone())),
+        mcp_schema_entry(&app_tools_dev::AppSettingsOpsTool::new(ctx.clone())),
+        mcp_schema_entry(&app_tools_dev::AiMemorySkillsTool::new(ctx)),
+    ]
 }
 
 /// 动态风险评估结果（供审批门 `Gate::on_dispatch` 使用）。

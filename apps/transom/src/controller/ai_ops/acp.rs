@@ -14,6 +14,7 @@ use transom_ai::{
 use transom_core::{AiAppEvent, AiPromptRequest, AppEvent};
 
 use super::run::{PumpContext, execute_and_pump};
+use super::context_builder::ToolContextBuildParams;
 use super::{build_tool_context, prepare_conversation};
 use crate::controller::state::{ControllerCtx, ControllerState};
 
@@ -94,15 +95,6 @@ pub(super) async fn start_acp_only_run(
     };
     let (conversation_id, title, history_branch) =
         prepare_conversation(ctx, &req, &scope, &agent.name).await;
-    let _ = ctx
-        .event_tx
-        .send_async(AppEvent::Ai(Box::new(AiAppEvent::RunStarted {
-            run_id: req.run_id.clone(),
-            conversation_id: conversation_id.clone(),
-            title: title.clone(),
-            user_entry_id: String::new(),
-        })))
-        .await;
 
     let cancel = CancellationToken::new();
     state
@@ -115,15 +107,17 @@ pub(super) async fn start_acp_only_run(
     let tool_ctx = build_tool_context(
         state,
         ctx,
-        &req,
-        &scope,
-        &conversation_id,
-        &60,
-        cancel.clone(),
-        card_tx,
-        Some(plan_tx),
-        None,
-        Arc::new(parking_lot::RwLock::new(None)),
+        ToolContextBuildParams {
+            req: &req,
+            scope: &scope,
+            conversation_id: &conversation_id,
+            timeout_secs: 60,
+            cancel: cancel.clone(),
+            card_tx,
+            plan_tx: Some(plan_tx),
+            subagent_cfg: None,
+            current_turn_entry_id: Arc::new(parking_lot::RwLock::new(None)),
+        },
     );
     let host_label = tool_ctx.host_label();
     let effective_model = req
@@ -135,8 +129,8 @@ pub(super) async fn start_acp_only_run(
         .unwrap_or_else(|| agent.default_model.clone());
     let settings = ctx.ai_store.load_settings().unwrap_or_default();
     *state.ai_execution_mode.write() = settings.execution_mode;
-    let (active_skill_prompt, mut effective_prompt) =
-        super::expand_skill_prompt(&ctx.ai_store, &req.prompt, &settings.disabled_skills);
+    let (active_skill_prompt, mut effective_prompt, _) =
+        super::load_and_expand_skills(&ctx.ai_store, &req.prompt, &settings.disabled_skills);
     if let Some(skill_body) = active_skill_prompt.as_deref() {
         effective_prompt = if effective_prompt.trim().is_empty() {
             skill_body.to_owned()

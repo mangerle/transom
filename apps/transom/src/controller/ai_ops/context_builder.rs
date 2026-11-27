@@ -18,24 +18,39 @@ use super::bridge::{HostRuntimeBridge, SshRemoteExecutor, SshRemoteFsBridge, UiT
 use super::subagent;
 use crate::controller::state::{ControllerCtx, ControllerState};
 
-#[allow(clippy::too_many_arguments)]
+/// 装配 [`ToolRuntimeContext`] 所需的参数对象。
+pub(super) struct ToolContextBuildParams<'a> {
+    pub(super) req: &'a AiPromptRequest,
+    pub(super) scope: &'a SessionScope,
+    pub(super) conversation_id: &'a str,
+    pub(super) timeout_secs: u64,
+    pub(super) cancel: CancellationToken,
+    pub(super) card_tx: mpsc::Sender<transom_ai::ToolExecutionCard>,
+    pub(super) plan_tx: Option<mpsc::Sender<PlanSnapshot>>,
+    pub(super) subagent_cfg: Option<(
+        &'a transom_ai::ModelTarget,
+        &'a transom_ai::MemorySnapshot,
+        Option<String>,
+    )>,
+    pub(super) current_turn_entry_id: Arc<parking_lot::RwLock<Option<String>>>,
+}
+
 pub(super) fn build_tool_context(
     state: &mut ControllerState,
     ctx: &ControllerCtx,
-    req: &AiPromptRequest,
-    scope: &SessionScope,
-    conversation_id: &str,
-    timeout_secs: &u64,
-    cancel: CancellationToken,
-    card_tx: mpsc::Sender<transom_ai::ToolExecutionCard>,
-    plan_tx: Option<mpsc::Sender<PlanSnapshot>>,
-    subagent_cfg: Option<(
-        &transom_ai::ModelTarget,
-        &transom_ai::MemorySnapshot,
-        Option<String>,
-    )>,
-    current_turn_entry_id: Arc<parking_lot::RwLock<Option<String>>>,
+    params: ToolContextBuildParams<'_>,
 ) -> ToolRuntimeContext {
+    let ToolContextBuildParams {
+        req,
+        scope,
+        conversation_id,
+        timeout_secs,
+        cancel,
+        card_tx,
+        plan_tx,
+        subagent_cfg,
+        current_turn_entry_id,
+    } = params;
     let mut locked_session = None;
     let mut remote_exec: Option<Arc<dyn transom_ai::RemoteExecutor>> = None;
     let mut remote_fs: Option<Arc<dyn transom_ai::RemoteFsExecutor>> = None;
@@ -118,7 +133,7 @@ pub(super) fn build_tool_context(
         .or_insert_with(|| Arc::new(ToolOutputStore::new()))
         .clone();
 
-    let command_timeout = Duration::from_secs((*timeout_secs).max(5));
+    let command_timeout = Duration::from_secs(timeout_secs.max(5));
     let mut bridge_deps = app_bridge::AppBridgeDeps::from_controller(
         state,
         ctx,

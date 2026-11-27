@@ -22,35 +22,44 @@ use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 use transom_ai::{
     AcpAgentConfig, EVENT_CHANNEL_CAPACITY, ExecutionMode, RunInput, SessionEntry,
-    SessionEntryKind, SessionScope, ThinkingEffort, extract_skill_command,
-    load_skills_with_disabled, summarize_enabled_skills,
+    SessionEntryKind, SessionScope, SkillSummary, ThinkingEffort, extract_skill_command,
+    load_skills_with_disabled,
 };
 use transom_core::{AiCommand, AiPromptRequest};
 
 use super::state::{ControllerCtx, ControllerState};
-use context_builder::{StoreExt as _, build_tool_context, emit_run_error, prepare_conversation};
+use context_builder::{
+    StoreExt as _, ToolContextBuildParams, build_tool_context, emit_run_error, prepare_conversation,
+};
 pub(in crate::controller) use mcp_bridge::{
     McpControllerSnapshot, handle_mcp_snapshot, spawn_mcp_server,
 };
 use run::{PumpContext, execute_and_pump};
 
-/// 展开内置或自定义斜杠技能模板，返回 `(技能模板, 实际用户问题)`。
-pub(super) fn expand_skill_prompt(
+/// 单次扫描技能目录并同时完成斜杠技能展开与可用技能摘要构造，避免重复读盘。
+pub(super) fn load_and_expand_skills(
     store: &transom_store::AiStore,
     raw_prompt: &str,
     disabled_skills: &[String],
-) -> (Option<String>, String) {
+) -> (Option<String>, String, Vec<SkillSummary>) {
     let skills = load_skills_with_disabled(Some(&store.custom_skills_dir()), disabled_skills);
-    if let Some((skill, rest)) = extract_skill_command(raw_prompt, &skills) {
-        let user_text = if rest.is_empty() {
-            skill.title.clone()
+    let (active_skill_prompt, effective_prompt) =
+        if let Some((skill, rest)) = extract_skill_command(raw_prompt, &skills) {
+            let user_text = if rest.is_empty() {
+                skill.title.clone()
+            } else {
+                rest
+            };
+            (Some(skill.prompt_template.clone()), user_text)
         } else {
-            rest
+            (None, raw_prompt.to_owned())
         };
-        (Some(skill.prompt_template.clone()), user_text)
-    } else {
-        (None, raw_prompt.to_owned())
-    }
+    let summaries = skills
+        .iter()
+        .filter(|s| s.enabled)
+        .map(|s| s.to_summary())
+        .collect();
+    (active_skill_prompt, effective_prompt, summaries)
 }
 
 /// 处理来自 UI 的 AI 控制命令。
@@ -337,12 +346,8 @@ async fn start_ai_run(state: &mut ControllerState, ctx: &ControllerCtx, mut req:
         .load_memory(host_id_str.as_deref())
         .unwrap_or_default();
 
-    let (active_skill_prompt, effective_prompt) =
-        expand_skill_prompt(&ctx.ai_store, &req.prompt, &settings.disabled_skills);
-    let available_skills = summarize_enabled_skills(
-        Some(&ctx.ai_store.custom_skills_dir()),
-        &settings.disabled_skills,
-    );
+    let (active_skill_prompt, effective_prompt, available_skills) =
+        load_and_expand_skills(&ctx.ai_store, &req.prompt, &settings.disabled_skills);
 
     if let Some((label, content)) = req.attachment_text.take() {
         let parent_id = history_branch.last().map(|e| e.id.clone());
@@ -367,20 +372,21 @@ async fn start_ai_run(state: &mut ControllerState, ctx: &ControllerCtx, mut req:
     let (plan_tx, plan_rx) = mpsc::channel(32);
 
     let current_turn_entry_id = Arc::new(parking_lot::RwLock::new(None));
-    let mut tool_ctx = build_tool_context(
+    let tool_ctx = build_tool_context(
         state,
         ctx,
-        &req,
-        &scope,
-        &conversation_id,
-        &settings.command_timeout_secs,
-        cancel.clone(),
-        card_tx,
-        Some(plan_tx),
-        Some((&target, &memory, Some(settings.response_language.clone()))),
-        current_turn_entry_id.clone(),
+        ToolContextBuildParams {
+            req: &req,
+            scope: &scope,
+            conversation_id: &conversation_id,
+            timeout_secs: settings.command_timeout_secs,
+            cancel: cancel.clone(),
+            card_tx,
+            plan_tx: Some(plan_tx),
+            subagent_cfg: Some((&target, &memory, Some(settings.response_language.clone()))),
+            current_turn_entry_id: current_turn_entry_id.clone(),
+        },
     );
-    let _ = &mut tool_ctx;
     let host_label = tool_ctx.host_label();
     let hook_executor: Option<Arc<dyn transom_ai::HookExecutor>> = (!settings.hooks.is_empty())
         .then(|| {
