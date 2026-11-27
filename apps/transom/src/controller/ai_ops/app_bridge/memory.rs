@@ -101,6 +101,62 @@ impl MemoryWriter for StoreMemoryBridge {
     }
 }
 
+/// 基于目录元数据指纹的跨轮次 BM25 索引缓存（避免每次检索全量读取 `.md` 文件并重建倒排表）。
+struct CachedKnowledgeIndex {
+    root: std::path::PathBuf,
+    fingerprint: KnowledgeFingerprint,
+    index: Option<Arc<Bm25Index>>,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct KnowledgeFingerprint {
+    file_count: usize,
+    total_bytes: u64,
+    latest_mtime_nanos: u128,
+}
+
+static KNOWLEDGE_INDEX_CACHE: std::sync::LazyLock<
+    parking_lot::Mutex<Option<CachedKnowledgeIndex>>,
+> = std::sync::LazyLock::new(|| parking_lot::Mutex::new(None));
+
+fn compute_knowledge_fingerprint(dirs: &[std::path::PathBuf]) -> KnowledgeFingerprint {
+    let mut fp = KnowledgeFingerprint {
+        file_count: 0,
+        total_bytes: 0,
+        latest_mtime_nanos: 0,
+    };
+    let mut stack: Vec<std::path::PathBuf> = dirs.to_vec();
+    while let Some(dir) = stack.pop() {
+        if fp.file_count >= 128 || !dir.exists() {
+            continue;
+        }
+        let Ok(read_dir) = std::fs::read_dir(&dir) else {
+            continue;
+        };
+        for entry in read_dir.flatten() {
+            if fp.file_count >= 128 {
+                break;
+            }
+            let path = entry.path();
+            if path.is_dir() {
+                stack.push(path);
+            } else if path.extension().and_then(|e| e.to_str()) == Some("md")
+                && let Ok(meta) = entry.metadata()
+                && meta.len() <= 128 * 1024
+            {
+                fp.file_count += 1;
+                fp.total_bytes = fp.total_bytes.saturating_add(meta.len());
+                if let Ok(mtime) = meta.modified()
+                    && let Ok(dur) = mtime.duration_since(std::time::UNIX_EPOCH)
+                {
+                    fp.latest_mtime_nanos = fp.latest_mtime_nanos.max(dur.as_nanos());
+                }
+            }
+        }
+    }
+    fp
+}
+
 /// 基于纯 Rust BM25 检索本地长期记忆与自定义 Runbook。
 pub(in crate::controller) struct StoreKnowledgeBridge {
     pub(in crate::controller) store: Arc<AiStore>,
@@ -112,15 +168,41 @@ impl KnowledgeSearcher for StoreKnowledgeBridge {
         let store = self.store.clone();
         let q = query.to_owned();
         tokio::task::spawn_blocking(move || {
-            let mut docs = Vec::new();
-            let dirs = [store.root().join("memory"), store.custom_skills_dir()];
-            for dir in dirs {
-                collect_markdown_docs(&dir, &dir, &mut docs);
-            }
-            if docs.is_empty() {
+            let root = store.root().to_path_buf();
+            let dirs = [root.join("memory"), store.custom_skills_dir()];
+            let fp = compute_knowledge_fingerprint(&dirs);
+            let cached_index = {
+                let guard = KNOWLEDGE_INDEX_CACHE.lock();
+                guard
+                    .as_ref()
+                    .filter(|c| c.root == root && c.fingerprint == fp)
+                    .map(|c| c.index.clone())
+            };
+
+            let index_opt = match cached_index {
+                Some(hit) => hit,
+                None => {
+                    let mut docs = Vec::new();
+                    for dir in &dirs {
+                        collect_markdown_docs(dir, dir, &mut docs);
+                    }
+                    let built = if docs.is_empty() {
+                        None
+                    } else {
+                        Some(Arc::new(Bm25Index::build(docs)))
+                    };
+                    *KNOWLEDGE_INDEX_CACHE.lock() = Some(CachedKnowledgeIndex {
+                        root,
+                        fingerprint: fp,
+                        index: built.clone(),
+                    });
+                    built
+                }
+            };
+
+            let Some(index) = index_opt else {
                 return "本地尚无主机记忆或自定义运维手册可检索。".to_owned();
-            }
-            let index = Bm25Index::build(docs);
+            };
             let hits = index.search(&q, top_k);
             if hits.is_empty() {
                 return format!("未找到与 `{q}` 相关的本地记忆或手册条目。");
