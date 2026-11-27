@@ -297,17 +297,22 @@ pub(super) fn render_work_group(
         for item in params.items {
             let cid = chat_item_id(item).to_owned();
             let item_expanded = params.expanded_cards.contains(&cid);
+            let full_key = format!("full-out-{cid}");
+            let full_output_expanded = params.expanded_cards.contains(&full_key);
             let t = on_toggle_id.clone();
+            let t_full = on_toggle_id.clone();
             details = details.child(render_chat_item(
                 ChatItemRenderParams {
                     item,
                     expanded: item_expanded,
+                    full_output_expanded,
                     copied_key: params.copied_key,
                     has_active_terminal: params.has_active_terminal,
                     p,
                 },
                 ChatItemCallbacks {
                     on_toggle_expand: Rc::new(move |w, cx| t(cid.clone(), w, cx)),
+                    on_toggle_full_output: Rc::new(move |w, cx| t_full(full_key.clone(), w, cx)),
                     on_rollback: Rc::new(|_, _, _| {}),
                     code: code_callbacks.clone(),
                 },
@@ -334,17 +339,24 @@ pub(super) fn render_work_group(
             for item in running_items {
                 let cid = chat_item_id(item).to_owned();
                 let item_expanded = params.expanded_cards.contains(&cid);
+                let full_key = format!("full-out-{cid}");
+                let full_output_expanded = params.expanded_cards.contains(&full_key);
                 let t = on_toggle_id.clone();
+                let t_full = on_toggle_id.clone();
                 live_list = live_list.child(render_chat_item(
                     ChatItemRenderParams {
                         item,
                         expanded: item_expanded,
+                        full_output_expanded,
                         copied_key: params.copied_key,
                         has_active_terminal: params.has_active_terminal,
                         p,
                     },
                     ChatItemCallbacks {
                         on_toggle_expand: Rc::new(move |w, cx| t(cid.clone(), w, cx)),
+                        on_toggle_full_output: Rc::new(move |w, cx| {
+                            t_full(full_key.clone(), w, cx)
+                        }),
                         on_rollback: Rc::new(|_, _, _| {}),
                         code: code_callbacks.clone(),
                     },

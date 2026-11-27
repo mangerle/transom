@@ -167,13 +167,17 @@ impl AiAssistantView {
                     DisplayBlock::Single(item) => {
                         let cid = chat_item_id(item).to_owned();
                         let expanded = self.state.expanded_cards.contains(&cid);
+                        let full_key = format!("full-out-{cid}");
+                        let full_output_expanded = self.state.expanded_cards.contains(&full_key);
                         let is_follow_user =
                             b_idx > 0 && matches!(item, super::state::UiChatItem::UserText { .. });
                         let v_rb = cx.entity();
+                        let v_full = cx.entity();
                         let item_el = render_chat_item(
                             ChatItemRenderParams {
                                 item,
                                 expanded,
+                                full_output_expanded,
                                 copied_key,
                                 has_active_terminal,
                                 p,
@@ -182,6 +186,11 @@ impl AiAssistantView {
                                 on_toggle_expand: std::rc::Rc::new(move |_, cx| {
                                     v_exp.update(cx, |this, cx| {
                                         this.toggle_card_id(cid.clone(), cx);
+                                    });
+                                }),
+                                on_toggle_full_output: std::rc::Rc::new(move |_, cx| {
+                                    v_full.update(cx, |this, cx| {
+                                        this.toggle_card_id(full_key.clone(), cx);
                                     });
                                 }),
                                 on_rollback: std::rc::Rc::new(move |entry_id, _, cx| {

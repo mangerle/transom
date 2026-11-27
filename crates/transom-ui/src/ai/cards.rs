@@ -17,6 +17,7 @@ use crate::theme::tokens::{space, typography};
 pub(super) struct ChatItemRenderParams<'a> {
     pub(super) item: &'a UiChatItem,
     pub(super) expanded: bool,
+    pub(super) full_output_expanded: bool,
     pub(super) copied_key: Option<&'a str>,
     pub(super) has_active_terminal: bool,
     pub(super) p: &'a Palette,
@@ -31,6 +32,7 @@ pub(super) type RollbackCallback = Rc<dyn Fn(String, &mut Window, &mut App)>;
 #[derive(Clone)]
 pub(super) struct ChatItemCallbacks {
     pub(super) on_toggle_expand: ToggleCardCallback,
+    pub(super) on_toggle_full_output: ToggleCardCallback,
     pub(super) on_rollback: RollbackCallback,
     pub(super) code: CodeBlockCallbacks,
 }

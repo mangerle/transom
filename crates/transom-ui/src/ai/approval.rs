@@ -130,15 +130,9 @@ pub(super) fn render_approval_card(
         card = card.child(
             div()
                 .id("ai-approval-diff")
-                .max_h(rems(10.0))
+                .max_h(rems(12.0))
                 .overflow_y_scroll()
-                .p(rems(space::XS))
-                .rounded(p.radius.sm)
-                .bg(p.background)
-                .font_family("monospace")
-                .text_size(rems(typography::CAPTION))
-                .text_color(p.muted_foreground)
-                .child(diff.clone()),
+                .child(super::diff_view::render_diff_block(diff, p)),
         );
     }
 

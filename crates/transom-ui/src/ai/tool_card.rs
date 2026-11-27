@@ -270,10 +270,17 @@ pub(super) fn render_tool_card(
         body = body.child(div().text_color(p.text.muted).child(format!("$ {summary}")));
     }
     if let Some(diff) = diff_preview {
-        body = body.child(div().text_color(p.muted_foreground).child(diff.clone()));
+        body = body.child(super::diff_view::render_diff_block(diff, p));
     }
     if !output.trim().is_empty() {
-        body = body.child(div().text_color(p.foreground).child(output.clone()));
+        let on_full = callbacks.on_toggle_full_output;
+        body = body.child(super::diff_view::render_log_output(
+            id,
+            output,
+            params.full_output_expanded,
+            p,
+            move |w, cx| on_full(w, cx),
+        ));
     }
 
     let status_icon = if *ok { UiIcon::CHECK } else { UiIcon::CLOSE };
