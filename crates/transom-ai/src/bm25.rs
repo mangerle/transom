@@ -5,7 +5,7 @@
 //! - 采用标准 Okapi BM25（`k1 = 1.5, b = 0.75`）+ ASCII 词元与 CJK 单字/二元 bigram 混合分词，
 //!   无需引入外部向量库或嵌入模型即可实现毫秒级本地知识检索。
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 const K1: f32 = 1.5;
 const B: f32 = 0.75;
@@ -55,12 +55,13 @@ impl Bm25Index {
             let len = tokens.len();
             total_len = total_len.saturating_add(len);
 
-            let mut tf: HashMap<String, usize> = HashMap::new();
-            let mut seen = HashSet::new();
+            let mut tf: HashMap<String, usize> = HashMap::with_capacity(len.min(128));
             for tok in tokens {
-                *tf.entry(tok.clone()).or_insert(0) += 1;
-                if seen.insert(tok.clone()) {
-                    *doc_freq.entry(tok).or_insert(0) += 1;
+                if let Some(count) = tf.get_mut(&tok) {
+                    *count += 1;
+                } else {
+                    *doc_freq.entry(tok.clone()).or_insert(0) += 1;
+                    tf.insert(tok, 1);
                 }
             }
 
@@ -135,7 +136,7 @@ impl Bm25Index {
 
 /// 中英文混合分词：ASCII 词元转小写，CJK 字符同时产出单字与相邻二元 bigram。
 pub fn tokenize(text: &str) -> Vec<String> {
-    let mut tokens = Vec::new();
+    let mut tokens = Vec::with_capacity(text.len() / 4);
     let mut ascii_buf = String::new();
     let mut prev_cjk: Option<char> = None;
 

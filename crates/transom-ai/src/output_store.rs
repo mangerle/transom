@@ -10,7 +10,7 @@ use std::collections::{HashMap, VecDeque};
 use parking_lot::Mutex;
 use uuid::Uuid;
 
-use crate::compaction::{DEFAULT_TOOL_OUTPUT_LIMIT, strip_ansi, truncate_tool_output};
+use crate::compaction::{DEFAULT_TOOL_OUTPUT_LIMIT, clip_head_tail, strip_ansi};
 use crate::error::ToolError;
 use crate::redact::redact_secrets_for_model;
 
@@ -81,7 +81,7 @@ impl ToolOutputStore {
             },
         );
 
-        let preview = truncate_tool_output(&text, max_preview_chars);
+        let preview = clip_head_tail(&text, max_preview_chars);
         format!(
             "{preview}\n\n[完整输出已缓存: output_id={id}，共 {line_count} 行 / {byte_len} 字节；\
             如需查看中间片段或检索关键字，请调用 read_tool_output(output_id=\"{id}\")]"
@@ -159,7 +159,7 @@ impl ToolOutputStore {
             )
         };
 
-        Ok(truncate_tool_output(&body, DEFAULT_TOOL_OUTPUT_LIMIT))
+        Ok(clip_head_tail(&body, DEFAULT_TOOL_OUTPUT_LIMIT))
     }
 
     fn insert(&self, id: String, item: StoredOutput) {

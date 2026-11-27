@@ -4,6 +4,7 @@
 //! - 远端命令输出、终端屏幕或配置文件读取结果中可能包含明文私钥、Bearer Token、URL 账密或 API Key；
 //! - 在内容进入大模型上下文前统一遮蔽，即使模型请求了非预期文件也能避免明文凭据外泄给第三方接口。
 
+use std::borrow::Cow;
 use std::sync::LazyLock;
 
 use regex::Regex;
@@ -34,16 +35,29 @@ static KNOWN_TOKEN_RE: LazyLock<Regex> = LazyLock::new(|| {
 });
 
 /// 在内容发往模型前自动遮蔽常见明文私钥、Token、URL 账密与配置密钥。
+///
+/// 采用廉价字节特征预检 + `Cow` 链式替换：常规日志无敏感特征时直接跳过对应正则。
 pub fn redact_secrets_for_model(raw: &str) -> String {
     if raw.is_empty() {
         return String::new();
     }
-    let s1 = PEM_KEY_RE.replace_all(raw, "[REDACTED_PRIVATE_KEY]");
-    let s2 = BEARER_RE.replace_all(&s1, "$1 [REDACTED]");
-    let s3 = URL_CRED_RE.replace_all(&s2, "$1[REDACTED]$3");
-    let s4 = KV_SECRET_RE.replace_all(&s3, "$1$2[REDACTED]");
-    let s5 = KNOWN_TOKEN_RE.replace_all(&s4, "[REDACTED_TOKEN]");
-    s5.into_owned()
+    let mut cur: Cow<'_, str> = Cow::Borrowed(raw);
+    if cur.contains("-----BEGIN ") {
+        cur = Cow::Owned(PEM_KEY_RE.replace_all(&cur, "[REDACTED_PRIVATE_KEY]").into_owned());
+    }
+    if cur.contains("earer ") || cur.contains("EARER ") {
+        cur = Cow::Owned(BEARER_RE.replace_all(&cur, "$1 [REDACTED]").into_owned());
+    }
+    if cur.contains("://") && cur.contains('@') {
+        cur = Cow::Owned(URL_CRED_RE.replace_all(&cur, "$1[REDACTED]$3").into_owned());
+    }
+    if cur.contains('=') || cur.contains(':') {
+        cur = Cow::Owned(KV_SECRET_RE.replace_all(&cur, "$1$2[REDACTED]").into_owned());
+    }
+    if cur.contains("sk-") || cur.contains("gh") || cur.contains("AKIA") {
+        cur = Cow::Owned(KNOWN_TOKEN_RE.replace_all(&cur, "[REDACTED_TOKEN]").into_owned());
+    }
+    cur.into_owned()
 }
 
 #[cfg(test)]

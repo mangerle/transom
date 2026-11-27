@@ -6,6 +6,7 @@
 //! - 会话过长时从最近的 [`SessionEntryKind::Compaction`] 节点之后组装历史，保持 Token 可控。
 
 use std::borrow::Cow;
+use std::collections::VecDeque;
 use std::sync::LazyLock;
 
 use regex::Regex;
@@ -38,25 +39,46 @@ pub fn strip_ansi(raw: &str) -> Cow<'_, str> {
     ANSI_REGEX.replace_all(raw, "")
 }
 
-/// 去除 ANSI 终端转义序列、遮蔽明文敏感凭据并将工具输出做头尾保留截断。
-pub fn truncate_tool_output(raw: &str, max_chars: usize) -> String {
-    let cleaned = redact_secrets_for_model(&strip_ansi(raw));
-    let total_chars = cleaned.chars().count();
-    if total_chars <= max_chars || max_chars < 64 {
-        return cleaned;
+/// 仅对已清洗脱敏的文本做头尾保留截断（单次 `char_indices` 扫描定位字节边界）。
+pub fn clip_head_tail(cleaned: &str, max_chars: usize) -> String {
+    if max_chars < 64 || cleaned.len() <= max_chars {
+        return cleaned.to_owned();
     }
 
     let head_len = max_chars / 3;
     let tail_len = max_chars.saturating_sub(head_len);
-    let head: String = cleaned.chars().take(head_len).collect();
-    let tail: String = cleaned
-        .chars()
-        .skip(total_chars.saturating_sub(tail_len))
-        .collect();
+    let mut total_chars = 0usize;
+    let mut head_end = cleaned.len();
+    let mut tail_ring: VecDeque<usize> = VecDeque::with_capacity(tail_len.saturating_add(1));
+
+    for (byte_idx, _) in cleaned.char_indices() {
+        if total_chars == head_len {
+            head_end = byte_idx;
+        }
+        if tail_ring.len() == tail_len {
+            tail_ring.pop_front();
+        }
+        tail_ring.push_back(byte_idx);
+        total_chars += 1;
+    }
+
+    if total_chars <= max_chars {
+        return cleaned.to_owned();
+    }
+
+    let tail_start = tail_ring.front().copied().unwrap_or(cleaned.len());
     let omitted = total_chars.saturating_sub(head_len + tail_len);
     format!(
-        "{head}\n\n... [已省略中间 {omitted} 个字符，完整输出可在命令卡片中展开查看] ...\n\n{tail}"
+        "{}\n\n... [已省略中间 {omitted} 个字符，完整输出可在命令卡片中展开查看] ...\n\n{}",
+        &cleaned[..head_end],
+        &cleaned[tail_start..],
     )
+}
+
+/// 去除 ANSI 终端转义序列、遮蔽明文敏感凭据并将工具输出做头尾保留截断。
+pub fn truncate_tool_output(raw: &str, max_chars: usize) -> String {
+    let cleaned = redact_secrets_for_model(&strip_ansi(raw));
+    clip_head_tail(&cleaned, max_chars)
 }
 
 /// 估算一组文本的粗略 Token 数量（中英文混合按约 3 字符 = 1 Token 保守估算）。
