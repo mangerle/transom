@@ -97,10 +97,14 @@ impl AgentHook for Gate {
             return ObservationAction::stop("用户已取消");
         }
         self.mark_delta();
-        let _ = self
+        if self
             .events
             .send(AgentEvent::TextDelta(delta.delta.to_owned()))
-            .await;
+            .await
+            .is_err()
+        {
+            return ObservationAction::stop("事件通道已关闭");
+        }
         ObservationAction::continue_run()
     }
 
@@ -113,10 +117,14 @@ impl AgentHook for Gate {
             return ObservationAction::stop("用户已取消");
         }
         self.mark_delta();
-        let _ = self
+        if self
             .events
             .send(AgentEvent::ReasoningDelta(delta.delta.to_owned()))
-            .await;
+            .await
+            .is_err()
+        {
+            return ObservationAction::stop("事件通道已关闭");
+        }
         ObservationAction::continue_run()
     }
 
@@ -153,7 +161,7 @@ impl AgentHook for Gate {
         let input_tokens = event.usage.input_tokens.unwrap_or(0);
         let cached_input_tokens = event.usage.cached_input_tokens.unwrap_or(0);
         let output_tokens = event.usage.output_tokens.unwrap_or(0);
-        let _ = self
+        if self
             .events
             .send(AgentEvent::TurnEnd(TurnOutput {
                 reasoning: reasoning_parts.join("\n\n"),
@@ -165,7 +173,11 @@ impl AgentHook for Gate {
                 model_duration_ms,
                 ttft_ms,
             }))
-            .await;
+            .await
+            .is_err()
+        {
+            return ModelTurnAction::stop("事件通道已关闭");
+        }
 
         if !text_parts.is_empty() {
             *self.last_summary.lock() = text_parts.join("\n").chars().take(240).collect();
@@ -217,11 +229,12 @@ impl AgentHook for Gate {
         };
         let assessment =
             assess_tool_call_value(tool_name, &parsed, args_json, &self.tool_ctx, &target);
-        if tool_name != "update_plan" {
-            let _ = self.events.try_send(AgentEvent::FocusUpdated(format!(
-                "正在执行 {}…",
-                assessment.summary.title
-            )));
+        if tool_name != "update_plan"
+            && let Err(mpsc::error::TrySendError::Closed(_)) = self.events.try_send(
+                AgentEvent::FocusUpdated(format!("正在执行 {}…", assessment.summary.title)),
+            )
+        {
+            log::warn!("发送 AI 工具焦点更新失败，事件通道已关闭");
         }
 
         if let Some(blocked) = self
