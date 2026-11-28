@@ -159,7 +159,7 @@ pub(super) fn render_running_focus_bar(
     };
     let mut row = h_flex()
         .w_full()
-        .px(rems(space::SM))
+        .px(rems(space::LG))
         .py(px(4.0))
         .justify_between()
         .items_center()
