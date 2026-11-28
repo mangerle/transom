@@ -4,6 +4,7 @@ use super::{
     SessionScope, ToolRuntimeContext, app_tools, app_tools_dev, compare, delegate, extra, ops,
     plan, remote, skill_tool,
 };
+use crate::policy::ToolRisk;
 
 /// 构造单个工具的 MCP JSON Schema 条目。
 fn mcp_schema_entry<T: rig_agent::tool::Tool>(tool: &T) -> serde_json::Value {
@@ -30,6 +31,21 @@ macro_rules! for_each_app_bridge_tool {
             app_tools_dev::AiMemorySkillsTool,
         )
     };
+}
+
+/// 按工具名与动作读取软件工具的声明式风险，避免审批评估另维护一套 match。
+pub(crate) fn app_tool_action_risk(tool_name: &str, action: &str) -> Option<ToolRisk> {
+    macro_rules! lookup_risk {
+        ($($tool_ty:path),+ $(,)?) => {
+            $(
+                if tool_name == <$tool_ty>::NAME {
+                    return Some(<$tool_ty>::risk_for(action));
+                }
+            )+
+        };
+    }
+    for_each_app_bridge_tool!(lookup_risk);
+    None
 }
 
 /// 从真实 `Tool` 实现中统一导出反向 MCP Server 暴露的工具 Schema 清单，杜绝双份维护漂移。
@@ -104,4 +120,27 @@ pub fn attach_tools(
             .tool(compare::CompareHostsTool::new(ctx.clone()));
     }
     builder
+}
+
+#[cfg(test)]
+#[test]
+fn every_registered_app_action_has_a_shared_risk() {
+    macro_rules! assert_actions {
+        ($($tool_ty:path),+ $(,)?) => {
+            $(
+                assert_eq!(
+                    <$tool_ty>::NAME,
+                    <$tool_ty as rig_agent::tool::Tool>::NAME
+                );
+                for action in <$tool_ty>::ACTIONS {
+                    assert!(
+                        app_tool_action_risk(<$tool_ty>::NAME, action).is_some(),
+                        "工具 {} 的动作 {action} 缺少风险定义",
+                        <$tool_ty>::NAME
+                    );
+                }
+            )+
+        };
+    }
+    for_each_app_bridge_tool!(assert_actions);
 }

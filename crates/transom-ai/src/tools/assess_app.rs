@@ -13,63 +13,7 @@ pub fn assess_app_tool(
     target: &ResolvedToolTarget,
 ) -> Option<ToolRiskAssessment> {
     let action = parsed["action"].as_str().unwrap_or("");
-    let risk = match tool_name {
-        "session_catalog" => match action {
-            "list" | "list_known_hosts" => ToolRisk::SafeRead,
-            "delete" | "delete_folder" | "remove_known_host" | "deploy_public_key" => {
-                ToolRisk::Destructive
-            }
-            _ => ToolRisk::Write,
-        },
-        "workspace_control" => match action {
-            "list_tabs" => ToolRisk::SafeRead,
-            "send_terminal_input" => ToolRisk::Destructive,
-            _ => ToolRisk::Write,
-        },
-        "sftp_transfer" => match action {
-            "list_transfers" | "sync_preview" => ToolRisk::SafeRead,
-            _ => ToolRisk::Write,
-        },
-        "host_monitor" => match action {
-            "snapshot" | "list_processes" | "probe_host" => ToolRisk::SafeRead,
-            "kill_process" => ToolRisk::Destructive,
-            _ => ToolRisk::Write,
-        },
-        "port_forward_ops" => match action {
-            "list" | "probe" => ToolRisk::SafeRead,
-            "delete" => ToolRisk::Destructive,
-            _ => ToolRisk::Write,
-        },
-        "container_workspace" => match action {
-            "discover_engines" | "list_containers" | "inspect_container" | "container_logs"
-            | "list_images" | "list_networks" | "list_volumes" => ToolRisk::SafeRead,
-            "remove_container" | "remove_image" | "compose_down" => ToolRisk::Destructive,
-            _ => ToolRisk::Write,
-        },
-        "git_workspace" => match action {
-            "list_projects" | "status" | "log" | "diff" | "branches" | "stash_list" => {
-                ToolRisk::SafeRead
-            }
-            "discard" | "delete_untracked" => ToolRisk::Destructive,
-            _ => ToolRisk::Write,
-        },
-        "api_client" => match action {
-            "list_projects" | "list_requests" | "get_request" => ToolRisk::SafeRead,
-            "delete_request" => ToolRisk::Destructive,
-            _ => ToolRisk::Write,
-        },
-        "app_settings_ops" => match action {
-            "list_snippets" | "get_settings" | "sync_status" => ToolRisk::SafeRead,
-            "delete_snippet" => ToolRisk::Destructive,
-            _ => ToolRisk::Write,
-        },
-        "ai_memory_skills" => match action {
-            "read_memory" | "list_skills" => ToolRisk::SafeRead,
-            "delete_skill" => ToolRisk::Destructive,
-            _ => ToolRisk::Write,
-        },
-        _ => return None,
-    };
+    let risk = super::registry::app_tool_action_risk(tool_name, action)?;
 
     let title = format!("软件操作 {tool_name} · {action}");
     let detail = if tool_name == "app_settings_ops" && parsed.get("passphrase").is_some() {

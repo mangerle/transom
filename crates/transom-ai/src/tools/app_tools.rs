@@ -103,8 +103,17 @@ macro_rules! define_app_tool {
         }
 
         impl $name {
+            /// 工具在注册表、Schema 与风险分发中共用的稳定名称。
+            pub const NAME: &'static str = $tool_name;
+
             /// 该工具允许的 `action` 枚举清单（单一事实来源，同时用于 Schema 导出与前置校验）。
             pub const ACTIONS: &'static [&'static str] = &[$($act),+];
+
+            /// 按动作返回风险等级；执行卡片与审批门共享这一判定。
+            pub(crate) fn risk_for(action: &str) -> ToolRisk {
+                let $risk_act = action;
+                $risk_body
+            }
 
             pub fn new(ctx: ToolRuntimeContext) -> Self {
                 Self { ctx }
@@ -144,8 +153,7 @@ macro_rules! define_app_tool {
                 _context: &mut ToolContext,
                 args: Self::Args,
             ) -> Result<Self::Output, Self::Error> {
-                let $risk_act = args.action.as_str();
-                let risk: ToolRisk = $risk_body;
+                let risk = Self::risk_for(&args.action);
                 invoke_app_tool(&self.ctx, Self::NAME, Self::ACTIONS, risk, args).await
             }
         }
