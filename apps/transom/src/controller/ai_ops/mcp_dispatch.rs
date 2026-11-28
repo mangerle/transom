@@ -1,13 +1,17 @@
 //! 外部 MCP 单工具分发执行与策略审批模块。
 
+use std::sync::Arc;
 use std::time::Duration;
 
+use parking_lot::RwLock;
 use serde_json::Value;
 use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
 use transom_ai::{
-    ApprovalRequestId, PolicyDecision, RemoteExecutor, RemoteFsExecutor, RuntimeInspector,
-    TerminalContextProvider, ToolIoContext, ToolRisk,
+    ApprovalGrantStore, ApprovalRequestId, ApprovalScope, CommandPolicyContext, ExecPolicyRule,
+    ExecutionMode, HostProtection, PolicyDecision, RemoteExecutor, RemoteFsExecutor,
+    ResolvedToolTarget, RuntimeInspector, TerminalContextProvider, ToolIoContext, ToolRisk,
+    evaluate_bulk_policy, evaluate_command_chain, evaluate_command_policy, evaluate_policy,
 };
 use transom_core::{AiAppEvent, AiApprovalDto, AppEvent};
 use uuid::Uuid;
@@ -16,6 +20,91 @@ use super::bridge::{HostRuntimeBridge, SshRemoteExecutor, SshRemoteFsBridge, UiT
 use super::mcp_bridge::{McpControllerSnapshot, McpLiveSession};
 
 const MCP_APPROVAL_TIMEOUT: Duration = Duration::from_secs(120);
+const MCP_APPROVAL_NAMESPACE: &str = "mcp-external";
+
+/// 外部 MCP 单工具策略评估参数。
+pub(super) struct McpToolPolicyParams<'a> {
+    pub(super) mode: ExecutionMode,
+    pub(super) rules: &'a [ExecPolicyRule],
+    pub(super) grants: &'a Arc<RwLock<ApprovalGrantStore>>,
+    pub(super) tool_name: &'a str,
+    pub(super) args: &'a Value,
+    pub(super) target: &'a ResolvedToolTarget,
+    pub(super) base_risk: ToolRisk,
+    pub(super) force_confirm: bool,
+}
+
+/// 计算外部 MCP 单工具调用的统一策略裁决。
+///
+/// 外部 MCP 使用独立授权命名空间，但必须与内置 Agent 一样应用用户命令规则、
+/// 命令链风险和审批授权，避免外部客户端获得更宽的自动执行权限。
+pub(super) fn evaluate_tool_policy(params: McpToolPolicyParams<'_>) -> PolicyDecision {
+    let Some(command) = (params.tool_name == "remote_exec")
+        .then(|| params.args["command"].as_str())
+        .flatten()
+    else {
+        return evaluate_policy(
+            params.target.protection,
+            params.mode,
+            params.base_risk,
+            params.force_confirm,
+        );
+    };
+    let scope = ApprovalScope::new(
+        MCP_APPROVAL_NAMESPACE,
+        params.target.host_id.clone(),
+        params.target.protection,
+    );
+    let grants = params.grants.read();
+    evaluate_command_policy(&CommandPolicyContext {
+        protection: params.target.protection,
+        mode: params.mode,
+        plan_mode: false,
+        base_risk: params.base_risk,
+        force_confirm: params.force_confirm,
+        command: Some(command),
+        exec_policy_rules: params.rules,
+        approval_scope: &scope,
+        approval_grants: &grants,
+    })
+}
+
+/// 计算外部 MCP 多主机批量执行的统一策略裁决。
+///
+/// 先执行与内置 Agent 相同的命令链规则，再应用多主机保护策略；最终风险取两者
+/// 的较高等级，任何强制确认信号都会阻止自动放行。
+pub(super) fn evaluate_bulk_tool_policy(
+    mode: ExecutionMode,
+    rules: &[ExecPolicyRule],
+    grants: &Arc<RwLock<ApprovalGrantStore>>,
+    protections: &[HostProtection],
+    command: &str,
+    base_risk: ToolRisk,
+    requires_confirmation: bool,
+) -> (PolicyDecision, bool, ToolRisk) {
+    let worst_protection = if protections.contains(&HostProtection::ReadOnly) {
+        HostProtection::ReadOnly
+    } else if protections.contains(&HostProtection::Production) {
+        HostProtection::Production
+    } else {
+        HostProtection::Normal
+    };
+    let scope = ApprovalScope::new(MCP_APPROVAL_NAMESPACE, None, worst_protection);
+    let grants = grants.read();
+    let chain = evaluate_command_chain(command, rules, &grants, &scope);
+    if let Some(reason) = chain.denied_reason {
+        return (PolicyDecision::Deny { reason }, false, chain.worst_risk);
+    }
+    let risk = base_risk.max(chain.worst_risk);
+    let (mut decision, mut requires_fresh_approval) = evaluate_bulk_policy(protections, mode, risk);
+    if decision == PolicyDecision::Allow
+        && (requires_confirmation || chain.requires_confirmation || chain.force_ask)
+    {
+        decision = PolicyDecision::RequireApproval;
+        requires_fresh_approval = true;
+    }
+    (decision, requires_fresh_approval, risk)
+}
 
 pub(super) async fn enforce_decision(
     snap: &McpControllerSnapshot,
@@ -225,5 +314,78 @@ pub(super) async fn dispatch_single_tool(
                 .map_err(|e| e.to_string())
         }
         other => Err(format!("不支持的 MCP 工具: {other}")),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use parking_lot::RwLock;
+    use serde_json::json;
+
+    use super::{McpToolPolicyParams, evaluate_tool_policy};
+    use transom_ai::{
+        ApprovalGrantStore, ExecPolicyAction, ExecPolicyRule, ExecutionMode, HostProtection,
+        PolicyDecision, ResolvedToolTarget, ToolRisk,
+    };
+
+    fn target() -> ResolvedToolTarget {
+        ResolvedToolTarget::new(
+            Some("prod-01".to_owned()),
+            "prod-01",
+            HostProtection::Production,
+        )
+    }
+
+    fn deny_rule(pattern: &str) -> ExecPolicyRule {
+        ExecPolicyRule {
+            id: "deny".to_owned(),
+            pattern: pattern.to_owned(),
+            action: ExecPolicyAction::Deny,
+            note: "禁止外部 MCP 自动执行".to_owned(),
+            enabled: true,
+        }
+    }
+
+    #[test]
+    fn mcp_remote_exec_respects_user_deny_rules() {
+        let grants = Arc::new(RwLock::new(ApprovalGrantStore::new()));
+        let args = json!({ "command": "systemctl restart nginx" });
+        let decision = evaluate_tool_policy(McpToolPolicyParams {
+            mode: ExecutionMode::AllowAll,
+            rules: &[deny_rule("systemctl restart")],
+            grants: &grants,
+            tool_name: "remote_exec",
+            args: &args,
+            target: &target(),
+            base_risk: ToolRisk::Write,
+            force_confirm: false,
+        });
+        assert!(matches!(decision, PolicyDecision::Deny { .. }));
+    }
+
+    #[test]
+    fn mcp_remote_exec_ask_rule_overrides_allow_all() {
+        let grants = Arc::new(RwLock::new(ApprovalGrantStore::new()));
+        let rule = ExecPolicyRule {
+            id: "ask".to_owned(),
+            pattern: "docker restart".to_owned(),
+            action: ExecPolicyAction::Ask,
+            note: String::new(),
+            enabled: true,
+        };
+        let args = json!({ "command": "docker restart api" });
+        let decision = evaluate_tool_policy(McpToolPolicyParams {
+            mode: ExecutionMode::AllowAll,
+            rules: &[rule],
+            grants: &grants,
+            tool_name: "remote_exec",
+            args: &args,
+            target: &target(),
+            base_risk: ToolRisk::Write,
+            force_confirm: false,
+        });
+        assert_eq!(decision, PolicyDecision::RequireApproval);
     }
 }

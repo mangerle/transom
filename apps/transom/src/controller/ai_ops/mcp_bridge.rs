@@ -15,11 +15,11 @@ use serde_json::Value;
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 use transom_ai::{
-    AiAuditEntry, AppActionBridge, AppBridgeDomain, ExecutionMode, HostProtection, LockedSession,
-    McpServer, McpServerBackend, McpSessionInfo, PolicyDecision, RemoteExecutor,
-    ResolvedToolTarget, SessionPromptContext, SessionScope, ToolOutputStore, ToolRuntimeContext,
-    assess_shell_command, assess_tool_call, detect_blocking_command, evaluate_bulk_policy,
-    evaluate_policy, format_blocking_command_hint, serve_local_socket, target_argument_for_tool,
+    AiAuditEntry, AppActionBridge, AppBridgeDomain, ApprovalGrantStore, ExecPolicyRule,
+    ExecutionMode, HostProtection, LockedSession, McpServer, McpServerBackend, McpSessionInfo,
+    RemoteExecutor, ResolvedToolTarget, SessionPromptContext, SessionScope, ToolOutputStore,
+    ToolRuntimeContext, assess_shell_command, assess_tool_call, detect_blocking_command,
+    format_blocking_command_hint, serve_local_socket, target_argument_for_tool,
 };
 use transom_core::{AiHostTargetDto, AppEvent};
 use transom_net::{SftpClient, SshRemote};
@@ -27,7 +27,10 @@ use transom_store::AiStore;
 
 use super::app_bridge::{AppBridgeDeps, ControllerAppActionBridge, ControllerTargetResolver};
 use super::bridge::SshRemoteExecutor;
-use super::mcp_dispatch::{dispatch_single_tool, enforce_decision};
+use super::mcp_dispatch::{
+    McpToolPolicyParams, dispatch_single_tool, enforce_decision, evaluate_bulk_tool_policy,
+    evaluate_tool_policy,
+};
 use crate::controller::Internal;
 use crate::controller::state::{AiApprovalMap, ControllerCtx, ControllerState};
 
@@ -43,6 +46,8 @@ pub(in crate::controller) struct McpLiveSession {
 pub(in crate::controller) struct McpControllerSnapshot {
     pub(super) sessions: Vec<McpLiveSession>,
     pub(super) execution_mode: ExecutionMode,
+    pub(super) exec_policy_rules: Vec<ExecPolicyRule>,
+    pub(super) approval_grants: Arc<parking_lot::RwLock<ApprovalGrantStore>>,
     pub(super) command_timeout: Duration,
     pub(super) output_store: Arc<ToolOutputStore>,
     pub(super) approvals: AiApprovalMap,
@@ -85,6 +90,8 @@ pub(in crate::controller) fn handle_mcp_snapshot(
         .send(McpControllerSnapshot {
             sessions,
             execution_mode: settings.execution_mode,
+            exec_policy_rules: settings.exec_policy_rules.clone(),
+            approval_grants: state.ai_approval_grants.clone(),
             command_timeout,
             output_store: store,
             approvals: state.ai_approvals.clone(),
@@ -230,12 +237,16 @@ impl McpServerBackend for ControllerMcpBackend {
             target.meta.protection,
         );
         let assessment = assess_tool_call(name, &args_json, &ctx, &resolved_target);
-        let decision = evaluate_policy(
-            resolved_target.protection,
-            snap.execution_mode,
-            assessment.risk,
-            assessment.force_confirm,
-        );
+        let decision = evaluate_tool_policy(McpToolPolicyParams {
+            mode: snap.execution_mode,
+            rules: &snap.exec_policy_rules,
+            grants: &snap.approval_grants,
+            tool_name: name,
+            args: &arguments,
+            target: &resolved_target,
+            base_risk: assessment.risk,
+            force_confirm: assessment.force_confirm,
+        });
         let approved = enforce_decision(&snap, decision, assessment.summary, &self.cancel).await?;
 
         let started = Instant::now();
@@ -319,12 +330,16 @@ impl ControllerMcpBackend {
             .await
             .map_err(|error| error.to_string())?;
         let assessment = assess_tool_call(name, &args_json, &ctx, &resolved_target);
-        let decision = evaluate_policy(
-            resolved_target.protection,
-            snap.execution_mode,
-            assessment.risk,
-            assessment.force_confirm,
-        );
+        let decision = evaluate_tool_policy(McpToolPolicyParams {
+            mode: snap.execution_mode,
+            rules: &snap.exec_policy_rules,
+            grants: &snap.approval_grants,
+            tool_name: name,
+            args: arguments,
+            target: &resolved_target,
+            base_risk: assessment.risk,
+            force_confirm: assessment.force_confirm,
+        });
         let approved = enforce_decision(snap, decision, assessment.summary, &self.cancel).await?;
 
         let started = Instant::now();
@@ -384,13 +399,15 @@ impl ControllerMcpBackend {
         }
         let protections: Vec<HostProtection> = selected.iter().map(|s| s.meta.protection).collect();
         let assessment = assess_shell_command(cmd);
-        let risk = assessment.risk;
-        let (mut decision, mut requires_fresh_approval) =
-            evaluate_bulk_policy(&protections, snap.execution_mode, risk);
-        if assessment.requires_confirmation && decision == PolicyDecision::Allow {
-            decision = PolicyDecision::RequireApproval;
-            requires_fresh_approval = true;
-        }
+        let (decision, requires_fresh_approval, risk) = evaluate_bulk_tool_policy(
+            snap.execution_mode,
+            &snap.exec_policy_rules,
+            &snap.approval_grants,
+            &protections,
+            cmd,
+            assessment.risk,
+            assessment.requires_confirmation,
+        );
 
         let host_desc = selected
             .iter()
