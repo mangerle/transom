@@ -1,7 +1,7 @@
 //! ACP 流式事件处理、统一权限协商与单轮收尾统计。
 
 use std::collections::HashMap;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use serde_json::Value as JsonValue;
 use serde_json::{Value, json};
@@ -163,41 +163,106 @@ pub(crate) async fn handle_acp_update(
     }
 }
 
+const ACP_APPROVAL_TIMEOUT: Duration = Duration::from_secs(120);
+
+/// ACP 权限请求的策略评估结果。
+struct AcpPermissionAssessment {
+    command: Option<String>,
+    risk: ToolRisk,
+    force_confirm: bool,
+    detail: String,
+}
+
+/// 从 ACP 的结构化工具输入中提取真实命令。
+///
+/// `title` 是展示字段，不能作为安全判断依据。优先读取 ACP 的 `rawInput`，
+/// 兼容常见的 `input`、`arguments` 和字符串载荷；字段缺失时返回 `None`，
+/// 由调用方按工具类型选择 fail-closed 的默认风险。
+fn extract_acp_permission_command(msg: &Value) -> Option<String> {
+    const COMMAND_POINTERS: [&str; 8] = [
+        "/params/toolCall/rawInput/command",
+        "/params/toolCall/rawInput/cmd",
+        "/params/toolCall/rawInput/shellCommand",
+        "/params/toolCall/rawInput/input",
+        "/params/toolCall/input/command",
+        "/params/toolCall/input/cmd",
+        "/params/toolCall/arguments/command",
+        "/params/toolCall/arguments/cmd",
+    ];
+    for pointer in COMMAND_POINTERS {
+        if let Some(command) = msg
+            .pointer(pointer)
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        {
+            return Some(command.to_owned());
+        }
+    }
+    for pointer in [
+        "/params/toolCall/rawInput",
+        "/params/toolCall/input",
+        "/params/toolCall/arguments",
+    ] {
+        if let Some(command) = msg
+            .pointer(pointer)
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        {
+            return Some(command.to_owned());
+        }
+    }
+    None
+}
+
+/// 根据真实命令和 ACP 工具类型生成权限请求的风险快照。
+fn assess_acp_permission(msg: &Value) -> AcpPermissionAssessment {
+    let title = msg
+        .pointer("/params/toolCall/title")
+        .and_then(Value::as_str)
+        .unwrap_or("外部 ACP 工具调用请求")
+        .trim()
+        .to_owned();
+    let tool_kind = msg
+        .pointer("/params/toolCall/kind")
+        .and_then(Value::as_str)
+        .unwrap_or("");
+    let command = extract_acp_permission_command(msg);
+    let (risk, force_confirm) = match command.as_deref() {
+        Some(command) => {
+            let assessment = assess_shell_command(command);
+            (assessment.risk, assessment.requires_confirmation)
+        }
+        None if matches!(tool_kind, "read" | "search" | "fetch") => (ToolRisk::SafeRead, false),
+        None => (ToolRisk::Write, true),
+    };
+    AcpPermissionAssessment {
+        detail: command.as_deref().unwrap_or(&title).to_owned(),
+        command,
+        risk,
+        force_confirm,
+    }
+}
+
 pub(crate) async fn handle_acp_permission(
     input: &AcpRunInput,
     stdin: &mut ChildStdin,
     msg: &Value,
     req_id: Value,
 ) -> Result<(), AiError> {
-    let title = msg
-        .pointer("/params/toolCall/title")
-        .and_then(Value::as_str)
-        .unwrap_or("外部 ACP 工具调用请求")
-        .to_owned();
-    let tool_kind = msg
-        .pointer("/params/toolCall/kind")
-        .and_then(Value::as_str)
-        .unwrap_or("");
+    let assessment = assess_acp_permission(msg);
     let option_id = pick_acp_allow_option(msg.pointer("/params/options"));
     let mode = *input.execution_mode.read();
-    let command_assessment = assess_shell_command(&title);
-    let base_risk = if matches!(tool_kind, "read" | "search" | "fetch")
-        && command_assessment.risk == ToolRisk::Write
-        && !command_assessment.requires_confirmation
-    {
-        ToolRisk::SafeRead
-    } else {
-        command_assessment.risk
-    };
     let decision = {
         let grants = input.approval_grants.read();
         evaluate_command_policy(&CommandPolicyContext {
             protection: input.protection,
             mode,
             plan_mode: input.plan_mode,
-            base_risk,
-            force_confirm: command_assessment.requires_confirmation,
-            command: Some(&title),
+            base_risk: assessment.risk,
+            force_confirm: assessment.force_confirm,
+            command: assessment.command.as_deref(),
             exec_policy_rules: &input.exec_policy_rules,
             approval_scope: &input.approval_scope,
             approval_grants: &grants,
@@ -207,20 +272,26 @@ pub(crate) async fn handle_acp_permission(
         PolicyDecision::Allow => true,
         PolicyDecision::Deny { .. } => false,
         PolicyDecision::RequireApproval => {
-            let suggested_prefix = extract_command_prefix(&title);
-            let impact_note = explain_command_impact(&title);
+            let suggested_prefix = assessment
+                .command
+                .as_deref()
+                .and_then(extract_command_prefix);
+            let impact_note = assessment
+                .command
+                .as_deref()
+                .and_then(explain_command_impact);
             let (tx, rx) = oneshot::channel();
             let summary = ApprovalSummary {
                 tool_name: format!("acp:{}", input.agent.id),
                 host_label: input.agent.name.clone(),
                 protection: input.protection,
-                risk: base_risk,
+                risk: assessment.risk,
                 title: format!("{} 请求执行权限", input.agent.name),
-                detail: title,
+                detail: assessment.detail,
                 diff_preview: None,
                 requires_fresh_approval: false,
             };
-            let _ = input
+            if let Err(err) = input
                 .events
                 .send(AgentEvent::Approval(ApprovalRequest {
                     summary,
@@ -228,10 +299,26 @@ pub(crate) async fn handle_acp_permission(
                     impact_note,
                     respond: tx,
                 }))
-                .await;
+                .await
+            {
+                return Err(AiError::AcpFailed {
+                    agent: input.agent.name.clone(),
+                    reason: format!("无法把 ACP 权限请求发送到界面: {err}"),
+                });
+            }
             let reply = tokio::select! {
                 _ = input.cancel.cancelled() => return Err(AiError::Cancelled),
-                res = rx => res.ok(),
+                res = tokio::time::timeout(ACP_APPROVAL_TIMEOUT, rx) => match res {
+                    Ok(reply) => reply.ok(),
+                    Err(_) => {
+                        log::warn!(
+                            "ACP Agent（{}）权限请求等待用户确认超时（{} 秒）",
+                            input.agent.name,
+                            ACP_APPROVAL_TIMEOUT.as_secs()
+                        );
+                        None
+                    }
+                },
             };
             match reply {
                 Some(transom_core::AiApprovalDecision::AllowOnce) => true,
@@ -324,4 +411,60 @@ pub(crate) async fn finalize_acp_turn(
         }))
         .await;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::assess_acp_permission;
+    use crate::policy::ToolRisk;
+
+    #[test]
+    fn uses_structured_command_instead_of_misleading_title() {
+        let msg = json!({
+            "params": {
+                "toolCall": {
+                    "title": "读取配置文件",
+                    "kind": "read",
+                    "rawInput": { "command": "rm -rf /tmp/prod" }
+                }
+            }
+        });
+        let assessment = assess_acp_permission(&msg);
+        assert_eq!(assessment.command.as_deref(), Some("rm -rf /tmp/prod"));
+        assert_eq!(assessment.risk, ToolRisk::Destructive);
+    }
+
+    #[test]
+    fn missing_execute_command_fails_closed() {
+        let msg = json!({
+            "params": {
+                "toolCall": {
+                    "title": "执行检查",
+                    "kind": "execute",
+                    "rawInput": {}
+                }
+            }
+        });
+        let assessment = assess_acp_permission(&msg);
+        assert_eq!(assessment.risk, ToolRisk::Write);
+        assert!(assessment.force_confirm);
+    }
+
+    #[test]
+    fn read_without_command_remains_read_only() {
+        let msg = json!({
+            "params": {
+                "toolCall": {
+                    "title": "读取配置",
+                    "kind": "read",
+                    "rawInput": {}
+                }
+            }
+        });
+        let assessment = assess_acp_permission(&msg);
+        assert_eq!(assessment.risk, ToolRisk::SafeRead);
+        assert!(!assessment.force_confirm);
+    }
 }
