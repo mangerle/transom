@@ -6,7 +6,7 @@ use rig_agent::tool::{Tool, ToolContext, ToolExecutionError};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use super::{AppBridgeDomain, ToolExecutionCard, ToolRuntimeContext, to_rig_err};
+use super::{AppBridgeDomain, ToolCardMeta, ToolRuntimeContext, to_rig_err};
 use crate::error::ToolError;
 use crate::policy::ToolRisk;
 
@@ -47,42 +47,8 @@ pub(crate) async fn invoke_app_tool(
     let summary = format!("{tool_name}({})", args.action);
     let res = bridge.invoke(domain, &args.action, payload).await;
     let elapsed = started.elapsed().as_millis() as u64;
-    match res {
-        Ok(raw) => {
-            let clipped = ctx.format_tool_output(tool_name, &raw);
-            ctx.record_card(ToolExecutionCard {
-                tool_name: tool_name.to_owned(),
-                host_label: String::new(),
-                risk,
-                summary,
-                output: clipped.clone(),
-                ok: true,
-                approved: true,
-                duration_ms: elapsed,
-                diff_preview: None,
-                ..Default::default()
-            })
-            .await;
-            Ok(clipped)
-        }
-        Err(err) => {
-            let msg = err.to_string();
-            ctx.record_card(ToolExecutionCard {
-                tool_name: tool_name.to_owned(),
-                host_label: String::new(),
-                risk,
-                summary,
-                output: msg,
-                ok: false,
-                approved: true,
-                duration_ms: elapsed,
-                diff_preview: None,
-                ..Default::default()
-            })
-            .await;
-            Err(to_rig_err(err))
-        }
-    }
+    ctx.finish_tool_result(ToolCardMeta::new(tool_name, risk, &summary, elapsed), res)
+        .await
 }
 
 /// 声明式定义基于 [`AppActionBridge`] 的软件领域工具，统一实现 `ACTIONS` 前置校验与 `Tool` 特型。

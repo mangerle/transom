@@ -167,20 +167,13 @@ impl Tool for RemoteExecTool {
             Ok((raw, ok, exit_code)) => {
                 let clipped = self.ctx.format_tool_output(Self::NAME, &raw);
                 self.ctx
-                    .record_card(crate::tools::ToolExecutionCard {
-                        call_id: call_id.into(),
-                        running: false,
-                        tool_name: Self::NAME.to_owned(),
-                        host_label,
-                        risk,
-                        summary: args.command,
-                        output: clipped.clone(),
+                    .record_outcome_card(
+                        super::ToolCardMeta::new(Self::NAME, risk, &args.command, elapsed_ms)
+                            .with_call_id(&call_id)
+                            .with_host(&host_label),
+                        clipped.clone(),
                         ok,
-                        approved: true,
-                        duration_ms: elapsed_ms,
-                        diff_preview: None,
-                        ..Default::default()
-                    })
+                    )
                     .await;
                 match exit_code {
                     Some(code) => Ok(format!("退出码: {code}\n{clipped}")),
@@ -188,22 +181,14 @@ impl Tool for RemoteExecTool {
                 }
             }
             Err(err) => {
-                let msg = err.to_string();
                 self.ctx
-                    .record_card(crate::tools::ToolExecutionCard {
-                        call_id: call_id.into(),
-                        running: false,
-                        tool_name: Self::NAME.to_owned(),
-                        host_label,
-                        risk,
-                        summary: args.command,
-                        output: msg,
-                        ok: false,
-                        approved: true,
-                        duration_ms: elapsed_ms,
-                        diff_preview: None,
-                        ..Default::default()
-                    })
+                    .record_outcome_card(
+                        super::ToolCardMeta::new(Self::NAME, risk, &args.command, elapsed_ms)
+                            .with_call_id(&call_id)
+                            .with_host(&host_label),
+                        err.to_string(),
+                        false,
+                    )
                     .await;
                 Err(to_rig_err(err))
             }
@@ -440,19 +425,18 @@ impl Tool for ProposeHostMemoryTool {
             })
             .await
             .map_err(to_rig_err)?;
+        let summary = format!("写入主机记忆: {}", args.fact);
         self.ctx
-            .record_card(crate::tools::ToolExecutionCard {
-                tool_name: Self::NAME.to_owned(),
-                host_label: String::new(),
-                risk: ToolRisk::Write,
-                summary: format!("写入主机记忆: {}", args.fact),
-                output: out.clone(),
-                ok: true,
-                approved: true,
-                duration_ms: started.elapsed().as_millis() as u64,
-                diff_preview: None,
-                ..Default::default()
-            })
+            .record_outcome_card(
+                super::ToolCardMeta::new(
+                    Self::NAME,
+                    ToolRisk::Write,
+                    &summary,
+                    started.elapsed().as_millis() as u64,
+                ),
+                out.clone(),
+                true,
+            )
             .await;
         Ok(out)
     }

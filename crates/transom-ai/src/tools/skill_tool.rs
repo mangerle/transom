@@ -7,7 +7,7 @@ use rig_agent::tool::{Tool, ToolContext, ToolExecutionError};
 use serde::Deserialize;
 use serde_json::json;
 
-use super::{ToolExecutionCard, ToolRuntimeContext, to_rig_err};
+use super::{ToolRuntimeContext, to_rig_err};
 use crate::error::ToolError;
 use crate::policy::ToolRisk;
 
@@ -79,45 +79,15 @@ impl Tool for LoadSkillTool {
             Some(r) if !r.trim().is_empty() => format!("{} ({r})", args.name),
             _ => args.name.clone(),
         };
-        match loader
+        let res = loader
             .load_skill(&args.name, args.resource.as_deref())
+            .await;
+        let elapsed = started.elapsed().as_millis() as u64;
+        self.ctx
+            .finish_tool_result(
+                super::ToolCardMeta::new(Self::NAME, ToolRisk::SafeRead, &summary, elapsed),
+                res,
+            )
             .await
-        {
-            Ok(out) => {
-                let clipped = self.ctx.format_tool_output(Self::NAME, &out);
-                self.ctx
-                    .record_card(ToolExecutionCard {
-                        tool_name: Self::NAME.to_owned(),
-                        host_label: String::new(),
-                        risk: ToolRisk::SafeRead,
-                        summary,
-                        output: clipped.clone(),
-                        ok: true,
-                        approved: true,
-                        duration_ms: started.elapsed().as_millis() as u64,
-                        diff_preview: None,
-                        ..Default::default()
-                    })
-                    .await;
-                Ok(clipped)
-            }
-            Err(err) => {
-                self.ctx
-                    .record_card(ToolExecutionCard {
-                        tool_name: Self::NAME.to_owned(),
-                        host_label: String::new(),
-                        risk: ToolRisk::SafeRead,
-                        summary,
-                        output: err.to_string(),
-                        ok: false,
-                        approved: true,
-                        duration_ms: started.elapsed().as_millis() as u64,
-                        diff_preview: None,
-                        ..Default::default()
-                    })
-                    .await;
-                Err(to_rig_err(err))
-            }
-        }
     }
 }

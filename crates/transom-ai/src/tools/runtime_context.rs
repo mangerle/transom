@@ -232,10 +232,105 @@ impl ToolRuntimeContext {
             .store_and_preview(tool_name, raw, DEFAULT_TOOL_OUTPUT_LIMIT)
     }
 
+    /// 统一记录工具执行结果卡片并返回格式化的模型输出（或转换后的 Rig 错误）。
+    ///
+    /// # Errors
+    /// 当 `result` 为 `Err` 时记录失败卡片并返回 [`rig_agent::tool::ToolExecutionError`]。
+    pub async fn finish_tool_result(
+        &self,
+        meta: ToolCardMeta<'_>,
+        result: Result<String, ToolError>,
+    ) -> Result<String, rig_agent::tool::ToolExecutionError> {
+        match result {
+            Ok(raw) => {
+                let clipped = self.format_tool_output(meta.tool_name, &raw);
+                self.record_outcome_card(meta, clipped.clone(), true).await;
+                Ok(clipped)
+            }
+            Err(err) => {
+                let msg = err.to_string();
+                self.record_outcome_card(meta, msg, false).await;
+                Err(to_rig_err(err))
+            }
+        }
+    }
+
+    /// 统一记录一张工具执行完成卡片（适用于调用方需自行格式化输出或仅记录既定结果）。
+    pub async fn record_outcome_card(&self, meta: ToolCardMeta<'_>, output: String, ok: bool) {
+        self.record_card(ToolExecutionCard {
+            call_id: meta.call_id.map(ToolCallId::from).unwrap_or_default(),
+            running: false,
+            tool_name: meta.tool_name.to_owned(),
+            host_label: meta.host_label.to_owned(),
+            risk: meta.risk,
+            summary: meta.summary.to_owned(),
+            output,
+            ok,
+            approved: true,
+            duration_ms: meta.duration_ms,
+            diff_preview: meta.diff_preview,
+            revert_target_path: meta.revert_target_path,
+            revert_backup_path: meta.revert_backup_path,
+        })
+        .await;
+    }
+
     /// 构造仅用于导出工具 Schema 的空上下文（不关联任何连接或任务）。
     pub(crate) fn dummy_for_schema() -> Self {
         let (events, _event_rx) = mpsc::channel(1);
         Self::minimal(SessionScope::Global, events, CancellationToken::new())
+    }
+}
+
+/// 工具执行完成卡片的元数据，供 [`ToolRuntimeContext::finish_tool_result`] 与
+/// [`ToolRuntimeContext::record_outcome_card`] 复用。
+pub struct ToolCardMeta<'a> {
+    pub call_id: Option<&'a str>,
+    pub tool_name: &'a str,
+    pub host_label: &'a str,
+    pub risk: ToolRisk,
+    pub summary: &'a str,
+    pub duration_ms: u64,
+    pub diff_preview: Option<String>,
+    pub revert_target_path: Option<String>,
+    pub revert_backup_path: Option<String>,
+}
+
+impl<'a> ToolCardMeta<'a> {
+    /// 构造基础工具卡片元数据。
+    pub fn new(tool_name: &'a str, risk: ToolRisk, summary: &'a str, duration_ms: u64) -> Self {
+        Self {
+            call_id: None,
+            tool_name,
+            host_label: "",
+            risk,
+            summary,
+            duration_ms,
+            diff_preview: None,
+            revert_target_path: None,
+            revert_backup_path: None,
+        }
+    }
+
+    pub fn with_host(mut self, host_label: &'a str) -> Self {
+        self.host_label = host_label;
+        self
+    }
+
+    pub fn with_call_id(mut self, call_id: &'a str) -> Self {
+        self.call_id = Some(call_id);
+        self
+    }
+
+    pub fn with_diff(mut self, diff_preview: Option<String>) -> Self {
+        self.diff_preview = diff_preview;
+        self
+    }
+
+    pub fn with_revert(mut self, target_path: Option<String>, backup_path: Option<String>) -> Self {
+        self.revert_target_path = target_path;
+        self.revert_backup_path = backup_path;
+        self
     }
 }
 

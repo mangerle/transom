@@ -30,7 +30,7 @@ pub use target::{ResolvedToolTarget, ToolTargetResolver, target_argument_for_too
 mod io;
 mod runtime_context;
 pub use io::{ToolIoContext, with_io_guard};
-pub use runtime_context::{ToolCapabilities, ToolProgressParams, ToolRuntimeContext};
+pub use runtime_context::{ToolCapabilities, ToolCardMeta, ToolProgressParams, ToolRuntimeContext};
 
 use std::sync::Arc;
 use std::time::Duration;

@@ -75,19 +75,18 @@ impl Tool for ReadToolOutputTool {
                 args.pattern.as_deref(),
             )
             .map_err(to_rig_err)?;
+        let summary = format!("读取输出句柄 {}", args.output_id);
         self.ctx
-            .record_card(ToolExecutionCard {
-                tool_name: Self::NAME.to_owned(),
-                host_label: String::new(),
-                risk: ToolRisk::SafeRead,
-                summary: format!("读取输出句柄 {}", args.output_id),
-                output: out.clone(),
-                ok: true,
-                approved: true,
-                duration_ms: started.elapsed().as_millis() as u64,
-                diff_preview: None,
-                ..Default::default()
-            })
+            .record_outcome_card(
+                super::ToolCardMeta::new(
+                    Self::NAME,
+                    ToolRisk::SafeRead,
+                    &summary,
+                    started.elapsed().as_millis() as u64,
+                ),
+                out.clone(),
+                true,
+            )
             .await;
         Ok(out)
     }
@@ -336,19 +335,18 @@ impl Tool for PortForwardTool {
                 }));
             }
         };
+        let summary = format!("端口转发 {}", args.action);
         self.ctx
-            .record_card(ToolExecutionCard {
-                tool_name: Self::NAME.to_owned(),
-                host_label: String::new(),
-                risk,
-                summary: format!("端口转发 {}", args.action),
-                output: out.clone(),
-                ok: true,
-                approved: true,
-                duration_ms: started.elapsed().as_millis() as u64,
-                diff_preview: None,
-                ..Default::default()
-            })
+            .record_outcome_card(
+                super::ToolCardMeta::new(
+                    Self::NAME,
+                    risk,
+                    &summary,
+                    started.elapsed().as_millis() as u64,
+                ),
+                out.clone(),
+                true,
+            )
             .await;
         Ok(out)
     }

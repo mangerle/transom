@@ -7,7 +7,7 @@ use serde::Deserialize;
 use serde_json::json;
 use similar::TextDiff;
 
-use super::{AppBridgeDomain, ToolRuntimeContext, TransferDirection, to_rig_err};
+use super::{AppBridgeDomain, ToolCardMeta, ToolRuntimeContext, TransferDirection, to_rig_err};
 use crate::compaction::truncate_tool_output;
 use crate::error::ToolError;
 use crate::policy::ToolRisk;
@@ -117,44 +117,14 @@ impl Tool for RemoteFsTool {
                 .invoke(AppBridgeDomain::RemoteFs, &args.action, payload)
                 .await;
             let elapsed = started.elapsed().as_millis() as u64;
-            return match res {
-                Ok(text) => {
-                    let clipped = self.ctx.format_tool_output(Self::NAME, &text);
-                    self.ctx
-                        .record_card(crate::tools::ToolExecutionCard {
-                            tool_name: Self::NAME.to_owned(),
-                            host_label,
-                            risk,
-                            summary: format!("{} {}", args.action, args.path),
-                            output: clipped.clone(),
-                            ok: true,
-                            approved: true,
-                            duration_ms: elapsed,
-                            diff_preview: None,
-                            ..Default::default()
-                        })
-                        .await;
-                    Ok(clipped)
-                }
-                Err(err) => {
-                    let msg = err.to_string();
-                    self.ctx
-                        .record_card(crate::tools::ToolExecutionCard {
-                            tool_name: Self::NAME.to_owned(),
-                            host_label,
-                            risk,
-                            summary: format!("{} {}", args.action, args.path),
-                            output: msg,
-                            ok: false,
-                            approved: true,
-                            duration_ms: elapsed,
-                            diff_preview: None,
-                            ..Default::default()
-                        })
-                        .await;
-                    Err(to_rig_err(err))
-                }
-            };
+            let summary = format!("{} {}", args.action, args.path);
+            return self
+                .ctx
+                .finish_tool_result(
+                    ToolCardMeta::new(Self::NAME, risk, &summary, elapsed).with_host(&host_label),
+                    res,
+                )
+                .await;
         }
 
         let fs = self
@@ -239,46 +209,11 @@ impl Tool for RemoteFsTool {
         };
 
         let elapsed = started.elapsed().as_millis() as u64;
-        match result {
-            Ok(text) => {
-                let clipped = self.ctx.format_tool_output(Self::NAME, &text);
-                self.ctx
-                    .record_card(crate::tools::ToolExecutionCard {
-                        tool_name: Self::NAME.to_owned(),
-                        host_label: String::new(),
-                        risk,
-                        summary: format!("{} {}", args.action, args.path),
-                        output: clipped.clone(),
-                        ok: true,
-                        approved: true,
-                        duration_ms: elapsed,
-                        diff_preview,
-                        revert_target_path,
-                        revert_backup_path,
-                        ..Default::default()
-                    })
-                    .await;
-                Ok(clipped)
-            }
-            Err(err) => {
-                let msg = err.to_string();
-                self.ctx
-                    .record_card(crate::tools::ToolExecutionCard {
-                        tool_name: Self::NAME.to_owned(),
-                        host_label: String::new(),
-                        risk,
-                        summary: format!("{} {}", args.action, args.path),
-                        output: msg,
-                        ok: false,
-                        approved: true,
-                        duration_ms: elapsed,
-                        diff_preview,
-                        ..Default::default()
-                    })
-                    .await;
-                Err(to_rig_err(err))
-            }
-        }
+        let summary = format!("{} {}", args.action, args.path);
+        let meta = ToolCardMeta::new(Self::NAME, risk, &summary, elapsed)
+            .with_diff(diff_preview)
+            .with_revert(revert_target_path, revert_backup_path);
+        self.ctx.finish_tool_result(meta, result).await
     }
 }
 
@@ -391,42 +326,13 @@ impl Tool for TransferFileTool {
         };
 
         let elapsed = started.elapsed().as_millis() as u64;
-        match res {
-            Ok(out) => {
-                self.ctx
-                    .record_card(crate::tools::ToolExecutionCard {
-                        tool_name: Self::NAME.to_owned(),
-                        host_label,
-                        risk: ToolRisk::Write,
-                        summary,
-                        output: out.clone(),
-                        ok: true,
-                        approved: true,
-                        duration_ms: elapsed,
-                        diff_preview: None,
-                        ..Default::default()
-                    })
-                    .await;
-                Ok(out)
-            }
-            Err(err) => {
-                self.ctx
-                    .record_card(crate::tools::ToolExecutionCard {
-                        tool_name: Self::NAME.to_owned(),
-                        host_label,
-                        risk: ToolRisk::Write,
-                        summary,
-                        output: err.to_string(),
-                        ok: false,
-                        approved: true,
-                        duration_ms: elapsed,
-                        diff_preview: None,
-                        ..Default::default()
-                    })
-                    .await;
-                Err(to_rig_err(err))
-            }
-        }
+        self.ctx
+            .finish_tool_result(
+                ToolCardMeta::new(Self::NAME, ToolRisk::Write, &summary, elapsed)
+                    .with_host(&host_label),
+                res,
+            )
+            .await
     }
 }
 

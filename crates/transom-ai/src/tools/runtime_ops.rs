@@ -6,7 +6,7 @@ use rig_agent::tool::{Tool, ToolContext, ToolExecutionError};
 use serde::Deserialize;
 use serde_json::json;
 
-use super::{ToolExecutionCard, ToolRuntimeContext, to_rig_err};
+use super::{ToolRuntimeContext, to_rig_err};
 use crate::error::ToolError;
 use crate::policy::ToolRisk;
 
@@ -56,18 +56,16 @@ impl Tool for InspectHostRuntimeTool {
             .map_err(to_rig_err)?;
         let clipped = self.ctx.format_tool_output(Self::NAME, &snapshot);
         self.ctx
-            .record_card(ToolExecutionCard {
-                tool_name: Self::NAME.to_owned(),
-                host_label: String::new(),
-                risk: ToolRisk::SafeRead,
-                summary: "采集主机运行时快照".to_owned(),
-                output: clipped.clone(),
-                ok: true,
-                approved: true,
-                duration_ms: started.elapsed().as_millis() as u64,
-                diff_preview: None,
-                ..Default::default()
-            })
+            .record_outcome_card(
+                super::ToolCardMeta::new(
+                    Self::NAME,
+                    ToolRisk::SafeRead,
+                    "采集主机运行时快照",
+                    started.elapsed().as_millis() as u64,
+                ),
+                clipped.clone(),
+                true,
+            )
             .await;
         Ok(clipped)
     }
@@ -142,19 +140,18 @@ impl Tool for ContainerOpsTool {
             .await
             .map_err(to_rig_err)?;
         let clipped = self.ctx.format_tool_output(Self::NAME, &out);
+        let summary = format!("容器 {}", args.action);
         self.ctx
-            .record_card(ToolExecutionCard {
-                tool_name: Self::NAME.to_owned(),
-                host_label: String::new(),
-                risk,
-                summary: format!("容器 {}", args.action),
-                output: clipped.clone(),
-                ok: true,
-                approved: true,
-                duration_ms: started.elapsed().as_millis() as u64,
-                diff_preview: None,
-                ..Default::default()
-            })
+            .record_outcome_card(
+                super::ToolCardMeta::new(
+                    Self::NAME,
+                    risk,
+                    &summary,
+                    started.elapsed().as_millis() as u64,
+                ),
+                clipped.clone(),
+                true,
+            )
             .await;
         Ok(clipped)
     }
