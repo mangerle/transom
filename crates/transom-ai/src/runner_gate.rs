@@ -2,7 +2,7 @@
 
 use std::collections::VecDeque;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
 use parking_lot::{Mutex, RwLock};
@@ -48,13 +48,18 @@ pub(crate) struct Gate {
     pub(crate) steer_queue: Arc<Mutex<VecDeque<String>>>,
     pub(crate) call_started: Mutex<Option<Instant>>,
     pub(crate) first_delta: Mutex<Option<Instant>>,
+    pub(crate) first_delta_seen: AtomicBool,
     pub(crate) last_summary: Arc<Mutex<String>>,
 }
 
 impl Gate {
     fn mark_delta(&self) {
-        let mut guard = self.first_delta.lock();
-        guard.get_or_insert_with(Instant::now);
+        if self.first_delta_seen.load(Ordering::Relaxed) {
+            return;
+        }
+        if !self.first_delta_seen.swap(true, Ordering::AcqRel) {
+            *self.first_delta.lock() = Some(Instant::now());
+        }
     }
 
     fn drain_steer_notes(&self) -> Option<String> {
@@ -85,6 +90,7 @@ impl AgentHook for Gate {
         }
         *self.call_started.lock() = Some(Instant::now());
         *self.first_delta.lock() = None;
+        self.first_delta_seen.store(false, Ordering::Release);
         CompletionCallAction::continue_run()
     }
 

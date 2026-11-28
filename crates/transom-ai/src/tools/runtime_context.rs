@@ -67,15 +67,15 @@ impl ToolRuntimeContext {
         }
     }
 
-    /// 将修改前的远端文件内容写入快照目录并返回快照文件路径。
-    pub fn save_revert_snapshot(&self, content: &str) -> Option<String> {
+    /// 将修改前的远端文件内容异步写入快照目录并返回快照文件路径。
+    pub async fn save_revert_snapshot(&self, content: &str) -> Option<String> {
         let dir = self.snapshot_dir.as_ref()?;
-        if let Err(err) = std::fs::create_dir_all(dir) {
+        if let Err(err) = tokio::fs::create_dir_all(dir).await {
             log::warn!("创建远端快照目录失败（{}）: {err}", dir.display());
             return None;
         }
         let path = dir.join(format!("{}.bak", uuid::Uuid::new_v4()));
-        match std::fs::write(&path, content.as_bytes()) {
+        match tokio::fs::write(&path, content.as_bytes()).await {
             Ok(()) => Some(path.display().to_string()),
             Err(err) => {
                 log::warn!("保存远端配置变更快照失败（{}）: {err}", path.display());

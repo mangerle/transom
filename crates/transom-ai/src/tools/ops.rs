@@ -228,7 +228,7 @@ impl Tool for RemoteFsTool {
                     && let Ok(original) = old_read
                 {
                     revert_target_path = Some(args.path.clone());
-                    revert_backup_path = self.ctx.save_revert_snapshot(&original);
+                    revert_backup_path = self.ctx.save_revert_snapshot(&original).await;
                 }
                 write_res.map(|()| format!("已写入文件并完成备份: {}", args.path))
             }

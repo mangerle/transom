@@ -10,7 +10,7 @@
 
 use std::collections::VecDeque;
 use std::sync::Arc;
-use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::{AtomicBool, AtomicUsize};
 
 use futures::StreamExt as _;
 use parking_lot::{Mutex, RwLock};
@@ -265,6 +265,7 @@ async fn run_attempt(
         steer_queue: input.steer_queue.clone(),
         call_started: Mutex::new(None),
         first_delta: Mutex::new(None),
+        first_delta_seen: AtomicBool::new(false),
         last_summary: last_summary.clone(),
     };
 

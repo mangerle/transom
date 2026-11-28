@@ -232,42 +232,45 @@ impl KnowledgeSearcher for StoreKnowledgeBridge {
 
 fn collect_markdown_docs(
     base: &std::path::Path,
-    dir: &std::path::Path,
+    root_dir: &std::path::Path,
     out: &mut Vec<Bm25Document>,
 ) {
-    if out.len() >= 128 || !dir.exists() {
-        return;
-    }
-    let Ok(read_dir) = std::fs::read_dir(dir) else {
-        return;
-    };
-    for entry in read_dir.flatten() {
-        if out.len() >= 128 {
-            break;
+    let mut stack = vec![root_dir.to_path_buf()];
+    while let Some(dir) = stack.pop() {
+        if out.len() >= 128 || !dir.exists() {
+            continue;
         }
-        let path = entry.path();
-        if path.is_dir() {
-            collect_markdown_docs(base, &path, out);
-        } else if path.extension().and_then(|e| e.to_str()) == Some("md")
-            && let Ok(meta) = entry.metadata()
-            && meta.len() <= 128 * 1024
-            && let Ok(content) = std::fs::read_to_string(&path)
-        {
-            let rel = path
-                .strip_prefix(base)
-                .unwrap_or(&path)
-                .display()
-                .to_string();
-            let title = path
-                .file_stem()
-                .and_then(|s| s.to_str())
-                .unwrap_or("note")
-                .to_owned();
-            out.push(Bm25Document {
-                source: rel,
-                title,
-                content,
-            });
+        let Ok(read_dir) = std::fs::read_dir(&dir) else {
+            continue;
+        };
+        for entry in read_dir.flatten() {
+            if out.len() >= 128 {
+                break;
+            }
+            let path = entry.path();
+            if path.is_dir() {
+                stack.push(path);
+            } else if path.extension().and_then(|e| e.to_str()) == Some("md")
+                && let Ok(meta) = entry.metadata()
+                && meta.len() <= 128 * 1024
+                && let Ok(content) = std::fs::read_to_string(&path)
+            {
+                let rel = path
+                    .strip_prefix(base)
+                    .unwrap_or(&path)
+                    .display()
+                    .to_string();
+                let title = path
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or("note")
+                    .to_owned();
+                out.push(Bm25Document {
+                    source: rel,
+                    title,
+                    content,
+                });
+            }
         }
     }
 }
