@@ -52,6 +52,9 @@ pub struct DelegateTaskRequest {
     /// 是否转入后台异步执行（`true` 时立即返回 `subagent_id`，完成后自动唤醒主对话）。
     #[serde(default)]
     pub async_mode: bool,
+    /// 关联的主工具调用 ID，用于控制平面与 UI 精确绑定托管任务卡片。
+    #[serde(default)]
+    pub call_id: Option<String>,
 }
 
 /// 子 Agent 运行器抽象（由控制平面实现并注册至托管任务中心）。
@@ -165,6 +168,10 @@ impl Tool for DelegateTaskTool {
             .filter(|s| !s.is_empty())
             .unwrap_or("子 Agent")
             .to_owned();
+        let call_id = self
+            .ctx
+            .emit_tool_started(Self::NAME, &host_label, risk, &args.title)
+            .await;
         let req = DelegateTaskRequest {
             title: args.title.clone(),
             task: args.task,
@@ -174,11 +181,8 @@ impl Tool for DelegateTaskTool {
             resume_id: args.resume_id.filter(|s| !s.trim().is_empty()),
             model_tier: args.model_tier,
             async_mode: args.async_mode,
+            call_id: Some(call_id.clone()),
         };
-        let call_id = self
-            .ctx
-            .emit_tool_started(Self::NAME, &host_label, risk, &args.title)
-            .await;
         let started = Instant::now();
         let res = runner.run_subagent(req).await;
         let elapsed = started.elapsed().as_millis() as u64;

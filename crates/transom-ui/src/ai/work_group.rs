@@ -35,13 +35,16 @@ pub(super) struct MessageBlockCache {
     pub(super) blocks: Vec<DisplayBlock>,
 }
 
-/// 根据工具卡片匹配对应的子代理托管任务（用于实时进度流展示与追加/中断交互）。
+/// 根据工具卡片的 `call_id` 精确匹配对应的子代理托管任务；若任务缺少 `source_call_id`（历史兼容）则回退按标题匹配。
 pub(super) fn find_subagent_task<'a>(
     tasks: &'a [super::task_bar::UiManagedTask],
     item: &UiChatItem,
 ) -> Option<&'a super::task_bar::UiManagedTask> {
     let UiChatItem::ToolCard {
-        tool_name, summary, ..
+        call_id,
+        tool_name,
+        summary,
+        ..
     } = item
     else {
         return None;
@@ -49,10 +52,17 @@ pub(super) fn find_subagent_task<'a>(
     if tool_name != "delegate_task" {
         return None;
     }
-    tasks
-        .iter()
-        .rev()
-        .find(|t| t.dto.kind == "subagent" && t.dto.title == *summary)
+    if !call_id.is_empty()
+        && let Some(matched) = tasks
+            .iter()
+            .rev()
+            .find(|t| t.dto.kind == "subagent" && t.dto.source_call_id.as_deref() == Some(call_id))
+    {
+        return Some(matched);
+    }
+    tasks.iter().rev().find(|t| {
+        t.dto.kind == "subagent" && t.dto.source_call_id.is_none() && t.dto.title == *summary
+    })
 }
 
 /// 统一格式化运行态焦点文案，避免重复拼接“正在执行”前缀。

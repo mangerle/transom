@@ -30,6 +30,9 @@ pub struct AiManagedTaskDto {
     pub started_at_ms: u64,
     pub finished_at_ms: Option<u64>,
     pub exit_code: Option<i32>,
+    /// 关联的发起工具调用 ID（如 `delegate_task` 的 `call_id`），用于 UI 精确绑定。
+    #[serde(default)]
+    pub source_call_id: Option<String>,
 }
 
 /// UI 请求终端上下文的类型。

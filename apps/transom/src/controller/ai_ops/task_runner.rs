@@ -94,6 +94,19 @@ impl ManagedTaskRegistry {
         parent_cancel: &CancellationToken,
         remote: Option<SshRemote>,
     ) -> ManagedTaskHandle {
+        self.start_task_with_source(kind, title, target_label, parent_cancel, remote, None)
+    }
+
+    /// 注册并启动一个新的托管任务，并附带发起工具的 `source_call_id` 强关联标识。
+    pub(in crate::controller) fn start_task_with_source(
+        self: &Arc<Self>,
+        kind: &str,
+        title: &str,
+        target_label: &str,
+        parent_cancel: &CancellationToken,
+        remote: Option<SshRemote>,
+        source_call_id: Option<String>,
+    ) -> ManagedTaskHandle {
         let task_id = format!("task-{}", Uuid::new_v4().simple());
         let cancel = parent_cancel.child_token();
         let detach = CancellationToken::new();
@@ -117,6 +130,7 @@ impl ManagedTaskRegistry {
             started_at_ms: now_epoch_ms(),
             finished_at_ms: None,
             exit_code: None,
+            source_call_id,
         };
         self.emit_event(AppEvent::Ai(Box::new(AiAppEvent::ManagedTaskStarted(dto))));
         ManagedTaskHandle {

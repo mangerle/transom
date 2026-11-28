@@ -136,12 +136,13 @@ impl SubagentRunner for ControllerSubagentRunner {
             .filter(|s| !s.is_empty())
             .unwrap_or("全局")
             .to_owned();
-        let task_handle = self.tasks.start_task(
+        let task_handle = self.tasks.start_task_with_source(
             "subagent",
             &req.title,
             &target_label,
             &self.parent_cancel,
             None,
+            req.call_id.clone(),
         );
         let child_cancel = task_handle.cancel.clone();
 

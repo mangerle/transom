@@ -321,8 +321,8 @@ async fn run_attempt(
 
 /// 生产环境标准入口：根据 [`ModelTarget`] 构造真实客户端并执行（支持 413 自动降级重试）。
 pub async fn run(input: RunInput) -> Result<(), AiError> {
-    let model = build_dyn_model(&input.target);
-    run_with_model_factory(move || model.clone(), input).await
+    let target = input.target.clone();
+    run_with_model_factory(move || build_dyn_model(&target), input).await
 }
 
 async fn run_single_turn_text(

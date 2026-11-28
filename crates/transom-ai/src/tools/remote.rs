@@ -93,7 +93,7 @@ impl Tool for RemoteExecTool {
         let host_label = match target_trimmed {
             Some(t) if t.eq_ignore_ascii_case("local") => "本机 (Local)".to_owned(),
             Some(t) => t.to_owned(),
-            None => String::new(),
+            None => self.ctx.host_label(),
         };
         let call_id = self
             .ctx
