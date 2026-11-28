@@ -278,7 +278,7 @@ impl AiAssistantView {
         self.state.conversation.items.push(UiChatItem::UserText {
             id: local_item_id.clone(),
             text: prompt.clone(),
-            timestamp: Some(chrono::Utc::now().to_rfc3339()),
+            timestamp: Some(chrono::Utc::now()),
         });
         self.active_nav_dot = None;
         self.state.view.status_error = None;

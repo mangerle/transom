@@ -22,6 +22,8 @@ pub(super) struct ChatItemRenderParams<'a> {
     pub(super) full_output_expanded: bool,
     pub(super) copied_key: Option<&'a str>,
     pub(super) has_active_terminal: bool,
+    /// 帧级统一时间戳，避免每个用户气泡重复调用 `Utc::now()`。
+    pub(super) now: chrono::DateTime<chrono::Utc>,
     /// 若当前项是 `delegate_task`，则关联对应的实时子代理托管任务状态。
     pub(super) subagent_task: Option<&'a super::task_bar::UiManagedTask>,
     pub(super) p: &'a Palette,
@@ -52,7 +54,7 @@ pub(super) fn render_chat_item(
             id,
             text,
             timestamp,
-        } => render_user_bubble(id, text, timestamp.as_deref(), &params, &callbacks),
+        } => render_user_bubble(id, text, *timestamp, &params, &callbacks),
         UiChatItem::Reasoning {
             id,
             text,
@@ -142,12 +144,11 @@ fn render_audit_notice(approved: bool, label: &str, host_label: &str, p: &Palett
     row.into_any_element()
 }
 
-/// 将 RFC3339 时间戳格式化为简洁的中文相对时间；跨天时展示本地月日时分，解析失败返回空串。
-fn format_relative_timestamp(raw: &str, now: chrono::DateTime<chrono::Utc>) -> String {
-    let Ok(dt) = chrono::DateTime::parse_from_rfc3339(raw) else {
-        return String::new();
-    };
-    let utc = dt.with_timezone(&chrono::Utc);
+/// 将预解析的 UTC 时间戳格式化为简洁的中文相对时间；跨天时展示本地月日时分。
+fn format_relative_timestamp(
+    utc: chrono::DateTime<chrono::Utc>,
+    now: chrono::DateTime<chrono::Utc>,
+) -> String {
     let secs = now.signed_duration_since(utc).num_seconds();
     if secs < 60 {
         rust_i18n::t!("ai.time_just_now").to_string()
@@ -156,7 +157,7 @@ fn format_relative_timestamp(raw: &str, now: chrono::DateTime<chrono::Utc>) -> S
     } else if secs < 86_400 {
         rust_i18n::t!("ai.time_hours_ago", count = secs / 3600).to_string()
     } else {
-        dt.with_timezone(&chrono::Local)
+        utc.with_timezone(&chrono::Local)
             .format("%m-%d %H:%M")
             .to_string()
     }
@@ -173,7 +174,7 @@ fn copy_icon_and_tip(is_copied: bool) -> (UiIcon, String) {
 fn render_user_bubble(
     id: &str,
     text: &str,
-    timestamp: Option<&str>,
+    timestamp: Option<chrono::DateTime<chrono::Utc>>,
     params: &ChatItemRenderParams<'_>,
     callbacks: &ChatItemCallbacks,
 ) -> AnyElement {
@@ -185,7 +186,7 @@ fn render_user_bubble(
     let on_copy = Rc::clone(&callbacks.code.on_copy);
     let copied_text = text.to_owned();
     let time_label = timestamp
-        .map(|ts| format_relative_timestamp(ts, chrono::Utc::now()))
+        .map(|ts| format_relative_timestamp(ts, params.now))
         .unwrap_or_default();
 
     let mut action_row = h_flex()
@@ -480,19 +481,19 @@ mod tests {
         let now = Utc.with_ymd_and_hms(2026, 11, 27, 10, 0, 0).unwrap();
 
         assert_eq!(
-            format_relative_timestamp("2026-11-27T09:59:30Z", now),
+            format_relative_timestamp(Utc.with_ymd_and_hms(2026, 11, 27, 9, 59, 30).unwrap(), now),
             rust_i18n::t!("ai.time_just_now").as_ref()
         );
         assert_eq!(
-            format_relative_timestamp("2026-11-27T09:45:00Z", now),
+            format_relative_timestamp(Utc.with_ymd_and_hms(2026, 11, 27, 9, 45, 0).unwrap(), now),
             rust_i18n::t!("ai.time_mins_ago", count = 15).as_ref()
         );
         assert_eq!(
-            format_relative_timestamp("2026-11-27T07:00:00Z", now),
+            format_relative_timestamp(Utc.with_ymd_and_hms(2026, 11, 27, 7, 0, 0).unwrap(), now),
             rust_i18n::t!("ai.time_hours_ago", count = 3).as_ref()
         );
-        let older = format_relative_timestamp("2026-11-25T08:30:00Z", now);
+        let older =
+            format_relative_timestamp(Utc.with_ymd_and_hms(2026, 11, 25, 8, 30, 0).unwrap(), now);
         assert!(!older.is_empty() && older.contains(':'));
-        assert_eq!(format_relative_timestamp("not-a-timestamp", now), "");
     }
 }

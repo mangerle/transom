@@ -69,7 +69,7 @@ pub(crate) enum UiChatItem {
     UserText {
         id: String,
         text: String,
-        timestamp: Option<String>,
+        timestamp: Option<chrono::DateTime<chrono::Utc>>,
     },
     Reasoning {
         id: String,

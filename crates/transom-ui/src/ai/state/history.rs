@@ -22,10 +22,13 @@ impl AiPanelState {
                     ..
                 } => match role {
                     ChatRole::User => {
+                        let parsed_ts = chrono::DateTime::parse_from_rfc3339(&entry.timestamp)
+                            .ok()
+                            .map(|dt| dt.with_timezone(&chrono::Utc));
                         self.conversation.items.push(UiChatItem::UserText {
                             id: entry.id,
                             text,
-                            timestamp: Some(entry.timestamp),
+                            timestamp: parsed_ts,
                         });
                     }
                     ChatRole::Assistant => {

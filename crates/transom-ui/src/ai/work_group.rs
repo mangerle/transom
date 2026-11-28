@@ -163,6 +163,7 @@ pub(super) struct WorkGroupParams<'a> {
     pub(super) live_elapsed_secs: Option<u64>,
     pub(super) copied_key: Option<&'a str>,
     pub(super) has_active_terminal: bool,
+    pub(super) now: chrono::DateTime<chrono::Utc>,
     pub(super) managed_tasks: &'a [super::task_bar::UiManagedTask],
     pub(super) p: &'a Palette,
 }
@@ -384,6 +385,7 @@ pub(super) fn render_work_group(
                     full_output_expanded,
                     copied_key: params.copied_key,
                     has_active_terminal: params.has_active_terminal,
+                    now: params.now,
                     subagent_task,
                     p,
                 },
@@ -433,6 +435,7 @@ pub(super) fn render_work_group(
                         full_output_expanded,
                         copied_key: params.copied_key,
                         has_active_terminal: params.has_active_terminal,
+                        now: params.now,
                         subagent_task,
                         p,
                     },

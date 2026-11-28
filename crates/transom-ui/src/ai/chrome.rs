@@ -211,6 +211,7 @@ impl AiAssistantView {
             let code_callbacks = self.build_code_callbacks(cx);
             let copied_key = self.copied_key.as_deref();
             let has_active_terminal = self.state.conversation.active_session.is_some();
+            let frame_now = chrono::Utc::now();
             if render_start > 0 {
                 let v_older = cx.entity();
                 msg_list = msg_list.child(
@@ -258,6 +259,7 @@ impl AiAssistantView {
                                 full_output_expanded,
                                 copied_key,
                                 has_active_terminal,
+                                now: frame_now,
                                 subagent_task,
                                 p,
                             },
@@ -305,6 +307,7 @@ impl AiAssistantView {
                                 live_elapsed_secs: live_elapsed,
                                 copied_key,
                                 has_active_terminal,
+                                now: frame_now,
                                 managed_tasks: &self.state.run.managed_tasks,
                                 p,
                             },
