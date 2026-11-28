@@ -16,6 +16,8 @@ use crate::config::ProviderProtocol;
 use crate::error::AiError;
 
 const DISCOVERY_TIMEOUT: Duration = Duration::from_secs(15);
+/// 模型列表响应允许读取的最大字节数，防止异常端点耗尽进程内存。
+const MAX_DISCOVERY_RESPONSE_BYTES: u64 = 2 * 1024 * 1024;
 
 static HTTP_CLIENT: LazyLock<Client> = LazyLock::new(|| {
     Client::builder()
@@ -140,17 +142,15 @@ pub async fn discover_models(
         })?;
 
     let status = resp.status();
-    let body_text = tokio::time::timeout(DISCOVERY_TIMEOUT, resp.text())
-        .await
-        .map_err(|_| AiError::Timeout {
-            operation: "读取模型列表响应".to_owned(),
-            timeout_secs: DISCOVERY_TIMEOUT.as_secs(),
-        })?
-        .map_err(|err| AiError::ModelCallFailed {
-            protocol: protocol.as_str().to_owned(),
-            model: "models".to_owned(),
-            reason: err.to_string(),
-        })?;
+    let body_text = tokio::time::timeout(
+        DISCOVERY_TIMEOUT,
+        read_bounded_response_body(resp, protocol),
+    )
+    .await
+    .map_err(|_| AiError::Timeout {
+        operation: "读取模型列表响应".to_owned(),
+        timeout_secs: DISCOVERY_TIMEOUT.as_secs(),
+    })??;
 
     if !status.is_success() {
         return Err(AiError::ModelCallFailed {
@@ -167,6 +167,63 @@ pub async fn discover_models(
             reason: format!("解析模型列表 JSON 失败: {err}"),
         })?;
     Ok(parse_models_payload(&json))
+}
+
+async fn read_bounded_response_body(
+    resp: reqwest::Response,
+    protocol: ProviderProtocol,
+) -> Result<String, AiError> {
+    if let Some(length) = resp.content_length()
+        && length > MAX_DISCOVERY_RESPONSE_BYTES
+    {
+        return Err(response_too_large(protocol, length));
+    }
+
+    let initial_capacity = resp
+        .content_length()
+        .unwrap_or(0)
+        .min(MAX_DISCOVERY_RESPONSE_BYTES) as usize;
+    let mut body = Vec::with_capacity(initial_capacity);
+    let mut stream = resp.bytes_stream();
+    while let Some(chunk) = futures::StreamExt::next(&mut stream).await {
+        let chunk = chunk.map_err(|err| AiError::ModelCallFailed {
+            protocol: protocol.as_str().to_owned(),
+            model: "models".to_owned(),
+            reason: format!("读取模型列表响应流失败: {err}"),
+        })?;
+        append_bounded_chunk(&mut body, &chunk, protocol)?;
+    }
+    String::from_utf8(body).map_err(|err| AiError::ModelCallFailed {
+        protocol: protocol.as_str().to_owned(),
+        model: "models".to_owned(),
+        reason: format!("模型列表响应不是有效 UTF-8: {err}"),
+    })
+}
+
+fn append_bounded_chunk(
+    body: &mut Vec<u8>,
+    chunk: &[u8],
+    protocol: ProviderProtocol,
+) -> Result<(), AiError> {
+    let next_len = body
+        .len()
+        .checked_add(chunk.len())
+        .ok_or_else(|| response_too_large(protocol, u64::MAX))?;
+    if next_len as u64 > MAX_DISCOVERY_RESPONSE_BYTES {
+        return Err(response_too_large(protocol, next_len as u64));
+    }
+    body.extend_from_slice(chunk);
+    Ok(())
+}
+
+fn response_too_large(protocol: ProviderProtocol, actual_bytes: u64) -> AiError {
+    AiError::ModelCallFailed {
+        protocol: protocol.as_str().to_owned(),
+        model: "models".to_owned(),
+        reason: format!(
+            "模型列表响应超过体积上限（实际 {actual_bytes} 字节，上限 {MAX_DISCOVERY_RESPONSE_BYTES} 字节）"
+        ),
+    }
 }
 
 /// 测试供应商端点连通性并统计往返延迟与可用模型数。
@@ -209,7 +266,11 @@ fn build_models_url(protocol: ProviderProtocol, raw_base: &str) -> Result<String
 mod tests {
     use serde_json::json;
 
-    use super::{infer_context_window, parse_models_payload};
+    use super::{
+        MAX_DISCOVERY_RESPONSE_BYTES, append_bounded_chunk, infer_context_window,
+        parse_models_payload,
+    };
+    use crate::config::ProviderProtocol;
 
     #[test]
     fn infers_known_context_windows() {
@@ -239,5 +300,16 @@ mod tests {
         assert_eq!(parsed_ollama.len(), 1);
         assert_eq!(parsed_ollama[0].id, "qwen2.5:14b");
         assert_eq!(parsed_ollama[0].context_window, Some(128_000));
+    }
+
+    #[test]
+    fn discovery_response_limit_is_bounded() {
+        assert_eq!(MAX_DISCOVERY_RESPONSE_BYTES, 2 * 1024 * 1024);
+
+        let mut body = vec![0; MAX_DISCOVERY_RESPONSE_BYTES as usize];
+        assert!(
+            append_bounded_chunk(&mut body, b"x", ProviderProtocol::OpenAi).is_err(),
+            "超过上限的流式分块必须立即拒绝"
+        );
     }
 }
