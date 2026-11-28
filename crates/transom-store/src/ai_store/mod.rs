@@ -5,6 +5,7 @@
 //! - 会话采用轻量 `index.json` + 追加写 `sessions/<id>.jsonl`，兼顾侧栏秒开与追加低 IO；
 //! - 所有动态文件名均经过 `resolve_sandbox_path` 规范化校验，杜绝路径穿越。
 
+mod audit;
 mod checkpoint;
 mod memory_usage;
 mod session;
@@ -30,6 +31,7 @@ pub struct AiStore {
     pub(super) usage_lock: Arc<Mutex<()>>,
     pub(super) checkpoint_lock: Arc<Mutex<()>>,
     pub(super) session_append_lock: Arc<Mutex<()>>,
+    pub(super) audit_lock: Arc<Mutex<()>>,
 }
 
 impl Default for AiStore {
@@ -53,6 +55,7 @@ impl AiStore {
             usage_lock: Arc::new(Mutex::new(())),
             checkpoint_lock: Arc::new(Mutex::new(())),
             session_append_lock: Arc::new(Mutex::new(())),
+            audit_lock: Arc::new(Mutex::new(())),
         }
     }
 

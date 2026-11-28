@@ -2,17 +2,15 @@
 
 use chrono::{DateTime, Local, TimeZone};
 use std::fs;
-use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 use transom_ai_contracts::{
-    AiAuditEntry, AiError, MemorySnapshot, read_memory_file_limited, resolve_sandbox_path,
+    AiError, MemorySnapshot, read_memory_file_limited, resolve_sandbox_path,
 };
 
 use super::{AiStore, sanitize_id_filename};
 use crate::file_io::write_atomic;
-use transom_platform::private_fs;
 
 impl AiStore {
     /// 读取三层记忆中的全局记忆与指定主机记忆。
@@ -51,25 +49,6 @@ impl AiStore {
         let safe_name = sanitize_id_filename(host_id, "md");
         let path = resolve_sandbox_path(&host_dir, Path::new(&safe_name))?;
         write_atomic(&path, markdown.as_bytes()).map_err(|err| AiError::StorageFailed {
-            target: path.display().to_string(),
-            reason: err.to_string(),
-        })
-    }
-
-    /// 审计日志文件路径。
-    pub fn append_audit(&self, entry: &AiAuditEntry) -> Result<(), AiError> {
-        private_fs::ensure_private_dir(&self.root).map_err(|err| AiError::StorageFailed {
-            target: self.root.display().to_string(),
-            reason: err.to_string(),
-        })?;
-        let path = self.root.join("audit.jsonl");
-        let line = entry.to_json_line()?;
-        let mut file =
-            private_fs::open_private_append(&path).map_err(|err| AiError::StorageFailed {
-                target: path.display().to_string(),
-                reason: err.to_string(),
-            })?;
-        writeln!(file, "{line}").map_err(|err| AiError::StorageFailed {
             target: path.display().to_string(),
             reason: err.to_string(),
         })
