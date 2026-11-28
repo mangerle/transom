@@ -6,6 +6,7 @@
 //!   仅在运行时构造 [`ModelTarget`] 时注入。
 
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 use crate::error::AiError;
 use crate::mcp::McpServerConfig;
@@ -113,6 +114,22 @@ pub struct ProviderConfig {
     pub thinking_switch: ThinkingSwitch,
     #[serde(default)]
     pub models: Vec<ModelConfig>,
+}
+
+/// 生成不依赖展示名称的新供应商标识。
+///
+/// 显示名称允许重复和修改，不能作为 Keyring 与模型命名空间的主键；UUID
+/// 提供跨重启稳定且无需查询现有配置即可避免碰撞的身份。代价是标识不可读，
+/// 因此界面始终使用 [`ProviderConfig::name`] 展示。
+pub fn new_provider_id() -> String {
+    format!("provider-{}", Uuid::new_v4())
+}
+
+/// 按供应商与请求模型名生成模型稳定标识。
+///
+/// 模型请求名允许在不同供应商间重复，因此命名空间必须包含供应商标识。
+pub fn provider_model_id(provider_id: &str, model_name: &str) -> String {
+    format!("{provider_id}:{model_name}")
 }
 
 pub use crate::config_presets::{
@@ -296,7 +313,10 @@ impl ModelTarget {
 
 #[cfg(test)]
 mod tests {
-    use super::{AiSettings, DEFAULT_MAX_TOKENS, PRESETS, provider_from_preset};
+    use super::{
+        AiSettings, DEFAULT_MAX_TOKENS, PRESETS, new_provider_id, provider_from_preset,
+        provider_model_id,
+    };
     use crate::error::AiError;
 
     #[test]
@@ -326,5 +346,18 @@ mod tests {
             .build_target(&model_id, None, "   ".to_owned())
             .expect_err("空 API Key 应返回错误");
         assert!(matches!(err, AiError::ConfigNotReady { .. }));
+    }
+
+    #[test]
+    fn provider_ids_are_stable_namespaces_independent_of_display_names() {
+        let first = new_provider_id();
+        let second = new_provider_id();
+
+        assert_ne!(first, second, "每次创建供应商都必须获得独立标识");
+        assert!(first.starts_with("provider-"), "供应商标识应带稳定前缀");
+        assert_eq!(
+            provider_model_id(&first, "shared-model"),
+            format!("{first}:shared-model")
+        );
     }
 }

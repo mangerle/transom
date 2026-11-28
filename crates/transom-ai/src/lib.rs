@@ -53,7 +53,7 @@ pub use config::{
     AcpAgentConfig, AiSettings, DEFAULT_COMMAND_TIMEOUT_SECS, DEFAULT_MAX_TOKENS,
     DEFAULT_MAX_TURNS, ModelConfig, ModelTarget, PRESETS, ProviderConfig, ProviderPreset,
     ProviderProtocol, RunningMessageBehavior, default_acp_presets, language_instruction,
-    provider_from_preset,
+    new_provider_id, provider_from_preset, provider_model_id,
 };
 pub use context_budget::{build_local_compaction_summary, compute_context_breakdown};
 pub use discovery::{

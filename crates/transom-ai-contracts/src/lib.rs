@@ -27,7 +27,8 @@ pub use checkpoint::{CheckpointManifest, FileBackupRecord, TurnCheckpoint};
 pub use config::{
     AcpAgentConfig, AiSettings, DEFAULT_COMMAND_TIMEOUT_SECS, DEFAULT_MAX_TOKENS,
     DEFAULT_MAX_TURNS, ModelConfig, ModelTarget, PRESETS, ProviderConfig, ProviderPreset,
-    ProviderProtocol, RunningMessageBehavior, default_acp_presets, provider_from_preset,
+    ProviderProtocol, RunningMessageBehavior, default_acp_presets, new_provider_id,
+    provider_from_preset, provider_model_id,
 };
 pub use error::{AiError, ToolError};
 pub use exec_policy::{

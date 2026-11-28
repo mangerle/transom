@@ -1,7 +1,10 @@
 //! AI 助手面板配置、供应商、ACP、记忆与模型发现动作。
 
 use gpui_kit::*;
-use transom_ai::{ExecutionMode, ModelConfig, ProviderConfig, ThinkingEffort, default_acp_presets};
+use transom_ai::{
+    ExecutionMode, ModelConfig, ProviderConfig, ThinkingEffort, default_acp_presets,
+    new_provider_id, provider_model_id,
+};
 use transom_core::{AiCommand, AppCommand};
 
 use super::state::{AiActivePopup, AiDrawerTab};
@@ -69,22 +72,12 @@ impl AiAssistantView {
         } else {
             name_val.trim().to_owned()
         };
-        let slug: String = display_name
-            .chars()
-            .filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_')
-            .collect();
         let prov_id = self
             .config_form
             .editing_provider
             .as_ref()
             .map(|provider| provider.id.clone())
-            .unwrap_or_else(|| {
-                if slug.is_empty() {
-                    protocol.as_str().to_owned()
-                } else {
-                    slug.to_lowercase()
-                }
-            });
+            .unwrap_or_else(new_provider_id);
         let existing_provider = self.config_form.editing_provider.as_ref();
 
         let mut models = Vec::new();
@@ -121,7 +114,7 @@ impl AiAssistantView {
                 id: existing_model
                     .as_ref()
                     .map(|model| model.id.clone())
-                    .unwrap_or_else(|| format!("{prov_id}:{req}")),
+                    .unwrap_or_else(|| provider_model_id(&prov_id, &req)),
                 display_name: disp,
                 name: req,
                 vision: existing_model.as_ref().is_none_or(|model| model.vision),

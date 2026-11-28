@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::config::{ModelConfig, ProviderConfig, ProviderProtocol};
+use crate::config::{ModelConfig, ProviderConfig, ProviderProtocol, provider_model_id};
 use crate::thinking::ThinkingEffort;
 use crate::thinking::ThinkingSwitch;
 
@@ -199,7 +199,7 @@ pub fn provider_from_preset(preset: &ProviderPreset, unique_suffix: &str) -> Pro
         .default_models
         .iter()
         .map(|model| ModelConfig {
-            id: format!("{provider_id}:{}", model.name),
+            id: provider_model_id(&provider_id, model.name),
             display_name: String::new(),
             name: model.name.to_owned(),
             vision: model.vision,
