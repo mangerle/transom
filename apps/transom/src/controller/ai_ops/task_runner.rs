@@ -310,7 +310,16 @@ pub(in crate::controller) async fn kill_remote_pid(remote: SshRemote, pid: u32) 
     let cmd = format!(
         "kill -TERM -{pid} {pid} 2>/dev/null || true; sleep 1; kill -KILL -{pid} {pid} 2>/dev/null || true"
     );
-    let _ = tokio::time::timeout(Duration::from_secs(5), remote.exec_command_capture(&cmd)).await;
+    match tokio::time::timeout(Duration::from_secs(5), remote.exec_command_capture(&cmd)).await {
+        Ok(Ok(result)) if result.exit_status == Some(0) => {}
+        Ok(Ok(result)) => log::warn!(
+            "清理远端托管任务进程组返回异常退出码，PID: {pid}，退出码: {:?}，stderr: {}",
+            result.exit_status,
+            result.stderr
+        ),
+        Ok(Err(err)) => log::warn!("清理远端托管任务进程组失败，PID: {pid}，原因: {err}"),
+        Err(_) => log::warn!("清理远端托管任务进程组超时（5 秒），PID: {pid}"),
+    }
 }
 
 fn now_epoch_ms() -> u64 {
