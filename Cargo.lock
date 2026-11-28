@@ -10400,6 +10400,7 @@ name = "transom-ai-contracts"
 version = "1.10.0"
 dependencies = [
  "chrono",
+ "log",
  "serde",
  "serde_json",
  "tempfile",

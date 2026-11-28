@@ -156,9 +156,10 @@ pub struct SessionTree {
 }
 
 impl SessionTree {
-    /// 从 JSONL 多行文本解析会话树；忽略空行，遇到损坏行则返回错误。
+    /// 从 JSONL 多行文本解析会话树；忽略空行与最后一条未完成写入记录。
     ///
-    /// 未指定活动叶节点时，以最后一条记录作为活动叶节点，兼容没有索引的旧调用方。
+    /// 未指定活动叶节点时，以最后一条有效记录作为活动叶节点，兼容没有索引的旧调用方。
+    /// 中间记录损坏仍返回错误，防止把真实数据损坏误判为可安全忽略的崩溃尾巴。
     pub fn from_jsonl(content: &str) -> Result<Self, AiError> {
         Self::from_jsonl_with_active_leaf(content, None)
     }
@@ -172,17 +173,29 @@ impl SessionTree {
         active_leaf_id: Option<&str>,
     ) -> Result<Self, AiError> {
         let mut tree = Self::default();
-        for (line_no, raw_line) in content.lines().enumerate() {
+        let mut lines = content
+            .lines()
+            .enumerate()
+            .filter(|(_, line)| !line.trim().is_empty())
+            .peekable();
+        while let Some((line_no, raw_line)) = lines.next() {
             let trimmed = raw_line.trim();
-            if trimmed.is_empty() {
-                continue;
+            let is_last_record = lines.peek().is_none();
+            match serde_json::from_str::<SessionEntry>(trimmed) {
+                Ok(entry) => tree.push(entry),
+                Err(err) if is_last_record && !tree.entries.is_empty() => {
+                    log::warn!(
+                        "忽略会话 JSONL 末尾未完成记录（第 {} 行）: {err}",
+                        line_no + 1
+                    );
+                }
+                Err(err) => {
+                    return Err(AiError::StorageFailed {
+                        target: format!("会话 JSONL 第 {} 行", line_no + 1),
+                        reason: err.to_string(),
+                    });
+                }
             }
-            let entry: SessionEntry =
-                serde_json::from_str(trimmed).map_err(|err| AiError::StorageFailed {
-                    target: format!("会话 JSONL 第 {} 行", line_no + 1),
-                    reason: err.to_string(),
-                })?;
-            tree.push(entry);
         }
         if let Some(leaf_id) = active_leaf_id {
             tree.set_active_leaf(Some(leaf_id.to_owned()));
@@ -339,6 +352,39 @@ mod tests {
             Some(kept.id.as_str())
         );
         assert!(!branch.iter().any(|entry| entry.id == abandoned.id));
+    }
+
+    #[test]
+    fn ignores_only_a_truncated_tail_record() {
+        let header = SessionEntry::new(
+            None,
+            SessionEntryKind::Header {
+                title: "崩溃恢复".to_owned(),
+                scope: SessionScope::Global,
+                model_id: "m1".to_owned(),
+            },
+        );
+        let valid = SessionTree::encode_entry(&header).expect("序列化失败");
+        let content = format!("{valid}\n{{\"id\":\"truncated");
+        let tree = SessionTree::from_jsonl(&content).expect("应保留有效记录并忽略损坏尾巴");
+        assert_eq!(tree.all_entries().len(), 1);
+        assert_eq!(tree.all_entries()[0].id, header.id);
+    }
+
+    #[test]
+    fn rejects_corruption_before_the_tail() {
+        let header = SessionEntry::new(
+            None,
+            SessionEntryKind::Header {
+                title: "损坏会话".to_owned(),
+                scope: SessionScope::Global,
+                model_id: "m1".to_owned(),
+            },
+        );
+        let valid = SessionTree::encode_entry(&header).expect("序列化失败");
+        let content = format!("{valid}\n{{broken\n{valid}");
+        let error = SessionTree::from_jsonl(&content).expect_err("中间损坏必须报错");
+        assert!(error.to_string().contains("第 2 行"));
     }
 
     #[test]
