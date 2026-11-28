@@ -100,6 +100,8 @@ pub(super) fn render_choice_card(
 
     let mut card = v_flex()
         .w_full()
+        .min_w_0()
+        .overflow_hidden()
         .p(rems(space::SM))
         .gap(rems(space::XS))
         .rounded(px(12.0))
@@ -110,22 +112,26 @@ pub(super) fn render_choice_card(
         .child(
             h_flex()
                 .w_full()
+                .min_w_0()
                 .justify_between()
                 .items_center()
                 .gap(rems(space::XS))
                 .child(
                     h_flex()
                         .flex_1()
+                        .min_w_0()
                         .gap(rems(space::XS))
                         .items_center()
                         .child(
                             div()
+                                .flex_shrink_0()
                                 .text_color(p.text.muted)
                                 .child(AppIconElement::new(AppIcon::Ui(UiIcon::HELP)).small()),
                         )
                         .child(
                             div()
                                 .flex_1()
+                                .min_w_0()
                                 .text_size(rems(typography::BODY))
                                 .font_weight(FontWeight::MEDIUM)
                                 .text_color(p.foreground)
@@ -171,6 +177,7 @@ pub(super) fn render_choice_card(
         let mut row = h_flex()
             .id(("ai-choice-opt", idx))
             .w_full()
+            .min_w_0()
             .px(rems(space::SM))
             .py(rems(space::XS))
             .gap(rems(space::XS))
@@ -183,6 +190,7 @@ pub(super) fn render_choice_card(
             .child(
                 div()
                     .flex_1()
+                    .min_w_0()
                     .text_size(rems(typography::BODY))
                     .text_color(p.foreground)
                     .child(option.clone()),
@@ -210,6 +218,7 @@ pub(super) fn render_choice_card(
             .child(
                 h_flex()
                     .flex_1()
+                    .min_w_0()
                     .px(rems(space::XS))
                     .py(px(2.0))
                     .gap(rems(space::XS))
@@ -218,7 +227,7 @@ pub(super) fn render_choice_card(
                     .bg(p.secondary)
                     .child(number_badge(other_num, false, p))
                     .child(
-                        div().flex_1().child(
+                        div().flex_1().min_w_0().child(
                             Input::new(custom_input)
                                 .appearance(false)
                                 .bordered(false)
