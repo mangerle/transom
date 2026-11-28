@@ -10964,6 +10964,9 @@ ai:
   attachment_binary_unsupported:
     en: "Unsupported binary file: %{name}"
     zh-CN: "不支持的二进制文件: %{name}"
+  attachment_image_too_large:
+    en: "Image remains above the size limit after compression: %{bytes} bytes"
+    zh-CN: "图片压缩后仍超过上限（%{bytes} 字节）"
   pasted_doc_title:
     en: "Pasted Doc #%{index}"
     zh-CN: "粘贴文档 #%{index}"

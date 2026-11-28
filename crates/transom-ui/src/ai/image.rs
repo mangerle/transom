@@ -81,7 +81,8 @@ fn encode_compact(img: &DynamicImage) -> Result<(Vec<u8>, String), AiError> {
         })?;
     if jpg_buf.len() > MAX_IMAGE_BYTES {
         return Err(AiError::ImageProcessFailed {
-            reason: format!("图片压缩后仍超过上限（{} 字节）", jpg_buf.len()),
+            reason: rust_i18n::t!("ai.attachment_image_too_large", bytes = jpg_buf.len())
+                .to_string(),
         });
     }
     Ok((jpg_buf, "image/jpeg".to_owned()))
