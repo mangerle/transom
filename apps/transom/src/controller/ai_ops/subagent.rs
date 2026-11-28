@@ -79,11 +79,15 @@ impl AgentPumpSink for SubagentPumpSink {
             }
             AgentEvent::Approval(approval) => {
                 if self.is_readonly {
-                    let _ = approval
+                    if approval
                         .respond
                         .send(AiApprovalDecision::RejectWithFeedback {
                             reason: "只读子 Agent 不允许写操作".to_owned(),
-                        });
+                        })
+                        .is_err()
+                    {
+                        log::debug!("只读子 Agent 审批接收方已取消，拒绝结果被丢弃");
+                    }
                     self.task_handle
                         .emit_chunk("[已拦截只读子 Agent 的写操作请求]\n");
                 } else {
@@ -109,10 +113,12 @@ impl AgentPumpSink for SubagentPumpSink {
                         suggested_prefix: approval.suggested_prefix,
                         impact_note: approval.impact_note,
                     };
-                    let _ = self
-                        .event_tx
-                        .send_async(AppEvent::Ai(Box::new(AiAppEvent::ApprovalRequested(dto))))
-                        .await;
+                    super::send_ai_event(
+                        &self.event_tx,
+                        AiAppEvent::ApprovalRequested(dto),
+                        "子 Agent 审批请求",
+                    )
+                    .await;
                 }
             }
             _ => {}

@@ -155,7 +155,9 @@ impl SshRemoteExecutor {
                     Err(map_remote_exec_err(&reason, timeout))
                 }
             };
-            let _ = tx.send(mapped);
+            if tx.send(mapped).is_err() {
+                log::debug!("远端托管命令结果接收方已取消，丢弃最终结果");
+            }
         });
 
         tokio::select! {

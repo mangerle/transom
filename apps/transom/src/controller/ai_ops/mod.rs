@@ -97,8 +97,9 @@ pub(in crate::controller) async fn handle_ai_command(
                 .approvals
                 .lock()
                 .remove(&ApprovalRequestId::from(request_id.as_str()))
+                && sender.send(decision).is_err()
             {
-                let _ = sender.send(decision);
+                log::debug!("AI 审批接收方已取消，决策结果被丢弃");
             }
         }
         AiCommand::CompactConversation {
@@ -149,20 +150,26 @@ pub(in crate::controller) async fn handle_ai_command(
                 } else {
                     Ok(terminal_output)
                 };
-                let _ = sender.send(payload);
+                if sender.send(payload).is_err() {
+                    log::debug!("终端交接请求方已取消，恢复结果被丢弃");
+                }
             }
         }
         AiCommand::RespondTerminalContext {
             request_id,
             content,
         } => {
-            if let Some(sender) = state.ai.terminal_reqs.lock().remove(&request_id) {
-                let _ = sender.send(content);
+            if let Some(sender) = state.ai.terminal_reqs.lock().remove(&request_id)
+                && sender.send(content).is_err()
+            {
+                log::debug!("终端上下文请求方已取消，响应内容被丢弃");
             }
         }
         AiCommand::RespondAppAction { request_id, result } => {
-            if let Some(sender) = state.ai.app_action_reqs.lock().remove(&request_id) {
-                let _ = sender.send(result);
+            if let Some(sender) = state.ai.app_action_reqs.lock().remove(&request_id)
+                && sender.send(result).is_err()
+            {
+                log::debug!("软件动作请求方已取消，执行结果被丢弃");
             }
         }
         AiCommand::DeleteConversation { conversation_id } => {

@@ -174,8 +174,12 @@ impl AiControlState {
     pub(in crate::controller) async fn shutdown(&mut self) {
         self.mcp_cancel.cancel();
         self.managed_tasks.cancel_all();
-        if let Some(task) = self.mcp_task.take() {
-            let _ = tokio::time::timeout(Duration::from_secs(1), task).await;
+        if let Some(task) = self.mcp_task.take()
+            && tokio::time::timeout(Duration::from_secs(1), task)
+                .await
+                .is_err()
+        {
+            log::warn!("等待反向 MCP 服务退出超过 1 秒");
         }
         {
             let runs = self.runs.lock();
@@ -190,10 +194,14 @@ impl AiControlState {
         self.output_stores.clear();
         self.approval_grants.write().clear();
         self.headless_remotes.clear();
-        let _ = tokio::time::timeout(Duration::from_secs(2), async {
+        if tokio::time::timeout(Duration::from_secs(2), async {
             while self.run_set.join_next().await.is_some() {}
         })
-        .await;
+        .await
+        .is_err()
+        {
+            log::warn!("等待 AI 运行任务退出超过 2 秒");
+        }
         self.managed_tasks.close_background();
         if tokio::time::timeout(Duration::from_secs(2), self.managed_tasks.wait_background())
             .await
