@@ -2,20 +2,78 @@
 
 use std::time::Duration;
 
+use async_trait::async_trait;
 use serde_json::Value;
 use tokio::sync::oneshot;
-use transom_ai::{HostProtection, ToolError};
+use transom_ai::{HostProtection, ResolvedToolTarget, ToolError, ToolTargetResolver};
 use transom_core::{
     AiHostTargetDto, AuthMethod, Connection, ConnectionSecrets, OutboundProxy, SecretKey,
-    SecretKind, Session, SshConnection, TabId,
+    SecretKind, Session, SessionCatalog, SshConnection, TabId,
 };
 use transom_net::{
     PasswordPrompter, SftpClient, SshRemote, SshRemoteConnectParams, connect_ssh_remote,
 };
 
-use super::ControllerAppActionBridge;
+use super::{AppBridgeDeps, ControllerAppActionBridge};
 use crate::controller::Internal;
 use crate::controller::ai_ops::mcp_bridge::{McpControllerSnapshot, McpLiveSession};
+
+const TARGET_RESOLUTION_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// 控制平面目标解析器：只读取当前会话与保存目录的元数据，不在审批前建立连接。
+pub(in crate::controller) struct ControllerTargetResolver {
+    deps: AppBridgeDeps,
+}
+
+impl ControllerTargetResolver {
+    pub(in crate::controller) fn new(deps: AppBridgeDeps) -> Self {
+        Self { deps }
+    }
+}
+
+#[async_trait]
+impl ToolTargetResolver for ControllerTargetResolver {
+    async fn resolve_remote_target(&self, target: &str) -> Result<ResolvedToolTarget, ToolError> {
+        let wanted = target.trim();
+        if wanted.is_empty() {
+            return Err(ToolError::InvalidArguments {
+                tool: "target_resolver",
+                reason: "目标名称不能为空".to_owned(),
+            });
+        }
+
+        let bridge = ControllerAppActionBridge::new(self.deps.clone());
+        let snapshot = fetch_snapshot(&bridge).await?;
+        if let Some(live) = find_live_session(&snapshot.sessions, wanted) {
+            return Ok(ResolvedToolTarget::new(
+                Some(live.meta.session_id.to_string()),
+                live.meta.host_name,
+                live.meta.protection,
+            ));
+        }
+
+        let store = self.deps.stores.session_store.clone();
+        let wanted_owned = wanted.to_owned();
+        let (session, ssh) = tokio::task::spawn_blocking(move || {
+            let catalog = store.load().map_err(|error| ToolError::ExecutionFailed {
+                tool: "target_resolver",
+                reason: error.to_string(),
+            })?;
+            find_saved_ssh_target(&catalog, &wanted_owned)
+        })
+        .await
+        .map_err(|error| ToolError::ExecutionFailed {
+            tool: "target_resolver",
+            reason: error.to_string(),
+        })??;
+
+        Ok(ResolvedToolTarget::new(
+            Some(session.id.to_string()),
+            session.name,
+            ssh.protection,
+        ))
+    }
+}
 
 /// 判断工具参数是否明确指向本机执行（`target = "local"`，忽略大小写）。
 pub(super) fn is_local_target(args: &Value) -> bool {
@@ -203,6 +261,48 @@ pub(super) async fn resolve_or_connect_target(
     })
 }
 
+fn find_saved_ssh_target(
+    catalog: &SessionCatalog,
+    wanted: &str,
+) -> Result<(Session, SshConnection), ToolError> {
+    let ssh_sessions: Vec<_> = catalog
+        .sessions
+        .iter()
+        .filter_map(|session| match &session.connection {
+            Connection::Ssh(ssh) => Some((session, ssh)),
+            _ => None,
+        })
+        .collect();
+
+    if let Some((session, ssh)) = ssh_sessions
+        .iter()
+        .find(|(session, _)| session.id.to_string() == wanted || session.name == wanted)
+    {
+        return Ok(((*session).clone(), (*ssh).clone()));
+    }
+    let ci_matches: Vec<_> = ssh_sessions
+        .iter()
+        .filter(|(session, ssh)| {
+            session.name.eq_ignore_ascii_case(wanted) || ssh.host.eq_ignore_ascii_case(wanted)
+        })
+        .collect();
+    match ci_matches.len() {
+        1 => Ok((ci_matches[0].0.clone(), ci_matches[0].1.clone())),
+        0 => Err(ToolError::InvalidArguments {
+            tool: "target_resolver",
+            reason: format!(
+                "未找到名为「{wanted}」的已保存 SSH 会话，请先调用 session_catalog(action=\"list\") 确认名称或 session_id"
+            ),
+        }),
+        _ => Err(ToolError::InvalidArguments {
+            tool: "target_resolver",
+            reason: format!(
+                "目标「{wanted}」匹配到多个已保存 SSH 会话，请改用精确名称或 session_id"
+            ),
+        }),
+    }
+}
+
 fn find_live_session(sessions: &[McpLiveSession], wanted: &str) -> Option<McpLiveSession> {
     sessions
         .iter()
@@ -218,21 +318,27 @@ fn find_live_session(sessions: &[McpLiveSession], wanted: &str) -> Option<McpLiv
 async fn fetch_snapshot(
     bridge: &ControllerAppActionBridge,
 ) -> Result<McpControllerSnapshot, ToolError> {
-    let (tx, rx) = oneshot::channel();
-    bridge
-        .deps
-        .runtime
-        .internal_tx
-        .send_async(Internal::McpSnapshot(tx))
-        .await
-        .map_err(|_| ToolError::ExecutionFailed {
+    tokio::time::timeout(TARGET_RESOLUTION_TIMEOUT, async {
+        let (tx, rx) = oneshot::channel();
+        bridge
+            .deps
+            .runtime
+            .internal_tx
+            .send_async(Internal::McpSnapshot(tx))
+            .await
+            .map_err(|_| ToolError::ExecutionFailed {
+                tool: "target_resolver",
+                reason: "Transom 控制平面未就绪".to_owned(),
+            })?;
+        rx.await.map_err(|_| ToolError::ExecutionFailed {
             tool: "target_resolver",
-            reason: "Transom 控制平面未就绪".to_owned(),
-        })?;
-    rx.await.map_err(|_| ToolError::ExecutionFailed {
-        tool: "target_resolver",
-        reason: "获取控制平面会话快照失败".to_owned(),
+            reason: "获取控制平面会话快照失败".to_owned(),
+        })
     })
+    .await
+    .map_err(|_| ToolError::ExecutionTimeout {
+        timeout_secs: TARGET_RESOLUTION_TIMEOUT.as_secs(),
+    })?
 }
 
 /// 确保目标会话拥有可用 SFTP 客户端（未开启时按需通过现有 SSH 连接打开）。
@@ -284,4 +390,54 @@ pub(super) async fn ensure_remote_dir(remote: &SshRemote, dir: &str) -> Result<(
 pub(super) fn shell_quote(raw: &str) -> String {
     let escaped = raw.replace('\'', "'\"'\"'");
     format!("'{escaped}'")
+}
+
+#[cfg(test)]
+mod tests {
+    use transom_core::{Connection, HostProtection, Session, SessionCatalog, SshConnection};
+
+    use super::find_saved_ssh_target;
+
+    fn catalog_with(hosts: &[(&str, &str, HostProtection)]) -> SessionCatalog {
+        let sessions = hosts
+            .iter()
+            .map(|(name, host, protection)| {
+                let mut ssh = SshConnection::new(*host, "ops");
+                ssh.protection = *protection;
+                Session::new(*name, Connection::Ssh(ssh))
+            })
+            .collect();
+        SessionCatalog {
+            sessions,
+            ..SessionCatalog::default()
+        }
+    }
+
+    #[test]
+    fn resolves_saved_target_by_name_and_preserves_protection() {
+        let catalog = catalog_with(&[("prod-01", "10.0.0.1", HostProtection::Production)]);
+        let (session, ssh) = find_saved_ssh_target(&catalog, "prod-01").expect("目标应解析成功");
+        assert_eq!(session.name, "prod-01");
+        assert_eq!(ssh.protection, HostProtection::Production);
+    }
+
+    #[test]
+    fn resolves_saved_target_case_insensitively_by_host() {
+        let catalog = catalog_with(&[("生产门户", "Prod.Example.COM", HostProtection::ReadOnly)]);
+        let (session, ssh) =
+            find_saved_ssh_target(&catalog, "prod.example.com").expect("主机名应大小写不敏感");
+        assert_eq!(session.name, "生产门户");
+        assert_eq!(ssh.protection, HostProtection::ReadOnly);
+    }
+
+    #[test]
+    fn rejects_ambiguous_saved_targets() {
+        let catalog = catalog_with(&[
+            ("api-a", "same.example.com", HostProtection::Normal),
+            ("api-b", "same.example.com", HostProtection::Production),
+        ]);
+        let error = find_saved_ssh_target(&catalog, "same.example.com")
+            .expect_err("重复主机必须要求精确目标");
+        assert!(error.to_string().contains("多个"));
+    }
 }

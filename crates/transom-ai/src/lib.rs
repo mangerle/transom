@@ -106,11 +106,12 @@ pub use thinking::{
 pub use tools::{
     AppActionBridge, AppBridgeDomain, ApprovalSummary, BulkHostTarget, DelegateMode,
     DelegateTaskRequest, ExecCommandResult, ForwardExecutor, KnowledgeSearcher, LockedSession,
-    MemoryWriter, RemoteExecutor, RemoteFsExecutor, RuntimeInspector, SkillLoader,
-    SubagentModelTier, SubagentRunner, TerminalContextProvider, ToolCapabilities,
-    ToolExecutionCard, ToolIoContext, ToolRuntimeContext, TransferDirection, assess_tool_call,
+    MemoryWriter, RemoteExecutor, RemoteFsExecutor, ResolvedToolTarget, RuntimeInspector,
+    SkillLoader, SubagentModelTier, SubagentRunner, TerminalContextProvider, ToolCapabilities,
+    ToolExecutionCard, ToolIoContext, ToolRuntimeContext, ToolTargetResolver, TransferDirection,
+    assess_tool_call,
     plan::{PlanSnapshot, PlanStep, PlanStepStatus},
-    with_io_guard,
+    target_argument_for_tool, with_io_guard,
 };
 pub use transom_ai_contracts::ids::{ApprovalRequestId, ConversationId, RunId, ToolCallId};
 pub use working_state::{

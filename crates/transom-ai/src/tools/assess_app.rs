@@ -2,7 +2,7 @@
 
 use serde_json::Value;
 
-use super::{ApprovalSummary, ToolRiskAssessment, ToolRuntimeContext};
+use super::{ApprovalSummary, ResolvedToolTarget, ToolRiskAssessment};
 use crate::policy::ToolRisk;
 
 /// 评估软件操作领域工具（10 大领域）的风险等级与确认摘要；非软件领域工具返回 `None`。
@@ -10,7 +10,7 @@ pub fn assess_app_tool(
     tool_name: &str,
     parsed: &Value,
     args_json: &str,
-    ctx: &ToolRuntimeContext,
+    target: &ResolvedToolTarget,
 ) -> Option<ToolRiskAssessment> {
     let action = parsed["action"].as_str().unwrap_or("");
     let risk = match tool_name {
@@ -80,16 +80,7 @@ pub fn assess_app_tool(
     let force_confirm = risk == ToolRisk::Destructive
         || (tool_name == "container_workspace"
             && matches!(action, "create_and_start_container" | "deploy_compose_yaml"));
-    let host_label = if tool_name == "container_workspace" {
-        parsed["target"]
-            .as_str()
-            .map(str::trim)
-            .filter(|s| !s.is_empty())
-            .map(str::to_owned)
-            .unwrap_or_else(|| ctx.host_label())
-    } else {
-        ctx.host_label()
-    };
+    let host_label = target.label.clone();
 
     Some(ToolRiskAssessment {
         risk,
@@ -97,7 +88,7 @@ pub fn assess_app_tool(
         summary: ApprovalSummary {
             tool_name: tool_name.to_owned(),
             host_label,
-            protection: ctx.protection(),
+            protection: target.protection,
             risk,
             title,
             detail,
@@ -109,22 +100,12 @@ pub fn assess_app_tool(
 
 #[cfg(test)]
 mod tests {
-    use tokio::sync::mpsc;
-    use tokio_util::sync::CancellationToken;
-
     use super::assess_app_tool;
-    use crate::policy::ToolRisk;
-    use crate::session::SessionScope;
-    use crate::tools::ToolRuntimeContext;
-
-    fn dummy_ctx() -> ToolRuntimeContext {
-        let (event_tx, _event_rx) = mpsc::channel(4);
-        ToolRuntimeContext::minimal(SessionScope::Global, event_tx, CancellationToken::new())
-    }
+    use crate::policy::{HostProtection, ToolRisk};
+    use crate::tools::ResolvedToolTarget;
 
     #[test]
     fn classifies_app_tools_risk_tiers() {
-        let ctx = dummy_ctx();
         let cases = [
             (
                 "session_catalog",
@@ -190,7 +171,8 @@ mod tests {
         ];
         for (tool, args, expected) in cases {
             let parsed: serde_json::Value = serde_json::from_str(args).unwrap();
-            let got = assess_app_tool(tool, &parsed, args, &ctx).expect("必须命中评估");
+            let target = ResolvedToolTarget::new(None, "测试主机", HostProtection::Normal);
+            let got = assess_app_tool(tool, &parsed, args, &target).expect("必须命中评估");
             assert_eq!(got.risk, expected, "tool={tool} args={args}");
         }
     }

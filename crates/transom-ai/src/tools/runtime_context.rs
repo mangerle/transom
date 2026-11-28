@@ -2,6 +2,7 @@
 //!
 //! 该模块只负责运行时状态与事件背压，不定义具体工具实现。
 
+use super::target::{ResolvedToolTarget, ToolTargetResolver};
 use super::*;
 use crate::ToolCallId;
 
@@ -25,6 +26,8 @@ pub struct ToolCapabilities {
 pub struct ToolRuntimeContext {
     pub scope: SessionScope,
     pub locked_session: Option<LockedSession>,
+    /// 未显式指定 `target` 时用于策略判断的默认目标。
+    pub default_target: ResolvedToolTarget,
     pub bulk_hosts: Vec<BulkHostTarget>,
     pub output_store: Arc<ToolOutputStore>,
     pub command_timeout: Duration,
@@ -33,6 +36,8 @@ pub struct ToolRuntimeContext {
     /// 远端写操作前保存快照的本地目录。
     pub snapshot_dir: Option<std::path::PathBuf>,
     pub caps: ToolCapabilities,
+    /// 用于在策略门前解析跨主机目标的元数据解析器。
+    pub target_resolver: Option<Arc<dyn ToolTargetResolver>>,
 }
 
 impl ToolRuntimeContext {
@@ -50,6 +55,7 @@ impl ToolRuntimeContext {
         Self {
             scope,
             locked_session: None,
+            default_target: ResolvedToolTarget::new(None, "通用会话", HostProtection::Normal),
             bulk_hosts: Vec::new(),
             output_store: Arc::new(ToolOutputStore::new()),
             command_timeout: Duration::from_secs(60),
@@ -57,6 +63,7 @@ impl ToolRuntimeContext {
             events,
             snapshot_dir: None,
             caps: ToolCapabilities::default(),
+            target_resolver: None,
         }
     }
 
@@ -78,17 +85,51 @@ impl ToolRuntimeContext {
     }
 
     pub fn host_label(&self) -> String {
-        self.locked_session
-            .as_ref()
-            .map(|s| s.prompt_ctx.host_name.clone())
-            .unwrap_or_else(|| "通用会话".to_owned())
+        self.default_target.label.clone()
     }
 
     pub fn protection(&self) -> HostProtection {
-        self.locked_session
+        self.default_target.protection
+    }
+
+    /// 返回当前运行上下文自身的策略目标快照。
+    pub fn current_target(&self) -> ResolvedToolTarget {
+        self.default_target.clone()
+    }
+
+    /// 解析本次工具调用的策略目标。
+    ///
+    /// 本机目标在本地保护策略正式确定前沿用当前运行上下文的保护级别，以免跨主机
+    /// 目标修复悄悄改变既有本机操作的审批语义。远端目标必须通过注入的解析器解析，
+    /// 解析失败时在策略门直接失败关闭。
+    ///
+    /// # Errors
+    /// 远端目标无法解析或运行上下文未挂载目标解析器时返回 [`ToolError`]。
+    pub async fn resolve_policy_target(
+        &self,
+        requested: Option<&str>,
+    ) -> Result<ResolvedToolTarget, ToolError> {
+        let Some(requested) = requested.map(str::trim).filter(|value| !value.is_empty()) else {
+            return Ok(self.current_target());
+        };
+        if requested.eq_ignore_ascii_case("local") {
+            return Ok(ResolvedToolTarget::new(
+                None,
+                "本机 (Local)",
+                self.default_target.protection,
+            ));
+        }
+        if requested.eq_ignore_ascii_case("active") {
+            return Ok(self.current_target());
+        }
+        let resolver = self
+            .target_resolver
             .as_ref()
-            .map(|s| s.prompt_ctx.protection)
-            .unwrap_or(HostProtection::Normal)
+            .ok_or_else(|| ToolError::ExecutionFailed {
+                tool: "target_resolver",
+                reason: "当前运行上下文未挂载跨主机目标解析器".to_owned(),
+            })?;
+        resolver.resolve_remote_target(requested).await
     }
 
     /// 等待有界事件流接收工具卡片。
@@ -191,5 +232,86 @@ impl ToolRuntimeContext {
     pub(crate) fn dummy_for_schema() -> Self {
         let (events, _event_rx) = mpsc::channel(1);
         Self::minimal(SessionScope::Global, events, CancellationToken::new())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use async_trait::async_trait;
+    use tokio::sync::mpsc;
+    use tokio_util::sync::CancellationToken;
+
+    use super::ToolRuntimeContext;
+    use crate::policy::HostProtection;
+    use crate::session::SessionScope;
+    use crate::tools::{ResolvedToolTarget, ToolError, ToolTargetResolver};
+
+    struct FakeResolver;
+
+    #[async_trait]
+    impl ToolTargetResolver for FakeResolver {
+        async fn resolve_remote_target(
+            &self,
+            target: &str,
+        ) -> Result<ResolvedToolTarget, ToolError> {
+            if target == "prod-01" {
+                Ok(ResolvedToolTarget::new(
+                    Some("saved-prod".to_owned()),
+                    "生产主机",
+                    HostProtection::Production,
+                ))
+            } else {
+                Err(ToolError::InvalidArguments {
+                    tool: "target_resolver",
+                    reason: "目标不存在".to_owned(),
+                })
+            }
+        }
+    }
+
+    fn context() -> ToolRuntimeContext {
+        let (events, _receiver) = mpsc::channel(1);
+        ToolRuntimeContext::minimal(SessionScope::Global, events, CancellationToken::new())
+    }
+
+    #[tokio::test]
+    async fn local_target_preserves_current_protection() {
+        let mut ctx = context();
+        ctx.default_target = ResolvedToolTarget::new(
+            Some("active".to_owned()),
+            "当前主机",
+            HostProtection::ReadOnly,
+        );
+
+        let target = ctx
+            .resolve_policy_target(Some("local"))
+            .await
+            .expect("本机目标应解析成功");
+        assert_eq!(target.protection, HostProtection::ReadOnly);
+        assert_eq!(target.label, "本机 (Local)");
+    }
+
+    #[tokio::test]
+    async fn remote_target_uses_injected_resolver() {
+        let mut ctx = context();
+        ctx.target_resolver = Some(std::sync::Arc::new(FakeResolver));
+
+        let target = ctx
+            .resolve_policy_target(Some("prod-01"))
+            .await
+            .expect("远端目标应解析成功");
+        assert_eq!(target.host_id.as_deref(), Some("saved-prod"));
+        assert_eq!(target.protection, HostProtection::Production);
+        assert_eq!(target.label, "生产主机");
+    }
+
+    #[tokio::test]
+    async fn remote_target_fails_closed_without_resolver() {
+        let ctx = context();
+        let error = ctx
+            .resolve_policy_target(Some("prod-01"))
+            .await
+            .expect_err("缺少解析器时必须失败关闭");
+        assert!(matches!(error, ToolError::ExecutionFailed { .. }));
     }
 }

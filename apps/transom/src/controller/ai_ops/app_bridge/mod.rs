@@ -19,6 +19,7 @@ use async_trait::async_trait;
 pub(super) use memory::{StoreKnowledgeBridge, StoreMemoryBridge, StoreSkillLoader};
 use parking_lot::Mutex;
 use serde_json::Value;
+pub(in crate::controller) use target_resolver::ControllerTargetResolver;
 use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
 use transom_ai::{AppActionBridge, AppBridgeDomain, ToolError, ToolIoContext};

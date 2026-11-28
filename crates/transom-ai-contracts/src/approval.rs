@@ -48,6 +48,14 @@ impl ApprovalScope {
         }
     }
 
+    /// 派生同一命名空间下绑定到实际目标主机的授权作用域。
+    ///
+    /// 跨主机工具在策略通过后必须使用解析后的目标主机，而不是当前活动标签页；
+    /// 否则授权可能被错误地复用到另一台主机。
+    pub fn with_target(&self, host_id: Option<String>, protection: HostProtection) -> Self {
+        Self::new(self.namespace.clone(), host_id, protection)
+    }
+
     /// 授权所属命名空间。
     pub fn namespace(&self) -> &str {
         &self.namespace

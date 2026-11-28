@@ -6,13 +6,16 @@ use std::time::Duration;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 use transom_ai::{
-    AgentEvent, BulkHostTarget, ConversationSummary, LockedSession, MAX_BULK_TARGETS, SessionEntry,
-    SessionEntryKind, SessionPromptContext, SessionScope, ThinkingEffort, ToolRuntimeContext,
+    AgentEvent, BulkHostTarget, ConversationSummary, LockedSession, MAX_BULK_TARGETS,
+    ResolvedToolTarget, SessionEntry, SessionEntryKind, SessionPromptContext, SessionScope,
+    ThinkingEffort, ToolRuntimeContext,
 };
 use transom_core::{AiAppEvent, AiPromptRequest, AppEvent};
 use uuid::Uuid;
 
-use super::app_bridge::{self, StoreKnowledgeBridge, StoreMemoryBridge, StoreSkillLoader};
+use super::app_bridge::{
+    self, ControllerTargetResolver, StoreKnowledgeBridge, StoreMemoryBridge, StoreSkillLoader,
+};
 use super::bridge::{HostRuntimeBridge, SshRemoteExecutor, SshRemoteFsBridge, UiTerminalBridge};
 use super::subagent;
 use crate::controller::state::{ControllerCtx, ControllerState};
@@ -59,6 +62,8 @@ pub(super) fn build_tool_context(
         current_turn_entry_id,
     } = params;
     let mut locked_session = None;
+    let mut default_target =
+        ResolvedToolTarget::new(None, "通用会话", transom_ai::HostProtection::Normal);
     let mut remote_exec: Option<Arc<dyn transom_ai::RemoteExecutor>> = None;
     let mut remote_fs: Option<Arc<dyn transom_ai::RemoteFsExecutor>> = None;
     let mut terminal: Option<Arc<dyn transom_ai::TerminalContextProvider>> = None;
@@ -75,6 +80,8 @@ pub(super) fn build_tool_context(
             .unwrap_or_else(|| "SSH 主机".to_owned());
         let login = req.login.clone().unwrap_or_default();
         let os_platform = req.platform.clone().unwrap_or_else(|| "linux".to_owned());
+        default_target =
+            ResolvedToolTarget::new(Some(sid.to_string()), host_name.clone(), req.protection);
         locked_session = Some(LockedSession {
             session_id: sid.to_string(),
             prompt_ctx: SessionPromptContext {
@@ -160,6 +167,7 @@ pub(super) fn build_tool_context(
             hooks: cfg.hooks.to_vec(),
             approval_scope: cfg.approval_scope.clone(),
             approval_grants: cfg.approval_grants,
+            default_target: default_target.clone(),
             app_bridge_deps: bridge_deps.clone(),
             tasks: state.ai_tasks.clone(),
             subagent_histories: state.ai_subagent_histories.clone(),
@@ -168,12 +176,14 @@ pub(super) fn build_tool_context(
             parent_cancel: cancel.clone(),
         }) as Arc<dyn transom_ai::SubagentRunner>
     });
+    let target_resolver = Arc::new(ControllerTargetResolver::new(bridge_deps.clone()));
     let app_bridge: Arc<dyn transom_ai::AppActionBridge> =
         Arc::new(app_bridge::ControllerAppActionBridge::new(bridge_deps));
 
     ToolRuntimeContext {
         scope: scope.clone(),
         locked_session,
+        default_target,
         bulk_hosts,
         output_store,
         command_timeout,
@@ -203,6 +213,7 @@ pub(super) fn build_tool_context(
                 ai_config: ctx.ai_config.clone(),
             })),
         },
+        target_resolver: Some(target_resolver),
     }
 }
 

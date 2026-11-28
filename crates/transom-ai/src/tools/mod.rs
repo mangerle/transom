@@ -21,9 +21,11 @@ mod registry;
 pub mod remote;
 pub mod runtime_ops;
 pub mod skill_tool;
+mod target;
 
 pub use registry::attach_tools;
 pub(crate) use registry::export_mcp_tool_schemas;
+pub use target::{ResolvedToolTarget, ToolTargetResolver, target_argument_for_tool};
 
 mod io;
 mod runtime_context;

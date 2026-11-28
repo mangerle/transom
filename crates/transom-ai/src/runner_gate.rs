@@ -27,7 +27,10 @@ use crate::policy::{
     format_blocking_command_hint,
 };
 use crate::runner::{AgentEvent, ApprovalRequest, HandoffRequest, TurnOutput};
-use crate::tools::{ToolRiskAssessment, ToolRuntimeContext, assess_tool_call_value};
+use crate::tools::{
+    ResolvedToolTarget, ToolRiskAssessment, ToolRuntimeContext, assess_tool_call_value,
+    target_argument_for_tool,
+};
 
 /// 运行期生命周期钩子：熔断、Plan 护栏、策略引擎、Hooks 与流式增量转发。
 pub(crate) struct Gate {
@@ -207,7 +210,13 @@ impl AgentHook for Gate {
             return DispatchAction::skip(format_blocking_command_hint(&hit));
         }
 
-        let assessment = assess_tool_call_value(tool_name, &parsed, args_json, &self.tool_ctx);
+        let requested_target = target_argument_for_tool(tool_name, &parsed);
+        let target = match self.tool_ctx.resolve_policy_target(requested_target).await {
+            Ok(target) => target,
+            Err(err) => return DispatchAction::stop(err.to_string()),
+        };
+        let assessment =
+            assess_tool_call_value(tool_name, &parsed, args_json, &self.tool_ctx, &target);
         if tool_name != "update_plan" {
             let _ = self.events.try_send(AgentEvent::FocusUpdated(format!(
                 "正在执行 {}…",
@@ -222,13 +231,14 @@ impl AgentHook for Gate {
             return blocked;
         }
 
-        let decision = self.decide_policy(tool_name, &parsed, cmd_str, &assessment);
+        let decision = self.decide_policy(tool_name, &parsed, cmd_str, &assessment, &target);
 
         match decision {
             PolicyDecision::Allow => DispatchAction::proceed(),
             PolicyDecision::Deny { reason } => DispatchAction::skip(reason),
             PolicyDecision::RequireApproval => {
-                self.await_approval_or_handoff(assessment, cmd_str).await
+                self.await_approval_or_handoff(assessment, cmd_str, &target)
+                    .await
             }
         }
     }
@@ -272,6 +282,7 @@ impl Gate {
         parsed: &serde_json::Value,
         cmd_str: Option<&str>,
         assessment: &ToolRiskAssessment,
+        target: &ResolvedToolTarget,
     ) -> PolicyDecision {
         let mode = *self.execution_mode.read();
         let command = matches!(tool_name, "remote_exec" | "remote_exec_bulk")
@@ -312,15 +323,18 @@ impl Gate {
         }
 
         let grants = self.approval_grants.read();
+        let approval_scope = self
+            .approval_scope
+            .with_target(target.host_id.clone(), target.protection);
         evaluate_command_policy(&CommandPolicyContext {
-            protection: self.tool_ctx.protection(),
+            protection: target.protection,
             mode,
             plan_mode: self.plan_mode,
             base_risk: assessment.risk,
             force_confirm: assessment.force_confirm,
             command,
             exec_policy_rules: &self.exec_policy_rules,
-            approval_scope: &self.approval_scope,
+            approval_scope: &approval_scope,
             approval_grants: &grants,
         })
     }
@@ -330,6 +344,7 @@ impl Gate {
         &self,
         assessment: ToolRiskAssessment,
         cmd_str: Option<&str>,
+        target: &ResolvedToolTarget,
     ) -> DispatchAction {
         let suggested_prefix = cmd_str.and_then(extract_command_prefix);
         let impact_note = cmd_str.and_then(explain_command_impact);
@@ -363,9 +378,10 @@ impl Gate {
             AiApprovalDecision::AllowOnce => DispatchAction::proceed(),
             AiApprovalDecision::AllowPrefix { prefix } => {
                 if let Some(prefix) = extract_command_prefix(&prefix) {
-                    self.approval_grants
-                        .write()
-                        .grant_prefix(&self.approval_scope, &prefix);
+                    let scope = self
+                        .approval_scope
+                        .with_target(target.host_id.clone(), target.protection);
+                    self.approval_grants.write().grant_prefix(&scope, &prefix);
                 }
                 DispatchAction::proceed()
             }

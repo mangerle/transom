@@ -18,7 +18,8 @@ use transom_core::{AiAppEvent, AiApprovalDecision, AiApprovalDto, AiManagedTaskS
 use uuid::Uuid;
 
 use super::app_bridge::{
-    AppBridgeDeps, ControllerAppActionBridge, StoreKnowledgeBridge, StoreSkillLoader,
+    AppBridgeDeps, ControllerAppActionBridge, ControllerTargetResolver, StoreKnowledgeBridge,
+    StoreSkillLoader,
 };
 use super::event_pump::{AgentPumpSink, drive_agent_pump};
 use super::hooks_exec::ControllerHookExecutor;
@@ -36,6 +37,7 @@ pub(in crate::controller) struct ControllerSubagentRunner {
     pub(in crate::controller) hooks: Vec<HookRule>,
     pub(in crate::controller) approval_scope: transom_ai::ApprovalScope,
     pub(in crate::controller) approval_grants: Arc<RwLock<transom_ai::ApprovalGrantStore>>,
+    pub(in crate::controller) default_target: transom_ai::ResolvedToolTarget,
     pub(in crate::controller) app_bridge_deps: AppBridgeDeps,
     pub(in crate::controller) tasks: Arc<ManagedTaskRegistry>,
     pub(in crate::controller) subagent_histories: Arc<Mutex<HashMap<String, Vec<SessionEntry>>>>,
@@ -139,6 +141,7 @@ impl SubagentRunner for ControllerSubagentRunner {
 
         let mut deps = self.app_bridge_deps.clone();
         deps.set_cancel(child_cancel.clone());
+        let target_resolver = Arc::new(ControllerTargetResolver::new(deps.clone()));
         let app_bridge: Arc<dyn transom_ai::AppActionBridge> =
             Arc::new(ControllerAppActionBridge::new(deps));
 
@@ -149,6 +152,8 @@ impl SubagentRunner for ControllerSubagentRunner {
             event_tx.clone(),
             child_cancel.clone(),
         );
+        tool_ctx.default_target = self.default_target.clone();
+        tool_ctx.target_resolver = Some(target_resolver);
         tool_ctx.command_timeout = self
             .app_bridge_deps
             .runtime

@@ -17,15 +17,15 @@ use tokio_util::sync::CancellationToken;
 use transom_ai::{
     AiAuditEntry, AppActionBridge, AppBridgeDomain, ExecutionMode, HostProtection, LockedSession,
     McpServer, McpServerBackend, McpSessionInfo, PolicyDecision, RemoteExecutor,
-    SessionPromptContext, SessionScope, ToolOutputStore, ToolRuntimeContext, assess_shell_command,
-    assess_tool_call, detect_blocking_command, evaluate_bulk_policy, evaluate_policy,
-    format_blocking_command_hint, serve_local_socket,
+    ResolvedToolTarget, SessionPromptContext, SessionScope, ToolOutputStore, ToolRuntimeContext,
+    assess_shell_command, assess_tool_call, detect_blocking_command, evaluate_bulk_policy,
+    evaluate_policy, format_blocking_command_hint, serve_local_socket, target_argument_for_tool,
 };
 use transom_core::{AiHostTargetDto, AppEvent};
 use transom_net::{SftpClient, SshRemote};
 use transom_store::AiStore;
 
-use super::app_bridge::{AppBridgeDeps, ControllerAppActionBridge};
+use super::app_bridge::{AppBridgeDeps, ControllerAppActionBridge, ControllerTargetResolver};
 use super::bridge::SshRemoteExecutor;
 use super::mcp_dispatch::{dispatch_single_tool, enforce_decision};
 use crate::controller::Internal;
@@ -215,13 +215,23 @@ impl McpServerBackend for ControllerMcpBackend {
                 protection: target.meta.protection,
             },
         });
+        ctx.default_target = ResolvedToolTarget::new(
+            Some(target.meta.session_id.to_string()),
+            target.meta.host_name.clone(),
+            target.meta.protection,
+        );
         ctx.output_store = snap.output_store.clone();
         ctx.command_timeout = snap.command_timeout;
 
         let args_json = arguments.to_string();
-        let assessment = assess_tool_call(name, &args_json, &ctx);
-        let decision = evaluate_policy(
+        let resolved_target = ResolvedToolTarget::new(
+            Some(target.meta.session_id.to_string()),
+            target.meta.host_name.clone(),
             target.meta.protection,
+        );
+        let assessment = assess_tool_call(name, &args_json, &ctx, &resolved_target);
+        let decision = evaluate_policy(
+            resolved_target.protection,
             snap.execution_mode,
             assessment.risk,
             assessment.force_confirm,
@@ -283,15 +293,34 @@ impl ControllerMcpBackend {
         let (event_tx, _event_rx) = mpsc::channel(4);
         let mut ctx =
             ToolRuntimeContext::minimal(SessionScope::Global, event_tx, self.cancel.clone());
+        if let Some(target) = matched {
+            ctx.locked_session = Some(LockedSession {
+                session_id: target.meta.session_id.to_string(),
+                prompt_ctx: SessionPromptContext {
+                    host_name: target.meta.host_name.clone(),
+                    login: target.meta.login.clone(),
+                    os_platform: target.meta.platform.clone(),
+                    protection: target.meta.protection,
+                },
+            });
+            ctx.default_target = ResolvedToolTarget::new(
+                Some(target.meta.session_id.to_string()),
+                target.meta.host_name.clone(),
+                target.meta.protection,
+            );
+        }
         ctx.output_store = snap.output_store.clone();
         ctx.command_timeout = snap.command_timeout;
+        ctx.target_resolver = Some(Arc::new(ControllerTargetResolver::new(deps.clone())));
         let args_json = arguments.to_string();
-        let assessment = assess_tool_call(name, &args_json, &ctx);
-        let protection = matched
-            .map(|t| t.meta.protection)
-            .unwrap_or(HostProtection::Normal);
+        let requested_target = target_argument_for_tool(name, arguments);
+        let resolved_target = ctx
+            .resolve_policy_target(requested_target)
+            .await
+            .map_err(|error| error.to_string())?;
+        let assessment = assess_tool_call(name, &args_json, &ctx, &resolved_target);
         let decision = evaluate_policy(
-            protection,
+            resolved_target.protection,
             snap.execution_mode,
             assessment.risk,
             assessment.force_confirm,

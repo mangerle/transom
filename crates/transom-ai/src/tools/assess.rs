@@ -1,31 +1,19 @@
 //! 工具调用动态风险评估与审批摘要生成。
 
 use super::assess_app::assess_app_tool;
-use super::{ApprovalSummary, ToolRiskAssessment, ToolRuntimeContext};
+use super::{ApprovalSummary, ResolvedToolTarget, ToolRiskAssessment, ToolRuntimeContext};
 use crate::policy::{HostProtection, ToolRisk, assess_shell_command};
-
-/// 解析工具调用的目标显示标签（支持 `target = "local"` 或跨会话目标名）。
-pub(crate) fn resolve_target_label(parsed: &serde_json::Value, ctx: &ToolRuntimeContext) -> String {
-    match parsed["target"]
-        .as_str()
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-    {
-        Some(t) if t.eq_ignore_ascii_case("local") => "本机 (Local)".to_owned(),
-        Some(t) => t.to_owned(),
-        None => ctx.host_label(),
-    }
-}
 
 /// 根据工具名与参数 JSON 字符串动态判定本次调用的风险级别与审批卡片摘要。
 pub fn assess_tool_call(
     tool_name: &str,
     args_json: &str,
     ctx: &ToolRuntimeContext,
+    target: &ResolvedToolTarget,
 ) -> ToolRiskAssessment {
     let parsed: serde_json::Value =
         serde_json::from_str(args_json).unwrap_or(serde_json::Value::Null);
-    assess_tool_call_value(tool_name, &parsed, args_json, ctx)
+    assess_tool_call_value(tool_name, &parsed, args_json, ctx, target)
 }
 
 /// 基于已解析的参数 `Value` 动态判定工具风险与审批摘要（避免调用方重复解析 JSON）。
@@ -34,9 +22,10 @@ pub fn assess_tool_call_value(
     parsed: &serde_json::Value,
     args_json: &str,
     ctx: &ToolRuntimeContext,
+    target: &ResolvedToolTarget,
 ) -> ToolRiskAssessment {
-    let host_label = resolve_target_label(parsed, ctx);
-    let protection = ctx.protection();
+    let host_label = target.label.clone();
+    let protection = target.protection;
 
     match tool_name {
         "remote_exec" => {
@@ -262,7 +251,7 @@ pub fn assess_tool_call_value(
             }
         }
         other => {
-            if let Some(assessed) = assess_app_tool(other, parsed, args_json, ctx) {
+            if let Some(assessed) = assess_app_tool(other, parsed, args_json, target) {
                 return assessed;
             }
             ToolRiskAssessment {
@@ -388,9 +377,9 @@ mod tests {
     use tokio_util::sync::CancellationToken;
 
     use super::assess_tool_call_value;
-    use crate::policy::{ToolRisk, assess_shell_command};
+    use crate::policy::{HostProtection, ToolRisk, assess_shell_command};
     use crate::session::SessionScope;
-    use crate::tools::ToolRuntimeContext;
+    use crate::tools::{ResolvedToolTarget, ToolRuntimeContext};
 
     fn dummy_ctx() -> ToolRuntimeContext {
         let (event_tx, _event_rx) = mpsc::channel(4);
@@ -403,8 +392,15 @@ mod tests {
         let args = serde_json::json!({
             "command": "curl -o /tmp/body https://example.com"
         });
-        let assessment = assess_tool_call_value("remote_exec", &args, &args.to_string(), &ctx);
+        let target = ResolvedToolTarget::new(
+            Some("prod-01".to_owned()),
+            "prod-01",
+            HostProtection::Production,
+        );
+        let assessment =
+            assess_tool_call_value("remote_exec", &args, &args.to_string(), &ctx, &target);
         assert_eq!(assessment.risk, ToolRisk::Write);
+        assert_eq!(assessment.summary.protection, HostProtection::Production);
         assert!(assessment.force_confirm);
         assert!(
             assess_shell_command("curl -o /tmp/body https://example.com").requires_confirmation
