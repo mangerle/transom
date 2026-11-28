@@ -288,10 +288,10 @@ impl AiAssistantView {
         cx.notify();
     }
 
-    /// 将空状态快捷指令/提示词追加预填到输入框并聚焦（不自动发送，由用户确认后发出）。
+    /// 将空状态快捷指令/提示词追加预填到输入框并聚焦（斜杠指令转为行内胶囊，不自动发送）。
     pub(in crate::app::ai) fn prefill_quick_prompt(
         &mut self,
-        snippet: &str,
+        prompt: &str,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -299,12 +299,20 @@ impl AiAssistantView {
         self.completion_dismissed_input = None;
         self.composer_input.update(cx, |i, cx| {
             let cur = i.value().to_string();
-            let text = if cur.is_empty() || cur.ends_with(char::is_whitespace) {
-                snippet.to_owned()
+            if !cur.is_empty() && !cur.ends_with(char::is_whitespace) {
+                i.insert(" ", window, cx);
+            }
+            if prompt.starts_with('/') {
+                let inline = InlineToken::new(format!("slash:{prompt}"), prompt.to_owned());
+                let len = i.value().len();
+                if i.replace_range_with_token(len..len, inline, window, cx)
+                    .is_ok()
+                {
+                    i.insert(" ", window, cx);
+                }
             } else {
-                format!(" {snippet}")
-            };
-            i.insert(&text, window, cx);
+                i.insert(prompt, window, cx);
+            }
             i.focus_handle(cx).focus(window, cx);
         });
         self.last_composer_len = self.composer_input.read(cx).value().len();

@@ -252,12 +252,7 @@ impl AiAssistantView {
                     this.rollback_checkpoint(entry_id.clone(), cx);
                 }
                 MessageStreamEvent::SendQuickPrompt(prompt) => {
-                    let snippet = if prompt.starts_with('/') {
-                        format!("{prompt} ")
-                    } else {
-                        prompt.clone()
-                    };
-                    this.prefill_quick_prompt(&snippet, w, cx);
+                    this.prefill_quick_prompt(prompt, w, cx);
                 }
                 MessageStreamEvent::CopyText { key, text } => {
                     this.copy_text_with_feedback(key.clone(), text.clone(), cx);
