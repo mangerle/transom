@@ -77,28 +77,32 @@ pub(super) async fn handle_turn_end(
     Ok(())
 }
 
+fn to_tool_card_dto(ctx: &PumpContext, card: ToolExecutionCard, running: bool) -> AiToolCardDto {
+    AiToolCardDto {
+        conversation_id: ctx.conversation_id.clone(),
+        run_id: ctx.run_id.clone(),
+        call_id: card.call_id.to_string(),
+        running,
+        tool_name: card.tool_name,
+        host_label: card.host_label,
+        risk_label: card.risk.label().to_owned(),
+        summary: card.summary,
+        output: card.output,
+        ok: card.ok,
+        duration_ms: card.duration_ms,
+        diff_preview: card.diff_preview,
+        revert_target_path: card.revert_target_path,
+        revert_backup_path: card.revert_backup_path,
+    }
+}
+
 pub(super) async fn handle_tool_card(
     ctx: &mut PumpContext,
     last_leaf_id: &mut Option<String>,
     card: ToolExecutionCard,
 ) -> Result<(), transom_ai::AiError> {
     if card.running {
-        let dto = AiToolCardDto {
-            conversation_id: ctx.conversation_id.clone(),
-            run_id: ctx.run_id.clone(),
-            call_id: card.call_id.to_string(),
-            running: true,
-            tool_name: card.tool_name,
-            host_label: card.host_label,
-            risk_label: card.risk.label().to_owned(),
-            summary: card.summary,
-            output: card.output,
-            ok: card.ok,
-            duration_ms: card.duration_ms,
-            diff_preview: card.diff_preview,
-            revert_target_path: card.revert_target_path,
-            revert_backup_path: card.revert_backup_path,
-        };
+        let dto = to_tool_card_dto(ctx, card, true);
         if let Err(err) = ctx
             .event_tx
             .send_async(AppEvent::Ai(Box::new(AiAppEvent::ToolCard(dto))))
@@ -147,22 +151,7 @@ pub(super) async fn handle_tool_card(
     let card_ok = card.ok;
     let card_summary_text = format!("{} ({})", card.tool_name, card.summary);
 
-    let dto = AiToolCardDto {
-        conversation_id: ctx.conversation_id.clone(),
-        run_id: ctx.run_id.clone(),
-        call_id: card.call_id.to_string(),
-        running: false,
-        tool_name: card.tool_name,
-        host_label: card.host_label,
-        risk_label: card.risk.label().to_owned(),
-        summary: card.summary,
-        output: card.output,
-        ok: card.ok,
-        duration_ms: card.duration_ms,
-        diff_preview: card.diff_preview,
-        revert_target_path: card.revert_target_path,
-        revert_backup_path: card.revert_backup_path,
-    };
+    let dto = to_tool_card_dto(ctx, card, false);
     if let Err(err) = ctx
         .event_tx
         .send_async(AppEvent::Ai(Box::new(AiAppEvent::ToolCard(dto))))

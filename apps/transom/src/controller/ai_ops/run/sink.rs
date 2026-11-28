@@ -54,29 +54,12 @@ impl AgentPumpSink for MainAgentPumpSink {
                 }
             }
             AgentEvent::Plan(plan) => {
-                let dto = AiPlanDto {
-                    title: plan.title,
-                    focus: plan.focus,
-                    steps: plan
-                        .steps
-                        .into_iter()
-                        .map(|s| AiPlanStepDto {
-                            text: s.text,
-                            status: match s.status {
-                                PlanStepStatus::Pending => AiPlanStepStatus::Pending,
-                                PlanStepStatus::InProgress => AiPlanStepStatus::InProgress,
-                                PlanStepStatus::Done => AiPlanStepStatus::Done,
-                                PlanStepStatus::Failed => AiPlanStepStatus::Failed,
-                            },
-                        })
-                        .collect(),
-                };
                 emit_ui_event(
                     &self.ctx,
                     AiAppEvent::PlanUpdated {
                         run_id: self.ctx.run_id.clone(),
                         conversation_id: self.ctx.conversation_id.clone(),
-                        plan: dto,
+                        plan: to_plan_dto(plan),
                     },
                     "发送 AI 计划更新事件",
                 )
@@ -150,5 +133,25 @@ impl AgentPumpSink for MainAgentPumpSink {
                 .await;
             }
         }
+    }
+}
+
+fn to_plan_dto(plan: transom_ai::PlanSnapshot) -> AiPlanDto {
+    AiPlanDto {
+        title: plan.title,
+        focus: plan.focus,
+        steps: plan
+            .steps
+            .into_iter()
+            .map(|s| AiPlanStepDto {
+                text: s.text,
+                status: match s.status {
+                    PlanStepStatus::Pending => AiPlanStepStatus::Pending,
+                    PlanStepStatus::InProgress => AiPlanStepStatus::InProgress,
+                    PlanStepStatus::Done => AiPlanStepStatus::Done,
+                    PlanStepStatus::Failed => AiPlanStepStatus::Failed,
+                },
+            })
+            .collect(),
     }
 }
