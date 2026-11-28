@@ -322,12 +322,9 @@ impl AiAssistantView {
                     this.open_image_preview(title.clone(), base64.clone(), cx);
                 }
                 MessageStreamEvent::LoadOlderMessages => {
-                    this.state.conversation.render_window_blocks = this
-                        .state
-                        .conversation
-                        .render_window_blocks
-                        .saturating_add(160);
-                    this.sync_message_stream(false, false, cx);
+                    this.message_stream.update(cx, |stream, cx| {
+                        stream.expand_older_window(160, cx);
+                    });
                 }
             },
         );

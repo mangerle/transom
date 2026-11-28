@@ -1,52 +1,75 @@
 //! AI 面板状态与运行事件路由单元测试。
 
-use super::AiPanelState;
+use super::{AiPanelState, MessageStreamModel};
 use crate::ai::state_types::UiChatItem;
 use transom_core::{AiAppEvent, AiApprovalDto, AiToolCardDto, HostProtection};
+
+fn apply_event(state: &mut AiPanelState, stream: &mut MessageStreamModel, event: AiAppEvent) {
+    if !state.accepts_event(&event) {
+        return;
+    }
+    let model_name = state.active_model_name();
+    let is_current = matches!(
+        &event,
+        AiAppEvent::RunFinished { conversation_id, .. }
+            if state.conversation.active_conversation_id.as_deref() == Some(conversation_id.as_str())
+    );
+    stream.apply_app_event(&event, model_name, is_current);
+    state.apply_app_event(event);
+}
 
 #[test]
 fn tool_card_updates_in_place_by_call_id() {
     let mut st = AiPanelState::default();
+    let mut stream = MessageStreamModel::default();
     st.conversation.active_conversation_id = Some("c1".to_owned());
-    st.apply_app_event(AiAppEvent::ToolCard(AiToolCardDto {
-        conversation_id: "c1".to_owned(),
-        run_id: String::new(),
-        call_id: "call-1".to_owned(),
-        running: true,
-        tool_name: "remote_exec".to_owned(),
-        host_label: "web-01".to_owned(),
-        risk_label: "只读".to_owned(),
-        summary: "tail -n 5 /var/log/syslog".to_owned(),
-        output: "line 1".to_owned(),
-        ok: true,
-        duration_ms: 300,
-        diff_preview: None,
-        revert_target_path: None,
-        revert_backup_path: None,
-    }));
-    assert_eq!(st.conversation.items.len(), 1);
+    apply_event(
+        &mut st,
+        &mut stream,
+        AiAppEvent::ToolCard(AiToolCardDto {
+            conversation_id: "c1".to_owned(),
+            run_id: String::new(),
+            call_id: "call-1".to_owned(),
+            running: true,
+            tool_name: "remote_exec".to_owned(),
+            host_label: "web-01".to_owned(),
+            risk_label: "只读".to_owned(),
+            summary: "tail -n 5 /var/log/syslog".to_owned(),
+            output: "line 1".to_owned(),
+            ok: true,
+            duration_ms: 300,
+            diff_preview: None,
+            revert_target_path: None,
+            revert_backup_path: None,
+        }),
+    );
+    assert_eq!(stream.item_count(), 1);
     assert_eq!(st.conversation.metrics.steps, 0);
 
-    st.apply_app_event(AiAppEvent::ToolCard(AiToolCardDto {
-        conversation_id: "c1".to_owned(),
-        run_id: String::new(),
-        call_id: "call-1".to_owned(),
-        running: false,
-        tool_name: "remote_exec".to_owned(),
-        host_label: "web-01".to_owned(),
-        risk_label: "只读".to_owned(),
-        summary: "tail -n 5 /var/log/syslog".to_owned(),
-        output: "line 1\nline 2".to_owned(),
-        ok: true,
-        duration_ms: 820,
-        diff_preview: None,
-        revert_target_path: None,
-        revert_backup_path: None,
-    }));
-    assert_eq!(st.conversation.items.len(), 1);
+    apply_event(
+        &mut st,
+        &mut stream,
+        AiAppEvent::ToolCard(AiToolCardDto {
+            conversation_id: "c1".to_owned(),
+            run_id: String::new(),
+            call_id: "call-1".to_owned(),
+            running: false,
+            tool_name: "remote_exec".to_owned(),
+            host_label: "web-01".to_owned(),
+            risk_label: "只读".to_owned(),
+            summary: "tail -n 5 /var/log/syslog".to_owned(),
+            output: "line 1\nline 2".to_owned(),
+            ok: true,
+            duration_ms: 820,
+            diff_preview: None,
+            revert_target_path: None,
+            revert_backup_path: None,
+        }),
+    );
+    assert_eq!(stream.item_count(), 1);
     assert_eq!(st.conversation.metrics.steps, 1);
     assert_eq!(st.conversation.metrics.tool_duration_ms, 820);
-    match &st.conversation.items[0] {
+    match &stream.items()[0] {
         UiChatItem::ToolCard {
             running,
             output,
@@ -66,6 +89,7 @@ fn run_started_resets_prior_view_state_with_real_user_entry() {
     use transom_core::AiPlanDto;
 
     let mut state = AiPanelState::default();
+    let mut stream = MessageStreamModel::default();
     state.conversation.active_conversation_id = Some("conv-1".to_owned());
     state.run.active_plan = Some(AiPlanDto {
         title: Some("旧计划".to_owned()),
@@ -75,26 +99,30 @@ fn run_started_resets_prior_view_state_with_real_user_entry() {
     state.run.active_focus = Some("旧焦点".to_owned());
     state.view.status_panel_expanded = false;
     state.begin_run("run-1".to_owned(), Some("conv-1".to_owned()));
-    state.conversation.items.push(UiChatItem::UserText {
+    stream.push_item(UiChatItem::UserText {
         id: "local-u-run-1".to_owned(),
         text: "新问题".to_owned(),
         images: Vec::new(),
         timestamp: None,
     });
 
-    state.apply_app_event(AiAppEvent::RunStarted {
-        run_id: "run-1".to_owned(),
-        conversation_id: "conv-1".to_owned(),
-        title: "新对话".to_owned(),
-        user_entry_id: "entry-1".to_owned(),
-    });
+    apply_event(
+        &mut state,
+        &mut stream,
+        AiAppEvent::RunStarted {
+            run_id: "run-1".to_owned(),
+            conversation_id: "conv-1".to_owned(),
+            title: "新对话".to_owned(),
+            user_entry_id: "entry-1".to_owned(),
+        },
+    );
 
     assert!(state.run.active_plan.is_none());
     assert!(state.run.active_focus.is_none());
     assert!(state.view.status_panel_expanded);
     assert_eq!(state.conversation.metrics.turns, 1);
     assert!(matches!(
-        &state.conversation.items[0],
+        &stream.items()[0],
         UiChatItem::UserText { id, .. } if id == "entry-1"
     ));
 }
@@ -102,31 +130,48 @@ fn run_started_resets_prior_view_state_with_real_user_entry() {
 #[test]
 fn stale_run_and_conversation_events_are_rejected() {
     let mut state = AiPanelState::default();
+    let mut stream = MessageStreamModel::default();
     state.begin_run("run-1".to_owned(), Some("conv-1".to_owned()));
-    state.apply_app_event(AiAppEvent::RunStarted {
-        run_id: "run-1".to_owned(),
-        conversation_id: "conv-1".to_owned(),
-        title: "对话".to_owned(),
-        user_entry_id: "entry-1".to_owned(),
-    });
-    state.apply_app_event(AiAppEvent::TextDelta {
-        run_id: "run-1".to_owned(),
-        conversation_id: "conv-1".to_owned(),
-        delta: "当前内容".to_owned(),
-    });
-    assert_eq!(state.conversation.items.len(), 1);
+    apply_event(
+        &mut state,
+        &mut stream,
+        AiAppEvent::RunStarted {
+            run_id: "run-1".to_owned(),
+            conversation_id: "conv-1".to_owned(),
+            title: "对话".to_owned(),
+            user_entry_id: "entry-1".to_owned(),
+        },
+    );
+    apply_event(
+        &mut state,
+        &mut stream,
+        AiAppEvent::TextDelta {
+            run_id: "run-1".to_owned(),
+            conversation_id: "conv-1".to_owned(),
+            delta: "当前内容".to_owned(),
+        },
+    );
+    assert_eq!(stream.item_count(), 1);
 
-    state.apply_app_event(AiAppEvent::TextDelta {
-        run_id: "run-2".to_owned(),
-        conversation_id: "conv-1".to_owned(),
-        delta: "旧运行内容".to_owned(),
-    });
-    state.apply_app_event(AiAppEvent::TextDelta {
-        run_id: "run-1".to_owned(),
-        conversation_id: "conv-2".to_owned(),
-        delta: "其他对话内容".to_owned(),
-    });
-    assert_eq!(state.conversation.items.len(), 1);
+    apply_event(
+        &mut state,
+        &mut stream,
+        AiAppEvent::TextDelta {
+            run_id: "run-2".to_owned(),
+            conversation_id: "conv-1".to_owned(),
+            delta: "旧运行内容".to_owned(),
+        },
+    );
+    apply_event(
+        &mut state,
+        &mut stream,
+        AiAppEvent::TextDelta {
+            run_id: "run-1".to_owned(),
+            conversation_id: "conv-2".to_owned(),
+            delta: "其他对话内容".to_owned(),
+        },
+    );
+    assert_eq!(stream.item_count(), 1);
     assert!(state.run.active_run.is_some());
 }
 
@@ -346,24 +391,37 @@ fn detaching_active_run_prevents_old_run_events_from_hijacking_new_conversation(
     assert!(!state.active_run_is_current());
 
     // 旧运行的 RunStarted / FocusUpdated / TextDelta 均不得篡改新空白对话
-    state.apply_app_event(AiAppEvent::RunStarted {
-        run_id: "old-run".to_owned(),
-        conversation_id: "old-conv".to_owned(),
-        title: "旧会话".to_owned(),
-        user_entry_id: "u-old".to_owned(),
-    });
-    state.apply_app_event(AiAppEvent::FocusUpdated {
-        run_id: "old-run".to_owned(),
-        focus: "旧焦点".to_owned(),
-    });
-    state.apply_app_event(AiAppEvent::TextDelta {
-        run_id: "old-run".to_owned(),
-        conversation_id: "old-conv".to_owned(),
-        delta: "旧文本".to_owned(),
-    });
+    let mut stream = MessageStreamModel::default();
+    apply_event(
+        &mut state,
+        &mut stream,
+        AiAppEvent::RunStarted {
+            run_id: "old-run".to_owned(),
+            conversation_id: "old-conv".to_owned(),
+            title: "旧会话".to_owned(),
+            user_entry_id: "u-old".to_owned(),
+        },
+    );
+    apply_event(
+        &mut state,
+        &mut stream,
+        AiAppEvent::FocusUpdated {
+            run_id: "old-run".to_owned(),
+            focus: "旧焦点".to_owned(),
+        },
+    );
+    apply_event(
+        &mut state,
+        &mut stream,
+        AiAppEvent::TextDelta {
+            run_id: "old-run".to_owned(),
+            conversation_id: "old-conv".to_owned(),
+            delta: "旧文本".to_owned(),
+        },
+    );
 
     assert!(state.conversation.active_conversation_id.is_none());
-    assert!(state.conversation.items.is_empty());
+    assert!(stream.is_empty());
     assert!(state.run.active_focus.is_none());
 }
 

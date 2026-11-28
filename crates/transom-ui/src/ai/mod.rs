@@ -22,7 +22,6 @@ mod metrics;
 mod metrics_model;
 pub(crate) mod panel_events;
 mod state;
-mod state_turn;
 mod state_types;
 mod task_bar;
 mod turn_nav;

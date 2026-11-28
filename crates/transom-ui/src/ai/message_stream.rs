@@ -7,7 +7,6 @@
 //!   `apply_streaming_delta` 向下推送投影数据，用户交互通过 [`MessageStreamEvent`] 向上冒泡，
 //!   渲染链路严禁任何 `read_entity` 反向读取。
 
-use std::collections::HashSet;
 use std::rc::Rc;
 use std::time::Instant;
 
@@ -15,15 +14,15 @@ use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Sizable as _;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::*;
+use transom_core::AiAppEvent;
 use transom_ui_icons::{AppIcon, AppIconElement, UiIcon};
 
 use super::cards::{ChatItemCallbacks, ChatItemRenderParams, render_chat_item};
 use super::empty_state::render_empty_state;
 use super::markdown_blocks::CodeBlockCallbacks;
-use super::markdown_parser::StreamingMarkdownCache;
 use super::metrics::format_duration_zh;
 use super::plan_card::render_scroll_bottom_button;
-use super::state::UiChatItem;
+use super::state::{MessageStreamModel, UiChatItem};
 use super::task_bar::UiManagedTask;
 use super::turn_nav::{collect_turn_nav_entries, render_turn_nav_rail, resolve_active_nav_dot};
 use super::work_group::{
@@ -65,12 +64,8 @@ pub(in crate::app::ai) enum MessageStreamEvent {
     },
 }
 
-/// 由父视图单向注入的消息流完整投影快照。
+/// 由父视图单向注入的消息流运行态元信息快照（不含消息列表深拷贝）。
 pub(in crate::app::ai) struct MessageStreamSnapshot {
-    pub(in crate::app::ai) items: Vec<UiChatItem>,
-    pub(in crate::app::ai) expanded_cards: HashSet<String>,
-    pub(in crate::app::ai) group_revision: u64,
-    pub(in crate::app::ai) render_window_blocks: usize,
     pub(in crate::app::ai) is_running: bool,
     pub(in crate::app::ai) run_started_at: Option<Instant>,
     pub(in crate::app::ai) active_focus: Option<String>,
@@ -81,12 +76,9 @@ pub(in crate::app::ai) struct MessageStreamSnapshot {
     pub(in crate::app::ai) managed_tasks: Vec<UiManagedTask>,
 }
 
-/// 独立的 AI 消息流视图实体。
+/// 独立的 AI 消息流视图实体（消息流单一数据源的唯一持有者）。
 pub(in crate::app::ai) struct MessageStreamView {
-    items: Vec<UiChatItem>,
-    expanded_cards: HashSet<String>,
-    group_revision: u64,
-    render_window_blocks: usize,
+    model: MessageStreamModel,
     is_running: bool,
     run_started_at: Option<Instant>,
     active_focus: Option<String>,
@@ -106,10 +98,7 @@ impl EventEmitter<MessageStreamEvent> for MessageStreamView {}
 impl MessageStreamView {
     pub(in crate::app::ai) fn new() -> Self {
         Self {
-            items: Vec::new(),
-            expanded_cards: HashSet::new(),
-            group_revision: 0,
-            render_window_blocks: 160,
+            model: MessageStreamModel::default(),
             is_running: false,
             run_started_at: None,
             active_focus: None,
@@ -125,7 +114,22 @@ impl MessageStreamView {
         }
     }
 
-    /// 同步父视图投影快照（结构变化、卡片状态或会话切换时调用）。
+    /// 返回当前消息条目总数。
+    pub(in crate::app::ai) fn item_count(&self) -> usize {
+        self.model.item_count()
+    }
+
+    /// 返回最后一条已完成助手回复的 `(id, text)`。
+    pub(in crate::app::ai) fn last_completed_assistant(&self) -> Option<(&str, &str)> {
+        self.model.last_completed_assistant()
+    }
+
+    /// 返回最后一条助手消息的 ID。
+    pub(in crate::app::ai) fn last_assistant_id(&self) -> Option<&str> {
+        self.model.last_assistant_id()
+    }
+
+    /// 同步父视图运行态元信息快照（零消息列表克隆）。
     pub(in crate::app::ai) fn sync_snapshot(
         &mut self,
         snap: MessageStreamSnapshot,
@@ -133,10 +137,6 @@ impl MessageStreamView {
         scroll_to_bottom: bool,
         cx: &mut Context<Self>,
     ) {
-        self.items = snap.items;
-        self.expanded_cards = snap.expanded_cards;
-        self.group_revision = snap.group_revision;
-        self.render_window_blocks = snap.render_window_blocks;
         self.is_running = snap.is_running;
         self.run_started_at = snap.run_started_at;
         self.active_focus = snap.active_focus;
@@ -156,6 +156,68 @@ impl MessageStreamView {
         cx.notify();
     }
 
+    /// 原地消费控制平面事件并更新唯一消息流数据源。
+    pub(in crate::app::ai) fn apply_app_event(
+        &mut self,
+        event: &AiAppEvent,
+        active_model_name: Option<String>,
+        is_current_conversation: bool,
+        cx: &mut Context<Self>,
+    ) {
+        self.model
+            .apply_app_event(event, active_model_name, is_current_conversation);
+        self.refresh_block_cache();
+        cx.notify();
+    }
+
+    /// 整表替换历史消息条目（会话切换 / 回滚加载完成时调用）。
+    pub(in crate::app::ai) fn replace_items(
+        &mut self,
+        items: Vec<UiChatItem>,
+        cx: &mut Context<Self>,
+    ) {
+        self.model.replace_items(items);
+        self.refresh_block_cache();
+        cx.notify();
+    }
+
+    /// 清空全部消息流。
+    pub(in crate::app::ai) fn clear_items(&mut self, cx: &mut Context<Self>) {
+        self.model.clear();
+        self.refresh_block_cache();
+        cx.notify();
+    }
+
+    /// 追加单条消息条目。
+    pub(in crate::app::ai) fn push_item(&mut self, item: UiChatItem, cx: &mut Context<Self>) {
+        self.model.push_item(item);
+        self.refresh_block_cache();
+        cx.notify();
+    }
+
+    /// 按消息 ID 删除条目。
+    pub(in crate::app::ai) fn remove_item_by_id(
+        &mut self,
+        target_id: &str,
+        cx: &mut Context<Self>,
+    ) {
+        self.model.remove_item_by_id(target_id);
+        self.refresh_block_cache();
+        cx.notify();
+    }
+
+    /// 切换指定卡片或输出块的展开/折叠状态。
+    pub(in crate::app::ai) fn toggle_expanded(&mut self, id: String, cx: &mut Context<Self>) {
+        self.model.toggle_expanded(id);
+        cx.notify();
+    }
+
+    /// 向上扩充历史消息可见块窗口。
+    pub(in crate::app::ai) fn expand_older_window(&mut self, step: usize, cx: &mut Context<Self>) {
+        self.model.expand_older_window(step);
+        cx.notify();
+    }
+
     /// 仅原地追加流式文本/思考增量并局部重绘本实体（零整树重绘、零全量列表拷贝）。
     pub(in crate::app::ai) fn apply_streaming_delta(
         &mut self,
@@ -163,51 +225,8 @@ impl MessageStreamView {
         delta: &str,
         cx: &mut Context<Self>,
     ) {
-        if is_reasoning {
-            if let Some(UiChatItem::Reasoning {
-                text,
-                streaming: true,
-                ..
-            }) = self.items.last_mut()
-            {
-                text.push_str(delta);
-            } else {
-                self.items.push(UiChatItem::Reasoning {
-                    id: format!("stream-r-{}", self.items.len()),
-                    text: delta.to_owned(),
-                    streaming: true,
-                });
-                self.refresh_block_cache();
-            }
-        } else {
-            if let Some(UiChatItem::Reasoning { streaming, .. }) = self.items.last_mut() {
-                *streaming = false;
-            }
-            if let Some(UiChatItem::AssistantText {
-                text,
-                streaming: true,
-                cached_segments,
-                ..
-            }) = self.items.last_mut()
-            {
-                text.push_str(delta);
-                cached_segments
-                    .get_or_insert_with(StreamingMarkdownCache::default)
-                    .update(text);
-            } else {
-                let mut cache = StreamingMarkdownCache::default();
-                cache.update(delta);
-                self.items.push(UiChatItem::AssistantText {
-                    id: format!("stream-a-{}", self.items.len()),
-                    text: delta.to_owned(),
-                    model: None,
-                    tokens_per_sec: None,
-                    streaming: true,
-                    cached_segments: Some(cache),
-                });
-                self.refresh_block_cache();
-            }
-        }
+        self.model.apply_streaming_delta(is_reasoning, delta);
+        self.refresh_block_cache();
         if !self.auto_scroll_locked {
             self.scroll_handle.scroll_to_bottom();
         }
@@ -224,8 +243,8 @@ impl MessageStreamView {
 
     fn refresh_block_cache(&mut self) {
         let is_running = self.is_running;
-        let item_count = self.items.len();
-        let group_revision = self.group_revision;
+        let item_count = self.model.item_count();
+        let group_revision = self.model.group_revision();
         let cache_is_valid = self.block_cache.as_ref().is_some_and(|cache| {
             cache.item_count == item_count
                 && cache.is_running == is_running
@@ -234,7 +253,7 @@ impl MessageStreamView {
         if cache_is_valid {
             return;
         }
-        let blocks = group_chat_items(&self.items, is_running);
+        let blocks = group_chat_items(self.model.items(), is_running);
         self.block_cache = Some(MessageBlockCache {
             item_count,
             is_running,
@@ -324,7 +343,7 @@ impl Render for MessageStreamView {
             }));
 
         let mut nav_entries = Vec::new();
-        if self.items.is_empty() {
+        if self.model.is_empty() {
             let v_quick = cx.entity();
             msg_list = msg_list.child(render_empty_state(
                 self.active_acp.as_ref().map(|(id, _)| id.as_str()),
@@ -340,19 +359,22 @@ impl Render for MessageStreamView {
         } else {
             let is_running = self.is_running;
             let live_elapsed = self.run_started_at.map(|t| t.elapsed().as_secs());
-            let items = &self.items;
+            let items = self.model.items();
+            let expanded_cards = self.model.expanded_cards();
+            let group_revision = self.model.group_revision();
+            let render_window_blocks = self.model.render_window_blocks();
             let fallback_blocks;
             let blocks = if let Some(cache) = self.block_cache.as_ref().filter(|cache| {
                 cache.item_count == items.len()
                     && cache.is_running == is_running
-                    && cache.group_revision == self.group_revision
+                    && cache.group_revision == group_revision
             }) {
                 cache.blocks.as_slice()
             } else {
                 fallback_blocks = group_chat_items(items, is_running);
                 fallback_blocks.as_slice()
             };
-            let render_start = blocks.len().saturating_sub(self.render_window_blocks);
+            let render_start = blocks.len().saturating_sub(render_window_blocks);
             let visible_blocks = &blocks[render_start..];
             nav_entries = collect_turn_nav_entries(items, visible_blocks);
             if render_start > 0 {
@@ -392,9 +414,9 @@ impl Render for MessageStreamView {
                     DisplayBlock::Single(item_index) => {
                         let item = &items[*item_index];
                         let cid = chat_item_id(item).to_owned();
-                        let expanded = self.expanded_cards.contains(&cid);
+                        let expanded = expanded_cards.contains(&cid);
                         let full_key = format!("full-out-{cid}");
-                        let full_output_expanded = self.expanded_cards.contains(&full_key);
+                        let full_output_expanded = expanded_cards.contains(&full_key);
                         let is_follow_user =
                             b_idx > 0 && matches!(item, UiChatItem::UserText { .. });
                         let after_work_group = b_idx > 0
@@ -461,7 +483,7 @@ impl Render for MessageStreamView {
                                 id,
                                 items: &items[*start..*end],
                                 in_progress: *in_progress,
-                                expanded_cards: &self.expanded_cards,
+                                expanded_cards,
                                 active_focus: self.active_focus.as_deref(),
                                 live_elapsed_secs: live_elapsed,
                                 copied_key,

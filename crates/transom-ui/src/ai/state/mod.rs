@@ -3,12 +3,12 @@
 use std::collections::{HashMap, HashSet};
 
 use super::attachments::ComposerAttachment;
-use super::markdown_blocks::StreamingMarkdownCache;
 use super::metrics_model::AiSessionMetrics;
 pub(crate) use super::state_types::{
     ActiveAiRun, ActiveAiSessionInfo, AiActivePopup, AiConfigSection, AiDrawerTab, AiTargetMode,
     UiChatImage, UiChatItem,
 };
+pub(in crate::app::ai) use stream::MessageStreamModel;
 use transom_ai_contracts::{
     AiSettings, ConversationSummary, ExecutionMode, MemorySnapshot, ProviderProtocol, SessionScope,
     ThinkingEffort,
@@ -69,17 +69,11 @@ pub(crate) struct AiConversationUiState {
     pub(crate) show_archived_history: bool,
     pub(crate) active_conversation_id: Option<String>,
     pub(crate) active_conversation_title: Option<String>,
-    pub(crate) items: Vec<UiChatItem>,
-    pub(crate) expanded_cards: HashSet<String>,
     pub(crate) metrics: AiSessionMetrics,
     /// 会话切换序号，用于丢弃后台读取迟到的旧会话。
     pub(crate) load_seq: u64,
     /// 记忆刷新序号，用于丢弃活动主机切换前发起的旧读取。
     pub(crate) memory_load_seq: u64,
-    /// 分组结构版本，流式文本变化不失效，终态或历史重载才更新。
-    pub(crate) group_revision: u64,
-    /// 消息流当前保留的末尾展示块数量。
-    pub(crate) render_window_blocks: usize,
 }
 
 impl Default for AiConversationUiState {
@@ -96,13 +90,9 @@ impl Default for AiConversationUiState {
             show_archived_history: false,
             active_conversation_id: None,
             active_conversation_title: None,
-            items: Vec::new(),
-            expanded_cards: HashSet::new(),
             metrics: AiSessionMetrics::default(),
             load_seq: 0,
             memory_load_seq: 0,
-            group_revision: 0,
-            render_window_blocks: 160,
         }
     }
 }
@@ -176,6 +166,7 @@ impl Default for AiViewUiState {
 mod history;
 mod run;
 mod settings;
+pub(in crate::app::ai) mod stream;
 #[cfg(test)]
 mod tests;
 
@@ -237,7 +228,15 @@ impl AiPanelState {
         }
     }
 
-    /// 消费来自控制平面的流式事件并更新界面消息流。
+    /// 当前选中的模型显示名称。
+    pub(crate) fn active_model_name(&self) -> Option<String> {
+        self.config
+            .settings
+            .resolve_model(&self.config.selected_model_id)
+            .map(|(_, m)| m.name.clone())
+    }
+
+    /// 消费来自控制平面的流式事件并更新会话元状态与运行态。
     pub(crate) fn apply_app_event(&mut self, event: AiAppEvent) -> AiEventOutcome {
         if !self.accepts_event(&event) {
             return AiEventOutcome::default();
@@ -248,7 +247,7 @@ impl AiPanelState {
                 run_id,
                 conversation_id,
                 title,
-                user_entry_id,
+                ..
             } => {
                 if self.run.active_run.is_none() {
                     self.begin_run(run_id.clone(), Some(conversation_id.clone()));
@@ -266,76 +265,16 @@ impl AiPanelState {
                 self.view.status_panel_expanded = true;
                 self.run.tasks_drawer_expanded = false;
                 self.conversation.metrics.turns = self.conversation.metrics.turns.saturating_add(1);
-                if !user_entry_id.trim().is_empty() {
-                    let temp_id = format!("local-u-{run_id}");
-                    for item in &mut self.conversation.items {
-                        if let UiChatItem::UserText { id, .. } = item
-                            && *id == temp_id
-                        {
-                            *id = user_entry_id.clone();
-                        }
-                    }
-                }
             }
-            AiAppEvent::ReasoningDelta { delta, .. } => {
-                if let Some(UiChatItem::Reasoning {
-                    text,
-                    streaming: true,
-                    ..
-                }) = self.conversation.items.last_mut()
-                {
-                    text.push_str(&delta);
-                } else {
-                    self.conversation.items.push(UiChatItem::Reasoning {
-                        id: format!("stream-r-{}", self.conversation.items.len()),
-                        text: delta,
-                        streaming: true,
-                    });
-                }
-            }
-            AiAppEvent::TextDelta { delta, .. } => {
-                // 模型开始吐正文时收起上一条流式思考块
-                if let Some(UiChatItem::Reasoning { streaming, .. }) =
-                    self.conversation.items.last_mut()
-                {
-                    *streaming = false;
-                }
-                if let Some(UiChatItem::AssistantText {
-                    text,
-                    streaming: true,
-                    cached_segments,
-                    ..
-                }) = self.conversation.items.last_mut()
-                {
-                    text.push_str(&delta);
-                    cached_segments
-                        .get_or_insert_with(StreamingMarkdownCache::default)
-                        .update(text);
-                } else {
-                    let mut cache = StreamingMarkdownCache::default();
-                    cache.update(&delta);
-                    self.conversation.items.push(UiChatItem::AssistantText {
-                        id: format!("stream-t-{}", self.conversation.items.len()),
-                        text: delta,
-                        model: None,
-                        tokens_per_sec: None,
-                        streaming: true,
-                        cached_segments: Some(cache),
-                    });
-                }
-            }
+            AiAppEvent::ReasoningDelta { .. } | AiAppEvent::TextDelta { .. } => {}
             AiAppEvent::TurnEnd {
-                reasoning,
-                text,
                 tokens_per_sec,
                 metrics,
                 ..
             } => {
-                self.conversation.group_revision = self.conversation.group_revision.wrapping_add(1);
                 self.conversation
                     .metrics
                     .record_turn(tokens_per_sec, &metrics);
-                self.finalize_turn(reasoning, text, tokens_per_sec);
             }
             AiAppEvent::ToolCard(dto) => {
                 if !dto.running {
@@ -347,7 +286,6 @@ impl AiPanelState {
                         .tool_duration_ms
                         .saturating_add(dto.duration_ms);
                 }
-                self.push_tool_card(dto);
             }
             AiAppEvent::ApprovalRequested(dto) => {
                 self.run.pending_approvals.push(dto);
@@ -377,31 +315,6 @@ impl AiPanelState {
                         plan.focus = None;
                     }
                     self.view.status_panel_expanded = false;
-                    for item in &mut self.conversation.items {
-                        match item {
-                            UiChatItem::Reasoning { streaming, .. } => {
-                                *streaming = false;
-                            }
-                            UiChatItem::AssistantText {
-                                text,
-                                streaming,
-                                cached_segments,
-                                ..
-                            } => {
-                                *streaming = false;
-                                if let Some(cache) = cached_segments {
-                                    cache.update(text);
-                                } else {
-                                    *cached_segments =
-                                        Some(StreamingMarkdownCache::from_complete(text));
-                                }
-                            }
-                            UiChatItem::ToolCard { running, .. } => {
-                                *running = false;
-                            }
-                            _ => {}
-                        }
-                    }
                     if let Some(err) = error {
                         self.view.status_error = Some(err);
                     }

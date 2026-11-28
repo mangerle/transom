@@ -10,7 +10,6 @@ use gpui_kit::*;
 use transom_ai_contracts::{ExtractedChoices, extract_prompt_choices};
 use transom_ui_icons::{AppIcon, AppIconElement, UiIcon};
 
-use crate::app::ai::state::UiChatItem;
 use crate::app::ai::view::AiAssistantView;
 use crate::palette::Palette;
 use crate::theme::tokens::{space, typography};
@@ -262,9 +261,12 @@ pub(in crate::app::ai) fn init_choice_input(
     });
     let sub = cx.subscribe_in(&input, window, |this, _, event: &InputEvent, window, cx| {
         if matches!(event, InputEvent::PressEnter { .. })
-            && let Some(UiChatItem::AssistantText { id, .. }) = this.state.conversation.items.last()
+            && let Some(id) = this
+                .message_stream
+                .read(cx)
+                .last_assistant_id()
+                .map(str::to_owned)
         {
-            let id = id.clone();
             this.submit_custom_choice(&id, window, cx);
         }
     });
@@ -286,20 +288,12 @@ impl AiAssistantView {
         if self.state.active_run_is_current() || has_visible_approval {
             return None;
         }
-        let UiChatItem::AssistantText {
-            id,
-            text,
-            streaming: false,
-            ..
-        } = self.state.conversation.items.last()?
-        else {
-            return None;
-        };
-        if self.choice_card.dismissed_id.as_deref() == Some(id.as_str()) {
+        let (id, text) = self.message_stream.read(cx).last_completed_assistant()?;
+        if self.choice_card.dismissed_id.as_deref() == Some(id) {
             return None;
         }
         let choices = extract_prompt_choices(text)?;
-        let item_id = id.clone();
+        let item_id = id.to_owned();
         let v_sel = cx.entity();
         let v_tog = cx.entity();
         let v_skip = cx.entity();

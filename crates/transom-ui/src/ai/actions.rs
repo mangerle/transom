@@ -80,16 +80,21 @@ impl AiAssistantView {
                         Ok(tree) => {
                             let branch: Vec<_> =
                                 tree.active_branch().into_iter().cloned().collect();
-                            this.state.load_entries(branch);
+                            let items = this.state.load_entries(branch);
                             this.state.view.status_error = this
                                 .state
                                 .run
                                 .background_run_errors
                                 .remove(&display_conversation_id);
+                            this.message_stream.update(cx, |stream, cx| {
+                                stream.replace_items(items, cx);
+                            });
                             this.sync_message_stream(true, false, cx);
                         }
                         Err(err) => {
-                            this.state.conversation.items.clear();
+                            this.message_stream.update(cx, |stream, cx| {
+                                stream.clear_items(cx);
+                            });
                             this.state
                                 .run
                                 .background_run_errors
@@ -290,11 +295,14 @@ impl AiAssistantView {
         }
         let run_id = uuid::Uuid::new_v4().to_string();
         let local_item_id = format!("local-u-{run_id}");
-        self.state.conversation.items.push(UiChatItem::UserText {
+        let user_item = UiChatItem::UserText {
             id: local_item_id.clone(),
             text: prompt.clone(),
             images: ui_images,
             timestamp: Some(chrono::Utc::now()),
+        };
+        self.message_stream.update(cx, |stream, cx| {
+            stream.push_item(user_item, cx);
         });
         self.state.view.status_error = None;
         self.state.run.active_focus = Some(rust_i18n::t!("ai.working_default").to_string());
@@ -372,9 +380,9 @@ impl AiAssistantView {
                 req,
             )))))
         {
-            self.state.conversation.items.retain(
-                |item| !matches!(item, UiChatItem::UserText { id, .. } if id == &local_item_id),
-            );
+            self.message_stream.update(cx, |stream, cx| {
+                stream.remove_item_by_id(&local_item_id, cx);
+            });
             self.state.run.active_focus = None;
             self.state.view.status_error =
                 Some(rust_i18n::t!("ai.send_failed", error = err.to_string()).to_string());
@@ -463,7 +471,9 @@ impl AiAssistantView {
         self.state.detach_active_run();
         self.state.conversation.active_conversation_id = None;
         self.state.conversation.active_conversation_title = None;
-        self.state.conversation.items.clear();
+        self.message_stream.update(cx, |stream, cx| {
+            stream.clear_items(cx);
+        });
         self.state.conversation.metrics.reset_session();
         self.state.run.active_plan = None;
         self.state.run.active_focus = None;

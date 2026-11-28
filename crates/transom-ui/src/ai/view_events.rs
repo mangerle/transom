@@ -8,7 +8,7 @@ use super::view::AiAssistantView;
 use crate::app::spawn_blocking_local;
 
 impl AiAssistantView {
-    /// 将当前会话与运行态投影同步到独立的 [`MessageStreamView`] 实体。
+    /// 将当前运行态元信息投影同步到独立的 [`MessageStreamView`] 实体（零消息列表克隆）。
     pub(super) fn sync_message_stream(
         &mut self,
         reset_scroll_lock: bool,
@@ -17,10 +17,6 @@ impl AiAssistantView {
     ) {
         let active_acp = self.active_acp_agent().map(|agent| (agent.id, agent.name));
         let snap = MessageStreamSnapshot {
-            items: self.state.conversation.items.clone(),
-            expanded_cards: self.state.conversation.expanded_cards.clone(),
-            group_revision: self.state.conversation.group_revision,
-            render_window_blocks: self.state.conversation.render_window_blocks,
             is_running: self.state.active_run_is_current(),
             run_started_at: self.state.current_run_started_at(),
             active_focus: self.state.run.active_focus.clone(),
@@ -48,18 +44,14 @@ impl AiAssistantView {
         // 高频流式增量仅局部刷新 MessageStreamView 实体，彻底隔离顶栏、抽屉与输入区重绘。
         match &event {
             AiAppEvent::TextDelta { delta, .. } => {
-                let delta_owned = delta.clone();
-                self.state.apply_app_event(event);
                 self.message_stream.update(cx, |stream, cx| {
-                    stream.apply_streaming_delta(false, &delta_owned, cx);
+                    stream.apply_streaming_delta(false, delta, cx);
                 });
                 return;
             }
             AiAppEvent::ReasoningDelta { delta, .. } => {
-                let delta_owned = delta.clone();
-                self.state.apply_app_event(event);
                 self.message_stream.update(cx, |stream, cx| {
-                    stream.apply_streaming_delta(true, &delta_owned, cx);
+                    stream.apply_streaming_delta(true, delta, cx);
                 });
                 return;
             }
@@ -135,6 +127,16 @@ impl AiAssistantView {
             | AiAppEvent::ToolCard(_) => true,
             _ => false,
         };
+        let active_model_name = self.state.active_model_name();
+        let is_current_conv = matches!(
+            &event,
+            AiAppEvent::RunFinished { conversation_id, .. }
+                if self.state.conversation.active_conversation_id.as_deref()
+                    == Some(conversation_id.as_str())
+        );
+        self.message_stream.update(cx, |stream, cx| {
+            stream.apply_app_event(&event, active_model_name, is_current_conv, cx);
+        });
         let outcome = self.state.apply_app_event(event);
         if let Some(settings) = outcome.settings_snapshot {
             if let Err(err) = self.config_form.apply_settings(&settings, window, cx) {

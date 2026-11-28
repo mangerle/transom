@@ -107,10 +107,9 @@ impl AiAssistantView {
     }
 
     pub(super) fn toggle_card_id(&mut self, id: String, cx: &mut Context<Self>) {
-        if !self.state.conversation.expanded_cards.remove(&id) {
-            self.state.conversation.expanded_cards.insert(id);
-        }
-        self.sync_message_stream(false, false, cx);
+        self.message_stream.update(cx, |stream, cx| {
+            stream.toggle_expanded(id, cx);
+        });
         cx.notify();
     }
 

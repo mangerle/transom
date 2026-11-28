@@ -91,10 +91,11 @@ impl AiAssistantView {
             )),
             AiActivePopup::ContextUsage => {
                 let v_cmp = view;
+                let item_count = self.message_stream.read(cx).item_count();
                 Some(render_context_usage_popup(
                     &self.state.conversation.metrics,
                     self.active_context_window(),
-                    self.state.conversation.items.len(),
+                    item_count,
                     p,
                     move |_, cx| {
                         v_cmp.update(cx, |this, cx| this.compact_conversation(String::new(), cx));

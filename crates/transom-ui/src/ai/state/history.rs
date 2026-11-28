@@ -7,11 +7,9 @@ use crate::ai::markdown_blocks::StreamingMarkdownCache;
 
 impl AiPanelState {
     /// 把从 JSONL 加载的树状会话主分支还原为 UI 消息列表，并恢复该会话的推理指标。
-    pub(crate) fn load_entries(&mut self, entries: Vec<SessionEntry>) {
-        self.conversation.items.clear();
-        self.conversation.group_revision = self.conversation.group_revision.wrapping_add(1);
-        self.conversation.render_window_blocks = 160;
+    pub(crate) fn load_entries(&mut self, entries: Vec<SessionEntry>) -> Vec<UiChatItem> {
         self.conversation.metrics.restore_from_entries(&entries);
+        let mut items = Vec::with_capacity(entries.len());
         for entry in entries {
             match entry.kind {
                 SessionEntryKind::Message {
@@ -42,7 +40,7 @@ impl AiPanelState {
                                 super::UiChatImage { base64, thumb }
                             })
                             .collect();
-                        self.conversation.items.push(UiChatItem::UserText {
+                        items.push(UiChatItem::UserText {
                             id: entry.id,
                             text,
                             images: ui_images,
@@ -51,7 +49,7 @@ impl AiPanelState {
                     }
                     ChatRole::Assistant => {
                         let cached_segments = Some(StreamingMarkdownCache::from_complete(&text));
-                        self.conversation.items.push(UiChatItem::AssistantText {
+                        items.push(UiChatItem::AssistantText {
                             id: entry.id,
                             text,
                             model,
@@ -62,7 +60,7 @@ impl AiPanelState {
                     }
                 },
                 SessionEntryKind::Reasoning { text } => {
-                    self.conversation.items.push(UiChatItem::Reasoning {
+                    items.push(UiChatItem::Reasoning {
                         id: entry.id,
                         text,
                         streaming: false,
@@ -79,7 +77,7 @@ impl AiPanelState {
                     revert_backup_path,
                     ..
                 } => {
-                    self.conversation.items.push(UiChatItem::ToolCard {
+                    items.push(UiChatItem::ToolCard {
                         id: entry.id,
                         call_id: String::new(),
                         running: false,
@@ -105,7 +103,7 @@ impl AiPanelState {
                     label,
                     host_label,
                 } => {
-                    self.conversation.items.push(UiChatItem::AuditNotice {
+                    items.push(UiChatItem::AuditNotice {
                         id: entry.id,
                         approved,
                         label,
@@ -117,5 +115,6 @@ impl AiPanelState {
                 | SessionEntryKind::Attachment { .. } => {}
             }
         }
+        items
     }
 }

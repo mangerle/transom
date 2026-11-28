@@ -418,14 +418,18 @@ impl AiAssistantView {
                     }
                 }
             };
-            self.state.conversation.items.push(
-                crate::app::ai::state_types::UiChatItem::AuditNotice {
-                    id: format!("audit-{}", self.state.conversation.items.len()),
-                    approved,
-                    label,
-                    host_label: approval.host_label,
-                },
-            );
+            self.message_stream.update(cx, |stream, cx| {
+                let idx = stream.item_count();
+                stream.push_item(
+                    crate::app::ai::state_types::UiChatItem::AuditNotice {
+                        id: format!("audit-{idx}"),
+                        approved,
+                        label,
+                        host_label: approval.host_label,
+                    },
+                    cx,
+                );
+            });
         }
         self.state
             .run
