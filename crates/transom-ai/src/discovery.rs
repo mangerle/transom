@@ -73,13 +73,14 @@ pub fn infer_context_window(model_id: &str) -> Option<u32> {
 pub fn parse_models_payload(value: &serde_json::Value) -> Vec<DiscoveredModel> {
     let mut models = Vec::new();
     if let Some(arr) = value.get("data").and_then(serde_json::Value::as_array) {
+        models.reserve(arr.len());
         for item in arr {
             if let Some(id) = item.get("id").and_then(serde_json::Value::as_str) {
                 let ctx = item
                     .get("context_length")
                     .or_else(|| item.get("context_window"))
                     .and_then(serde_json::Value::as_u64)
-                    .map(|v| v as u32)
+                    .and_then(|value| u32::try_from(value).ok())
                     .or_else(|| infer_context_window(id));
                 models.push(DiscoveredModel {
                     id: id.to_owned(),
@@ -88,6 +89,7 @@ pub fn parse_models_payload(value: &serde_json::Value) -> Vec<DiscoveredModel> {
             }
         }
     } else if let Some(arr) = value.get("models").and_then(serde_json::Value::as_array) {
+        models.reserve(arr.len());
         for item in arr {
             if let Some(name) = item
                 .get("name")
@@ -307,6 +309,19 @@ mod tests {
         assert_eq!(parsed_ollama.len(), 1);
         assert_eq!(parsed_ollama[0].id, "qwen2.5:14b");
         assert_eq!(parsed_ollama[0].context_window, Some(128_000));
+    }
+
+    #[test]
+    fn rejects_out_of_range_context_windows_without_wrapping() {
+        let payload = json!({
+            "data": [
+                { "id": "unknown-custom", "context_length": u64::MAX },
+                { "id": "gpt-4o", "context_length": u64::MAX }
+            ]
+        });
+        let parsed = parse_models_payload(&payload);
+        assert_eq!(parsed[0].context_window, None);
+        assert_eq!(parsed[1].context_window, Some(128_000));
     }
 
     #[test]
