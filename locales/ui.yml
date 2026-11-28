@@ -10946,6 +10946,9 @@ ai:
   empty_greeting:
     en: Send a message to Transom AI
     zh-CN: 向 Transom AI 发送运维指令
+  empty_global_scope_hint:
+    en: "Global mode: select a target session below or use @ to target a host/local"
+    zh-CN: "当前为全局模式：可在下方选择目标会话，或通过 @ 指定主机/本机"
   empty_greeting_acp:
     en: "Send a message to %{agent}"
     zh-CN: "给 %{agent} 发送消息"

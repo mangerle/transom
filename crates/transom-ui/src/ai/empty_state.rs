@@ -34,6 +34,7 @@ pub(super) fn header_icon_btn(
 pub(super) fn render_empty_state(
     active_agent_id: Option<&str>,
     active_agent_name: Option<&str>,
+    has_active_terminal: bool,
     p: &Palette,
     on_quick_prompt: impl Fn(String, &mut Window, &mut App) + Clone + 'static,
 ) -> AnyElement {
@@ -123,7 +124,7 @@ pub(super) fn render_empty_state(
         );
     }
 
-    v_flex()
+    let mut root = v_flex()
         .size_full()
         .items_center()
         .justify_center()
@@ -162,7 +163,19 @@ pub(super) fn render_empty_state(
                         .text_center()
                         .child(rust_i18n::t!("ai.empty_subhint").to_string()),
                 ),
-        )
-        .child(cards)
-        .into_any_element()
+        );
+    if !has_active_terminal {
+        root = root.child(
+            div()
+                .px(rems(space::SM))
+                .py(px(4.0))
+                .rounded_full()
+                .bg(p.secondary)
+                .text_size(rems(typography::CAPTION))
+                .text_color(p.text.muted)
+                .text_center()
+                .child(rust_i18n::t!("ai.empty_global_scope_hint").to_string()),
+        );
+    }
+    root.child(cards).into_any_element()
 }

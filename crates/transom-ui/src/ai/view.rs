@@ -250,7 +250,13 @@ impl AiAssistantView {
                     this.rollback_checkpoint(entry_id.clone(), cx);
                 }
                 MessageStreamEvent::SendQuickPrompt(prompt) => {
-                    this.send_prompt_text(prompt.clone(), cx);
+                    let needs_target =
+                        matches!(prompt.as_str(), "/inspect" | "/disk" | "/docker");
+                    if this.state.conversation.active_session.is_none() && needs_target {
+                        this.prefill_quick_prompt_with_mention(prompt, w, cx);
+                    } else {
+                        this.send_prompt_text(prompt.clone(), cx);
+                    }
                 }
                 MessageStreamEvent::CopyText { key, text } => {
                     this.copy_text_with_feedback(key.clone(), text.clone(), cx);

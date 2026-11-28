@@ -325,6 +325,7 @@ impl Render for MessageStreamView {
             msg_list = msg_list.child(render_empty_state(
                 self.active_acp.as_ref().map(|(id, _)| id.as_str()),
                 self.active_acp.as_ref().map(|(_, name)| name.as_str()),
+                self.has_active_terminal,
                 p,
                 move |prompt, _, cx| {
                     v_quick.update(cx, |_, cx| {
