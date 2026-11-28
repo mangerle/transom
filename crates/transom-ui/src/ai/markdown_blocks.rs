@@ -7,15 +7,13 @@
 //!   代码块则渲染为带语言图标、一键复制、Shell 填入终端与存为快捷指令的独立卡片。
 
 use std::rc::Rc;
+use std::time::Duration;
 
-use gpui_kit::base::{TextView, TextViewStyle, h_flex, v_flex};
-use gpui_kit::component::Sizable as _;
-use gpui_kit::component::button::{Button, ButtonVariants as _};
+use gpui_kit::base::{TextView, TextViewMotion, TextViewStyle, v_flex};
 use gpui_kit::*;
-use transom_ui_icons::{AppIcon, AppIconElement, CustomIcon, DomainIcon, UiIcon};
 
 use crate::palette::Palette;
-use crate::theme::tokens::{space, typography};
+use crate::theme::tokens::space;
 
 /// Markdown 解析分段结果。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -147,6 +145,7 @@ pub(super) struct MarkdownRenderParams<'a> {
     pub(super) msg_id: &'a str,
     pub(super) text: &'a str,
     pub(super) cached_segments: Option<&'a [MarkdownSegment]>,
+    pub(super) streaming: bool,
     pub(super) copied_key: Option<&'a str>,
     pub(super) has_active_terminal: bool,
     pub(super) p: &'a Palette,
@@ -260,15 +259,18 @@ fn trim_up_to_3_spaces(line: &str) -> &str {
 }
 
 /// 构造对标现代文档/Agent 信息流的 Markdown 排版样式：
-/// 收窄标题字号梯度、为表格提供圆角与宽松内边距、柔化分割线与行内代码胶囊背景。
+/// 收窄标题字号梯度、为行内代码与引用块提供胶囊/导轨层次，并为表格与选中态提供一致的语义色。
 fn build_markdown_style(p: &Palette) -> TextViewStyle {
     let mut table = StyleRefinement::default();
     table.overflow.x = Some(Overflow::Scroll);
-    table = table.rounded(p.radius.md).border_color(p.stroke.subtle);
+    table = table
+        .rounded(p.radius.md)
+        .border_1()
+        .border_color(p.stroke.subtle);
 
     let table_head = StyleRefinement::default()
-        .bg(p.surface.faint)
-        .text_color(p.text.subtle)
+        .bg(p.surface.subtle)
+        .text_color(p.foreground)
         .font_weight(FontWeight::MEDIUM);
 
     let table_cell = StyleRefinement::default()
@@ -277,22 +279,40 @@ fn build_markdown_style(p: &Palette) -> TextViewStyle {
         .border_color(p.stroke.faint);
 
     let blockquote_style = StyleRefinement::default()
-        .border_color(p.stroke.muted)
+        .border_l_2()
+        .border_color(p.primary.opacity(0.45))
+        .bg(p.surface.faint)
+        .px(rems(space::SM))
+        .py(rems(space::XS))
+        .rounded(p.radius.sm)
         .text_color(p.text.subtle);
+
+    let inline_code_style = StyleRefinement::default()
+        .font_family(p.mono_font_family.clone())
+        .text_size(rems(0.84))
+        .px(px(5.0))
+        .py(px(1.5))
+        .rounded(px(4.0))
+        .bg(p.surface.subtle)
+        .border_1()
+        .border_color(p.stroke.faint);
+
+    let list_style = StyleRefinement::default().text_color(p.text.muted);
 
     TextViewStyle::default()
         .with_foreground(p.foreground)
         .with_muted_foreground(p.muted_foreground)
         .with_link(p.primary)
+        .with_selection(p.primary.opacity(0.22))
         .with_border(p.stroke.faint)
         .with_code_background(p.surface.faint)
         .with_dark(p.background.l < 0.5)
-        .with_paragraph_gap(rems(0.65))
+        .with_paragraph_gap(rems(0.6))
         .with_heading(|level| {
             let (size, weight) = match level {
-                1 => (px(16.5), FontWeight::SEMIBOLD),
-                2 => (px(15.0), FontWeight::SEMIBOLD),
-                3 => (px(14.0), FontWeight::MEDIUM),
+                1 => (px(17.0), FontWeight::SEMIBOLD),
+                2 => (px(15.5), FontWeight::SEMIBOLD),
+                3 => (px(14.5), FontWeight::MEDIUM),
                 _ => (px(13.5), FontWeight::MEDIUM),
             };
             StyleRefinement::default()
@@ -304,6 +324,8 @@ fn build_markdown_style(p: &Palette) -> TextViewStyle {
         .with_table_cell(table_cell)
         .with_table_row_hover(p.surface.ghost)
         .with_blockquote_style(blockquote_style)
+        .with_inline_code_style(inline_code_style)
+        .with_list_style(list_style)
         .with_inline_code(HighlightStyle {
             background_color: Some(p.surface.subtle),
             ..Default::default()
@@ -327,23 +349,27 @@ pub(super) fn render_markdown_content(params: MarkdownRenderParams<'_>) -> AnyEl
     for (idx, seg) in segments.iter().enumerate() {
         match seg {
             MarkdownSegment::Prose(prose) => {
-                col = col.child(
-                    div().w_full().line_height(relative(1.58)).child(
-                        TextView::markdown(
-                            SharedString::from(format!("ai-md-{}-{idx}", params.msg_id)),
-                            prose.clone(),
-                        )
-                        .style(md_style.clone())
-                        .selectable(true),
-                    ),
-                );
+                let mut tv = TextView::markdown(
+                    SharedString::from(format!("ai-md-{}-{idx}", params.msg_id)),
+                    prose.clone(),
+                )
+                .style(md_style.clone())
+                .selectable(true);
+                if params.streaming {
+                    tv = tv.motion(
+                        TextViewMotion::default()
+                            .with_stream_fade(Duration::from_millis(160))
+                            .with_stream_fade_stagger(Duration::from_millis(22)),
+                    );
+                }
+                col = col.child(div().w_full().line_height(relative(1.62)).child(tv));
             }
             MarkdownSegment::CodeBlock {
                 lang,
                 code,
                 unclosed,
             } => {
-                col = col.child(render_code_card(
+                col = col.child(super::markdown_code_card::render_code_card(
                     &params,
                     idx,
                     lang.as_deref(),
@@ -354,197 +380,6 @@ pub(super) fn render_markdown_content(params: MarkdownRenderParams<'_>) -> AnyEl
         }
     }
     col.into_any_element()
-}
-
-fn render_code_card(
-    params: &MarkdownRenderParams<'_>,
-    idx: usize,
-    lang: Option<&str>,
-    code: &str,
-    unclosed: bool,
-) -> AnyElement {
-    let p = params.p;
-    let block_key = format!("code-{}-{idx}", params.msg_id);
-    let is_copied = params.copied_key == Some(block_key.as_str());
-    let is_shell = is_shell_language(lang);
-    let lang_label = lang
-        .filter(|s| !s.is_empty())
-        .map(str::to_owned)
-        .unwrap_or_else(|| rust_i18n::t!("ai.code_block_default").to_string());
-
-    let icon = if is_shell {
-        AppIcon::Domain(DomainIcon::TERMINAL)
-    } else {
-        AppIcon::Custom(CustomIcon::CPU)
-    };
-
-    let mut left = h_flex().gap(px(6.0)).items_center().child(
-        h_flex()
-            .px(px(6.0))
-            .py(px(2.0))
-            .gap(px(5.0))
-            .items_center()
-            .rounded(p.radius.sm)
-            .bg(p.surface.floating)
-            .border_1()
-            .border_color(p.stroke.faint)
-            .child(
-                div()
-                    .text_color(p.text.muted)
-                    .child(AppIconElement::new(icon).small()),
-            )
-            .child(
-                div()
-                    .font_family("monospace")
-                    .text_size(rems(typography::CAPTION))
-                    .font_weight(FontWeight::MEDIUM)
-                    .text_color(p.foreground)
-                    .child(lang_label),
-            ),
-    );
-    if unclosed {
-        left = left.child(
-            div()
-                .px(px(6.0))
-                .py(px(1.0))
-                .rounded_full()
-                .bg(p.tone.primary_subtle)
-                .text_size(rems(typography::CAPTION))
-                .font_weight(FontWeight::MEDIUM)
-                .text_color(p.primary)
-                .child(rust_i18n::t!("ai.streaming_code").to_string()),
-        );
-    }
-
-    let copy_icon = if is_copied {
-        UiIcon::CHECK
-    } else {
-        UiIcon::COPY
-    };
-    let copy_tip = if is_copied {
-        rust_i18n::t!("ai.copied").to_string()
-    } else {
-        rust_i18n::t!("ai.copy").to_string()
-    };
-    let on_copy = Rc::clone(&params.callbacks.on_copy);
-    let copy_code = code.to_owned();
-    let copy_key = block_key.clone();
-
-    let mut actions = h_flex().gap(px(4.0)).items_center();
-    if is_shell && !unclosed {
-        if params.has_active_terminal {
-            let on_send = Rc::clone(&params.callbacks.on_send_to_terminal);
-            let send_code = code.to_owned();
-            actions = actions.child(
-                Button::new(SharedString::from(format!("ai-send-term-{block_key}")))
-                    .ghost()
-                    .xsmall()
-                    .label(rust_i18n::t!("ai.send_to_terminal").to_string())
-                    .on_click(move |_, w, cx| on_send(send_code.clone(), w, cx)),
-            );
-        }
-        let on_snip = Rc::clone(&params.callbacks.on_save_snippet);
-        let snip_code = code.to_owned();
-        let snip_name = code
-            .lines()
-            .next()
-            .unwrap_or("")
-            .trim()
-            .chars()
-            .take(32)
-            .collect::<String>();
-        actions = actions.child(
-            Button::new(SharedString::from(format!("ai-snip-code-{block_key}")))
-                .ghost()
-                .xsmall()
-                .label(rust_i18n::t!("ai.save_as_snippet").to_string())
-                .on_click(move |_, w, cx| on_snip(snip_name.clone(), snip_code.clone(), w, cx)),
-        );
-    }
-    actions = actions.child(
-        Button::new(SharedString::from(format!("ai-copy-code-{block_key}")))
-            .ghost()
-            .xsmall()
-            .accessibility_label(copy_tip.clone())
-            .tooltip(copy_tip)
-            .child(
-                div()
-                    .text_color(if is_copied { p.success } else { p.text.muted })
-                    .child(AppIconElement::new(AppIcon::Ui(copy_icon)).small()),
-            )
-            .on_click(move |_, w, cx| on_copy(copy_key.clone(), copy_code.clone(), w, cx)),
-    );
-
-    let header = h_flex()
-        .w_full()
-        .px(rems(space::SM))
-        .py(px(5.0))
-        .justify_between()
-        .items_center()
-        .bg(p.surface.faint)
-        .border_b_1()
-        .border_color(p.stroke.subtle)
-        .child(left)
-        .child(actions);
-
-    let line_count = code.lines().count().max(1);
-    let line_numbers: String = (1..=line_count)
-        .map(|n| n.to_string())
-        .collect::<Vec<_>>()
-        .join("\n");
-    let body_text = if code.is_empty() {
-        " ".to_owned()
-    } else {
-        code.to_owned()
-    };
-
-    v_flex()
-        .w_full()
-        .rounded(p.radius.md)
-        .overflow_hidden()
-        .border_1()
-        .border_color(if unclosed {
-            p.primary.opacity(0.35)
-        } else {
-            p.stroke.subtle
-        })
-        .bg(p.background)
-        .child(header)
-        .child(
-            h_flex()
-                .w_full()
-                .items_start()
-                .child(
-                    div()
-                        .flex_shrink_0()
-                        .px(rems(space::XS))
-                        .py(rems(space::XS))
-                        .border_r_1()
-                        .border_color(p.stroke.faint)
-                        .bg(p.surface.faint)
-                        .font_family("monospace")
-                        .text_size(rems(typography::CAPTION))
-                        .line_height(relative(1.5))
-                        .text_color(p.text.disabled)
-                        .text_right()
-                        .child(line_numbers),
-                )
-                .child(
-                    div()
-                        .id(SharedString::from(format!("ai-code-body-{block_key}")))
-                        .flex_1()
-                        .min_w_0()
-                        .px(rems(space::SM))
-                        .py(rems(space::XS))
-                        .overflow_x_scroll()
-                        .font_family("monospace")
-                        .text_size(rems(typography::CAPTION))
-                        .line_height(relative(1.5))
-                        .text_color(p.foreground)
-                        .child(body_text),
-                ),
-        )
-        .into_any_element()
 }
 
 #[cfg(test)]

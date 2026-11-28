@@ -324,10 +324,10 @@ pub(super) fn render_tool_card(
     let shell_box = v_flex()
         .w_full()
         .rounded(p.radius.md)
-        .bg(p.background)
+        .bg(p.surface.ghost)
         .border_1()
         .border_color(if *ok {
-            p.stroke.subtle
+            p.stroke.faint
         } else {
             p.danger.opacity(0.35)
         })
@@ -336,15 +336,15 @@ pub(super) fn render_tool_card(
             h_flex()
                 .w_full()
                 .px(rems(space::SM))
-                .py(px(5.0))
+                .py(px(4.5))
                 .bg(p.surface.faint)
                 .justify_between()
                 .items_center()
                 .border_b_1()
-                .border_color(p.stroke.subtle)
+                .border_color(p.stroke.faint)
                 .child(
                     div()
-                        .font_family("monospace")
+                        .font_family(p.mono_font_family.clone())
                         .text_size(rems(typography::CAPTION))
                         .font_weight(FontWeight::MEDIUM)
                         .text_color(p.text.subtle)

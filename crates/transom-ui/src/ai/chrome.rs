@@ -137,7 +137,7 @@ impl AiAssistantView {
             .px(rems(space::LG))
             .pt(rems(space::MD))
             .pb(rems(space::LG))
-            .gap(rems(0.65))
+            .gap(rems(0.75))
             .overflow_y_scroll()
             .track_scroll(&self.msg_scroll_handle)
             .on_scroll(cx.listener(|this, event: &ScrollEvent, _, cx| {
@@ -242,6 +242,9 @@ impl AiAssistantView {
                             self.state.conversation.expanded_cards.contains(&full_key);
                         let is_follow_user =
                             b_idx > 0 && matches!(item, super::state::UiChatItem::UserText { .. });
+                        let after_work_group = b_idx > 0
+                            && matches!(blocks[b_idx - 1], DisplayBlock::WorkGroup { .. })
+                            && matches!(item, super::state::UiChatItem::AssistantText { .. });
                         let v_rb = cx.entity();
                         let v_full = cx.entity();
                         let subagent_task = super::work_group::find_subagent_task(
@@ -280,6 +283,8 @@ impl AiAssistantView {
                         if is_follow_user {
                             msg_list =
                                 msg_list.child(div().w_full().pt(rems(space::SM)).child(item_el));
+                        } else if after_work_group {
+                            msg_list = msg_list.child(div().w_full().pt(px(4.0)).child(item_el));
                         } else {
                             msg_list = msg_list.child(item_el);
                         }

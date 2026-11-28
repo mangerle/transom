@@ -162,6 +162,14 @@ fn format_relative_timestamp(raw: &str, now: chrono::DateTime<chrono::Utc>) -> S
     }
 }
 
+fn copy_icon_and_tip(is_copied: bool) -> (UiIcon, String) {
+    if is_copied {
+        (UiIcon::CHECK, rust_i18n::t!("ai.copied").to_string())
+    } else {
+        (UiIcon::COPY, rust_i18n::t!("ai.copy").to_string())
+    }
+}
+
 fn render_user_bubble(
     id: &str,
     text: &str,
@@ -172,16 +180,7 @@ fn render_user_bubble(
     let p = params.p;
     let copy_key = format!("user-{id}");
     let is_copied = params.copied_key == Some(copy_key.as_str());
-    let copy_icon = if is_copied {
-        UiIcon::CHECK
-    } else {
-        UiIcon::COPY
-    };
-    let copy_tip = if is_copied {
-        rust_i18n::t!("ai.copied").to_string()
-    } else {
-        rust_i18n::t!("ai.copy").to_string()
-    };
+    let (copy_icon, copy_tip) = copy_icon_and_tip(is_copied);
     let rb_tip = rust_i18n::t!("ai.rollback_turn").to_string();
     let on_copy = Rc::clone(&callbacks.code.on_copy);
     let copied_text = text.to_owned();
@@ -236,18 +235,18 @@ fn render_user_bubble(
     v_flex()
         .w_full()
         .items_end()
-        .gap(px(4.0))
+        .gap(px(3.0))
         .child(
             div()
-                .max_w(rems(30.0))
+                .max_w(rems(32.0))
                 .px(rems(space::MD))
                 .py(rems(space::SM))
                 .rounded(p.radius.lg)
-                .bg(p.secondary)
+                .bg(p.surface.subtle)
                 .border_1()
-                .border_color(p.stroke.subtle)
+                .border_color(p.stroke.faint)
                 .text_size(rems(typography::BODY))
-                .line_height(relative(1.5))
+                .line_height(relative(1.55))
                 .text_color(p.foreground)
                 .child(text.to_owned()),
         )
@@ -280,13 +279,11 @@ fn render_reasoning_block(
         .w_full()
         .rounded(p.radius.md)
         .px(rems(space::SM))
-        .py(rems(space::XS))
-        .bg(p.surface.subtle)
-        .border_1()
-        .border_color(if streaming {
-            p.primary.opacity(0.35)
+        .py(px(5.0))
+        .bg(if streaming {
+            p.tone.primary_subtle
         } else {
-            p.stroke.subtle
+            p.surface.ghost
         })
         .gap(px(4.0))
         .child(
@@ -329,17 +326,20 @@ fn render_reasoning_block(
     if streaming || expanded {
         box_el = box_el.child(
             div()
+                .id(SharedString::from(format!("ai-reason-body-{id}")))
                 .ml(px(5.0))
                 .pl(rems(space::SM))
                 .py(px(2.0))
+                .max_h(rems(16.0))
+                .overflow_y_scroll()
                 .border_l_2()
                 .border_color(if streaming {
-                    p.primary.opacity(0.35)
+                    p.primary.opacity(0.45)
                 } else {
                     p.stroke.muted
                 })
                 .text_size(rems(typography::CAPTION))
-                .line_height(relative(1.5))
+                .line_height(relative(1.55))
                 .text_color(p.text.subtle)
                 .child(text.to_owned()),
         );
@@ -377,6 +377,7 @@ fn render_assistant_message(
         msg_id: id,
         text,
         cached_segments,
+        streaming,
         copied_key: params.copied_key,
         has_active_terminal: params.has_active_terminal,
         p,
@@ -391,10 +392,20 @@ fn render_assistant_message(
     if streaming {
         col = col.child(
             h_flex()
-                .pt(px(2.0))
+                .pt(px(4.0))
                 .gap(px(6.0))
                 .items_center()
-                .child(div().w(px(6.0)).h(px(6.0)).rounded_full().bg(p.primary))
+                .child(
+                    div()
+                        .w(px(12.0))
+                        .h(px(12.0))
+                        .rounded_full()
+                        .bg(p.tone.primary_subtle)
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .child(div().w(px(5.0)).h(px(5.0)).rounded_full().bg(p.primary)),
+                )
                 .child(
                     div()
                         .text_size(rems(typography::CAPTION))
@@ -403,51 +414,38 @@ fn render_assistant_message(
                 ),
         );
     } else {
-        let mut meta_bar = h_flex().gap(px(6.0)).items_center();
+        let mut meta_bar = h_flex().gap(px(8.0)).items_center();
         if let Some(m) = model {
             meta_bar = meta_bar.child(
                 div()
                     .px(px(6.0))
-                    .py(px(1.0))
+                    .py(px(1.5))
                     .rounded(p.radius.sm)
-                    .bg(p.secondary)
-                    .border_1()
-                    .border_color(p.stroke.faint)
+                    .bg(p.surface.faint)
                     .text_size(rems(typography::CAPTION))
-                    .text_color(p.text.subtle)
+                    .text_color(p.text.muted)
                     .child(m.to_owned()),
             );
         }
         if let Some(tps) = tokens_per_sec {
             meta_bar = meta_bar.child(
                 div()
-                    .font_family("monospace")
+                    .font_family(p.mono_font_family.clone())
                     .text_size(rems(typography::CAPTION))
-                    .text_color(p.text.muted)
+                    .text_color(p.text.disabled)
                     .child(format!("{tps:.1} tok/s")),
             );
         }
         let copy_key = format!("asst-{id}");
         let is_copied = params.copied_key == Some(copy_key.as_str());
-        let copy_icon = if is_copied {
-            UiIcon::CHECK
-        } else {
-            UiIcon::COPY
-        };
-        let copy_tip = if is_copied {
-            rust_i18n::t!("ai.copied").to_string()
-        } else {
-            rust_i18n::t!("ai.copy").to_string()
-        };
+        let (copy_icon, copy_tip) = copy_icon_and_tip(is_copied);
         let on_copy = Rc::clone(&callbacks.code.on_copy);
         let full_text = text.to_owned();
 
         col = col.child(
             h_flex()
                 .w_full()
-                .pt(px(6.0))
-                .border_t_1()
-                .border_color(p.stroke.faint)
+                .pt(px(2.0))
                 .justify_between()
                 .items_center()
                 .child(meta_bar)

@@ -29,6 +29,7 @@ mod history_drawer;
 mod image;
 pub(crate) mod inline_assist;
 mod markdown_blocks;
+mod markdown_code_card;
 mod memory_drawer;
 mod mention_menu;
 mod metrics;

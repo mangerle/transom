@@ -235,16 +235,16 @@ pub(super) fn render_work_group(
         .bg(if params.in_progress {
             p.tone.primary_subtle
         } else {
-            p.surface.faint
+            p.surface.ghost
         })
         .border_1()
         .border_color(if params.in_progress {
-            p.primary.opacity(0.35)
+            p.primary.opacity(0.28)
         } else {
-            p.stroke.subtle
+            p.stroke.faint
         })
         .cursor_pointer()
-        .hover(|s| s.bg(p.surface.hover))
+        .hover(|s| s.bg(p.surface.faint))
         .on_click(move |_, w, cx| toggle_self(gid.clone(), w, cx));
 
     let mut left_head = h_flex()
@@ -259,6 +259,20 @@ pub(super) fn render_work_group(
                 .flex_shrink_0()
                 .text_color(p.primary)
                 .child(AppIconElement::new(AppIcon::Ui(UiIcon::REFRESH)).small()),
+        );
+    } else {
+        let dot_color = if tool_steps > 0 && ok_steps < tool_steps {
+            p.danger
+        } else {
+            p.success
+        };
+        left_head = left_head.child(
+            div()
+                .flex_shrink_0()
+                .w(px(6.0))
+                .h(px(6.0))
+                .rounded_full()
+                .bg(dot_color),
         );
     }
     header = header.child(
