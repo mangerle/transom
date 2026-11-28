@@ -78,12 +78,13 @@ pub(super) fn parse_markdown_segments(input: &str) -> Vec<MarkdownSegment> {
     for line in input.lines() {
         if let Some((fence_ch, fence_len, _)) = &active_fence {
             if is_closing_fence(line, *fence_ch, *fence_len) {
-                let (_, _, lang) = active_fence.take().expect("checked");
-                segments.push(MarkdownSegment::CodeBlock {
-                    lang,
-                    code: code_lines.join("\n"),
-                    unclosed: false,
-                });
+                if let Some((_, _, lang)) = active_fence.take() {
+                    segments.push(MarkdownSegment::CodeBlock {
+                        lang,
+                        code: code_lines.join("\n"),
+                        unclosed: false,
+                    });
+                }
                 code_lines.clear();
             } else {
                 code_lines.push(line);
