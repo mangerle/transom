@@ -24,7 +24,7 @@ static URL_CRED_RE: LazyLock<Regex> = LazyLock::new(|| {
 
 static KV_SECRET_RE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(
-        r#"(?i)\b([A-Za-z0-9_.-]*(?:password|passwd|passphrase|pwd|token|secret|api[_-]?key|access[_-]?key|secret[_-]?key|private[_-]?key)\b)\s*([:=])\s*(?:"[^"\n]+"|'[^'\n]+'|[^\s"',;]+)"#,
+        r#"(?i)(["']?)([A-Za-z0-9_.-]*(?:password|passwd|passphrase|pwd|token|secret|api[_-]?key|access[_-]?key|secret[_-]?key|private[_-]?key)\b)(["']?)(\s*[:=]\s*)(?:"[^"\n]*"|'[^'\n]*'|[^\s"',;]+)"#,
     )
     .expect("键值密钥正则必须合法")
 });
@@ -58,7 +58,7 @@ pub fn redact_secrets_for_model(raw: &str) -> String {
     if cur.contains('=') || cur.contains(':') {
         cur = Cow::Owned(
             KV_SECRET_RE
-                .replace_all(&cur, "$1$2[REDACTED]")
+                .replace_all(&cur, "$1$2$3$4[REDACTED]")
                 .into_owned(),
         );
     }
@@ -95,6 +95,7 @@ mod tests {
         assert!(out.contains("DB_PASSWORD=[REDACTED]"));
         assert!(!out.contains("super_secret_123"));
         assert!(!out.contains("ghp_1234567890"));
+        assert!(!out.contains("json_secret"));
         assert!(out.contains("INFO nginx started on port 80"));
     }
 }

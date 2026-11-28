@@ -20,6 +20,7 @@ use transom_ai::{
     RemoteExecutor, ResolvedToolTarget, SessionPromptContext, SessionScope, ToolOutputStore,
     ToolRuntimeContext, assess_shell_command, assess_tool_call, detect_blocking_command,
     format_blocking_command_hint, serve_local_socket, target_argument_for_tool,
+    truncate_tool_output,
 };
 use transom_core::{AiHostTargetDto, AppEvent};
 use transom_net::{SftpClient, SshRemote};
@@ -252,18 +253,35 @@ impl McpServerBackend for ControllerMcpBackend {
         let started = Instant::now();
         let result = dispatch_single_tool(name, &arguments, &target, &snap, &self.cancel).await;
         let elapsed = started.elapsed().as_millis() as u64;
-        let _ = snap.ai_store.append_audit(&AiAuditEntry {
-            timestamp: chrono::Utc::now().to_rfc3339(),
-            conversation_id: "mcp-external".to_owned(),
-            host_label: target.meta.host_name.clone(),
-            tool_name: name.to_owned(),
-            risk: assessment.risk,
-            summary: format!("[MCP] {args_json}"),
-            approved,
-            ok: result.is_ok(),
-            duration_ms: elapsed,
-        });
+        append_mcp_audit(
+            &snap,
+            AiAuditEntry {
+                timestamp: chrono::Utc::now().to_rfc3339(),
+                conversation_id: "mcp-external".to_owned(),
+                host_label: target.meta.host_name.clone(),
+                tool_name: name.to_owned(),
+                risk: assessment.risk,
+                summary: sanitize_audit_summary(&args_json),
+                approved,
+                ok: result.is_ok(),
+                duration_ms: elapsed,
+            },
+        )
+        .await;
         result.map(|out| snap.output_store.store_and_preview(name, &out, 8_000))
+    }
+}
+
+fn sanitize_audit_summary(raw: &str) -> String {
+    truncate_tool_output(raw, 2_000)
+}
+
+async fn append_mcp_audit(snap: &McpControllerSnapshot, entry: AiAuditEntry) {
+    let store = snap.ai_store.clone();
+    match tokio::task::spawn_blocking(move || store.append_audit(&entry)).await {
+        Ok(Ok(())) => {}
+        Ok(Err(error)) => log::warn!("写入外部 MCP 审计记录失败: {error}"),
+        Err(error) => log::warn!("外部 MCP 审计落盘任务异常: {error}"),
     }
 }
 
@@ -341,19 +359,23 @@ impl ControllerMcpBackend {
             Err(e) => Err(e.to_string()),
         };
         let elapsed = started.elapsed().as_millis() as u64;
-        let _ = snap.ai_store.append_audit(&AiAuditEntry {
-            timestamp: chrono::Utc::now().to_rfc3339(),
-            conversation_id: "mcp-external".to_owned(),
-            host_label: matched
-                .map(|t| t.meta.host_name.clone())
-                .unwrap_or_else(|| "软件全局".to_owned()),
-            tool_name: name.to_owned(),
-            risk: assessment.risk,
-            summary: format!("[MCP] {name}({action})"),
-            approved,
-            ok: result.is_ok(),
-            duration_ms: elapsed,
-        });
+        append_mcp_audit(
+            snap,
+            AiAuditEntry {
+                timestamp: chrono::Utc::now().to_rfc3339(),
+                conversation_id: "mcp-external".to_owned(),
+                host_label: matched
+                    .map(|target| target.meta.host_name.clone())
+                    .unwrap_or_else(|| "软件全局".to_owned()),
+                tool_name: name.to_owned(),
+                risk: assessment.risk,
+                summary: sanitize_audit_summary(&format!("[MCP] {name}({action})")),
+                approved,
+                ok: result.is_ok(),
+                duration_ms: elapsed,
+            },
+        )
+        .await;
         result.map(|out| snap.output_store.store_and_preview(name, &out, 8_000))
     }
 
@@ -460,19 +482,42 @@ impl ControllerMcpBackend {
             }
         }
         let combined = outputs.join("\n\n");
-        let _ = snap.ai_store.append_audit(&AiAuditEntry {
-            timestamp: chrono::Utc::now().to_rfc3339(),
-            conversation_id: "mcp-external".to_owned(),
-            host_label: format!("批量 {} 台", selected.len()),
-            tool_name: "remote_exec_bulk".to_owned(),
-            risk,
-            summary: format!("[MCP] {cmd}"),
-            approved,
-            ok: all_ok,
-            duration_ms: started.elapsed().as_millis() as u64,
-        });
+        append_mcp_audit(
+            snap,
+            AiAuditEntry {
+                timestamp: chrono::Utc::now().to_rfc3339(),
+                conversation_id: "mcp-external".to_owned(),
+                host_label: format!("批量 {} 台", selected.len()),
+                tool_name: "remote_exec_bulk".to_owned(),
+                risk,
+                summary: sanitize_audit_summary(&format!("[MCP] {cmd}")),
+                approved,
+                ok: all_ok,
+                duration_ms: started.elapsed().as_millis() as u64,
+            },
+        )
+        .await;
         Ok(snap
             .output_store
             .store_and_preview("remote_exec_bulk", &combined, 8_000))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::sanitize_audit_summary;
+
+    #[test]
+    fn mcp_audit_summary_redacts_and_bounds_sensitive_arguments() {
+        let raw = format!(
+            "[MCP] {}",
+            serde_json::json!({
+                "password": "super-secret",
+                "body": "x".repeat(20_000),
+            })
+        );
+        let safe = sanitize_audit_summary(&raw);
+        assert!(!safe.contains("super-secret"));
+        assert!(safe.len() <= 9_000);
     }
 }
