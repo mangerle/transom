@@ -11,7 +11,9 @@ use transom_core::AiManagedTaskStatus;
 
 use super::ControllerAppActionBridge;
 use super::file_io::read_text_prefix;
-use crate::controller::ai_ops::process::{MAX_PROCESS_CAPTURE_BYTES, append_bounded_text};
+use crate::controller::ai_ops::process::{
+    MAX_PROCESS_CAPTURE_BYTES, append_bounded_text, terminate_child_and_reap,
+};
 
 pub(super) const MAX_LOCAL_READ_BYTES: usize = 256 * 1024;
 
@@ -77,8 +79,7 @@ pub(super) async fn exec_local_shell(
                     while stdout_pipe.is_some() || stderr_pipe.is_some() {
                         tokio::select! {
                             _ = task.cancel.cancelled() => {
-                                let _ = child.kill().await;
-                                let _ = child.wait().await;
+                                terminate_child_and_reap(&mut child, "本机后台命令").await;
                                 task.finish(AiManagedTaskStatus::Cancelled, None, "本机命令已取消");
                                 return;
                             }
@@ -111,14 +112,12 @@ pub(super) async fn exec_local_shell(
                 ));
             }
             _ = task.cancel.cancelled() => {
-                let _ = child.kill().await;
-                let _ = child.wait().await;
+                terminate_child_and_reap(&mut child, "本机命令").await;
                 task.finish(AiManagedTaskStatus::Cancelled, None, "本机命令已取消");
                 return Err(ToolError::Cancelled);
             }
             _ = tokio::time::sleep_until(deadline) => {
-                let _ = child.kill().await;
-                let _ = child.wait().await;
+                terminate_child_and_reap(&mut child, "本机命令").await;
                 task.finish(AiManagedTaskStatus::Failed, None, "本机命令执行超时");
                 return Err(ToolError::ExecutionTimeout {
                     timeout_secs: timeout.as_secs(),

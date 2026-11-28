@@ -33,6 +33,26 @@ impl CapturedProcessOutput {
     }
 }
 
+/// 终止子进程并显式等待其退出，确保进程控制块被回收。
+///
+/// 该助手用于取消和超时等异常路径；正常完成路径仍由执行方直接等待。清理失败
+/// 不会覆盖原始业务错误，但必须记录进程上下文，便于排查残留进程。
+pub(in crate::controller) async fn terminate_child_and_reap(
+    child: &mut tokio::process::Child,
+    context: &str,
+) {
+    if let Err(err) = child.kill().await
+        && err.kind() != io::ErrorKind::InvalidInput
+    {
+        log::warn!("终止外部进程失败（{context}）: {err}");
+    }
+    match tokio::time::timeout(Duration::from_secs(2), child.wait()).await {
+        Ok(Ok(_)) => {}
+        Ok(Err(err)) => log::warn!("等待外部进程回收失败（{context}）: {err}"),
+        Err(_) => log::warn!("等待外部进程回收超时（2 秒，{context}）"),
+    }
+}
+
 /// 启动外部进程并捕获受控大小的标准输出与标准错误。
 ///
 /// 该函数统一强制 stdin 为空、stdout/stderr 管道化、子进程随 Future 取消而终止，
@@ -106,11 +126,18 @@ pub(in crate::controller) async fn capture_command_output(
     };
 
     tokio::select! {
-        _ = cancel.cancelled() => Err(ToolError::Cancelled),
-        result = tokio::time::timeout(timeout, capture) => {
-            result.map_err(|_| ToolError::ExecutionTimeout {
-                timeout_secs: timeout.as_secs(),
-            })?
+        _ = cancel.cancelled() => {
+            terminate_child_and_reap(&mut child, tool).await;
+            Err(ToolError::Cancelled)
+        }
+        result = tokio::time::timeout(timeout, capture) => match result {
+            Ok(result) => result,
+            Err(_) => {
+                terminate_child_and_reap(&mut child, tool).await;
+                Err(ToolError::ExecutionTimeout {
+                    timeout_secs: timeout.as_secs(),
+                })
+            }
         }
     }
 }
@@ -157,7 +184,7 @@ pub(in crate::controller) fn append_bounded_text(
 
 #[cfg(test)]
 mod tests {
-    use super::append_bounded_text;
+    use super::{append_bounded_text, terminate_child_and_reap};
 
     #[test]
     fn appends_text_without_splitting_utf8_characters() {
@@ -175,5 +202,22 @@ mod tests {
         let mut output = String::from("12345");
         assert!(append_bounded_text(&mut output, "6789", 6));
         assert_eq!(output, "123456");
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn terminated_child_is_reaped() {
+        let mut child = tokio::process::Command::new("sh")
+            .arg("-c")
+            .arg("sleep 30")
+            .spawn()
+            .expect("启动测试子进程失败");
+
+        terminate_child_and_reap(&mut child, "测试子进程").await;
+
+        assert!(
+            matches!(child.try_wait(), Ok(Some(_))),
+            "终止后必须完成子进程状态收割"
+        );
     }
 }
