@@ -5,59 +5,44 @@
 //!   **严禁持有 `WeakEntity<AppShell>`**，严格遵守数据向下、意图向上的单向数据流；
 //! - 按 `state` / `cards` / `approval` / `composer` / `config_drawer` / `view` 拆分为小文件。
 
-mod acp_banner;
 mod actions;
 mod app_actions;
-mod approval;
-mod attachments;
-mod bulk_matrix;
 mod cards;
-mod choice_card;
 mod chrome;
 mod chrome_header;
 mod composer;
-mod composer_triggers;
-mod config_drawer;
-mod config_drawer_general;
-mod config_form;
-mod context_popup;
-mod diff_view;
+mod drawers;
 mod empty_state;
 mod handoff_banner;
 mod handoff_render;
-mod history_drawer;
-mod image;
 pub(crate) mod inline_assist;
-mod markdown_blocks;
-mod markdown_code_card;
-mod markdown_parser;
-mod memory_drawer;
-mod mention_menu;
+mod markdown;
 mod metrics;
 mod metrics_model;
-mod model_picker;
-mod model_table;
 pub(crate) mod panel_events;
-mod plan_card;
-mod policy_hooks_actions;
-mod policy_hooks_drawer;
-mod popups;
-mod queue_card;
-mod settings_actions;
-mod skills_drawer;
-mod skills_drawer_render;
-mod slash_menu;
 mod state;
 mod state_turn;
 mod state_types;
 mod task_bar;
-mod tool_card;
-mod tool_card_body;
 mod turn_nav;
 mod view;
 mod view_events;
-mod work_group;
-mod work_group_summary;
+
+use cards::{
+    approval, bulk_matrix, choice_card, diff_view, plan_card, queue_card, tool_card,
+    tool_card_body, work_group, work_group_summary,
+};
+use composer::{
+    acp_banner, attachments, composer_triggers, context_popup, image, mention_menu, popups,
+    slash_menu,
+};
+use drawers::{
+    config_drawer, config_drawer_general, config_form, memory_drawer, model_picker, model_table,
+    policy_hooks_drawer, skills_drawer,
+};
+use markdown::{
+    blocks as markdown_blocks, code_card as markdown_code_card, parser as markdown_parser,
+};
 
 pub(crate) use state::ActiveAiSessionInfo;
 pub(crate) use view::AiAssistantView;

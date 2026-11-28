@@ -1,0 +1,112 @@
+//! AI 面板三层记忆查看与编辑抽屉。
+
+use crate::palette::Palette;
+use crate::theme::tokens::{space, typography};
+use gpui_kit::base::{h_flex, v_flex};
+use gpui_kit::component::button::{Button, ButtonVariants as _};
+use gpui_kit::component::input::{Input, InputState};
+use gpui_kit::component::scroll::ScrollableElement;
+use gpui_kit::*;
+
+/// 记忆抽屉的独立表单状态。
+pub(in crate::app::ai) struct MemoryFormState {
+    pub(in crate::app::ai) global_mem_input: Entity<InputState>,
+    pub(in crate::app::ai) host_mem_input: Entity<InputState>,
+}
+
+impl MemoryFormState {
+    pub(in crate::app::ai) fn new(
+        global_markdown: &str,
+        window: &mut Window,
+        cx: &mut Context<crate::app::ai::view::AiAssistantView>,
+    ) -> Self {
+        let global_mem_input = cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder(rust_i18n::t!("ai.global_memory_placeholder").to_string())
+        });
+        let host_mem_input = cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder(rust_i18n::t!("ai.host_memory_placeholder").to_string())
+        });
+        if !global_markdown.is_empty() {
+            let text = global_markdown.to_owned();
+            global_mem_input.update(cx, |input, cx| input.set_value(text, window, cx));
+        }
+        Self {
+            global_mem_input,
+            host_mem_input,
+        }
+    }
+}
+
+/// 渲染三层记忆查看与编辑抽屉。
+pub(in crate::app::ai) fn render_memory_drawer(
+    has_host: bool,
+    host_name: &str,
+    global_input: &Entity<InputState>,
+    host_input: &Entity<InputState>,
+    p: &Palette,
+    on_save_memory: impl Fn(&mut Window, &mut App) + 'static,
+) -> AnyElement {
+    let mut box_el = v_flex()
+        .flex_1()
+        .w_full()
+        .p(rems(space::SM))
+        .gap(rems(space::SM))
+        .overflow_y_scrollbar()
+        .child(
+            div()
+                .text_size(rems(typography::BODY))
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(p.foreground)
+                .child(rust_i18n::t!("ai.global_memory_title").to_string()),
+        )
+        .child(Input::new(global_input));
+    if has_host {
+        box_el = box_el
+            .child(
+                div()
+                    .text_size(rems(typography::BODY))
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .text_color(p.foreground)
+                    .child(rust_i18n::t!("ai.host_memory_title", host = host_name).to_string()),
+            )
+            .child(Input::new(host_input));
+    }
+    box_el = box_el.child(
+        h_flex().justify_end().child(
+            Button::new("ai-save-memory")
+                .primary()
+                .label(rust_i18n::t!("ai.save_memory").to_string())
+                .on_click(move |_, w, cx| on_save_memory(w, cx)),
+        ),
+    );
+    box_el.into_any_element()
+}
+
+impl crate::app::ai::view::AiAssistantView {
+    pub(in crate::app::ai) fn render_memory_body(
+        &self,
+        p: &Palette,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let has_host = self.state.conversation.active_session.is_some();
+        let general = rust_i18n::t!("ai.general_label").to_string();
+        let host_name = self
+            .state
+            .conversation
+            .active_session
+            .as_ref()
+            .map(|s| s.host_name.as_str())
+            .unwrap_or(&general);
+        let view = cx.entity();
+        render_memory_drawer(
+            has_host,
+            host_name,
+            &self.memory_form.global_mem_input,
+            &self.memory_form.host_mem_input,
+            p,
+            move |w, cx| view.update(cx, |this, cx| this.save_memory_from_drawer(w, cx)),
+        )
+    }
+}
