@@ -166,12 +166,15 @@ pub(in crate::controller) async fn handle_ai_command(
                 .remove_namespace(&conversation_id);
             let store = ctx.ai_store.clone();
             state.ai.run_set.spawn(async move {
-                let _ = tokio::task::spawn_blocking(move || {
+                if let Err(err) = tokio::task::spawn_blocking(move || {
                     if let Err(err) = store.delete_conversation(&conversation_id) {
                         log::warn!("删除 AI 对话失败（{conversation_id}）: {err}");
                     }
                 })
-                .await;
+                .await
+                {
+                    log::warn!("删除 AI 对话的阻塞任务异常结束: {err}");
+                }
             });
         }
         AiCommand::SetConversationArchived {
@@ -180,12 +183,15 @@ pub(in crate::controller) async fn handle_ai_command(
         } => {
             let store = ctx.ai_store.clone();
             state.ai.run_set.spawn(async move {
-                let _ = tokio::task::spawn_blocking(move || {
+                if let Err(err) = tokio::task::spawn_blocking(move || {
                     if let Err(err) = store.set_conversation_archived(&conversation_id, archived) {
                         log::warn!("归档 AI 对话失败（{conversation_id}）: {err}");
                     }
                 })
-                .await;
+                .await
+                {
+                    log::warn!("归档 AI 对话的阻塞任务异常结束: {err}");
+                }
             });
         }
         AiCommand::RenameConversation {
@@ -194,12 +200,15 @@ pub(in crate::controller) async fn handle_ai_command(
         } => {
             let store = ctx.ai_store.clone();
             state.ai.run_set.spawn(async move {
-                let _ = tokio::task::spawn_blocking(move || {
+                if let Err(err) = tokio::task::spawn_blocking(move || {
                     if let Err(err) = store.rename_conversation(&conversation_id, &title) {
                         log::warn!("重命名 AI 对话失败（{conversation_id}）: {err}");
                     }
                 })
-                .await;
+                .await
+                {
+                    log::warn!("重命名 AI 对话的阻塞任务异常结束: {err}");
+                }
             });
         }
         AiCommand::SaveSettingsJson {
@@ -256,7 +265,7 @@ pub(in crate::controller) async fn handle_ai_command(
         } => {
             let store = ctx.ai_store.clone();
             state.ai.run_set.spawn(async move {
-                let _ = tokio::task::spawn_blocking(move || {
+                if let Err(err) = tokio::task::spawn_blocking(move || {
                     if let Some(global) = global_markdown
                         && let Err(err) = store.save_global_memory(&global)
                     {
@@ -268,7 +277,10 @@ pub(in crate::controller) async fn handle_ai_command(
                         log::warn!("异步保存主机 AI 记忆失败（{hid}）: {err}");
                     }
                 })
-                .await;
+                .await
+                {
+                    log::warn!("保存 AI 记忆的阻塞任务异常结束: {err}");
+                }
             });
         }
         AiCommand::DiscoverModels {
