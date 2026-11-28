@@ -71,7 +71,8 @@ pub struct ChainEvalResult {
 
 /// 引号与转义感知的 Shell 命令分段拆解器。
 ///
-/// 拆分 `&&`、`||`、`;`、`|`、换行，并提取 `$(...)` 与反引号中的内嵌命令。
+/// 拆分 `&&`、`||`、`;`、`|`、`&`、换行，并提取 `$(...)` 与反引号中的内嵌命令。
+/// 后台运算符与普通命令链一样逐段定级，避免只检查首命令而漏掉后台写操作。
 /// 嵌套深度超过上限时保留原始片段，由风险分级按未知命令强制确认。
 pub fn split_shell_segments(command: &str) -> Vec<String> {
     split_shell_segments_inner(command, 0)
@@ -156,6 +157,11 @@ fn split_shell_segments_inner(command: &str, depth: usize) -> Vec<String> {
             if is_and || is_or {
                 push_trimmed(&mut segments, &mut current);
                 i += 2;
+                continue;
+            }
+            if ch == '&' {
+                push_trimmed(&mut segments, &mut current);
+                i += 1;
                 continue;
             }
             if matches!(ch, ';' | '|' | '\n') {
@@ -399,10 +405,13 @@ mod tests {
     }
 
     #[test]
-    fn split_segments_handles_quotes_and_subshells() {
-        let segs = split_shell_segments(r#"echo "a && b" && ls -la; $(rm -rf /tmp/x) | head"#);
-        assert!(segs.iter().any(|s| s.contains("echo \"a && b\"")));
+    fn split_segments_handles_quotes_background_and_subshells() {
+        let segs = split_shell_segments(
+            r#"echo "a && b & c" && ls -la & touch /tmp/x; $(rm -rf /tmp/x) | head"#,
+        );
+        assert!(segs.iter().any(|s| s.contains("echo \"a && b & c\"")));
         assert!(segs.iter().any(|s| s == "ls -la"));
+        assert!(segs.iter().any(|s| s == "touch /tmp/x"));
         assert!(segs.iter().any(|s| s == "rm -rf /tmp/x"));
         assert!(segs.iter().any(|s| s == "head"));
     }

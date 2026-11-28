@@ -52,11 +52,7 @@ impl ShellCommandAssessment {
 /// 检测会持续阻塞或进入全屏交互界面的远端命令，避免无效等待整个执行超时。
 pub fn detect_blocking_command(command: &str) -> Option<BlockingCommandHit> {
     let lower = command.trim().to_ascii_lowercase();
-    for raw_seg in lower
-        .split([';', '|'])
-        .flat_map(|p| p.split("&&"))
-        .flat_map(|p| p.split("||"))
-    {
+    for raw_seg in split_shell_segments(&lower) {
         let tokens: Vec<&str> = raw_seg.split_whitespace().collect();
         let mut idx = 0;
         if tokens.get(idx) == Some(&"sudo") {
@@ -217,7 +213,7 @@ pub fn classify_shell_command(command: &str) -> ToolRisk {
 }
 
 fn assess_segment(segment: &str) -> ShellCommandAssessment {
-    if segment.contains('>') {
+    if segment.contains('>') || segment.contains('<') {
         return ShellCommandAssessment::uncertain();
     }
     let Some(tokens) = parse_shell_words(segment) else {
@@ -406,12 +402,10 @@ fn accesses_sensitive_credential_path(lower: &str) -> bool {
 }
 
 fn is_shell_redirection(token: &str) -> bool {
-    token == ">"
-        || token == ">>"
-        || token == ">|"
-        || token == "&>"
-        || token == ">>&"
-        || token == "<>"
+    matches!(
+        token,
+        ">" | ">>" | ">|" | "&>" | ">>&" | "&>>" | "<" | "<<" | "<<<" | "<>" | ">|<"
+    )
 }
 
 fn is_destructive_pattern(lower: &str) -> bool {
@@ -612,7 +606,31 @@ mod tests {
         assert!(detect_blocking_command("docker compose logs -f api").is_some());
         assert!(detect_blocking_command("docker stats").is_some());
         assert!(detect_blocking_command("kubectl get pods --watch").is_some());
-        assert!(detect_blocking_command("docker stats --no-stream").is_none());
         assert!(detect_blocking_command("tail -n 200 /var/log/syslog").is_none());
+        assert!(detect_blocking_command("echo start & tail -f /var/log/syslog").is_some());
+        assert!(detect_blocking_command("docker stats --no-stream").is_none());
+    }
+
+    #[test]
+    fn background_commands_are_not_classified_as_safe_reads() {
+        assert_eq!(
+            assess_shell_command("ls & touch /tmp/x").risk,
+            ToolRisk::Write
+        );
+        assert_eq!(
+            assess_shell_command("echo ok & systemctl restart nginx").risk,
+            ToolRisk::Write
+        );
+        assert_eq!(
+            assess_shell_command("grep 'a & b' /tmp/log").risk,
+            ToolRisk::SafeRead
+        );
+    }
+
+    #[test]
+    fn input_redirection_is_never_auto_approved() {
+        let assessment = assess_shell_command("grep root < /etc/passwd");
+        assert_eq!(assessment.risk, ToolRisk::Write);
+        assert!(assessment.requires_confirmation);
     }
 }
