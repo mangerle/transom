@@ -9,8 +9,8 @@ use transom_core::{
     RdpConnection, SerialConnection, Session, SessionFolder, SessionId, SshConnection,
 };
 
-use super::ControllerAppActionBridge;
 use super::file_io::read_text_prefix;
+use super::{ControllerAppActionBridge, optional_port, port_or, u32_or};
 
 pub(super) async fn handle(
     bridge: &ControllerAppActionBridge,
@@ -190,14 +190,14 @@ fn build_connection(kind: &str, args: &Value) -> Result<Connection, ToolError> {
                 .unwrap_or("Administrator")
                 .to_owned();
             let mut rdp = RdpConnection::new(host, username);
-            if let Some(port) = args["port"].as_u64() {
-                rdp.port = port as u16;
+            if let Some(port) = optional_port(args, "port", "session_catalog")? {
+                rdp.port = port;
             }
             Ok(Connection::Rdp(rdp))
         }
         "serial" => {
             let port_name = req_str(args, "host")?.to_owned();
-            let baud = args["port"].as_u64().unwrap_or(115_200) as u32;
+            let baud = u32_or(args, "port", "session_catalog", 115_200)?;
             let ser = SerialConnection::new(port_name, baud);
             Ok(Connection::Serial(ser))
         }
@@ -205,8 +205,8 @@ fn build_connection(kind: &str, args: &Value) -> Result<Connection, ToolError> {
             let host = req_str(args, "host")?.to_owned();
             let username = req_str(args, "username")?.to_owned();
             let mut ssh = SshConnection::new(host, username);
-            if let Some(port) = args["port"].as_u64() {
-                ssh.port = port as u16;
+            if let Some(port) = optional_port(args, "port", "session_catalog")? {
+                ssh.port = port;
             }
             if let Some(key_path) = args["private_key_path"].as_str().filter(|s| !s.is_empty()) {
                 ssh.auth = AuthMethod::PrivateKey {
@@ -240,6 +240,7 @@ async fn update_session(
             reason: "update 必须提供有效的 session_id".to_owned(),
         })?;
     let args_cloned = args.clone();
+    let updated_port = optional_port(args, "port", "session_catalog")?;
     mutate_catalog_and_reload(bridge, move |catalog| {
         let session = catalog
             .sessions
@@ -264,8 +265,8 @@ async fn update_session(
             if let Some(host) = args_cloned["host"].as_str().filter(|s| !s.is_empty()) {
                 ssh.host = host.to_owned();
             }
-            if let Some(port) = args_cloned["port"].as_u64() {
-                ssh.port = port as u16;
+            if let Some(port) = updated_port {
+                ssh.port = port;
             }
             if let Some(user) = args_cloned["username"].as_str().filter(|s| !s.is_empty()) {
                 ssh.username = user.to_owned();
@@ -377,7 +378,7 @@ async fn remove_known_host(
     args: &Value,
 ) -> Result<String, ToolError> {
     let host = req_str(args, "host")?.to_owned();
-    let port = args["port"].as_u64().unwrap_or(22) as u16;
+    let port = port_or(args, "port", "session_catalog", 22)?;
     let kh = bridge.deps.stores.known_hosts.clone();
     tokio::task::spawn_blocking(move || kh.remove(&host, port))
         .await

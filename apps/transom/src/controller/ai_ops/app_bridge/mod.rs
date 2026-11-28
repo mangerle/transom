@@ -43,6 +43,57 @@ use uuid::Uuid;
 
 use super::super::state::{ControllerCtx, ControllerState};
 
+/// 解析可选端口参数；缺省返回 `None`，存在但非整数或超出 `u16` 时明确报错。
+pub(super) fn optional_port(
+    args: &Value,
+    key: &str,
+    tool: &'static str,
+) -> Result<Option<u16>, ToolError> {
+    let Some(value) = args.get(key) else {
+        return Ok(None);
+    };
+    let raw = value.as_u64().ok_or_else(|| ToolError::InvalidArguments {
+        tool,
+        reason: format!("参数 {key} 必须是整数端口号"),
+    })?;
+    u16::try_from(raw)
+        .map(Some)
+        .map_err(|_| ToolError::InvalidArguments {
+            tool,
+            reason: format!("参数 {key} 超出有效端口范围 0..=65535: {raw}"),
+        })
+}
+
+/// 解析带默认值的端口参数。
+pub(super) fn port_or(
+    args: &Value,
+    key: &str,
+    tool: &'static str,
+    default: u16,
+) -> Result<u16, ToolError> {
+    Ok(optional_port(args, key, tool)?.unwrap_or(default))
+}
+
+/// 解析带默认值的 `u32` 参数，拒绝负数和浮点数。
+pub(super) fn u32_or(
+    args: &Value,
+    key: &str,
+    tool: &'static str,
+    default: u32,
+) -> Result<u32, ToolError> {
+    let Some(value) = args.get(key) else {
+        return Ok(default);
+    };
+    let raw = value.as_u64().ok_or_else(|| ToolError::InvalidArguments {
+        tool,
+        reason: format!("参数 {key} 必须是非负整数"),
+    })?;
+    u32::try_from(raw).map_err(|_| ToolError::InvalidArguments {
+        tool,
+        reason: format!("参数 {key} 超出 u32 范围: {raw}"),
+    })
+}
+
 /// 桥接层依赖组合根，按能力域隔离存储、项目服务、运行时与当前目标。
 #[derive(Clone)]
 pub(in crate::controller) struct AppBridgeDeps {
@@ -254,5 +305,40 @@ impl AppActionBridge for ControllerAppActionBridge {
                 target_ops::handle_transfer_file(self, action, &args).await
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::{optional_port, port_or, u32_or};
+    use transom_ai::ToolError;
+
+    #[test]
+    fn port_arguments_fail_closed_outside_u16_range() {
+        let valid = json!({ "port": 2222 });
+        assert_eq!(
+            optional_port(&valid, "port", "session_catalog").expect("合法端口应解析成功"),
+            Some(2222)
+        );
+        assert_eq!(
+            port_or(&json!({}), "port", "session_catalog", 22).expect("缺省端口应回退"),
+            22
+        );
+
+        let invalid = json!({ "port": 65_536 });
+        assert!(matches!(
+            optional_port(&invalid, "port", "session_catalog"),
+            Err(ToolError::InvalidArguments { .. })
+        ));
+    }
+
+    #[test]
+    fn integer_arguments_reject_u32_overflow() {
+        assert!(matches!(
+            u32_or(&json!({ "port": u64::MAX }), "port", "session_catalog", 1),
+            Err(ToolError::InvalidArguments { .. })
+        ));
     }
 }

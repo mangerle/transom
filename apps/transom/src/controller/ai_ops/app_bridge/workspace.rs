@@ -3,7 +3,7 @@
 use serde_json::{Value, json};
 use transom_ai::ToolError;
 
-use super::ControllerAppActionBridge;
+use super::{ControllerAppActionBridge, port_or};
 
 pub(super) async fn handle_workspace(
     bridge: &ControllerAppActionBridge,
@@ -192,7 +192,7 @@ async fn probe_host(args: &Value) -> Result<String, ToolError> {
             reason: "probe_host 必须提供 host".to_owned(),
         })?
         .to_owned();
-    let port = args["port"].as_u64().unwrap_or(22) as u16;
+    let port = port_or(args, "port", "host_monitor", 22)?;
     let addr = format!("{host}:{port}");
     let started = std::time::Instant::now();
     match tokio::time::timeout(
