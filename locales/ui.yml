@@ -10727,6 +10727,9 @@ ai:
   inline_insert:
     en: Insert to Terminal
     zh-CN: 插入终端
+  inline_insert_failed:
+    en: Failed to insert the generated command into the terminal
+    zh-CN: 无法将生成的命令插入终端
   diagnose_exit_btn:
     en: "AI Diagnose (exit %{code})"
     zh-CN: "AI 诊断 (exit %{code})"

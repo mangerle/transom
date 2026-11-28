@@ -122,12 +122,14 @@ impl AiAssistantView {
             cx.background_executor()
                 .timer(std::time::Duration::from_millis(1500))
                 .await;
-            let _ = this.update(cx, |this, cx| {
+            if let Err(err) = this.update(cx, |this, cx| {
                 if this.copied_key.as_deref() == Some(key.as_str()) {
                     this.copied_key = None;
                     cx.notify();
                 }
-            });
+            }) {
+                log::debug!("复制反馈重置时 AI 面板已关闭: {err}");
+            }
         }));
         cx.notify();
     }

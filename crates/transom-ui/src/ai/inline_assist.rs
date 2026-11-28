@@ -227,7 +227,7 @@ pub(crate) fn submit_inline_assist(state: &mut crate::app::AppState, cx: &App) {
             (s.name.clone(), plat)
         })
         .unwrap_or_else(|| ("local".to_owned(), std::env::consts::OS.to_owned()));
-    let _ = state
+    if let Err(err) = state
         .runtime
         .services
         .command_tx
@@ -238,7 +238,14 @@ pub(crate) fn submit_inline_assist(state: &mut crate::app::AppState, cx: &App) {
                 host_label,
                 platform,
             },
-        )));
+        )))
+    {
+        log::warn!("发送内联命令生成请求失败: {err}");
+        state.features.inline_assist.loading = false;
+        state.features.inline_assist.active_request_id = None;
+        state.features.inline_assist.error =
+            Some(rust_i18n::t!("ai.command_send_failed", error = err.to_string()).to_string());
+    }
 }
 
 pub(crate) fn apply_inline_result(
@@ -276,11 +283,28 @@ pub(crate) fn render_workspace_inline_assist(
         },
         move |cmd, window, cx| {
             app_ins.update(cx, |this, cx| {
-                if let Some(term) = this.state.workspace.active_pane_terminal() {
-                    term.update(cx, |v, cx| {
-                        let _ = v.send_text(&cmd, cx);
+                let Some(term) = this.state.workspace.active_pane_terminal() else {
+                    this.state.features.inline_assist.error =
+                        Some(rust_i18n::t!("ai.inline_insert_failed").to_string());
+                    this.state.features.inline_assist.open = true;
+                    cx.notify();
+                    return;
+                };
+                let inserted = term.update(cx, |v, cx| {
+                    if v.send_text(&cmd, cx) {
                         window.focus(v.focus_handle(), cx);
-                    });
+                        true
+                    } else {
+                        log::warn!("向终端插入内联 AI 命令失败");
+                        false
+                    }
+                });
+                if !inserted {
+                    this.state.features.inline_assist.error =
+                        Some(rust_i18n::t!("ai.inline_insert_failed").to_string());
+                    this.state.features.inline_assist.open = true;
+                    cx.notify();
+                    return;
                 }
                 this.state.features.inline_assist.open = false;
                 cx.notify();
