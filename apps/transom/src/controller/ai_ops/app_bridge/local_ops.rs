@@ -71,7 +71,7 @@ pub(super) async fn exec_local_shell(
         tokio::select! {
             _ = task.detach.cancelled() => {
                 let bg_id = task.task_id.clone();
-                tokio::spawn(async move {
+                bridge.deps.runtime.tasks.spawn_background(async move {
                     let mut out_chunk = [0u8; 4096];
                     let mut err_chunk = [0u8; 4096];
                     while stdout_pipe.is_some() || stderr_pipe.is_some() {

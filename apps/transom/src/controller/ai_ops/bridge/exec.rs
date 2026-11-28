@@ -97,7 +97,7 @@ impl SshRemoteExecutor {
                 cb,
             )))
         });
-        tokio::spawn(async move {
+        tasks.spawn_background(async move {
             let res = remote_bg
                 .exec_command_stream(&wrapped, timeout, task_cancel.clone(), |chunk, _is_err| {
                     task.emit_chunk(chunk);
@@ -144,7 +144,7 @@ impl SshRemoteExecutor {
                 }
                 Err(_) if task_cancel.is_cancelled() => {
                     if let Some((remote, pid)) = tasks_bg.cancel_task(&task.task_id) {
-                        tokio::spawn(kill_remote_pid(remote, pid));
+                        tasks_bg.spawn_background(kill_remote_pid(remote, pid));
                     }
                     task.finish(AiManagedTaskStatus::Cancelled, None, "远端命令已取消");
                     Err(ToolError::Cancelled)

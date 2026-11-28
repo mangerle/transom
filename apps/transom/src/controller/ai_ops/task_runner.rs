@@ -6,12 +6,16 @@
 //! - 用户在 UI 上点击单个任务的“停止”按钮时，可精确中止该任务而不打断整轮主对话，并对远端进程组发信号清理。
 
 use std::collections::{HashMap, VecDeque};
+use std::future::Future;
+use std::panic::AssertUnwindSafe;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use futures::FutureExt as _;
 use parking_lot::Mutex;
 use tokio_util::sync::CancellationToken;
+use tokio_util::task::TaskTracker;
 use transom_core::{AiAppEvent, AiManagedTaskDto, AiManagedTaskStatus, AppEvent};
 use transom_net::SshRemote;
 use uuid::Uuid;
@@ -28,6 +32,7 @@ struct ActiveTaskEntry {
 pub(in crate::controller) struct ManagedTaskRegistry {
     event_tx: flume::Sender<AppEvent>,
     tasks: Mutex<HashMap<String, ActiveTaskEntry>>,
+    background: TaskTracker,
 }
 
 impl ManagedTaskRegistry {
@@ -35,6 +40,48 @@ impl ManagedTaskRegistry {
         Self {
             event_tx,
             tasks: Mutex::new(HashMap::new()),
+            background: TaskTracker::new(),
+        }
+    }
+
+    /// 将后台 Future 纳入统一生命周期跟踪，并记录 panic。
+    pub(in crate::controller) fn spawn_background<F>(&self, future: F)
+    where
+        F: Future<Output = ()> + Send + 'static,
+    {
+        let handle = self.background.spawn(async move {
+            if let Err(payload) = AssertUnwindSafe(future).catch_unwind().await {
+                log::error!("AI 后台任务异常崩溃: {}", panic_payload(&payload));
+            }
+        });
+        // TaskTracker 已持有任务登记；JoinHandle 本身不需要由调用方保存。
+        drop(handle);
+    }
+
+    /// 关闭后台任务跟踪，停止接收新的登记。
+    pub(in crate::controller) fn close_background(&self) {
+        self.background.close();
+    }
+
+    /// 等待所有已登记后台任务退出。
+    pub(in crate::controller) async fn wait_background(&self) {
+        self.background.wait().await;
+    }
+
+    fn emit_event(&self, event: AppEvent) {
+        match self.event_tx.try_send(event) {
+            Ok(()) => {}
+            Err(flume::TrySendError::Full(event)) => {
+                let event_tx = self.event_tx.clone();
+                self.spawn_background(async move {
+                    if let Err(error) = event_tx.send_async(event).await {
+                        log::warn!("发送 AI 托管任务状态事件失败: {error}");
+                    }
+                });
+            }
+            Err(flume::TrySendError::Disconnected(_)) => {
+                log::warn!("发送 AI 托管任务状态事件失败: 事件通道已关闭");
+            }
         }
     }
 
@@ -71,9 +118,7 @@ impl ManagedTaskRegistry {
             finished_at_ms: None,
             exit_code: None,
         };
-        let _ = self
-            .event_tx
-            .try_send(AppEvent::Ai(Box::new(AiAppEvent::ManagedTaskStarted(dto))));
+        self.emit_event(AppEvent::Ai(Box::new(AiAppEvent::ManagedTaskStarted(dto))));
         ManagedTaskHandle {
             task_id,
             cancel,
@@ -112,12 +157,10 @@ impl ManagedTaskRegistry {
             return false;
         }
         queue.lock().push_back(trimmed.clone());
-        let _ = self
-            .event_tx
-            .try_send(AppEvent::Ai(Box::new(AiAppEvent::ManagedTaskOutput {
-                task_id: task_id.to_owned(),
-                chunk: format!("[追加指令] {trimmed}\n"),
-            })));
+        self.emit_event(AppEvent::Ai(Box::new(AiAppEvent::ManagedTaskOutput {
+            task_id: task_id.to_owned(),
+            chunk: format!("[追加指令] {trimmed}\n"),
+        })));
         true
     }
 
@@ -216,14 +259,13 @@ impl ManagedTaskHandle {
     ) {
         self.finished = true;
         self.registry.tasks.lock().remove(&self.task_id);
-        let _ = self.registry.event_tx.try_send(AppEvent::Ai(Box::new(
-            AiAppEvent::ManagedTaskFinished {
+        self.registry
+            .emit_event(AppEvent::Ai(Box::new(AiAppEvent::ManagedTaskFinished {
                 task_id: self.task_id.clone(),
                 status,
                 exit_code,
                 summary: summary.into(),
-            },
-        )));
+            })));
     }
 }
 
@@ -236,14 +278,13 @@ impl Drop for ManagedTaskHandle {
             } else {
                 AiManagedTaskStatus::Failed
             };
-            let _ = self.registry.event_tx.try_send(AppEvent::Ai(Box::new(
-                AiAppEvent::ManagedTaskFinished {
+            self.registry
+                .emit_event(AppEvent::Ai(Box::new(AiAppEvent::ManagedTaskFinished {
                     task_id: self.task_id.clone(),
                     status,
                     exit_code: None,
                     summary: "任务已结束".to_owned(),
-                },
-            )));
+                })));
         }
     }
 }
@@ -277,4 +318,14 @@ fn now_epoch_ms() -> u64 {
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_millis() as u64)
         .unwrap_or(0)
+}
+
+fn panic_payload(payload: &Box<dyn std::any::Any + Send>) -> String {
+    if let Some(message) = payload.downcast_ref::<&str>() {
+        (*message).to_owned()
+    } else if let Some(message) = payload.downcast_ref::<String>() {
+        message.clone()
+    } else {
+        "未知 panic 载荷".to_owned()
+    }
 }

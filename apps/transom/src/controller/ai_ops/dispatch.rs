@@ -341,4 +341,11 @@ pub(in crate::controller) async fn shutdown_ai_runs(state: &mut ControllerState)
         while state.ai_set.join_next().await.is_some() {}
     })
     .await;
+    state.ai_tasks.close_background();
+    if tokio::time::timeout(Duration::from_secs(2), state.ai_tasks.wait_background())
+        .await
+        .is_err()
+    {
+        log::warn!("等待 AI 托管后台任务退出超过 2 秒");
+    }
 }

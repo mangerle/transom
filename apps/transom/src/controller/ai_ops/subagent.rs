@@ -315,7 +315,7 @@ impl SubagentRunner for ControllerSubagentRunner {
         };
 
         if async_mode {
-            tokio::spawn(async move {
+            self.tasks.spawn_background(async move {
                 let res = exec_fut.await;
                 let (ok, sid, summary) = match res {
                     Ok((id, text)) => (true, id, text),

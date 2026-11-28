@@ -10341,6 +10341,7 @@ dependencies = [
  "chrono",
  "fern",
  "flume",
+ "futures",
  "log",
  "parking_lot 0.13.0",
  "portable-pty",
