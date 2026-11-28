@@ -1,14 +1,12 @@
 //! AI 面板三层记忆查看与编辑抽屉。
 
+use crate::palette::Palette;
+use crate::theme::tokens::{space, typography};
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::input::{Input, InputState};
 use gpui_kit::component::scroll::ScrollableElement;
 use gpui_kit::*;
-use transom_ai_contracts::MemorySnapshot;
-
-use crate::palette::Palette;
-use crate::theme::tokens::{space, typography};
 
 /// 记忆抽屉的独立表单状态。
 pub(super) struct MemoryFormState {
@@ -47,11 +45,9 @@ pub(super) fn render_memory_drawer(
     host_name: &str,
     global_input: &Entity<InputState>,
     host_input: &Entity<InputState>,
-    memory: &MemorySnapshot,
     p: &Palette,
     on_save_memory: impl Fn(&mut Window, &mut App) + 'static,
 ) -> AnyElement {
-    let _ = memory;
     let mut box_el = v_flex()
         .flex_1()
         .w_full()
@@ -105,7 +101,6 @@ impl super::view::AiAssistantView {
             host_name,
             &self.memory_form.global_mem_input,
             &self.memory_form.host_mem_input,
-            &self.state.memory,
             p,
             move |w, cx| view.update(cx, |this, cx| this.save_memory_from_drawer(w, cx)),
         )
