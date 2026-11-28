@@ -281,12 +281,12 @@ fn render_reasoning_block(
         .rounded(p.radius.md)
         .px(rems(space::SM))
         .py(rems(space::XS))
-        .bg(p.surface.floating)
+        .bg(p.surface.subtle)
         .border_1()
         .border_color(if streaming {
-            p.primary.opacity(0.28)
+            p.primary.opacity(0.35)
         } else {
-            p.stroke.faint
+            p.stroke.subtle
         })
         .gap(px(4.0))
         .child(

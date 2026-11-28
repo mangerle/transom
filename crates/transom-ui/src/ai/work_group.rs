@@ -235,13 +235,13 @@ pub(super) fn render_work_group(
         .bg(if params.in_progress {
             p.tone.primary_subtle
         } else {
-            p.surface.floating
+            p.surface.faint
         })
         .border_1()
         .border_color(if params.in_progress {
-            p.primary.opacity(0.28)
+            p.primary.opacity(0.35)
         } else {
-            p.stroke.faint
+            p.stroke.subtle
         })
         .cursor_pointer()
         .hover(|s| s.bg(p.surface.hover))

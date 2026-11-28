@@ -95,12 +95,12 @@ impl SurfaceTokens {
             colors.foreground.opacity(0.20)
         };
         Self {
-            ghost: colors.muted.opacity(0.04),
-            faint: colors.muted.opacity(0.08),
-            subtle: colors.muted.opacity(0.12),
-            hover: colors.muted.opacity(0.30),
-            active: colors.muted.opacity(0.35),
-            pressed: colors.muted.opacity(0.40),
+            ghost: colors.foreground.opacity(0.03),
+            faint: colors.foreground.opacity(0.045),
+            subtle: colors.foreground.opacity(0.065),
+            hover: colors.foreground.opacity(0.10),
+            active: colors.foreground.opacity(0.14),
+            pressed: colors.foreground.opacity(0.18),
             selected,
             control_selected,
             floating: colors.surface,
@@ -113,11 +113,11 @@ impl BorderTokens {
     /// 从主题边界色派生边界强度层级。
     fn from_color(border: Hsla) -> Self {
         Self {
-            faint: border.opacity(0.12),
-            subtle: border.opacity(0.15),
-            muted: border.opacity(0.30),
-            medium: border.opacity(0.40),
-            strong: border.opacity(0.50),
+            faint: border.opacity(0.45),
+            subtle: border.opacity(0.65),
+            muted: border.opacity(0.80),
+            medium: border.opacity(0.90),
+            strong: border,
         }
     }
 }
@@ -138,9 +138,9 @@ impl TextTokens {
     /// 从主题次级文字色派生文字层级。
     fn from_color(muted_foreground: Hsla) -> Self {
         Self {
-            subtle: muted_foreground.opacity(0.80),
-            muted: muted_foreground.opacity(0.70),
-            disabled: muted_foreground.opacity(0.40),
+            subtle: muted_foreground.opacity(0.92),
+            muted: muted_foreground.opacity(0.82),
+            disabled: muted_foreground.opacity(0.50),
         }
     }
 }

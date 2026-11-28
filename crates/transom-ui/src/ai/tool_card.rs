@@ -337,11 +337,11 @@ pub(super) fn render_tool_card(
                 .w_full()
                 .px(rems(space::SM))
                 .py(px(5.0))
-                .bg(p.surface.floating)
+                .bg(p.surface.faint)
                 .justify_between()
                 .items_center()
                 .border_b_1()
-                .border_color(p.stroke.faint)
+                .border_color(p.stroke.subtle)
                 .child(
                     div()
                         .font_family("monospace")

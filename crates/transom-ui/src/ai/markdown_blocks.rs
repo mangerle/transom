@@ -428,9 +428,9 @@ fn render_code_card(
         .py(px(5.0))
         .justify_between()
         .items_center()
-        .bg(p.secondary)
+        .bg(p.surface.faint)
         .border_b_1()
-        .border_color(p.divider(p.border))
+        .border_color(p.stroke.subtle)
         .child(left)
         .child(actions);
 
@@ -468,7 +468,7 @@ fn render_code_card(
                         .py(rems(space::XS))
                         .border_r_1()
                         .border_color(p.stroke.faint)
-                        .bg(p.surface.floating)
+                        .bg(p.surface.faint)
                         .font_family("monospace")
                         .text_size(rems(typography::CAPTION))
                         .line_height(relative(1.5))
