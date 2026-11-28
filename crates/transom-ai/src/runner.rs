@@ -304,6 +304,7 @@ async fn run_attempt(
         let hook_ctx = HookContext {
             tool_name: None,
             args_json: None,
+            command: None,
             target_label: input.tool_ctx.host_label(),
             tool_ok: Some(run_result.is_ok()),
             summary,

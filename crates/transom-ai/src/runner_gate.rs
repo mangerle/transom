@@ -225,7 +225,7 @@ impl AgentHook for Gate {
         }
 
         if let Some(blocked) = self
-            .check_preconditions(tool_name, args_json, &assessment)
+            .check_preconditions(tool_name, args_json, cmd_str, &assessment)
             .await
         {
             return blocked;
@@ -250,6 +250,7 @@ impl Gate {
         &self,
         tool_name: &str,
         args_json: &str,
+        command: Option<&str>,
         assessment: &ToolRiskAssessment,
     ) -> Option<DispatchAction> {
         if self.plan_mode && matches!(assessment.risk, ToolRisk::Write | ToolRisk::Destructive) {
@@ -261,6 +262,7 @@ impl Gate {
             let hook_ctx = HookContext {
                 tool_name: Some(tool_name.to_owned()),
                 args_json: Some(args_json.to_owned()),
+                command: command.map(str::to_owned),
                 target_label: assessment.summary.host_label.clone(),
                 tool_ok: None,
                 summary: assessment.summary.detail.clone(),

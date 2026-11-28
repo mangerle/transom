@@ -142,6 +142,9 @@ pub(super) async fn handle_tool_card(
 
     let card_tool_name = card.tool_name.clone();
     let card_summary_for_hook = card.summary.clone();
+    let card_command_for_hook =
+        matches!(card.tool_name.as_str(), "remote_exec" | "remote_exec_bulk")
+            .then(|| card.summary.clone());
     let card_host_for_hook = card.host_label.clone();
     let card_ok = card.ok;
     let card_summary_text = format!("{} ({})", card.tool_name, card.summary);
@@ -174,6 +177,7 @@ pub(super) async fn handle_tool_card(
         let hook_ctx = HookContext {
             tool_name: Some(card_tool_name),
             args_json: Some(card_summary_for_hook),
+            command: card_command_for_hook,
             target_label: card_host_for_hook,
             tool_ok: Some(card_ok),
             summary: card_summary_text,

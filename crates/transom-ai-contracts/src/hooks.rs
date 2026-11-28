@@ -102,6 +102,8 @@ fn default_enabled() -> bool {
 pub struct HookContext {
     pub tool_name: Option<String>,
     pub args_json: Option<String>,
+    /// 本次工具调用实际执行的 Shell 命令（若适用）。
+    pub command: Option<String>,
     pub target_label: String,
     pub tool_ok: Option<bool>,
     pub summary: String,
@@ -166,12 +168,18 @@ pub fn rule_matches(rule: &HookRule, event: HookEvent, ctx: &HookContext) -> boo
         .filter(|s| !s.is_empty())
     {
         let cmd = ctx
-            .args_json
+            .command
             .as_deref()
-            .and_then(|raw| serde_json::from_str::<serde_json::Value>(raw).ok())
-            .and_then(|val| val["command"].as_str().map(str::to_owned))
+            .map(str::trim)
+            .filter(|command| !command.is_empty())
+            .map(str::to_owned)
+            .or_else(|| {
+                ctx.args_json
+                    .as_deref()
+                    .and_then(|raw| serde_json::from_str::<serde_json::Value>(raw).ok())
+                    .and_then(|value| value["command"].as_str().map(str::to_owned))
+            })
             .unwrap_or_default()
-            .trim()
             .to_ascii_lowercase();
         if !cmd.starts_with(&prefix.to_ascii_lowercase()) {
             return false;
@@ -205,11 +213,29 @@ mod tests {
         let ctx = HookContext {
             tool_name: Some("remote_fs".into()),
             args_json: Some(r#"{"action":"write","path":"/etc/nginx/conf.d/app.conf"}"#.into()),
+            command: None,
             target_label: "prod-01".into(),
             tool_ok: Some(true),
             summary: "/etc/nginx/conf.d/app.conf".into(),
         };
         assert!(rule_matches(&rule, HookEvent::PostToolUse, &ctx));
         assert!(!rule_matches(&rule, HookEvent::PreToolUse, &ctx));
+
+        let command_rule = HookRule {
+            matcher: HookMatcher {
+                command_prefix: Some("systemctl restart".to_owned()),
+                ..HookMatcher::default()
+            },
+            ..rule
+        };
+        let command_ctx = HookContext {
+            command: Some("systemctl restart nginx".to_owned()),
+            ..HookContext::default()
+        };
+        assert!(rule_matches(
+            &command_rule,
+            HookEvent::PostToolUse,
+            &command_ctx
+        ));
     }
 }

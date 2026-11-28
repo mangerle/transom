@@ -13,7 +13,7 @@ use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 use transom_ai::{
     ExecCommandResult, HookAction, HookContext, HookEvent, HookExecutor, HookOutcome, HookRule,
-    RemoteExecutor, ToolError, rule_matches, send_webhook_json,
+    RemoteExecutor, ToolError, redact_secrets_for_model, rule_matches, send_webhook_json,
 };
 
 use super::process::{MAX_PROCESS_CAPTURE_BYTES, capture_command_output};
@@ -52,6 +52,25 @@ async fn exec_hook_local(
         stdout: out.stdout_lossy().into_owned(),
         stderr,
     })
+}
+
+/// 渲染经过脱敏的 Webhook 通知文本。
+fn render_webhook_text(event: HookEvent, ctx: &HookContext, template: Option<&str>) -> String {
+    let safe_summary = redact_secrets_for_model(&ctx.summary);
+    template
+        .filter(|text| !text.trim().is_empty())
+        .map(|text| {
+            text.replace("{target}", &ctx.target_label)
+                .replace("{summary}", &safe_summary)
+        })
+        .unwrap_or_else(|| {
+            format!(
+                "[Transom AI · {}] 目标: {} | {}",
+                event.label(),
+                ctx.target_label,
+                safe_summary
+            )
+        })
 }
 
 /// 控制平面持有的钩子执行器。
@@ -124,21 +143,7 @@ impl HookExecutor for ControllerHookExecutor {
                         if url.is_empty() {
                             continue;
                         }
-                        let text = template
-                            .as_deref()
-                            .filter(|t| !t.trim().is_empty())
-                            .map(|t| {
-                                t.replace("{target}", &ctx.target_label)
-                                    .replace("{summary}", &ctx.summary)
-                            })
-                            .unwrap_or_else(|| {
-                                format!(
-                                    "[Transom AI · {}] 目标: {} | {}",
-                                    event.label(),
-                                    ctx.target_label,
-                                    ctx.summary
-                                )
-                            });
+                        let text = render_webhook_text(event, ctx, template.as_deref());
                         let payload = serde_json::json!({
                             "msg_type": "text",
                             "msgtype": "text",
@@ -160,5 +165,23 @@ impl HookExecutor for ControllerHookExecutor {
             }
             outcome
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::render_webhook_text;
+    use transom_ai::{HookContext, HookEvent};
+
+    #[test]
+    fn webhook_summary_is_redacted() {
+        let ctx = HookContext {
+            target_label: "prod-01".to_owned(),
+            summary: "Authorization: Bearer abcdefghijklmnopqrstuvwxyz".to_owned(),
+            ..HookContext::default()
+        };
+        let text = render_webhook_text(HookEvent::Stop, &ctx, Some("目标={target} 摘要={summary}"));
+        assert!(!text.contains("abcdefghijklmnopqrstuvwxyz"));
+        assert!(text.contains("[REDACTED]"));
     }
 }
