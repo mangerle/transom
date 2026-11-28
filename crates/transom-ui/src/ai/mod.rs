@@ -65,6 +65,22 @@ use transom_core::{AiAppEvent, AiCommand, AiTerminalContextKind, AppCommand};
 
 use crate::app::AppState;
 
+fn send_ai_response(state: &mut AppState, cx: &mut App, command: AiCommand, context: &str) {
+    if let Err(err) = state
+        .runtime
+        .services
+        .command_tx
+        .try_send(AppCommand::Ai(Box::new(command)))
+    {
+        log::warn!("发送 AI 控制平面响应失败（{context}）: {err}");
+        let message = rust_i18n::t!("ai.command_send_failed", error = err.to_string()).to_string();
+        state
+            .features
+            .ai_panel
+            .update(cx, |view, cx| view.report_command_error(message, cx));
+    }
+}
+
 /// 分发控制平面推送的 AI 事件，并处理反向终端上下文采集请求。
 pub(crate) fn dispatch_ai_event(
     state: &mut AppState,
@@ -91,16 +107,15 @@ pub(crate) fn dispatch_ai_event(
                     AiTerminalContextKind::ScreenTail { lines } => v.screen_tail_text(*lines),
                 }
             });
-        let _ = state
-            .runtime
-            .services
-            .command_tx
-            .try_send(AppCommand::Ai(Box::new(
-                AiCommand::RespondTerminalContext {
-                    request_id: request_id.clone(),
-                    content,
-                },
-            )));
+        send_ai_response(
+            state,
+            cx,
+            AiCommand::RespondTerminalContext {
+                request_id: request_id.clone(),
+                content,
+            },
+            "终端上下文",
+        );
         return;
     }
     if let AiAppEvent::AppActionRequested {
@@ -111,14 +126,15 @@ pub(crate) fn dispatch_ai_event(
     } = &event
     {
         let result = app_actions::handle_app_action(state, domain, action, args_json, cx);
-        let _ = state
-            .runtime
-            .services
-            .command_tx
-            .try_send(AppCommand::Ai(Box::new(AiCommand::RespondAppAction {
+        send_ai_response(
+            state,
+            cx,
+            AiCommand::RespondAppAction {
                 request_id: request_id.clone(),
                 result,
-            })));
+            },
+            "软件动作结果",
+        );
         return;
     }
     if let AiAppEvent::InlineCommandResult {

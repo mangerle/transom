@@ -13,6 +13,12 @@ use super::view::AiAssistantView;
 use crate::app::spawn_blocking_local;
 
 impl AiAssistantView {
+    /// 在 AI 面板展示控制平面通信错误。
+    pub(crate) fn report_command_error(&mut self, error: String, cx: &mut Context<Self>) {
+        self.state.view.status_error = Some(error);
+        cx.notify();
+    }
+
     /// 向控制平面提交 AI 命令；通道满或关闭时在当前面板展示错误并返回失败。
     pub(super) fn send_ai_command(&mut self, command: AiCommand, cx: &mut Context<Self>) -> bool {
         match self.command_tx.try_send(AppCommand::Ai(Box::new(command))) {
