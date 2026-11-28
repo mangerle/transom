@@ -22,7 +22,8 @@ use crate::acp_handlers::{
     AcpTurnState, finalize_acp_turn, handle_acp_permission, handle_acp_update,
 };
 use crate::acp_parse::{
-    format_acp_rpc_error, is_retryable_acp_error, parse_acp_update, wait_response, write_json_line,
+    format_acp_rpc_error, is_retryable_acp_error, parse_acp_update, wait_response,
+    wait_response_raw, write_json_line,
 };
 use crate::process_cleanup::terminate_child_and_reap;
 use crate::protocol_lines::{MAX_PROTOCOL_LINE_BYTES, read_bounded_line};
@@ -113,17 +114,34 @@ pub async fn run_acp_turn(input: AcpRunInput) -> Result<(), AiError> {
     result
 }
 
+/// 单调递增的 JSON-RPC 请求 ID 分配器，确保同一会话内请求永不碰撞。
+#[derive(Debug)]
+struct RpcIdSeq(i64);
+
+impl RpcIdSeq {
+    fn new() -> Self {
+        Self(0)
+    }
+
+    fn next(&mut self) -> i64 {
+        self.0 += 1;
+        self.0
+    }
+}
+
 async fn initialize_acp_session(
     input: &AcpRunInput,
     stdin: &mut ChildStdin,
     reader: &mut BufReader<ChildStdout>,
+    id_seq: &mut RpcIdSeq,
 ) -> Result<String, AiError> {
     let server_name = &input.agent.name;
+    let init_id = id_seq.next();
     write_json_line(
         stdin,
         &json!({
             "jsonrpc": "2.0",
-            "id": 1,
+            "id": init_id,
             "method": "initialize",
             "params": {
                 "protocolVersion": 1,
@@ -134,7 +152,14 @@ async fn initialize_acp_session(
         server_name,
     )
     .await?;
-    wait_response(reader, 1, ACP_HANDSHAKE_TIMEOUT, &input.cancel, server_name).await?;
+    wait_response(
+        reader,
+        init_id,
+        ACP_HANDSHAKE_TIMEOUT,
+        &input.cancel,
+        server_name,
+    )
+    .await?;
 
     let mcp_servers = match &input.mcp_stdio_exe {
         Some(exe) if !exe.trim().is_empty() => json!([{
@@ -145,11 +170,12 @@ async fn initialize_acp_session(
         }]),
         _ => json!([]),
     };
+    let new_session_id = id_seq.next();
     write_json_line(
         stdin,
         &json!({
             "jsonrpc": "2.0",
-            "id": 2,
+            "id": new_session_id,
             "method": "session/new",
             "params": {
                 "cwd": input.cwd.clone().unwrap_or_else(|| ".".to_owned()),
@@ -159,8 +185,14 @@ async fn initialize_acp_session(
         server_name,
     )
     .await?;
-    let new_resp =
-        wait_response(reader, 2, ACP_HANDSHAKE_TIMEOUT, &input.cancel, server_name).await?;
+    let new_resp = wait_response(
+        reader,
+        new_session_id,
+        ACP_HANDSHAKE_TIMEOUT,
+        &input.cancel,
+        server_name,
+    )
+    .await?;
     let session_id = new_resp
         .pointer("/result/sessionId")
         .and_then(Value::as_str)
@@ -173,11 +205,12 @@ async fn initialize_acp_session(
         .map(str::trim)
         .filter(|m| !m.is_empty())
     {
+        let set_model_id = id_seq.next();
         write_json_line(
             stdin,
             &json!({
                 "jsonrpc": "2.0",
-                "id": 4,
+                "id": set_model_id,
                 "method": "session/set_model",
                 "params": {
                     "sessionId": session_id,
@@ -187,6 +220,31 @@ async fn initialize_acp_session(
             server_name,
         )
         .await?;
+        let resp = wait_response_raw(
+            reader,
+            set_model_id,
+            ACP_HANDSHAKE_TIMEOUT,
+            &input.cancel,
+            server_name,
+        )
+        .await?;
+        if let Some(err) = resp.get("error") {
+            let code = err.get("code").and_then(Value::as_i64);
+            if code == Some(-32601) {
+                log::warn!(
+                    "ACP Agent（{server_name}）不支持 session/set_model，将沿用默认模型: {}",
+                    format_acp_rpc_error(err, false)
+                );
+            } else {
+                return Err(AiError::AcpFailed {
+                    agent: server_name.clone(),
+                    reason: format!(
+                        "切换 ACP 模型（{model_id}）失败: {}",
+                        format_acp_rpc_error(err, false)
+                    ),
+                });
+            }
+        }
     }
     Ok(session_id)
 }
@@ -197,10 +255,11 @@ async fn drive_acp_protocol(
     reader: &mut BufReader<ChildStdout>,
 ) -> Result<(), AiError> {
     let server_name = &input.agent.name;
-    let session_id = initialize_acp_session(input, stdin, reader).await?;
+    let mut id_seq = RpcIdSeq::new();
+    let session_id = initialize_acp_session(input, stdin, reader, &mut id_seq).await?;
 
     const MAX_RETRIES: usize = 2;
-    let mut prompt_req_id: i64 = 3;
+    let mut prompt_req_id = id_seq.next();
     let mut attempt = 0usize;
     let mut state = AcpTurnState::new();
 
@@ -256,7 +315,7 @@ async fn drive_acp_protocol(
                         && is_retryable_acp_error(err)
                     {
                         attempt += 1;
-                        prompt_req_id += 1;
+                        prompt_req_id = id_seq.next();
                         state.reset_for_retry();
                         let wait_secs = 2u64 * attempt as u64;
                         log::warn!(
@@ -296,7 +355,14 @@ async fn drive_acp_protocol(
 
 #[cfg(test)]
 mod tests {
-    use super::is_acp_command_available;
+    use super::{RpcIdSeq, is_acp_command_available};
+
+    #[test]
+    fn rpc_id_seq_is_strictly_monotonic_and_unique() {
+        let mut seq = RpcIdSeq::new();
+        let ids: Vec<i64> = (0..10).map(|_| seq.next()).collect();
+        assert_eq!(ids, vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    }
 
     #[test]
     fn checks_acp_command_availability() {

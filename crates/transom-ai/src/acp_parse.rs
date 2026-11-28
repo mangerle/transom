@@ -255,7 +255,7 @@ fn extract_nested_error_message(raw: &str) -> Option<String> {
         .map(str::to_owned)
 }
 
-pub(crate) async fn wait_response(
+pub(crate) async fn wait_response_raw(
     reader: &mut BufReader<tokio::process::ChildStdout>,
     expected_id: i64,
     timeout: Duration,
@@ -300,15 +300,26 @@ pub(crate) async fn wait_response(
         if let Ok(val) = serde_json::from_str::<Value>(&line)
             && val.get("id").and_then(Value::as_i64) == Some(expected_id)
         {
-            if let Some(err) = val.get("error") {
-                return Err(AiError::AcpFailed {
-                    agent: server_name.to_owned(),
-                    reason: format_acp_rpc_error(err, false),
-                });
-            }
             return Ok(val);
         }
     }
+}
+
+pub(crate) async fn wait_response(
+    reader: &mut BufReader<tokio::process::ChildStdout>,
+    expected_id: i64,
+    timeout: Duration,
+    cancel: &CancellationToken,
+    server_name: &str,
+) -> Result<Value, AiError> {
+    let val = wait_response_raw(reader, expected_id, timeout, cancel, server_name).await?;
+    if let Some(err) = val.get("error") {
+        return Err(AiError::AcpFailed {
+            agent: server_name.to_owned(),
+            reason: format_acp_rpc_error(err, false),
+        });
+    }
+    Ok(val)
 }
 
 #[cfg(test)]
