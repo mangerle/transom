@@ -31,7 +31,7 @@ use transom_core::{AiAppEvent, AiCommand, AppEvent};
 
 use super::state::{ControllerCtx, ControllerState};
 pub(in crate::controller) use config_service::AiConfigService;
-use context_builder::{build_tool_context, prepare_conversation};
+use context_builder::build_tool_context;
 pub(in crate::controller) use control::AiControlState;
 pub(in crate::controller) use dispatch::shutdown_ai_runs;
 pub(in crate::controller) use mcp_bridge::{

@@ -4,21 +4,19 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use tokio::process::Command;
-use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
-use transom_ai::RunId;
 use transom_ai::{
-    AcpAgentConfig, EVENT_CHANNEL_CAPACITY, ProviderProtocol, RunInput, SessionScope,
-    default_acp_presets, discover_models, probe_acp_models, test_provider_connection,
+    AcpAgentConfig, ProviderProtocol, RunInput, default_acp_presets, discover_models,
+    probe_acp_models, test_provider_connection,
 };
 use transom_core::{AiAppEvent, AiPromptRequest};
 
-use super::context_builder::{ToolContextBuildParams, emit_run_error};
+use super::build_tool_context;
+use super::context_builder::ToolContextBuildParams;
 use super::credentials::load_provider_api_key;
+use super::dispatch::{PreparedRunBase, prepare_run_base};
 use super::process::{MAX_PROCESS_CAPTURE_BYTES, capture_command_output};
 use super::run::{PumpContext, execute_and_pump};
-use super::run_recorder::RunRecorder;
-use super::{build_tool_context, prepare_conversation};
 use crate::controller::state::{ControllerCtx, ControllerState};
 
 pub(super) fn parse_protocol(raw: &str) -> ProviderProtocol {
@@ -147,41 +145,39 @@ pub(super) fn spawn_test_connection(
 pub(super) async fn start_acp_only_run(
     state: &mut ControllerState,
     ctx: &ControllerCtx,
-    req: AiPromptRequest,
+    mut req: AiPromptRequest,
     agent: AcpAgentConfig,
 ) {
-    let scope = match req.session_id {
-        Some(sid) => SessionScope::Host(sid.to_string()),
-        None => SessionScope::Global,
+    let settings = ctx.ai_config.snapshot();
+    let Some(base) = prepare_run_base(
+        state,
+        ctx,
+        &req,
+        &agent.name,
+        &settings.disabled_skills,
+        false,
+    )
+    .await
+    else {
+        return;
     };
-    let (conversation_id, title, history_branch) =
-        match prepare_conversation(ctx, &req, &scope, &agent.name).await {
-            Ok(conversation) => conversation,
-            Err(err) => {
-                emit_run_error(
-                    ctx,
-                    req.run_id,
-                    req.conversation_id.unwrap_or_default(),
-                    format!("准备 ACP 对话失败: {err}"),
-                )
-                .await;
-                return;
-            }
-        };
-    let approval_scope = transom_ai::ApprovalScope::new(
-        conversation_id.clone(),
-        req.session_id.map(|session_id| session_id.to_string()),
-        req.protection,
-    );
-    let recorder = RunRecorder::new(ctx.ai_store.clone(), conversation_id.clone());
+    let PreparedRunBase {
+        scope,
+        conversation_id,
+        title,
+        history_branch,
+        approval_scope,
+        recorder,
+        active_skill_prompt,
+        mut effective_prompt,
+        cancel,
+        steer_queue,
+        event_tx,
+        event_rx,
+        current_turn_entry_id,
+        ..
+    } = base;
 
-    let cancel = CancellationToken::new();
-    state
-        .ai
-        .runs
-        .lock()
-        .insert(RunId::from(req.run_id.as_str()), cancel.clone());
-    let (event_tx, event_rx) = mpsc::channel(EVENT_CHANNEL_CAPACITY);
     let tool_ctx = build_tool_context(
         state,
         ctx,
@@ -193,7 +189,7 @@ pub(super) async fn start_acp_only_run(
             cancel: cancel.clone(),
             events: event_tx.clone(),
             subagent_cfg: None,
-            current_turn_entry_id: Arc::new(parking_lot::RwLock::new(None)),
+            current_turn_entry_id: current_turn_entry_id.clone(),
         },
     );
     let host_label = tool_ctx.host_label();
@@ -204,10 +200,7 @@ pub(super) async fn start_acp_only_run(
         .filter(|m| !m.is_empty())
         .map(str::to_owned)
         .unwrap_or_else(|| agent.default_model.clone());
-    let settings = ctx.ai_config.snapshot();
     let execution_mode = Arc::new(parking_lot::RwLock::new(settings.execution_mode));
-    let (active_skill_prompt, mut effective_prompt, _) =
-        super::load_and_expand_skills(&ctx.ai_store, &req.prompt, &settings.disabled_skills);
     if let Some(skill_body) = active_skill_prompt.as_deref() {
         effective_prompt = if effective_prompt.trim().is_empty() {
             skill_body.to_owned()
@@ -215,7 +208,7 @@ pub(super) async fn start_acp_only_run(
             format!("{skill_body}\n\n{effective_prompt}")
         };
     }
-    if let Some((label, content)) = req.attachment_text {
+    if let Some((label, content)) = req.attachment_text.take() {
         effective_prompt.push_str(&format!("\n\n[附件: {label}]\n{content}"));
     }
     let input = RunInput {
@@ -247,7 +240,7 @@ pub(super) async fn start_acp_only_run(
         tool_ctx,
         events: event_tx,
         cancel: cancel.clone(),
-        steer_queue: Arc::new(parking_lot::Mutex::new(std::collections::VecDeque::new())),
+        steer_queue,
     };
     let pump_ctx = PumpContext {
         run_id: req.run_id,
@@ -277,7 +270,7 @@ pub(super) async fn start_acp_only_run(
                 128_000,
             )
         },
-        current_turn_entry_id: Arc::new(parking_lot::RwLock::new(None)),
+        current_turn_entry_id,
         cancel,
     };
     state

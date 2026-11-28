@@ -61,6 +61,131 @@ async fn resolve_fast_subagent_target(
     .flatten()
 }
 
+/// 主 Agent 与 ACP 独立运行共用的基础运行环境准备结果。
+pub(super) struct PreparedRunBase {
+    pub(super) scope: SessionScope,
+    pub(super) conversation_id: String,
+    pub(super) title: String,
+    pub(super) history_branch: Vec<SessionEntry>,
+    pub(super) approval_scope: transom_ai::ApprovalScope,
+    pub(super) recorder: RunRecorder,
+    pub(super) memory: transom_ai::MemorySnapshot,
+    pub(super) active_skill_prompt: Option<String>,
+    pub(super) effective_prompt: String,
+    pub(super) available_skills: Vec<transom_ai::SkillSummary>,
+    pub(super) cancel: CancellationToken,
+    pub(super) steer_queue: Arc<parking_lot::Mutex<std::collections::VecDeque<String>>>,
+    pub(super) event_tx: mpsc::Sender<transom_ai::AgentEvent>,
+    pub(super) event_rx: mpsc::Receiver<transom_ai::AgentEvent>,
+    pub(super) current_turn_entry_id: Arc<parking_lot::RwLock<Option<String>>>,
+}
+
+/// 准备主 Agent 与 ACP 独立运行共用的会话分支、记忆/技能上下文与运行注册状态。
+pub(super) async fn prepare_run_base(
+    state: &mut ControllerState,
+    ctx: &ControllerCtx,
+    req: &AiPromptRequest,
+    model_label: &str,
+    disabled_skills: &[String],
+    load_memory: bool,
+) -> Option<PreparedRunBase> {
+    let scope = match req.session_id {
+        Some(sid) => SessionScope::Host(sid.to_string()),
+        None => SessionScope::Global,
+    };
+    let (conversation_id, title, history_branch) =
+        match prepare_conversation(ctx, req, &scope, model_label).await {
+            Ok(conversation) => conversation,
+            Err(err) => {
+                emit_run_error(
+                    ctx,
+                    req.run_id.clone(),
+                    req.conversation_id.clone().unwrap_or_default(),
+                    format!("准备 AI 对话失败: {err}"),
+                )
+                .await;
+                return None;
+            }
+        };
+    let approval_scope = transom_ai::ApprovalScope::new(
+        conversation_id.clone(),
+        req.session_id.map(|session_id| session_id.to_string()),
+        req.protection,
+    );
+    let recorder = RunRecorder::new(ctx.ai_store.clone(), conversation_id.clone());
+
+    let host_id_str = req.session_id.map(|session_id| session_id.to_string());
+    let prompt_for_skills = req.prompt.clone();
+    let disabled = disabled_skills.to_vec();
+    let store = ctx.ai_store.clone();
+    let prompt_context = tokio::task::spawn_blocking(move || {
+        let memory = if load_memory {
+            store.load_memory(host_id_str.as_deref())?
+        } else {
+            transom_ai::MemorySnapshot::default()
+        };
+        let (active_skill_prompt, effective_prompt, available_skills) =
+            load_and_expand_skills(&store, &prompt_for_skills, &disabled);
+        Ok::<_, transom_ai::AiError>((
+            memory,
+            active_skill_prompt,
+            effective_prompt,
+            available_skills,
+        ))
+    })
+    .await;
+    let (memory, active_skill_prompt, effective_prompt, available_skills) = match prompt_context {
+        Ok(Ok(context)) => context,
+        Ok(Err(err)) => {
+            emit_run_error(
+                ctx,
+                req.run_id.clone(),
+                conversation_id,
+                format!("加载 AI 记忆或技能失败: {err}"),
+            )
+            .await;
+            return None;
+        }
+        Err(err) => {
+            emit_run_error(
+                ctx,
+                req.run_id.clone(),
+                conversation_id,
+                format!("AI 启动准备任务异常: {err}"),
+            )
+            .await;
+            return None;
+        }
+    };
+
+    let cancel = CancellationToken::new();
+    let steer_queue = Arc::new(parking_lot::Mutex::new(std::collections::VecDeque::new()));
+    let run_key = RunId::from(req.run_id.as_str());
+    state.ai.runs.lock().insert(run_key.clone(), cancel.clone());
+    state.ai.steers.lock().insert(run_key, steer_queue.clone());
+
+    let (event_tx, event_rx) = mpsc::channel(EVENT_CHANNEL_CAPACITY);
+    let current_turn_entry_id = Arc::new(parking_lot::RwLock::new(None));
+
+    Some(PreparedRunBase {
+        scope,
+        conversation_id,
+        title,
+        history_branch,
+        approval_scope,
+        recorder,
+        memory,
+        active_skill_prompt,
+        effective_prompt,
+        available_skills,
+        cancel,
+        steer_queue,
+        event_tx,
+        event_rx,
+        current_turn_entry_id,
+    })
+}
+
 pub(super) async fn start_ai_run(
     state: &mut ControllerState,
     ctx: &ControllerCtx,
@@ -127,71 +252,35 @@ pub(super) async fn start_ai_run(
         }
     };
 
-    let scope = match req.session_id {
-        Some(sid) => SessionScope::Host(sid.to_string()),
-        None => SessionScope::Global,
+    let Some(base) = prepare_run_base(
+        state,
+        ctx,
+        &req,
+        &target.model,
+        &settings.disabled_skills,
+        true,
+    )
+    .await
+    else {
+        return;
     };
-
-    let (conversation_id, title, mut history_branch) =
-        match prepare_conversation(ctx, &req, &scope, &target.model).await {
-            Ok(conversation) => conversation,
-            Err(err) => {
-                emit_run_error(
-                    ctx,
-                    req.run_id,
-                    req.conversation_id.unwrap_or_default(),
-                    format!("准备 AI 对话失败: {err}"),
-                )
-                .await;
-                return;
-            }
-        };
-    let approval_scope = transom_ai::ApprovalScope::new(
-        conversation_id.clone(),
-        req.session_id.map(|session_id| session_id.to_string()),
-        req.protection,
-    );
-    let recorder = RunRecorder::new(ctx.ai_store.clone(), conversation_id.clone());
-
-    let host_id_str = req.session_id.map(|session_id| session_id.to_string());
-    let prompt_for_skills = req.prompt.clone();
-    let disabled_skills = settings.disabled_skills.clone();
-    let store = ctx.ai_store.clone();
-    let prompt_context = tokio::task::spawn_blocking(move || {
-        let memory = store.load_memory(host_id_str.as_deref())?;
-        let (active_skill_prompt, effective_prompt, available_skills) =
-            load_and_expand_skills(&store, &prompt_for_skills, &disabled_skills);
-        Ok::<_, transom_ai::AiError>((
-            memory,
-            active_skill_prompt,
-            effective_prompt,
-            available_skills,
-        ))
-    })
-    .await;
-    let (memory, active_skill_prompt, effective_prompt, available_skills) = match prompt_context {
-        Ok(Ok(context)) => context,
-        Ok(Err(err)) => {
-            emit_run_error(
-                ctx,
-                req.run_id,
-                conversation_id,
-                format!("加载 AI 记忆或技能失败: {err}"),
-            )
-            .await;
-            return;
-        }
-        Err(err) => {
-            emit_run_error(
-                ctx,
-                req.run_id,
-                conversation_id,
-                format!("AI 启动准备任务异常: {err}"),
-            )
-            .await;
-            return;
-        }
-    };
+    let PreparedRunBase {
+        scope,
+        conversation_id,
+        title,
+        mut history_branch,
+        approval_scope,
+        recorder,
+        memory,
+        active_skill_prompt,
+        effective_prompt,
+        available_skills,
+        cancel,
+        steer_queue,
+        event_tx,
+        event_rx,
+        current_turn_entry_id,
+    } = base;
 
     if let Some((label, content)) = req.attachment_text.take() {
         let parent_id = history_branch.last().map(|e| e.id.clone());
@@ -213,23 +302,7 @@ pub(super) async fn start_ai_run(
         history_branch.push(attachment);
     }
 
-    let cancel = CancellationToken::new();
-    let steer_queue = Arc::new(parking_lot::Mutex::new(std::collections::VecDeque::new()));
-    state
-        .ai
-        .runs
-        .lock()
-        .insert(RunId::from(req.run_id.as_str()), cancel.clone());
-    state
-        .ai
-        .steers
-        .lock()
-        .insert(RunId::from(req.run_id.as_str()), steer_queue.clone());
-
-    let (event_tx, event_rx) = mpsc::channel(EVENT_CHANNEL_CAPACITY);
-
     let fast_target = resolve_fast_subagent_target(&settings, &target, ctx).await;
-    let current_turn_entry_id = Arc::new(parking_lot::RwLock::new(None));
     let tool_ctx = build_tool_context(
         state,
         ctx,
