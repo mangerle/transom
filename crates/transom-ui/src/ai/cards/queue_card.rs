@@ -447,15 +447,27 @@ impl AiAssistantView {
             if self.state.run.pending_interrupt_send.is_none() {
                 self.state.run.queue_paused_by_cancel = true;
             }
-            if let Err(err) = self
-                .command_tx
-                .try_send(AppCommand::Ai(Box::new(AiCommand::CancelRun { run_id })))
-            {
-                self.state.view.status_error = Some(
-                    rust_i18n::t!("ai.cancel_run_failed", error = err.to_string()).to_string(),
-                );
-            }
+            self.send_cancel_run_command(run_id);
         }
         cx.notify();
+    }
+
+    /// 停止当前在后台其他对话中运行中的任务。
+    pub(in crate::app::ai) fn cancel_background_run(&mut self, cx: &mut Context<Self>) {
+        if let Some(run_id) = self.state.request_any_run_cancel() {
+            self.send_cancel_run_command(run_id);
+        }
+        cx.notify();
+    }
+
+    fn send_cancel_run_command(&mut self, run_id: String) {
+        if let Err(err) = self
+            .command_tx
+            .try_send(AppCommand::Ai(Box::new(AiCommand::CancelRun { run_id })))
+        {
+            self.state.view.status_error = Some(
+                rust_i18n::t!("ai.cancel_run_failed", error = err.to_string()).to_string(),
+            );
+        }
     }
 }

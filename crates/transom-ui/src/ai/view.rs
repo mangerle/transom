@@ -463,6 +463,10 @@ impl AiAssistantView {
             );
         }
 
+        if self.state.has_active_run() && !self.state.active_run_is_current() {
+            container = container.child(self.render_background_run_banner(p, cx));
+        }
+
         if let Some(q_card) = super::queue_card::render_queued_messages_card(self, p, cx) {
             container = container.child(q_card);
         }
@@ -487,6 +491,80 @@ impl AiAssistantView {
         container = container.child(self.render_chat_composer(p, cx));
 
         container.into_any_element()
+    }
+
+    fn render_background_run_banner(&self, p: &Palette, cx: &mut Context<Self>) -> AnyElement {
+        use gpui_kit::base::h_flex;
+        use gpui_kit::component::Sizable as _;
+        use gpui_kit::component::button::{Button, ButtonVariants as _};
+        use transom_ui_icons::{AppIcon, AppIconElement, UiIcon};
+
+        let bg_conv_id = self
+            .state
+            .background_run_conversation_id()
+            .map(str::to_owned);
+        let v_stop = cx.entity();
+        let mut actions = h_flex().gap(px(4.0)).flex_shrink_0();
+        if let Some(cid) = bg_conv_id {
+            let v_jump = cx.entity();
+            actions = actions.child(
+                Button::new("ai-bg-run-jump")
+                    .outline()
+                    .xsmall()
+                    .label(rust_i18n::t!("ai.bg_run_switch").to_string())
+                    .on_click(move |_, _, cx| {
+                        v_jump.update(cx, |this, cx| this.select_conversation(&cid, cx));
+                    }),
+            );
+        }
+        actions = actions.child(
+            Button::new("ai-bg-run-stop")
+                .ghost()
+                .xsmall()
+                .label(rust_i18n::t!("ai.bg_run_stop").to_string())
+                .on_click(move |_, _, cx| {
+                    v_stop.update(cx, |this, cx| this.cancel_background_run(cx));
+                }),
+        );
+
+        div()
+            .px(rems(space::SM))
+            .pb(rems(space::XS))
+            .child(
+                h_flex()
+                    .w_full()
+                    .px(rems(space::SM))
+                    .py(rems(space::XS))
+                    .gap(rems(space::XS))
+                    .justify_between()
+                    .items_center()
+                    .rounded(p.radius.md)
+                    .bg(p.surface.floating)
+                    .border_1()
+                    .border_color(p.warning.opacity(0.45))
+                    .child(
+                        h_flex()
+                            .flex_1()
+                            .min_w_0()
+                            .gap(px(6.0))
+                            .items_center()
+                            .child(
+                                div()
+                                    .flex_shrink_0()
+                                    .text_color(p.warning)
+                                    .child(AppIconElement::new(AppIcon::Ui(UiIcon::STOP)).small()),
+                            )
+                            .child(
+                                div()
+                                    .truncate()
+                                    .text_size(rems(crate::theme::tokens::typography::CAPTION))
+                                    .text_color(p.foreground)
+                                    .child(rust_i18n::t!("ai.bg_run_banner_title").to_string()),
+                            ),
+                    )
+                    .child(actions),
+            )
+            .into_any_element()
     }
 }
 

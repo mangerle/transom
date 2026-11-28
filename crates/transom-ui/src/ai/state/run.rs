@@ -91,6 +91,24 @@ impl AiPanelState {
         Some(run.run_id.clone())
     }
 
+    /// 请求取消任意正在进行的运行（含后台脱离的运行）。
+    pub(crate) fn request_any_run_cancel(&mut self) -> Option<String> {
+        let run = self.run.active_run.as_mut()?;
+        run.cancel_requested = true;
+        Some(run.run_id.clone())
+    }
+
+    /// 返回当前脱离在后台运行的对话 ID（若存在）。
+    pub(crate) fn background_run_conversation_id(&self) -> Option<&str> {
+        if self.active_run_is_current() {
+            return None;
+        }
+        self.run
+            .active_run
+            .as_ref()
+            .and_then(|r| r.conversation_id.as_deref())
+    }
+
     /// 在收到对应终态时清除运行。
     pub(crate) fn finish_run(&mut self, run_id: &str) -> bool {
         if self
