@@ -252,21 +252,7 @@ impl AiAssistantView {
                     this.rollback_checkpoint(entry_id.clone(), cx);
                 }
                 MessageStreamEvent::SendQuickPrompt(prompt) => {
-                    let needs_target =
-                        matches!(prompt.as_str(), "/inspect" | "/disk" | "/docker");
-                    let has_mention_target = this
-                        .composer_input
-                        .read(cx)
-                        .tokens()
-                        .iter()
-                        .any(|span| span.token().id().starts_with("mention:"));
-                    let snippet = if this.state.conversation.active_session.is_none()
-                        && needs_target
-                        && !has_mention_target
-                    {
-                        format!("{prompt} @")
-                    } else if prompt.starts_with('/') {
-                        // 末尾加空格收起斜杠补全弹层，方便用户直接按 Enter 发送或继续补充条件
+                    let snippet = if prompt.starts_with('/') {
                         format!("{prompt} ")
                     } else {
                         prompt.clone()
