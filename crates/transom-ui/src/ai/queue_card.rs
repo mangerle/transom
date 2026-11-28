@@ -10,7 +10,7 @@ use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Sizable as _;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::*;
-use transom_ai::RunningMessageBehavior;
+use transom_ai_contracts::RunningMessageBehavior;
 use transom_core::{AiCommand, AppCommand};
 use transom_ui_icons::{AppIcon, AppIconElement, UiIcon};
 

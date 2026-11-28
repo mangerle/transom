@@ -6,7 +6,7 @@ use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::input::{Input, Textarea};
 use gpui_kit::component::scroll::ScrollableElement;
 use gpui_kit::*;
-use transom_ai::SkillDefinition;
+use transom_ai_contracts::SkillDefinition;
 use transom_ui_icons::{AppIcon, AppIconElement, UiIcon};
 
 use super::config_drawer::{field_group, section_card};

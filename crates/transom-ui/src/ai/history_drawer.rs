@@ -7,7 +7,7 @@ use gpui_kit::component::Sizable as _;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::scroll::ScrollableElement;
 use gpui_kit::*;
-use transom_ai::ConversationSummary;
+use transom_ai_contracts::ConversationSummary;
 use transom_ui_icons::{AppIcon, AppIconElement, UiIcon};
 
 use super::state::AiDrawerTab;

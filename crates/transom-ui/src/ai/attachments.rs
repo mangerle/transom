@@ -8,8 +8,9 @@ use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::gpui::{ClipboardEntry, ClipboardItem};
 use gpui_kit::*;
-use transom_ai::PreparedImage;
 use transom_ui_icons::{AppIcon, AppIconElement, CustomIcon, UiIcon};
+
+use super::image::PreparedImage;
 
 use super::view::AiAssistantView;
 use crate::app::spawn_blocking_local;

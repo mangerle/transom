@@ -2,7 +2,7 @@
 
 use gpui_kit::base::h_flex;
 use gpui_kit::*;
-use transom_ai::ExecutionMode;
+use transom_ai_contracts::ExecutionMode;
 use transom_ui_icons::{AppIcon, AppIconElement, CustomIcon, UiIcon};
 
 use super::view::AiAssistantView;

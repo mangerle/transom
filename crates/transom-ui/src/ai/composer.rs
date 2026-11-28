@@ -8,7 +8,7 @@ use gpui_kit::component::input::{InlineTokenContext, Textarea, TextareaState};
 use gpui_kit::component::progress::ProgressCircle;
 use gpui_kit::gpui::{ClipboardItem, ExternalPaths};
 use gpui_kit::*;
-use transom_ai::ExecutionMode;
+use transom_ai_contracts::ExecutionMode;
 use transom_core::TabId;
 use transom_ui_icons::{AppIcon, AppIconElement, CustomIcon, UiIcon};
 

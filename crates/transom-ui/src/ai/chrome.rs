@@ -4,7 +4,7 @@ use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::Sizable as _;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::*;
-use transom_ai::{AcpAgentConfig, default_acp_presets};
+use transom_ai_contracts::{AcpAgentConfig, default_acp_presets};
 use transom_ui_icons::{AppIcon, AppIconElement, UiIcon};
 
 use super::cards::{ChatItemCallbacks, ChatItemRenderParams, render_chat_item};

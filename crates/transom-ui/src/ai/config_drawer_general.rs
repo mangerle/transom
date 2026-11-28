@@ -6,7 +6,7 @@ use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::input::Input;
 use gpui_kit::component::select::Select;
 use gpui_kit::*;
-use transom_ai::{default_acp_presets, is_acp_command_available};
+use transom_ai_contracts::{default_acp_presets, is_acp_command_available};
 use transom_ui_icons::{AppIcon, AppIconElement, UiIcon};
 
 use super::config_drawer::{

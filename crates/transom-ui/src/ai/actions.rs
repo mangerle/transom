@@ -1,7 +1,7 @@
 //! AI 助手面板会话与消息发送交互动作。
 
 use gpui_kit::*;
-use transom_ai::extract_host_mentions;
+use transom_ai_contracts::extract_host_mentions;
 use transom_core::{
     AiCommand, AiHostTargetDto, AiPromptRequest, AppCommand, HostProtection, TabId,
 };
@@ -39,7 +39,7 @@ impl AiAssistantView {
             let loaded =
                 spawn_blocking_local(move || store.load_session_tree(&conversation_id)).await;
             let loaded = loaded.unwrap_or_else(|| {
-                Err(transom_ai::AiError::StorageFailed {
+                Err(transom_ai_contracts::AiError::StorageFailed {
                     target: "ai_session_load".to_owned(),
                     reason: rust_i18n::t!("ai.background_task_failed").to_string(),
                 })

@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use transom_ai::{ChatRole, SessionEntry, SessionEntryKind};
+use transom_ai_contracts::{ChatRole, SessionEntry, SessionEntryKind};
 
 use super::{AiPanelState, UiChatItem};
 use crate::ai::markdown_blocks::parse_markdown_segments;

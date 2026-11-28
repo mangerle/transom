@@ -4,7 +4,7 @@ use super::view::AiAssistantView;
 use crate::app::spawn_blocking_local;
 use gpui_kit::component::input::{InputState, TextareaState};
 use gpui_kit::*;
-use transom_ai::{
+use transom_ai_contracts::{
     SkillDefinition, delete_custom_skill, import_skill_from_path, load_skills_with_disabled,
     save_custom_skill,
 };

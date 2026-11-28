@@ -1,7 +1,7 @@
 //! AI 助手面板配置、供应商、ACP、记忆与模型发现动作。
 
 use gpui_kit::*;
-use transom_ai::{
+use transom_ai_contracts::{
     ExecutionMode, ModelConfig, ProviderConfig, ThinkingEffort, default_acp_presets,
     new_provider_id, provider_model_id,
 };

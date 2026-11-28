@@ -1,6 +1,6 @@
 //! AI 配置快照与保存确认的状态迁移。
 
-use transom_ai::AiSettings;
+use transom_ai_contracts::AiSettings;
 
 use super::AiPanelState;
 
@@ -59,7 +59,7 @@ impl AiPanelState {
         self.config.selected_protocol = settings
             .resolve_model(&self.config.selected_model_id)
             .map(|(provider, _)| provider.protocol)
-            .unwrap_or(transom_ai::ProviderProtocol::OpenAi);
+            .unwrap_or(transom_ai_contracts::ProviderProtocol::OpenAi);
         if self.config.selected_model_id.is_empty()
             && let Some((_, model)) = settings.models().next()
         {

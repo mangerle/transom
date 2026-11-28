@@ -9,7 +9,7 @@ use super::metrics_model::AiSessionMetrics;
 pub(crate) use super::state_types::{
     ActiveAiRun, ActiveAiSessionInfo, AiActivePopup, AiConfigSection, AiDrawerTab, UiChatItem,
 };
-use transom_ai::{
+use transom_ai_contracts::{
     AiSettings, ConversationSummary, ExecutionMode, MemorySnapshot, ProviderProtocol, SessionScope,
     ThinkingEffort,
 };
@@ -401,7 +401,7 @@ impl AiPanelState {
                     .acp_agents
                     .iter()
                     .any(|a| a.id == agent_id)
-                    && let Some(preset) = transom_ai::default_acp_presets()
+                    && let Some(preset) = transom_ai_contracts::default_acp_presets()
                         .into_iter()
                         .find(|p| p.id == agent_id)
                 {

@@ -11,7 +11,7 @@ use image::imageops::FilterType;
 use image::{DynamicImage, GenericImageView as _, ImageFormat};
 use sha2::{Digest, Sha256};
 
-use crate::error::AiError;
+use transom_ai_contracts::AiError;
 
 /// 模型侧视觉输入的长边最大像素。
 pub const MAX_IMAGE_EDGE: u32 = 1568;

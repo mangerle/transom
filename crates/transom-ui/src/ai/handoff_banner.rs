@@ -2,7 +2,7 @@
 
 use gpui_kit::gpui::ClipboardItem;
 use gpui_kit::*;
-use transom_ai::is_acp_command_available;
+use transom_ai_contracts::is_acp_command_available;
 use transom_core::{AiCommand, AppCommand};
 
 use super::AiPanelEvent;
@@ -61,7 +61,7 @@ impl AiAssistantView {
             .find(|a| a.id == agent_id)
             .cloned()
             .or_else(|| {
-                transom_ai::default_acp_presets()
+                transom_ai_contracts::default_acp_presets()
                     .into_iter()
                     .find(|a| a.id == agent_id)
             });
@@ -71,7 +71,7 @@ impl AiAssistantView {
         let install_command = if !agent.install_command.trim().is_empty() {
             agent.install_command
         } else {
-            transom_ai::default_acp_presets()
+            transom_ai_contracts::default_acp_presets()
                 .into_iter()
                 .find(|p| p.id == agent.id)
                 .map(|p| p.install_command)
@@ -241,8 +241,8 @@ impl AiAssistantView {
         self.state.conversation.active_session = session;
         let scope = self.state.current_scope();
         let host_id = match scope {
-            transom_ai::SessionScope::Host(id) => Some(id),
-            transom_ai::SessionScope::Global => None,
+            transom_ai_contracts::SessionScope::Host(id) => Some(id),
+            transom_ai_contracts::SessionScope::Global => None,
         };
         self.state.conversation.memory_load_seq =
             self.state.conversation.memory_load_seq.wrapping_add(1);
@@ -251,7 +251,7 @@ impl AiAssistantView {
         self._memory_load_task = Some(cx.spawn_in(window, async move |this, cx| {
             let loaded = spawn_blocking_local(move || store.load_memory(host_id.as_deref())).await;
             let loaded = loaded.unwrap_or_else(|| {
-                Err(transom_ai::AiError::StorageFailed {
+                Err(transom_ai_contracts::AiError::StorageFailed {
                     target: "ai_memory_load".to_owned(),
                     reason: rust_i18n::t!("ai.background_task_failed").to_string(),
                 })
@@ -309,7 +309,7 @@ impl AiAssistantView {
             if !agent.default_model.trim().is_empty() {
                 agent.default_model.clone()
             } else {
-                transom_ai::default_acp_presets()
+                transom_ai_contracts::default_acp_presets()
                     .into_iter()
                     .find(|p| p.id == agent.id)
                     .map(|p| p.default_model)

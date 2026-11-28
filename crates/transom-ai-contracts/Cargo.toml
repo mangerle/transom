@@ -1,6 +1,6 @@
 [package]
 name = "transom-ai-contracts"
-description = "Transom AI 持久化与策略契约层，不依赖模型运行时、网络客户端或工具执行器"
+description = "Transom AI 持久化、策略、技能与共享算法契约层，不依赖模型运行时、网络客户端或工具执行器"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

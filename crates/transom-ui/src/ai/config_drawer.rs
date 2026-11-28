@@ -10,7 +10,7 @@ use gpui_kit::component::scroll::ScrollableElement;
 use gpui_kit::component::searchable_list::{SearchableListItem, SearchableVec};
 use gpui_kit::component::select::SelectState;
 use gpui_kit::*;
-use transom_ai::{AiSettings, ProviderProtocol, ThinkingEffort};
+use transom_ai_contracts::{AiSettings, ProviderProtocol, ThinkingEffort};
 use transom_ui_icons::{AppIcon, AppIconElement, UiIcon};
 
 use super::config_drawer_general::render_general_acp_tab;

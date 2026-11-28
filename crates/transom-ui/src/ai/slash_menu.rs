@@ -3,7 +3,7 @@
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::input::InlineToken;
 use gpui_kit::*;
-use transom_ai::SkillDefinition;
+use transom_ai_contracts::SkillDefinition;
 use transom_ui_icons::{AppIcon, AppIconElement, CustomIcon, UiIcon};
 
 use super::state::AiDrawerTab;

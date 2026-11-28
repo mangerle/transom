@@ -11,7 +11,6 @@ pub mod approval;
 pub mod audit;
 pub mod bm25;
 pub mod checkpoint;
-pub mod choices;
 pub mod compaction;
 pub mod config;
 pub mod context_budget;
@@ -19,7 +18,6 @@ pub mod discovery;
 pub mod error;
 pub mod exec_policy;
 pub mod hooks;
-pub mod image;
 pub mod mcp_server;
 pub(crate) mod mcp_tools;
 pub mod memory;
@@ -30,12 +28,12 @@ pub mod redact;
 pub mod runner;
 pub(crate) mod runner_gate;
 pub mod session;
-pub mod skills;
-pub(crate) mod skills_builtin;
-pub(crate) mod skills_io;
 pub mod thinking;
 pub mod tools;
 pub mod working_state;
+
+pub use transom_ai_contracts::choices;
+pub use transom_ai_contracts::skills;
 
 pub use acp::{AcpRunInput, is_acp_command_available, run_acp_turn};
 pub use acp_probe::{AcpModelProbeResult, probe_acp_models};
@@ -68,7 +66,6 @@ pub use hooks::{
     HookAction, HookContext, HookEvent, HookExecutor, HookMatcher, HookOutcome, HookRule,
     rule_matches, send_webhook_json,
 };
-pub use image::PreparedImage;
 pub use mcp_server::{
     MCP_PROTOCOL_VERSION, McpServer, McpServerBackend, McpSessionInfo, serve_local_socket,
     serve_stream,

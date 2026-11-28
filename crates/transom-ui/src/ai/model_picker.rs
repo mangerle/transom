@@ -9,7 +9,7 @@ use gpui_kit::component::input::{Input, InputState};
 use gpui_kit::component::scroll::ScrollableElement;
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
-use transom_ai::ThinkingEffort;
+use transom_ai_contracts::ThinkingEffort;
 use transom_ui_icons::{AppIcon, AppIconElement, UiIcon};
 
 use super::model_table::make_draft_model_row;

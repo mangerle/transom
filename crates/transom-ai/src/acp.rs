@@ -24,8 +24,6 @@ use crate::acp_handlers::{
 use crate::acp_parse::{
     format_acp_rpc_error, is_retryable_acp_error, parse_acp_update, wait_response, write_json_line,
 };
-use crate::acp_probe::augmented_path_env;
-pub use crate::acp_probe::{acp_tools_bin_dir, is_acp_command_available};
 use crate::approval::{ApprovalGrantStore, ApprovalScope};
 use crate::config::AcpAgentConfig;
 use crate::error::AiError;
@@ -33,6 +31,8 @@ use crate::exec_policy::ExecPolicyRule;
 use crate::policy::{ExecutionMode, HostProtection};
 use crate::protocol_lines::{MAX_PROTOCOL_LINE_BYTES, read_bounded_line};
 use crate::runner::AgentEvent;
+use transom_ai_contracts::acp::augmented_path_env;
+pub use transom_ai_contracts::acp::{acp_tools_bin_dir, is_acp_command_available};
 
 const ACP_HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(20);
 const ACP_TURN_TIMEOUT: Duration = Duration::from_secs(300);

@@ -170,11 +170,11 @@ impl AiAssistantView {
                 let conversations = init_store.list_all_conversations()?;
                 let memory = init_store.load_memory(None)?;
                 let totals = init_store.load_usage_totals()?;
-                Ok::<_, transom_ai::AiError>((conversations, memory, totals))
+                Ok::<_, transom_ai_contracts::AiError>((conversations, memory, totals))
             })
             .await;
             let loaded = loaded.unwrap_or_else(|| {
-                Err(transom_ai::AiError::StorageFailed {
+                Err(transom_ai_contracts::AiError::StorageFailed {
                     target: "ai_local_data_init".to_owned(),
                     reason: rust_i18n::t!("ai.background_task_failed").to_string(),
                 })

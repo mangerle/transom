@@ -60,3 +60,35 @@ fn api_and_store_use_only_bounded_channels() {
         offenders.join("\n")
     );
 }
+
+#[test]
+fn ui_depends_on_ai_contracts_not_full_runtime() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let manifest = std::fs::read_to_string(root.join("crates/transom-ui/Cargo.toml"))
+        .expect("读取 transom-ui 清单失败");
+    assert!(
+        !manifest
+            .lines()
+            .any(|line| line.trim() == "transom-ai.workspace = true"),
+        "transom-ui 不得依赖完整 transom-ai 运行时"
+    );
+
+    let mut offenders = Vec::new();
+    for entry in walkdir_like(&root.join("crates/transom-ui/src")) {
+        let path = normalized_path(&entry);
+        if entry.extension().and_then(|extension| extension.to_str()) != Some("rs") {
+            continue;
+        }
+        let Ok(content) = std::fs::read_to_string(&entry) else {
+            continue;
+        };
+        if content.contains("transom_ai::") {
+            offenders.push(path);
+        }
+    }
+    assert!(
+        offenders.is_empty(),
+        "UI 只能依赖 transom-ai-contracts，不得使用运行时命名空间:\n{}",
+        offenders.join("\n")
+    );
+}

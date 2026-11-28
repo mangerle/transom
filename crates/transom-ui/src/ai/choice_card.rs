@@ -7,7 +7,7 @@ use gpui_kit::component::Sizable as _;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::input::{Input, InputEvent, InputState};
 use gpui_kit::*;
-use transom_ai::{ExtractedChoices, extract_prompt_choices};
+use transom_ai_contracts::{ExtractedChoices, extract_prompt_choices};
 use transom_ui_icons::{AppIcon, AppIconElement, UiIcon};
 
 use super::state::UiChatItem;

@@ -255,10 +255,10 @@ fn stale_settings_save_result_does_not_clear_current_request() {
 
 #[test]
 fn settings_snapshot_replaces_runtime_defaults() {
-    let settings = transom_ai::AiSettings {
+    let settings = transom_ai_contracts::AiSettings {
         default_model: "provider:model-1".to_owned(),
-        execution_mode: transom_ai::ExecutionMode::AllowAll,
-        ..transom_ai::AiSettings::default()
+        execution_mode: transom_ai_contracts::ExecutionMode::AllowAll,
+        ..transom_ai_contracts::AiSettings::default()
     };
     let mut state = AiPanelState::default();
     state.config.pending_settings_load = Some("load-1".to_owned());
@@ -276,14 +276,14 @@ fn settings_snapshot_replaces_runtime_defaults() {
     assert_eq!(state.config.selected_model_id, "provider:model-1");
     assert_eq!(
         state.config.execution_mode,
-        transom_ai::ExecutionMode::AllowAll
+        transom_ai_contracts::ExecutionMode::AllowAll
     );
     assert!(state.view.status_error.is_none());
 }
 
 #[test]
 fn settings_load_failure_applies_default_snapshot_and_reports_error() {
-    let settings = transom_ai::AiSettings::default();
+    let settings = transom_ai_contracts::AiSettings::default();
     let mut state = AiPanelState::default();
     state.config.pending_settings_load = Some("load-1".to_owned());
 

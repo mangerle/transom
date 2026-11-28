@@ -26,6 +26,7 @@ mod empty_state;
 mod handoff_banner;
 mod handoff_render;
 mod history_drawer;
+mod image;
 pub(crate) mod inline_assist;
 mod markdown_blocks;
 mod memory_drawer;

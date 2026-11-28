@@ -4,7 +4,7 @@ use gpui_kit::component::input::InputState;
 use gpui_kit::component::searchable_list::SearchableVec;
 use gpui_kit::component::select::{SelectEvent, SelectState};
 use gpui_kit::*;
-use transom_ai::{AiSettings, ProviderConfig, RunningMessageBehavior};
+use transom_ai_contracts::{AiSettings, ProviderConfig, RunningMessageBehavior};
 
 use super::config_drawer::{ConfigChoice, ConfigSelect, DraftModelRow};
 use super::model_table::make_draft_model_row;
@@ -165,7 +165,7 @@ impl ConfigFormState {
             .active_acp_agent_id
             .as_deref()
             .and_then(|active| {
-                transom_ai::default_acp_presets()
+                transom_ai_contracts::default_acp_presets()
                     .iter()
                     .position(|preset| preset.id == active)
             })
@@ -203,7 +203,7 @@ impl ConfigFormState {
     }
 }
 
-fn format_acp_command(agent: &transom_ai::AcpAgentConfig) -> String {
+fn format_acp_command(agent: &transom_ai_contracts::AcpAgentConfig) -> String {
     if agent.args.is_empty() {
         agent.command.clone()
     } else {

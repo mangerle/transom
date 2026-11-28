@@ -1,6 +1,6 @@
 //! AI 会话统计、Token 用量与上下文占用模型及格式化辅助函数。
 
-use transom_ai::{ChatRole, SessionEntry, SessionEntryKind};
+use transom_ai_contracts::{ChatRole, SessionEntry, SessionEntryKind};
 use transom_core::AiTurnMetricsDto;
 
 /// 当前会话及今日/本月的实时推理指标。
@@ -252,7 +252,7 @@ mod tests {
 
     #[test]
     fn restores_metrics_from_persisted_entries_and_legacy_fallback() {
-        use transom_ai::{ChatRole, SessionEntry, SessionEntryKind, TurnUsageRecord};
+        use transom_ai_contracts::{ChatRole, SessionEntry, SessionEntryKind, TurnUsageRecord};
 
         let mut m = AiSessionMetrics::default();
         m.set_stored_totals((9_000, 30_000));

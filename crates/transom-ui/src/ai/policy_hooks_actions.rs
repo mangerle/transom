@@ -1,7 +1,9 @@
 //! AI 面板命令策略规则（Exec Policy）与生命周期钩子（Hooks）交互操作逻辑。
 
 use gpui_kit::*;
-use transom_ai::{ExecPolicyAction, ExecPolicyRule, HookAction, HookEvent, HookMatcher, HookRule};
+use transom_ai_contracts::{
+    ExecPolicyAction, ExecPolicyRule, HookAction, HookEvent, HookMatcher, HookRule,
+};
 use uuid::Uuid;
 
 use super::view::AiAssistantView;

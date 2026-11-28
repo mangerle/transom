@@ -1,77 +1,20 @@
 //! 外部 ACP Agent 真实模型探测：结合 ACP `session/new` 协议响应与本地 CLI 配置。
 
 use std::env;
-use std::ffi::OsString;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::Stdio;
 use std::time::Duration;
 
 use serde_json::{Value, json};
 use tokio::io::{AsyncWriteExt, BufReader};
 use tokio::process::Command;
+use transom_ai_contracts::acp::{augmented_path_env, is_acp_command_available};
 
 use crate::config::AcpAgentConfig;
 use crate::error::AiError;
 use crate::protocol_lines::{MAX_PROTOCOL_LINE_BYTES, read_bounded_line};
 
 const ACP_PROBE_TIMEOUT: Duration = Duration::from_secs(10);
-
-/// 返回用户级免 root 安装的 ACP 工具 bin 目录（`$HOME/.transom/acp-tools/bin`）。
-pub fn acp_tools_bin_dir() -> Option<PathBuf> {
-    let home = env::var_os("HOME").or_else(|| env::var_os("USERPROFILE"))?;
-    let base = PathBuf::from(home).join(".transom").join("acp-tools");
-    Some(if cfg!(windows) {
-        base
-    } else {
-        base.join("bin")
-    })
-}
-
-fn augmented_path_dirs() -> Vec<PathBuf> {
-    let mut dirs = Vec::new();
-    if let Some(bin) = acp_tools_bin_dir() {
-        dirs.push(bin);
-    }
-    if let Some(home) = env::var_os("HOME") {
-        dirs.push(PathBuf::from(home).join(".local").join("bin"));
-    }
-    if let Some(path_var) = env::var_os("PATH") {
-        dirs.extend(env::split_paths(&path_var));
-    }
-    dirs
-}
-
-pub(crate) fn augmented_path_env() -> Option<OsString> {
-    env::join_paths(augmented_path_dirs()).ok()
-}
-
-#[cfg(windows)]
-fn is_executable_file(candidate: &Path) -> bool {
-    candidate.is_file()
-        || (candidate.extension().is_none()
-            && ["exe", "cmd", "bat", "com"]
-                .iter()
-                .any(|ext| candidate.with_extension(ext).is_file()))
-}
-
-#[cfg(not(windows))]
-fn is_executable_file(candidate: &Path) -> bool {
-    candidate.is_file()
-}
-
-/// 检测外部 ACP Agent 可执行命令是否在当前 `PATH`（或用户级 `.transom/acp-tools/bin`）中可用。
-pub fn is_acp_command_available(command: &str) -> bool {
-    let trimmed = command.trim();
-    if trimmed.is_empty() {
-        return false;
-    }
-    if trimmed.contains(std::path::MAIN_SEPARATOR) || trimmed.contains('/') {
-        return is_executable_file(Path::new(trimmed));
-    }
-    augmented_path_dirs()
-        .into_iter()
-        .any(|dir| is_executable_file(&dir.join(trimmed)))
-}
 
 /// 外部 ACP Agent 模型探测结果。
 #[derive(Debug, Clone, Default, PartialEq, Eq)]

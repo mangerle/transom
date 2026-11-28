@@ -5,7 +5,7 @@ use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::input::{Input, InputState};
 use gpui_kit::component::scroll::ScrollableElement;
 use gpui_kit::*;
-use transom_ai::MemorySnapshot;
+use transom_ai_contracts::MemorySnapshot;
 
 use crate::palette::Palette;
 use crate::theme::tokens::{space, typography};
