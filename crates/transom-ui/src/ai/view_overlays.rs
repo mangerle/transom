@@ -262,7 +262,7 @@ impl AiAssistantView {
             .gap(rems(space::XS))
             .justify_between()
             .items_center()
-            .bg(p.warning.opacity(0.12))
+            .bg(p.tone.warning_subtle)
             .border_b_1()
             .border_color(p.warning.opacity(0.4))
             .child(

@@ -24,7 +24,6 @@ mod message_stream_types;
 mod metrics;
 mod metrics_model;
 pub(crate) mod panel_events;
-mod panel_tasks;
 mod state;
 mod state_types;
 mod streaming_tail;

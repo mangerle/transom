@@ -15,6 +15,7 @@ use serde_json::{Value, json};
 use tokio::io::{AsyncBufRead, AsyncWrite, AsyncWriteExt};
 use tokio_util::sync::CancellationToken;
 
+#[cfg(unix)]
 use transom_platform::private_fs;
 
 use crate::protocol_lines::{MAX_PROTOCOL_LINE_BYTES, read_bounded_line};

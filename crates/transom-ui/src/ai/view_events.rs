@@ -7,6 +7,17 @@ use super::message_stream_types::MessageStreamSnapshot;
 use super::view::AiAssistantView;
 use crate::app::spawn_blocking_local;
 
+/// AI 面板主视图持有的后台异步任务槽位（覆盖式取消旧任务）。
+#[derive(Default)]
+pub(super) struct AiPanelTasks {
+    pub(super) copy_reset: Option<Task<()>>,
+    pub(super) attachment: Option<Task<()>>,
+    pub(super) _init_load: Option<Task<()>>,
+    pub(super) refresh_index: Option<Task<()>>,
+    pub(super) conversation_load: Option<Task<()>>,
+    pub(super) memory_load: Option<Task<()>>,
+}
+
 impl AiAssistantView {
     /// 将当前运行态元信息投影同步到独立的 [`MessageStreamView`] 实体（零消息列表克隆）。
     pub(super) fn sync_message_stream(
