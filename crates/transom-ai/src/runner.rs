@@ -10,7 +10,7 @@
 
 use std::collections::VecDeque;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, AtomicUsize};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 use futures::StreamExt as _;
 use parking_lot::{Mutex, RwLock};
@@ -166,10 +166,15 @@ fn prepare_initial_history(
 pub async fn run_with_model(model: DynModel<Completion>, input: RunInput) -> Result<(), AiError> {
     let working_state = SessionWorkingState::from_history(&input.history_branch, &input.prompt);
     let (history, ws_markdown) = prepare_initial_history(&input, &working_state, 8, 800);
-    run_attempt(model, &input, &history, ws_markdown.as_deref()).await
+    run_attempt(model, &input, &history, ws_markdown.as_deref())
+        .await
+        .map_err(|(err, _)| err)
 }
 
 /// 支持 413 / 上下文超限自动激进压缩并重试 1 次的 Agent 运行入口。
+///
+/// 仅当首次尝试尚未向 UI 发出任何可见流式输出或工具卡片时才静默重试，
+/// 避免已产生半截输出时重跑导致界面内容撕裂。
 pub async fn run_with_model_factory(
     factory: impl Fn() -> DynModel<Completion>,
     input: RunInput,
@@ -179,16 +184,34 @@ pub async fn run_with_model_factory(
 
     match run_attempt(factory(), &input, &initial_history, initial_ws.as_deref()).await {
         Ok(()) => Ok(()),
-        Err(AiError::ModelCallFailed { ref reason, .. }) if is_context_overflow_error(reason) => {
+        Err((AiError::ModelCallFailed { ref reason, .. }, false))
+            if is_context_overflow_error(reason) =>
+        {
             log::warn!(
-                "检测到模型上下文超限或 413 响应，正在执行激进压缩并重注入工作状态重试: {reason}"
+                "检测到首轮模型请求上下文超限或 413 响应（尚未产出可见输出），正在执行激进压缩并重注入工作状态重试: {reason}"
             );
             let compact_history =
                 aggressive_compact_history(&input.history_branch, &working_state, 4, 300);
             let ws_md = working_state.render_markdown();
-            run_attempt(factory(), &input, &compact_history, Some(&ws_md)).await
+            run_attempt(factory(), &input, &compact_history, Some(&ws_md))
+                .await
+                .map_err(|(err, _)| err)
         }
-        Err(err) => Err(err),
+        Err((
+            AiError::ModelCallFailed {
+                protocol,
+                model,
+                reason,
+            },
+            true,
+        )) if is_context_overflow_error(&reason) => Err(AiError::ModelCallFailed {
+            protocol,
+            model,
+            reason: format!(
+                "{reason}（本轮已产出部分输出，为避免内容撕裂未自动重跑，请执行 /compact 压缩上下文后继续）"
+            ),
+        }),
+        Err((err, _)) => Err(err),
     }
 }
 
@@ -228,7 +251,7 @@ async fn run_attempt(
     input: &RunInput,
     history_branch: &[SessionEntry],
     working_state_md: Option<&str>,
-) -> Result<(), AiError> {
+) -> Result<(), (AiError, bool)> {
     let preamble = build_run_preamble(input, working_state_md);
 
     let max_turns = input.max_turns.max(1);
@@ -250,6 +273,7 @@ async fn run_attempt(
     }
 
     let last_summary = Arc::new(Mutex::new(String::new()));
+    let visible_output_emitted = Arc::new(AtomicBool::new(false));
     let gate = Gate {
         events: input.events.clone(),
         tool_ctx: input.tool_ctx.clone(),
@@ -266,6 +290,7 @@ async fn run_attempt(
         call_started: Mutex::new(None),
         first_delta: Mutex::new(None),
         first_delta_seen: AtomicBool::new(false),
+        visible_output_emitted: visible_output_emitted.clone(),
         last_summary: last_summary.clone(),
     };
 
@@ -323,7 +348,8 @@ async fn run_attempt(
         }
     }
 
-    run_result
+    let emitted = visible_output_emitted.load(Ordering::Acquire);
+    run_result.map_err(|err| (err, emitted))
 }
 
 /// 生产环境标准入口：根据 [`ModelTarget`] 构造真实客户端并执行（支持 413 自动降级重试）。

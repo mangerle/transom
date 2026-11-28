@@ -48,11 +48,13 @@ pub(crate) struct Gate {
     pub(crate) call_started: Mutex<Option<Instant>>,
     pub(crate) first_delta: Mutex<Option<Instant>>,
     pub(crate) first_delta_seen: AtomicBool,
+    pub(crate) visible_output_emitted: Arc<AtomicBool>,
     pub(crate) last_summary: Arc<Mutex<String>>,
 }
 
 impl Gate {
     fn mark_delta(&self) {
+        self.visible_output_emitted.store(true, Ordering::Release);
         if self.first_delta_seen.load(Ordering::Relaxed) {
             return;
         }
@@ -166,6 +168,7 @@ impl AgentHook for Gate {
         let input_tokens = event.usage.input_tokens.unwrap_or(0);
         let cached_input_tokens = event.usage.cached_input_tokens.unwrap_or(0);
         let output_tokens = event.usage.output_tokens.unwrap_or(0);
+        self.visible_output_emitted.store(true, Ordering::Release);
         if self
             .events
             .send(AgentEvent::TurnEnd(TurnOutput {
@@ -234,6 +237,7 @@ impl AgentHook for Gate {
         };
         let assessment =
             assess_tool_call_value(tool_name, &parsed, args_json, &self.tool_ctx, &target);
+        self.visible_output_emitted.store(true, Ordering::Release);
         if tool_name != "update_plan"
             && let Err(mpsc::error::TrySendError::Closed(_)) = self.events.try_send(
                 AgentEvent::FocusUpdated(format!("正在执行 {}…", assessment.summary.title)),
