@@ -283,7 +283,12 @@ pub(in crate::app::ai) fn render_status_pills_row(
                     .position(|s| s.status == AiPlanStepStatus::InProgress)
                     .map(|idx| idx + 1)
                     .unwrap_or(d);
-                (d, active_pos, t, ((d as f32 / t as f32) * 100.0).clamp(0.0, 100.0))
+                (
+                    d,
+                    active_pos,
+                    t,
+                    ((d as f32 / t as f32) * 100.0).clamp(0.0, 100.0),
+                )
             }
             None => (0, 0, 0, 15.0),
         };

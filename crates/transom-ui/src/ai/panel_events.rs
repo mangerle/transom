@@ -194,16 +194,13 @@ pub(crate) fn on_ai_panel_event(
             }
         }
         AiPanelEvent::ConnectAndPinSession { session_id } => {
-            state
-                .ui
-                .window_requests
-                .push_session_sidebar(crate::sidebar::SessionSidebarEvent::ConnectSession(
-                    *session_id,
-                ));
-            state
-                .ui
-                .window_requests
-                .push_toast(rust_i18n::t!("ai.target_connecting_toast").to_string(), true);
+            state.ui.window_requests.push_session_sidebar(
+                crate::sidebar::SessionSidebarEvent::ConnectSession(*session_id),
+            );
+            state.ui.window_requests.push_toast(
+                rust_i18n::t!("ai.target_connecting_toast").to_string(),
+                true,
+            );
         }
         AiPanelEvent::FocusTerminalForHandoff { command } => {
             if let Some(view) = state

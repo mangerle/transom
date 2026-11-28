@@ -206,10 +206,7 @@ impl AiConversationUiState {
         // 若已保存会话已在终端中打开，从静默协同集合移除，避免重复；未打开的继续保留
         self.extra_scope_sessions.retain(|sid| {
             Some(*sid) != primary_sid
-                && !self
-                    .connected_sessions
-                    .iter()
-                    .any(|s| s.session_id == *sid)
+                && !self.connected_sessions.iter().any(|s| s.session_id == *sid)
         });
         if self.active_session == next_active {
             return false;

@@ -239,17 +239,30 @@ pub(in crate::app::ai) fn render_status_error_banner(err: &str, p: &Palette) -> 
         .into_any_element()
 }
 
+/// 消息流滚动容器的装配参数。
+pub(in crate::app::ai) struct StreamScrollParams<'a> {
+    pub(in crate::app::ai) nav_entries: &'a [TurnNavEntry],
+    pub(in crate::app::ai) scroll_handle: &'a ScrollHandle,
+    pub(in crate::app::ai) is_running: bool,
+    pub(in crate::app::ai) auto_scroll_locked: bool,
+    pub(in crate::app::ai) active_nav_dot: Option<usize>,
+    pub(in crate::app::ai) p: &'a Palette,
+}
+
 /// 将消息流滚动列表与左侧轮次导航导轨及悬浮「回到底部」按钮组合为完整容器。
 pub(in crate::app::ai) fn wrap_stream_with_nav_and_scroll(
     msg_list: AnyElement,
-    nav_entries: &[TurnNavEntry],
-    scroll_handle: &ScrollHandle,
-    is_running: bool,
-    auto_scroll_locked: bool,
-    active_nav_dot: Option<usize>,
-    p: &Palette,
+    params: StreamScrollParams<'_>,
     view: Entity<MessageStreamView>,
 ) -> Div {
+    let StreamScrollParams {
+        nav_entries,
+        scroll_handle,
+        is_running,
+        auto_scroll_locked,
+        active_nav_dot,
+        p,
+    } = params;
     let auto_following = is_running && !auto_scroll_locked;
     if auto_following {
         scroll_handle.scroll_to_bottom();
@@ -300,4 +313,27 @@ pub(in crate::app::ai) fn wrap_stream_with_nav_and_scroll(
         }));
     }
     wrapper
+}
+
+impl MessageStreamView {
+    /// 显式解锁自动滚底并滚动到消息流底部（例如发送新提问时）。
+    pub(in crate::app::ai) fn reset_and_scroll_bottom(&mut self, cx: &mut Context<Self>) {
+        self.auto_scroll_locked = false;
+        self.active_nav_dot = None;
+        self.scroll_handle.scroll_to_bottom();
+        cx.notify();
+    }
+
+    /// 跳转到指定导航点对应的消息块并锁定自动滚底。
+    pub(in crate::app::ai) fn jump_to_nav_dot(
+        &mut self,
+        dot_idx: usize,
+        block_idx: usize,
+        cx: &mut Context<Self>,
+    ) {
+        self.auto_scroll_locked = true;
+        self.scroll_handle.scroll_to_item(block_idx);
+        self.active_nav_dot = Some(dot_idx);
+        cx.notify();
+    }
 }

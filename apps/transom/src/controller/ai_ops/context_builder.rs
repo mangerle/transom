@@ -129,35 +129,35 @@ pub(super) fn build_tool_context(
         if bulk_hosts.iter().any(|h| h.session_id == sid_str) {
             continue;
         }
-        let executor: Option<Arc<dyn transom_ai::RemoteExecutor>> =
-            if let Some(managed) = state.sessions.get(&extra.tab_id)
-                && let Some(remote) = managed.remote.clone()
-            {
-                Some(Arc::new(SshRemoteExecutor {
-                    remote,
-                    tasks: Some(state.ai.managed_tasks.clone()),
-                    host_label: extra.host_name.clone(),
-                }))
-            } else if let Some(remote) = state.ai.headless_remotes.get(&extra.session_id) {
-                Some(Arc::new(SshRemoteExecutor {
-                    remote,
-                    tasks: Some(state.ai.managed_tasks.clone()),
-                    host_label: extra.host_name.clone(),
-                }))
-            } else {
-                Some(Arc::new(LazyHeadlessRemoteExecutor {
-                    session_id: extra.session_id,
-                    host_label: extra.host_name.clone(),
-                    tasks: Some(state.ai.managed_tasks.clone()),
-                    connect_ctx: HeadlessConnectContext {
-                        session_store: ctx.session_store.clone(),
-                        secret_store: ctx.secret_store.clone(),
-                        known_hosts: ctx.known_hosts.clone(),
-                        headless_remotes: state.ai.headless_remotes.clone(),
-                        cancel: cancel.clone(),
-                    },
-                }))
-            };
+        let executor: Option<Arc<dyn transom_ai::RemoteExecutor>> = if let Some(managed) =
+            state.sessions.get(&extra.tab_id)
+            && let Some(remote) = managed.remote.clone()
+        {
+            Some(Arc::new(SshRemoteExecutor {
+                remote,
+                tasks: Some(state.ai.managed_tasks.clone()),
+                host_label: extra.host_name.clone(),
+            }))
+        } else if let Some(remote) = state.ai.headless_remotes.get(&extra.session_id) {
+            Some(Arc::new(SshRemoteExecutor {
+                remote,
+                tasks: Some(state.ai.managed_tasks.clone()),
+                host_label: extra.host_name.clone(),
+            }))
+        } else {
+            Some(Arc::new(LazyHeadlessRemoteExecutor {
+                session_id: extra.session_id,
+                host_label: extra.host_name.clone(),
+                tasks: Some(state.ai.managed_tasks.clone()),
+                connect_ctx: HeadlessConnectContext {
+                    session_store: ctx.session_store.clone(),
+                    secret_store: ctx.secret_store.clone(),
+                    known_hosts: ctx.known_hosts.clone(),
+                    headless_remotes: state.ai.headless_remotes.clone(),
+                    cancel: cancel.clone(),
+                },
+            }))
+        };
         if let Some(executor) = executor {
             bulk_hosts.push(BulkHostTarget {
                 session_id: sid_str,

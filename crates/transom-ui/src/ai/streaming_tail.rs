@@ -39,21 +39,22 @@ impl StreamingTailView {
 
     /// 当前是否已挂载匹配类型的流式末尾条目。
     pub(in crate::app::ai) fn matches_streaming_kind(&self, is_reasoning: bool) -> bool {
-        match (&self.item, is_reasoning) {
+        matches!(
+            (&self.item, is_reasoning),
             (
                 Some(UiChatItem::Reasoning {
-                    streaming: true, ..
+                    streaming: true,
+                    ..
                 }),
                 true,
-            )
-            | (
+            ) | (
                 Some(UiChatItem::AssistantText {
-                    streaming: true, ..
+                    streaming: true,
+                    ..
                 }),
                 false,
-            ) => true,
-            _ => false,
-        }
+            )
+        )
     }
 
     /// 同步末尾流式条目与渲染元数据。

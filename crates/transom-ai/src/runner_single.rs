@@ -4,7 +4,9 @@ use std::sync::Arc;
 
 use futures::StreamExt as _;
 use parking_lot::Mutex;
-use rig_agent::agent::{AgentBuilder, AgentHook, HookContext, ModelTurnAction, ModelTurnFinished, MultiTurnStreamItem};
+use rig_agent::agent::{
+    AgentBuilder, AgentHook, HookContext, ModelTurnAction, ModelTurnFinished, MultiTurnStreamItem,
+};
 use rig_core::message::{AssistantContent, Message};
 use tokio_util::sync::CancellationToken;
 
@@ -144,8 +146,8 @@ pub async fn summarize_for_compaction_with_cancel(
     let preamble = format!(
         "你是运维对话上下文压缩器。请将以下长对话记录压缩为精炼、结构化的中文摘要。\n{focus_line}\n只输出摘要正文，不要寒暄。"
     );
-    let raw = run_single_turn_text(target, &preamble, transcript, 25, "上下文压缩摘要", cancel)
-        .await?;
+    let raw =
+        run_single_turn_text(target, &preamble, transcript, 25, "上下文压缩摘要", cancel).await?;
     let trimmed = raw.trim();
     if trimmed.is_empty() {
         return Err(AiError::ModelCallFailed {

@@ -473,7 +473,10 @@ fn target_mode_resolves_follow_global_pinned_and_disconnect_fallback() {
     assert!(state.conversation.sync_resolved_session());
     state.conversation.connected_sessions = vec![s1.clone()];
     assert!(state.conversation.sync_resolved_session());
-    assert_eq!(state.conversation.target_mode, AiTargetMode::FollowActiveTab);
+    assert_eq!(
+        state.conversation.target_mode,
+        AiTargetMode::FollowActiveTab
+    );
     assert_eq!(
         state.conversation.active_session.as_ref().map(|s| s.tab_id),
         Some(s1.tab_id)

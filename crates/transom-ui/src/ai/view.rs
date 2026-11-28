@@ -232,7 +232,7 @@ impl AiAssistantView {
             }
         });
 
-        let message_stream = cx.new(|cx| MessageStreamView::new(cx));
+        let message_stream = cx.new(MessageStreamView::new);
         let stream_sub = cx.subscribe_in(
             &message_stream,
             window,

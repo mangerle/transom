@@ -186,30 +186,17 @@ fn session_index_and_jsonl_roundtrip() {
     store
         .set_conversation_archived(conv_id, true)
         .expect("归档失败");
-    assert!(
-        store
-            .list_all_conversations()
-            .expect("读取会话索引失败")[0]
-            .archived
-    );
+    assert!(store.list_all_conversations().expect("读取会话索引失败")[0].archived);
     store
         .set_conversation_archived(conv_id, false)
         .expect("取消归档失败");
-    assert!(
-        !store
-            .list_all_conversations()
-            .expect("读取会话索引失败")[0]
-            .archived
-    );
+    assert!(!store.list_all_conversations().expect("读取会话索引失败")[0].archived);
 
     store
         .rename_conversation(conv_id, "生产巡检记录")
         .expect("重命名失败");
     assert_eq!(
-        store
-            .list_all_conversations()
-            .expect("读取会话索引失败")[0]
-            .title,
+        store.list_all_conversations().expect("读取会话索引失败")[0].title,
         "生产巡检记录"
     );
 

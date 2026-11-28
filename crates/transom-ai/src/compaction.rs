@@ -49,8 +49,7 @@ pub fn clip_head_tail(cleaned: &str, max_chars: usize) -> String {
     let Some((head_end, _)) = cleaned.char_indices().nth(head_len) else {
         return cleaned.to_owned();
     };
-    let Some((tail_start, _)) = cleaned.char_indices().rev().nth(tail_len.saturating_sub(1))
-    else {
+    let Some((tail_start, _)) = cleaned.char_indices().rev().nth(tail_len.saturating_sub(1)) else {
         return cleaned.to_owned();
     };
     if head_end >= tail_start {

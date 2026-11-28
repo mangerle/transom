@@ -8,15 +8,17 @@
 use std::time::Instant;
 
 use gpui_kit::base::v_flex;
-use gpui_kit::component::Sizable as _;
-use gpui_kit::component::button::{Button, ButtonVariants as _};
+use gpui_kit::component::{
+    Sizable as _,
+    button::{Button, ButtonVariants as _},
+};
 use gpui_kit::*;
 use transom_core::AiAppEvent;
 
 use super::empty_state::render_empty_state;
 use super::markdown_blocks::CodeBlockCallbacks;
 use super::message_stream_render::{
-    build_code_callbacks, render_running_focus_row, render_single_stream_block,
+    StreamScrollParams, build_code_callbacks, render_running_focus_row, render_single_stream_block,
     render_status_error_banner, wrap_stream_with_nav_and_scroll,
 };
 use super::message_stream_types::{MessageStreamEvent, MessageStreamSnapshot};
@@ -44,9 +46,9 @@ pub(in crate::app::ai) struct MessageStreamView {
     block_cache: Option<MessageBlockCache>,
     code_callbacks: Option<CodeBlockCallbacks>,
     streaming_tail: Entity<StreamingTailView>,
-    scroll_handle: ScrollHandle,
-    auto_scroll_locked: bool,
-    active_nav_dot: Option<usize>,
+    pub(in crate::app::ai) scroll_handle: ScrollHandle,
+    pub(in crate::app::ai) auto_scroll_locked: bool,
+    pub(in crate::app::ai) active_nav_dot: Option<usize>,
 }
 
 impl EventEmitter<MessageStreamEvent> for MessageStreamView {}
@@ -264,27 +266,6 @@ impl MessageStreamView {
         Some((item_idx, after_work_group))
     }
 
-    /// 显式解锁自动滚底并滚动到消息流底部（例如发送新提问时）。
-    pub(in crate::app::ai) fn reset_and_scroll_bottom(&mut self, cx: &mut Context<Self>) {
-        self.auto_scroll_locked = false;
-        self.active_nav_dot = None;
-        self.scroll_handle.scroll_to_bottom();
-        cx.notify();
-    }
-
-    /// 跳转到指定导航点对应的消息块并锁定自动滚底。
-    pub(in crate::app::ai) fn jump_to_nav_dot(
-        &mut self,
-        dot_idx: usize,
-        block_idx: usize,
-        cx: &mut Context<Self>,
-    ) {
-        self.auto_scroll_locked = true;
-        self.scroll_handle.scroll_to_item(block_idx);
-        self.active_nav_dot = Some(dot_idx);
-        cx.notify();
-    }
-
     fn refresh_block_cache(&mut self) {
         let is_running = self.is_running;
         let item_count = self.model.item_count();
@@ -487,12 +468,14 @@ impl Render for MessageStreamView {
 
         wrap_stream_with_nav_and_scroll(
             msg_list.into_any_element(),
-            &nav_entries,
-            &self.scroll_handle,
-            self.is_running,
-            self.auto_scroll_locked,
-            self.active_nav_dot,
-            p,
+            StreamScrollParams {
+                nav_entries: &nav_entries,
+                scroll_handle: &self.scroll_handle,
+                is_running: self.is_running,
+                auto_scroll_locked: self.auto_scroll_locked,
+                active_nav_dot: self.active_nav_dot,
+                p,
+            },
             cx.entity(),
         )
     }

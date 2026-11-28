@@ -16,7 +16,10 @@ use crate::theme::tokens::{space, typography};
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum AiMentionKind {
     Local,
-    SshHost { connected: bool, session_id: SessionId },
+    SshHost {
+        connected: bool,
+        session_id: SessionId,
+    },
     ContainerEngine,
 }
 

@@ -436,9 +436,7 @@ impl AiAssistantView {
                 on_toggle_extra_host: Box::new(move |key, _, cx| {
                     v_extra.update(cx, |this, cx| match key {
                         ExtraHostKey::Tab(tid) => this.toggle_extra_scope_tab(tid, cx),
-                        ExtraHostKey::SavedSession(sid) => {
-                            this.toggle_extra_scope_session(sid, cx)
-                        }
+                        ExtraHostKey::SavedSession(sid) => this.toggle_extra_scope_session(sid, cx),
                     });
                 }),
                 on_switch_builtin: Box::new(move |_, cx| {

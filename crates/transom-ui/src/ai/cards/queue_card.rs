@@ -469,9 +469,8 @@ impl AiAssistantView {
             .command_tx
             .try_send(AppCommand::Ai(Box::new(AiCommand::CancelRun { run_id })))
         {
-            self.state.view.status_error = Some(
-                rust_i18n::t!("ai.cancel_run_failed", error = err.to_string()).to_string(),
-            );
+            self.state.view.status_error =
+                Some(rust_i18n::t!("ai.cancel_run_failed", error = err.to_string()).to_string());
         }
     }
 }

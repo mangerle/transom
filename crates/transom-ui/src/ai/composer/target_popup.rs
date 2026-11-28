@@ -25,13 +25,16 @@ pub(in crate::app::ai) struct TargetSessionPopupParams<'a> {
     pub(in crate::app::ai) p: &'a Palette,
 }
 
+/// 目标会话选择器弹层的单参数交互回调。
+type PopupCallback<T> = Box<dyn Fn(T, &mut Window, &mut App)>;
+
 /// 目标会话选择器弹层交互回调集合。
 pub(in crate::app::ai) struct TargetSessionPopupActions {
-    pub(in crate::app::ai) on_select_mode: Box<dyn Fn(AiTargetMode, &mut Window, &mut App)>,
-    pub(in crate::app::ai) on_toggle_coop: Box<dyn Fn(TabId, &mut Window, &mut App)>,
-    pub(in crate::app::ai) on_toggle_coop_session: Box<dyn Fn(SessionId, &mut Window, &mut App)>,
-    pub(in crate::app::ai) on_insert_mention: Box<dyn Fn(String, &mut Window, &mut App)>,
-    pub(in crate::app::ai) on_connect_and_pin: Box<dyn Fn(SessionId, &mut Window, &mut App)>,
+    pub(in crate::app::ai) on_select_mode: PopupCallback<AiTargetMode>,
+    pub(in crate::app::ai) on_toggle_coop: PopupCallback<TabId>,
+    pub(in crate::app::ai) on_toggle_coop_session: PopupCallback<SessionId>,
+    pub(in crate::app::ai) on_insert_mention: PopupCallback<String>,
+    pub(in crate::app::ai) on_connect_and_pin: PopupCallback<SessionId>,
 }
 
 fn render_coop_toggle_btn(
@@ -199,7 +202,11 @@ pub(in crate::app::ai) fn render_target_session_popup(
             move |w, cx| pick_global(AiTargetMode::GlobalOnly, w, cx),
         ));
 
-    let mut scroll_list = v_flex().w_full().max_h(px(220.0)).overflow_y_scrollbar().gap(px(2.0));
+    let mut scroll_list = v_flex()
+        .w_full()
+        .max_h(px(220.0))
+        .overflow_y_scrollbar()
+        .gap(px(2.0));
     let mut has_scroll_items = false;
 
     if !params.connected_sessions.is_empty() {
@@ -291,7 +298,12 @@ pub(in crate::app::ai) fn render_target_session_popup(
     let mut other_targets: Vec<&AiMentionCandidate> = params
         .mention_candidates
         .iter()
-        .filter(|c| matches!(c.kind, AiMentionKind::Local | AiMentionKind::ContainerEngine))
+        .filter(|c| {
+            matches!(
+                c.kind,
+                AiMentionKind::Local | AiMentionKind::ContainerEngine
+            )
+        })
         .collect();
     other_targets.extend(
         params
@@ -424,7 +436,13 @@ pub(in crate::app::ai) fn render_target_session_popup(
 
     if has_scroll_items {
         fixed_header = fixed_header
-            .child(div().w_full().h(px(1.0)).my(px(2.0)).bg(p.divider(p.border)))
+            .child(
+                div()
+                    .w_full()
+                    .h(px(1.0))
+                    .my(px(2.0))
+                    .bg(p.divider(p.border)),
+            )
             .child(scroll_list);
     }
 
