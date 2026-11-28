@@ -224,6 +224,17 @@ impl AiAssistantView {
                 });
                 cx.notify();
             }
+            RunningMessageBehavior::Steer if !attachments.is_empty() => {
+                self.state.run.queue_paused_by_cancel = false;
+                self.state.run.active_focus =
+                    Some(rust_i18n::t!("ai.steer_attachment_queued").to_string());
+                self.state.run.queued_messages.push(QueuedPrompt {
+                    id: uuid::Uuid::new_v4().to_string(),
+                    prompt,
+                    attachments,
+                });
+                cx.notify();
+            }
             RunningMessageBehavior::Steer => {
                 if let Some(run_id) = self.state.current_run_id().map(str::to_owned) {
                     if !self.send_ai_command(

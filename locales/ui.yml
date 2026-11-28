@@ -10790,6 +10790,9 @@ ai:
   steer_injected:
     en: Steering instruction injected…
     zh-CN: 已注入中途引导指令…
+  steer_attachment_queued:
+    en: Messages with attachments are queued until the current task finishes
+    zh-CN: 带附件的消息将在当前任务结束后发送，已加入队列
   running_msg_title:
     en: Behavior When Sending During Active Task
     zh-CN: 任务运行中发送消息行为
