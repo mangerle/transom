@@ -67,17 +67,25 @@ pub(crate) async fn handle_acp_update(
     input: &AcpRunInput,
     state: &mut AcpTurnState,
     chunk: AcpStreamChunk,
-) {
+) -> Result<(), AiError> {
     match chunk {
         AcpStreamChunk::Text(t) => {
             state.first_delta.get_or_insert_with(Instant::now);
             state.text_buf.push_str(&t);
-            let _ = input.events.send(AgentEvent::TextDelta(t)).await;
+            input
+                .events
+                .send(AgentEvent::TextDelta(t))
+                .await
+                .map_err(|_| acp_event_receiver_closed(input))?;
         }
         AcpStreamChunk::Reasoning(r) => {
             state.first_delta.get_or_insert_with(Instant::now);
             state.reasoning_buf.push_str(&r);
-            let _ = input.events.send(AgentEvent::ReasoningDelta(r)).await;
+            input
+                .events
+                .send(AgentEvent::ReasoningDelta(r))
+                .await
+                .map_err(|_| acp_event_receiver_closed(input))?;
         }
         AcpStreamChunk::ToolCallUpdate {
             tool_call_id,
@@ -163,6 +171,14 @@ pub(crate) async fn handle_acp_update(
                 log::warn!("发送 ACP 计划更新失败: {err}");
             }
         }
+    }
+    Ok(())
+}
+
+fn acp_event_receiver_closed(input: &AcpRunInput) -> AiError {
+    AiError::AcpFailed {
+        agent: input.agent.name.clone(),
+        reason: "ACP 事件接收端已关闭，运行已终止".to_owned(),
     }
 }
 
@@ -400,7 +416,7 @@ pub(crate) async fn finalize_acp_turn(
         .unwrap_or_else(|| (model_duration_ms as f32) / 1000.0);
     let tokens_per_sec = (stream_secs > 0.05).then(|| (output_tokens as f32) / stream_secs);
 
-    let _ = input
+    input
         .events
         .send(AgentEvent::TurnEnd(TurnOutput {
             reasoning: state.reasoning_buf,
@@ -412,7 +428,8 @@ pub(crate) async fn finalize_acp_turn(
             model_duration_ms,
             ttft_ms,
         }))
-        .await;
+        .await
+        .map_err(|_| acp_event_receiver_closed(input))?;
     Ok(())
 }
 

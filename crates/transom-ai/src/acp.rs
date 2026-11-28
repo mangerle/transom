@@ -282,7 +282,7 @@ async fn drive_acp_protocol(
                 && let Some(params) = msg.get("params")
                 && let Some(chunk) = parse_acp_update(params)
             {
-                handle_acp_update(input, &mut state, chunk).await;
+                handle_acp_update(input, &mut state, chunk).await?;
             } else if method == "session/request_permission"
                 && let Some(req_id) = msg.get("id").cloned()
             {
