@@ -22,6 +22,7 @@ use super::markdown_blocks::CodeBlockCallbacks;
 use super::message_stream_render::{render_running_focus_row, render_status_error_banner};
 use super::plan_card::render_scroll_bottom_button;
 use super::state::{MessageStreamModel, UiChatItem};
+use super::streaming_tail::{StreamingTailView, build_tail_callbacks};
 use super::task_bar::UiManagedTask;
 use super::turn_nav::{collect_turn_nav_entries, render_turn_nav_rail, resolve_active_nav_dot};
 use super::work_group::{
@@ -88,6 +89,7 @@ pub(in crate::app::ai) struct MessageStreamView {
     managed_tasks: Vec<UiManagedTask>,
     block_cache: Option<MessageBlockCache>,
     code_callbacks: Option<CodeBlockCallbacks>,
+    streaming_tail: Entity<StreamingTailView>,
     scroll_handle: ScrollHandle,
     auto_scroll_locked: bool,
     active_nav_dot: Option<usize>,
@@ -96,7 +98,8 @@ pub(in crate::app::ai) struct MessageStreamView {
 impl EventEmitter<MessageStreamEvent> for MessageStreamView {}
 
 impl MessageStreamView {
-    pub(in crate::app::ai) fn new() -> Self {
+    pub(in crate::app::ai) fn new(cx: &mut Context<Self>) -> Self {
+        let streaming_tail = cx.new(|_| StreamingTailView::new());
         Self {
             model: MessageStreamModel::default(),
             is_running: false,
@@ -109,6 +112,7 @@ impl MessageStreamView {
             managed_tasks: Vec::new(),
             block_cache: None,
             code_callbacks: None,
+            streaming_tail,
             scroll_handle: ScrollHandle::new(),
             auto_scroll_locked: false,
             active_nav_dot: None,
@@ -151,6 +155,7 @@ impl MessageStreamView {
             self.active_nav_dot = None;
         }
         self.refresh_block_cache();
+        self.sync_streaming_tail(cx);
         if scroll_to_bottom && !self.auto_scroll_locked {
             self.scroll_handle.scroll_to_bottom();
         }
@@ -168,6 +173,7 @@ impl MessageStreamView {
         self.model
             .apply_app_event(event, active_model_name, is_current_conversation);
         self.refresh_block_cache();
+        self.sync_streaming_tail(cx);
         cx.notify();
     }
 
@@ -179,6 +185,7 @@ impl MessageStreamView {
     ) {
         self.model.replace_items(items);
         self.refresh_block_cache();
+        self.sync_streaming_tail(cx);
         cx.notify();
     }
 
@@ -186,6 +193,7 @@ impl MessageStreamView {
     pub(in crate::app::ai) fn clear_items(&mut self, cx: &mut Context<Self>) {
         self.model.clear();
         self.refresh_block_cache();
+        self.sync_streaming_tail(cx);
         cx.notify();
     }
 
@@ -193,6 +201,7 @@ impl MessageStreamView {
     pub(in crate::app::ai) fn push_item(&mut self, item: UiChatItem, cx: &mut Context<Self>) {
         self.model.push_item(item);
         self.refresh_block_cache();
+        self.sync_streaming_tail(cx);
         cx.notify();
     }
 
@@ -204,6 +213,7 @@ impl MessageStreamView {
     ) {
         self.model.remove_item_by_id(target_id);
         self.refresh_block_cache();
+        self.sync_streaming_tail(cx);
         cx.notify();
     }
 
@@ -219,7 +229,7 @@ impl MessageStreamView {
         cx.notify();
     }
 
-    /// 仅原地追加流式文本/思考增量并局部重绘本实体（零整树重绘、零全量列表拷贝）。
+    /// 仅原地追加流式文本/思考增量并局部重绘末尾子实体（零历史块重绘、零全量列表拷贝）。
     pub(in crate::app::ai) fn apply_streaming_delta(
         &mut self,
         is_reasoning: bool,
@@ -227,11 +237,77 @@ impl MessageStreamView {
         cx: &mut Context<Self>,
     ) {
         self.model.apply_streaming_delta(is_reasoning, delta);
+        if self
+            .streaming_tail
+            .read(cx)
+            .matches_streaming_kind(is_reasoning)
+        {
+            let appended = self
+                .streaming_tail
+                .update(cx, |tail, cx| tail.append_delta(is_reasoning, delta, cx));
+            if appended {
+                if !self.auto_scroll_locked {
+                    self.scroll_handle.scroll_to_bottom();
+                }
+                return;
+            }
+        }
         self.refresh_block_cache();
+        self.sync_streaming_tail(cx);
         if !self.auto_scroll_locked {
             self.scroll_handle.scroll_to_bottom();
         }
         cx.notify();
+    }
+
+    /// 将当前末尾独立流式条目同步到 [`StreamingTailView`] 子实体；无独立流式条目时清空。
+    fn sync_streaming_tail(&mut self, cx: &mut Context<Self>) {
+        let Some(tail_block) = self.streaming_tail_block_info() else {
+            self.streaming_tail.update(cx, |tail, cx| tail.clear(cx));
+            return;
+        };
+        let (item_idx, after_work_group) = tail_block;
+        let item = self.model.items()[item_idx].clone();
+        let copied_key = self.copied_key.clone();
+        let has_active_terminal = self.has_active_terminal;
+        let code = self.cached_code_callbacks(cx);
+        let callbacks = build_tail_callbacks(cx.entity(), code);
+        self.streaming_tail.update(cx, |tail, cx| {
+            tail.sync(
+                Some(item),
+                after_work_group,
+                copied_key,
+                has_active_terminal,
+                callbacks,
+                cx,
+            );
+        });
+    }
+
+    /// 若最后一个可见块是正在流式输出的独立条目，返回其 `(item_idx, after_work_group)`。
+    fn streaming_tail_block_info(&self) -> Option<(usize, bool)> {
+        let blocks = self.block_cache.as_ref()?.blocks.as_slice();
+        let last_pos = blocks.len().checked_sub(1)?;
+        let DisplayBlock::Single(item_idx) = blocks[last_pos] else {
+            return None;
+        };
+        let item = self.model.items().get(item_idx)?;
+        let is_streaming = matches!(
+            item,
+            UiChatItem::Reasoning {
+                streaming: true,
+                ..
+            } | UiChatItem::AssistantText {
+                streaming: true,
+                ..
+            }
+        );
+        if !is_streaming {
+            return None;
+        }
+        let after_work_group =
+            last_pos > 0 && matches!(blocks[last_pos - 1], DisplayBlock::WorkGroup { .. });
+        Some((item_idx, after_work_group))
     }
 
     /// 显式解锁自动滚底并滚动到消息流底部（例如发送新提问时）。
@@ -418,7 +494,14 @@ impl Render for MessageStreamView {
             let has_active_terminal = self.has_active_terminal;
             let frame_now = chrono::Utc::now();
 
-            for (b_idx, block) in blocks.iter().enumerate().skip(render_start) {
+            let has_streaming_tail = self.streaming_tail_block_info().is_some();
+            let render_end = if has_streaming_tail {
+                blocks.len().saturating_sub(1)
+            } else {
+                blocks.len()
+            };
+
+            for (b_idx, block) in blocks[..render_end].iter().enumerate().skip(render_start) {
                 let v_exp = cx.entity();
                 match block {
                     DisplayBlock::Single(item_index) => {
@@ -511,6 +594,10 @@ impl Render for MessageStreamView {
                         ));
                     }
                 }
+            }
+
+            if has_streaming_tail {
+                msg_list = msg_list.child(self.streaming_tail.clone());
             }
 
             if is_running && !has_active_wg {

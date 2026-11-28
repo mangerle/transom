@@ -24,6 +24,7 @@ mod metrics_model;
 pub(crate) mod panel_events;
 mod state;
 mod state_types;
+mod streaming_tail;
 mod task_bar;
 mod turn_nav;
 mod view;
