@@ -10,7 +10,7 @@ use transom_core::{
 };
 
 use super::file_io::read_text_prefix;
-use super::{ControllerAppActionBridge, optional_port, port_or, u32_or};
+use super::{ControllerAppActionBridge, optional_port, port_or, sync_ui_after_persist, u32_or};
 
 pub(super) async fn handle(
     bridge: &ControllerAppActionBridge,
@@ -174,9 +174,7 @@ async fn mutate_catalog_and_reload(
     })?;
 
     let payload = serde_json::json!({ "catalog": catalog });
-    let _ = bridge
-        .request_ui_action("session_catalog", "reload_catalog", &payload)
-        .await;
+    sync_ui_after_persist(bridge, "session_catalog", "reload_catalog", &payload).await;
     Ok(())
 }
 

@@ -6,7 +6,7 @@ use serde_json::{Value, json};
 use transom_ai::ToolError;
 use transom_core::{BackupExportOptions, Snippet, SnippetId};
 
-use super::ControllerAppActionBridge;
+use super::{ControllerAppActionBridge, sync_ui_after_persist};
 
 pub(super) async fn handle_sftp_transfer(
     bridge: &ControllerAppActionBridge,
@@ -216,9 +216,7 @@ async fn mutate_settings_and_reload(
     })?;
 
     let payload = json!({ "settings": settings });
-    let _ = bridge
-        .request_ui_action("app_settings_ops", "reload_settings", &payload)
-        .await;
+    sync_ui_after_persist(bridge, "app_settings_ops", "reload_settings", &payload).await;
     Ok(())
 }
 

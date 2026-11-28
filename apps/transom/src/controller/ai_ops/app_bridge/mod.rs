@@ -94,6 +94,23 @@ pub(super) fn u32_or(
     })
 }
 
+/// 持久化成功后的界面快照同步。
+///
+/// 数据已经落盘，刷新失败不能把原操作伪装成失败并诱发重复写入；但也不能静默
+/// 忽略，因此统一记录包含领域与动作的告警，由后续界面刷新或重连自愈。
+pub(super) async fn sync_ui_after_persist(
+    bridge: &ControllerAppActionBridge,
+    domain: &'static str,
+    action: &str,
+    payload: &Value,
+) {
+    if let Err(err) = bridge.request_ui_action(domain, action, payload).await {
+        log::warn!(
+            "AI 软件操作已持久化，但通知界面刷新失败（领域: {domain}，动作: {action}）: {err}"
+        );
+    }
+}
+
 /// 桥接层依赖组合根，按能力域隔离存储、项目服务、运行时与当前目标。
 #[derive(Clone)]
 pub(in crate::controller) struct AppBridgeDeps {
