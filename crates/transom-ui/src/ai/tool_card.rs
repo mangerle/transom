@@ -131,6 +131,7 @@ pub(super) fn render_tool_card(
         };
         right = right.child(
             div()
+                .font_family("monospace")
                 .text_size(rems(typography::CAPTION))
                 .text_color(p.text.muted)
                 .child(dur_str),
@@ -323,23 +324,30 @@ pub(super) fn render_tool_card(
     let shell_box = v_flex()
         .w_full()
         .rounded(p.radius.md)
-        .bg(p.secondary)
+        .bg(p.background)
         .border_1()
-        .border_color(p.divider(p.border))
+        .border_color(if *ok {
+            p.stroke.subtle
+        } else {
+            p.danger.opacity(0.35)
+        })
         .overflow_hidden()
         .child(
             h_flex()
                 .w_full()
                 .px(rems(space::SM))
-                .py(px(4.0))
+                .py(px(5.0))
+                .bg(p.surface.floating)
                 .justify_between()
                 .items_center()
                 .border_b_1()
-                .border_color(p.divider(p.border))
+                .border_color(p.stroke.faint)
                 .child(
                     div()
+                        .font_family("monospace")
                         .text_size(rems(typography::CAPTION))
-                        .text_color(p.text.muted)
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(p.text.subtle)
                         .child(box_title),
                 )
                 .child(actions),

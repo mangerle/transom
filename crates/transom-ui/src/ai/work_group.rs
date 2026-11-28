@@ -226,12 +226,23 @@ pub(super) fn render_work_group(
     let mut header = h_flex()
         .id(SharedString::from(format!("ai-wg-{}", params.id)))
         .w_full()
-        .px(px(2.0))
-        .py(px(3.0))
+        .px(rems(space::SM))
+        .py(px(5.0))
         .gap(rems(space::XS))
         .justify_between()
         .items_center()
-        .rounded(p.radius.sm)
+        .rounded(p.radius.md)
+        .bg(if params.in_progress {
+            p.tone.primary_subtle
+        } else {
+            p.surface.floating
+        })
+        .border_1()
+        .border_color(if params.in_progress {
+            p.primary.opacity(0.28)
+        } else {
+            p.stroke.faint
+        })
         .cursor_pointer()
         .hover(|s| s.bg(p.surface.hover))
         .on_click(move |_, w, cx| toggle_self(gid.clone(), w, cx));
@@ -304,12 +315,16 @@ pub(super) fn render_work_group(
     if expanded {
         let mut details = v_flex()
             .w_full()
-            .ml(px(6.0))
+            .ml(px(8.0))
             .pl(rems(space::SM))
-            .py(px(2.0))
+            .py(px(3.0))
             .gap(px(4.0))
-            .border_l_1()
-            .border_color(p.divider(p.border));
+            .border_l_2()
+            .border_color(if params.in_progress {
+                p.primary.opacity(0.32)
+            } else {
+                p.stroke.subtle
+            });
         if let Some((wg_icon, wg_label)) = summarize_tool_activity(params.items) {
             details = details.child(
                 h_flex()

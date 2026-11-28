@@ -271,12 +271,12 @@ pub(super) fn render_markdown_content(params: MarkdownRenderParams<'_>) -> AnyEl
     if segments.is_empty() {
         return div().into_any_element();
     }
-    let mut col = v_flex().w_full().gap(rems(space::XS));
+    let mut col = v_flex().w_full().gap(rems(space::SM));
     for (idx, seg) in segments.iter().enumerate() {
         match seg {
             MarkdownSegment::Prose(prose) => {
                 col = col.child(
-                    div().w_full().line_height(relative(1.5)).child(
+                    div().w_full().line_height(relative(1.58)).child(
                         TextView::markdown(
                             SharedString::from(format!("ai-md-{}-{idx}", params.msg_id)),
                             prose.clone(),
@@ -325,25 +325,39 @@ fn render_code_card(
         AppIcon::Custom(CustomIcon::CPU)
     };
 
-    let mut left = h_flex()
-        .gap(px(6.0))
-        .items_center()
-        .child(
-            div()
-                .text_color(p.text.muted)
-                .child(AppIconElement::new(icon).small()),
-        )
-        .child(
-            div()
-                .text_size(rems(typography::CAPTION))
-                .font_weight(FontWeight::MEDIUM)
-                .text_color(p.text.muted)
-                .child(lang_label),
-        );
+    let mut left = h_flex().gap(px(6.0)).items_center().child(
+        h_flex()
+            .px(px(6.0))
+            .py(px(2.0))
+            .gap(px(5.0))
+            .items_center()
+            .rounded(p.radius.sm)
+            .bg(p.surface.floating)
+            .border_1()
+            .border_color(p.stroke.faint)
+            .child(
+                div()
+                    .text_color(p.text.muted)
+                    .child(AppIconElement::new(icon).small()),
+            )
+            .child(
+                div()
+                    .font_family("monospace")
+                    .text_size(rems(typography::CAPTION))
+                    .font_weight(FontWeight::MEDIUM)
+                    .text_color(p.foreground)
+                    .child(lang_label),
+            ),
+    );
     if unclosed {
         left = left.child(
             div()
+                .px(px(6.0))
+                .py(px(1.0))
+                .rounded_full()
+                .bg(p.tone.primary_subtle)
                 .text_size(rems(typography::CAPTION))
+                .font_weight(FontWeight::MEDIUM)
                 .text_color(p.primary)
                 .child(rust_i18n::t!("ai.streaming_code").to_string()),
         );
@@ -420,6 +434,11 @@ fn render_code_card(
         .child(left)
         .child(actions);
 
+    let line_count = code.lines().count().max(1);
+    let line_numbers: String = (1..=line_count)
+        .map(|n| n.to_string())
+        .collect::<Vec<_>>()
+        .join("\n");
     let body_text = if code.is_empty() {
         " ".to_owned()
     } else {
@@ -431,20 +450,46 @@ fn render_code_card(
         .rounded(p.radius.md)
         .overflow_hidden()
         .border_1()
-        .border_color(p.divider(p.border))
+        .border_color(if unclosed {
+            p.primary.opacity(0.35)
+        } else {
+            p.stroke.subtle
+        })
         .bg(p.background)
         .child(header)
         .child(
-            div()
-                .id(SharedString::from(format!("ai-code-body-{block_key}")))
+            h_flex()
                 .w_full()
-                .px(rems(space::SM))
-                .py(rems(space::XS))
-                .overflow_x_scroll()
-                .font_family("monospace")
-                .text_size(rems(typography::CAPTION))
-                .text_color(p.foreground)
-                .child(body_text),
+                .items_start()
+                .child(
+                    div()
+                        .flex_shrink_0()
+                        .px(rems(space::XS))
+                        .py(rems(space::XS))
+                        .border_r_1()
+                        .border_color(p.stroke.faint)
+                        .bg(p.surface.floating)
+                        .font_family("monospace")
+                        .text_size(rems(typography::CAPTION))
+                        .line_height(relative(1.5))
+                        .text_color(p.text.disabled)
+                        .text_right()
+                        .child(line_numbers),
+                )
+                .child(
+                    div()
+                        .id(SharedString::from(format!("ai-code-body-{block_key}")))
+                        .flex_1()
+                        .min_w_0()
+                        .px(rems(space::SM))
+                        .py(rems(space::XS))
+                        .overflow_x_scroll()
+                        .font_family("monospace")
+                        .text_size(rems(typography::CAPTION))
+                        .line_height(relative(1.5))
+                        .text_color(p.foreground)
+                        .child(body_text),
+                ),
         )
         .into_any_element()
 }

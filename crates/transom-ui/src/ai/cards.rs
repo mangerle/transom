@@ -239,15 +239,15 @@ fn render_user_bubble(
         .gap(px(4.0))
         .child(
             div()
-                .max_w(rems(28.0))
-                .px(px(14.0))
-                .py(px(9.0))
-                .rounded(px(16.0))
+                .max_w(rems(30.0))
+                .px(rems(space::MD))
+                .py(rems(space::SM))
+                .rounded(p.radius.lg)
                 .bg(p.secondary)
                 .border_1()
-                .border_color(p.divider(p.border).opacity(0.6))
+                .border_color(p.stroke.subtle)
                 .text_size(rems(typography::BODY))
-                .line_height(relative(1.45))
+                .line_height(relative(1.5))
                 .text_color(p.foreground)
                 .child(text.to_owned()),
         )
@@ -276,38 +276,71 @@ fn render_reasoning_block(
         UiIcon::CHEVRON_RIGHT
     };
     let on_toggle = callbacks.on_toggle_expand;
-    let mut box_el = v_flex().w_full().gap(px(4.0)).child(
-        h_flex()
-            .id(SharedString::from(format!("ai-reason-{id}")))
-            .py(px(2.0))
-            .gap(px(5.0))
-            .items_center()
-            .cursor_pointer()
-            .hover(|s| s.opacity(0.85))
-            .on_click(move |_, window, cx| on_toggle(window, cx))
-            .child(
-                div()
-                    .text_color(p.text.muted)
-                    .child(AppIconElement::new(AppIcon::Ui(chevron)).small()),
-            )
-            .child(
-                div()
-                    .text_size(rems(typography::CAPTION))
-                    .text_color(p.text.muted)
-                    .child(label),
-            ),
-    );
+    let mut box_el = v_flex()
+        .w_full()
+        .rounded(p.radius.md)
+        .px(rems(space::SM))
+        .py(rems(space::XS))
+        .bg(p.surface.floating)
+        .border_1()
+        .border_color(if streaming {
+            p.primary.opacity(0.28)
+        } else {
+            p.stroke.faint
+        })
+        .gap(px(4.0))
+        .child(
+            h_flex()
+                .id(SharedString::from(format!("ai-reason-{id}")))
+                .py(px(2.0))
+                .gap(px(6.0))
+                .items_center()
+                .justify_between()
+                .cursor_pointer()
+                .hover(|s| s.opacity(0.85))
+                .on_click(move |_, window, cx| on_toggle(window, cx))
+                .child(
+                    h_flex()
+                        .gap(px(6.0))
+                        .items_center()
+                        .child(
+                            div()
+                                .text_color(if streaming { p.primary } else { p.text.muted })
+                                .child(AppIconElement::new(AppIcon::Ui(UiIcon::LIGHTNING)).small()),
+                        )
+                        .child(
+                            div()
+                                .text_size(rems(typography::CAPTION))
+                                .font_weight(FontWeight::MEDIUM)
+                                .text_color(if streaming {
+                                    p.foreground
+                                } else {
+                                    p.text.subtle
+                                })
+                                .child(label),
+                        ),
+                )
+                .child(
+                    div()
+                        .text_color(p.text.muted)
+                        .child(AppIconElement::new(AppIcon::Ui(chevron)).small()),
+                ),
+        );
     if streaming || expanded {
         box_el = box_el.child(
             div()
-                .ml(px(6.0))
+                .ml(px(5.0))
                 .pl(rems(space::SM))
                 .py(px(2.0))
                 .border_l_2()
-                .border_color(p.divider(p.border))
+                .border_color(if streaming {
+                    p.primary.opacity(0.35)
+                } else {
+                    p.stroke.muted
+                })
                 .text_size(rems(typography::CAPTION))
-                .line_height(relative(1.45))
-                .text_color(p.muted_foreground)
+                .line_height(relative(1.5))
+                .text_color(p.text.subtle)
                 .child(text.to_owned()),
         );
     }
@@ -338,38 +371,61 @@ fn render_assistant_message(
         streaming,
     } = msg;
     let p = params.p;
-    // 流式阶段每 25ms 更新一次，避免对不断增长的文本重复执行完整 Markdown
-    // 分段与代码块构建；终态由 finalize_turn 一次解析并缓存。
-    let content = if streaming {
-        div()
-            .w_full()
-            .line_height(relative(1.5))
-            .child(text.to_owned())
-            .into_any_element()
-    } else {
-        render_markdown_content(MarkdownRenderParams {
-            msg_id: id,
-            text,
-            cached_segments,
-            copied_key: params.copied_key,
-            has_active_terminal: params.has_active_terminal,
-            p,
-            callbacks: &callbacks.code,
-        })
-    };
+    // 依托 StreamingMarkdownCache 的 O(N) 增量解析，流式阶段即可直接呈现完整
+    // Markdown 排版与代码块卡片，彻底消除流式结束时的视觉跳变。
+    let content = render_markdown_content(MarkdownRenderParams {
+        msg_id: id,
+        text,
+        cached_segments,
+        copied_key: params.copied_key,
+        has_active_terminal: params.has_active_terminal,
+        p,
+        callbacks: &callbacks.code,
+    });
     let mut col = v_flex()
         .w_full()
         .py(rems(space::XS))
         .gap(rems(space::XS))
         .child(content);
 
-    if !streaming {
-        let mut footer_parts = Vec::new();
+    if streaming {
+        col = col.child(
+            h_flex()
+                .pt(px(2.0))
+                .gap(px(6.0))
+                .items_center()
+                .child(div().w(px(6.0)).h(px(6.0)).rounded_full().bg(p.primary))
+                .child(
+                    div()
+                        .text_size(rems(typography::CAPTION))
+                        .text_color(p.text.muted)
+                        .child(rust_i18n::t!("ai.streaming_code").to_string()),
+                ),
+        );
+    } else {
+        let mut meta_bar = h_flex().gap(px(6.0)).items_center();
         if let Some(m) = model {
-            footer_parts.push(m.to_owned());
+            meta_bar = meta_bar.child(
+                div()
+                    .px(px(6.0))
+                    .py(px(1.0))
+                    .rounded(p.radius.sm)
+                    .bg(p.secondary)
+                    .border_1()
+                    .border_color(p.stroke.faint)
+                    .text_size(rems(typography::CAPTION))
+                    .text_color(p.text.subtle)
+                    .child(m.to_owned()),
+            );
         }
         if let Some(tps) = tokens_per_sec {
-            footer_parts.push(format!("{tps:.1} tok/s"));
+            meta_bar = meta_bar.child(
+                div()
+                    .font_family("monospace")
+                    .text_size(rems(typography::CAPTION))
+                    .text_color(p.text.muted)
+                    .child(format!("{tps:.1} tok/s")),
+            );
         }
         let copy_key = format!("asst-{id}");
         let is_copied = params.copied_key == Some(copy_key.as_str());
@@ -389,16 +445,12 @@ fn render_assistant_message(
         col = col.child(
             h_flex()
                 .w_full()
-                .pt(px(4.0))
+                .pt(px(6.0))
+                .border_t_1()
+                .border_color(p.stroke.faint)
                 .justify_between()
                 .items_center()
-                .child(
-                    div()
-                        .opacity(0.85)
-                        .text_size(rems(typography::CAPTION))
-                        .text_color(p.text.muted)
-                        .child(footer_parts.join(" · ")),
-                )
+                .child(meta_bar)
                 .child(
                     Button::new(SharedString::from(format!("ai-copy-asst-{id}")))
                         .ghost()
