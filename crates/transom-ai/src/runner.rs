@@ -436,7 +436,19 @@ pub async fn summarize_for_compaction(
 
 fn to_rig_history(entries: &[SessionEntry]) -> Vec<Message> {
     let refs: Vec<&SessionEntry> = entries.iter().collect();
-    extract_turn_pairs(&refs)
+    let pairs = extract_turn_pairs(&refs);
+    let mut merged: Vec<(ChatRole, String)> = Vec::with_capacity(pairs.len());
+    for (role, text) in pairs {
+        if let Some((last_role, last_text)) = merged.last_mut()
+            && *last_role == role
+        {
+            last_text.push_str("\n\n");
+            last_text.push_str(&text);
+        } else {
+            merged.push((role, text));
+        }
+    }
+    merged
         .into_iter()
         .map(|(role, text)| match role {
             ChatRole::User => Message::user(text),

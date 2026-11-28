@@ -267,11 +267,16 @@ pub(super) async fn start_acp_only_run(
         title,
         acp_agent: Some(agent),
         hook_executor: None,
-        preamble: String::new(),
-        memory: transom_ai::MemorySnapshot::default(),
-        tools_tokens: 0,
-        context_window: 128_000,
-        history_entries: history_branch,
+        budget_tracker: {
+            let refs: Vec<&transom_ai::SessionEntry> = history_branch.iter().collect();
+            transom_ai::ContextBudgetTracker::new(
+                "",
+                &transom_ai::MemorySnapshot::default(),
+                &refs,
+                0,
+                128_000,
+            )
+        },
         current_turn_entry_id: Arc::new(parking_lot::RwLock::new(None)),
         cancel,
     };

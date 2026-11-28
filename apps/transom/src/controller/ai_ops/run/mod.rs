@@ -6,7 +6,7 @@ use std::time::Duration;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 use transom_ai::{
-    AcpAgentConfig, AcpRunInput, AgentEvent, ChatRole, HookExecutor, MemorySnapshot, RunId,
+    AcpAgentConfig, AcpRunInput, AgentEvent, ChatRole, ContextBudgetTracker, HookExecutor, RunId,
     RunInput, SessionEntry, SessionEntryKind, run_acp_turn,
 };
 use transom_core::{AiAppEvent, AppEvent};
@@ -38,11 +38,7 @@ pub(super) struct PumpContext {
     pub(super) title: String,
     pub(super) acp_agent: Option<AcpAgentConfig>,
     pub(super) hook_executor: Option<Arc<dyn HookExecutor>>,
-    pub(super) preamble: String,
-    pub(super) memory: MemorySnapshot,
-    pub(super) tools_tokens: u32,
-    pub(super) context_window: u32,
-    pub(super) history_entries: Vec<SessionEntry>,
+    pub(super) budget_tracker: ContextBudgetTracker,
     pub(super) current_turn_entry_id: Arc<parking_lot::RwLock<Option<String>>>,
     pub(super) cancel: CancellationToken,
 }
@@ -77,7 +73,7 @@ pub(super) async fn execute_and_pump(
     }
     last_leaf_id = Some(user_entry.id.clone());
     *ctx.current_turn_entry_id.write() = Some(user_entry.id.clone());
-    ctx.history_entries.push(user_entry.clone());
+    ctx.budget_tracker.record_entry(&user_entry);
     if let Err(err) = ctx
         .event_tx
         .send_async(AppEvent::Ai(Box::new(AiAppEvent::RunStarted {

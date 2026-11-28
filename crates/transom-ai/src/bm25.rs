@@ -27,10 +27,10 @@ pub struct Bm25Hit {
     pub snippet: String,
 }
 
-/// 内存态 BM25 倒排索引。
+/// 内存态 BM25 倒排索引（以 FNV-1a 64-bit 词元哈希为键，避免海量小字符串堆分配）。
 pub struct Bm25Index {
     docs: Vec<IndexedDoc>,
-    doc_freq: HashMap<String, usize>,
+    doc_freq: HashMap<u64, usize>,
     avg_len: f32,
 }
 
@@ -38,7 +38,7 @@ struct IndexedDoc {
     source: String,
     title: String,
     content: String,
-    tf: HashMap<String, usize>,
+    tf: HashMap<u64, usize>,
     len: usize,
 }
 
@@ -46,24 +46,32 @@ impl Bm25Index {
     /// 基于文档切片构建 BM25 索引。
     pub fn build(documents: Vec<Bm25Document>) -> Self {
         let mut docs = Vec::with_capacity(documents.len());
-        let mut doc_freq: HashMap<String, usize> = HashMap::new();
+        let mut doc_freq: HashMap<u64, usize> = HashMap::new();
         let mut total_len = 0usize;
 
         for doc in documents {
-            let combined = format!("{}\n{}", doc.title, doc.content);
-            let tokens = tokenize(&combined);
-            let len = tokens.len();
-            total_len = total_len.saturating_add(len);
-
-            let mut tf: HashMap<String, usize> = HashMap::with_capacity(len.min(128));
-            for tok in tokens {
-                if let Some(count) = tf.get_mut(&tok) {
+            let mut tf: HashMap<u64, usize> =
+                HashMap::with_capacity((doc.title.len() + doc.content.len()).min(128));
+            let mut len = 0usize;
+            for_each_token_hash(&doc.title, |hash| {
+                len += 1;
+                if let Some(count) = tf.get_mut(&hash) {
                     *count += 1;
                 } else {
-                    *doc_freq.entry(tok.clone()).or_insert(0) += 1;
-                    tf.insert(tok, 1);
+                    *doc_freq.entry(hash).or_insert(0) += 1;
+                    tf.insert(hash, 1);
                 }
-            }
+            });
+            for_each_token_hash(&doc.content, |hash| {
+                len += 1;
+                if let Some(count) = tf.get_mut(&hash) {
+                    *count += 1;
+                } else {
+                    *doc_freq.entry(hash).or_insert(0) += 1;
+                    tf.insert(hash, 1);
+                }
+            });
+            total_len = total_len.saturating_add(len);
 
             docs.push(IndexedDoc {
                 source: doc.source,
@@ -91,8 +99,9 @@ impl Bm25Index {
         if self.docs.is_empty() || top_k == 0 {
             return Vec::new();
         }
-        let q_tokens = tokenize(query);
-        if q_tokens.is_empty() {
+        let mut q_hashes = Vec::with_capacity(query.len() / 2);
+        for_each_token_hash(query, |hash| q_hashes.push(hash));
+        if q_hashes.is_empty() {
             return Vec::new();
         }
 
@@ -104,11 +113,11 @@ impl Bm25Index {
                 continue;
             }
             let mut score = 0.0f32;
-            for term in &q_tokens {
-                let Some(&tf_raw) = doc.tf.get(term) else {
+            for &term_hash in &q_hashes {
+                let Some(&tf_raw) = doc.tf.get(&term_hash) else {
                     continue;
                 };
-                let df = *self.doc_freq.get(term).unwrap_or(&0) as f32;
+                let df = *self.doc_freq.get(&term_hash).unwrap_or(&0) as f32;
                 let idf = ((n - df + 0.5) / (df + 0.5) + 1.0).ln().max(0.0);
                 let tf = tf_raw as f32;
                 let norm = 1.0 - B + B * (doc.len as f32) / self.avg_len;
@@ -131,6 +140,51 @@ impl Bm25Index {
         });
         hits.truncate(top_k);
         hits
+    }
+}
+
+#[inline]
+fn fnv1a_bytes(bytes: &[u8]) -> u64 {
+    let mut hash: u64 = 0xcbf29ce484222325;
+    for &b in bytes {
+        hash ^= u64::from(b);
+        hash = hash.wrapping_mul(0x100000001b3);
+    }
+    hash
+}
+
+/// 零小字符串堆分配的中英文混合分词遍历（产出与 [`tokenize`] 完全一致的词元哈希）。
+fn for_each_token_hash(text: &str, mut on_hash: impl FnMut(u64)) {
+    let mut ascii_buf = String::with_capacity(32);
+    let mut prev_cjk: Option<char> = None;
+    let mut char_buf = [0u8; 4];
+    let mut bi_buf = [0u8; 8];
+
+    for ch in text.chars() {
+        if ch.is_ascii_alphanumeric() || ch == '_' || ch == '-' {
+            ascii_buf.push(ch.to_ascii_lowercase());
+            prev_cjk = None;
+        } else {
+            if !ascii_buf.is_empty() {
+                on_hash(fnv1a_bytes(ascii_buf.as_bytes()));
+                ascii_buf.clear();
+            }
+            if is_cjk(ch) {
+                let s = ch.encode_utf8(&mut char_buf);
+                on_hash(fnv1a_bytes(s.as_bytes()));
+                if let Some(p) = prev_cjk {
+                    let p_len = p.encode_utf8(&mut bi_buf[..4]).len();
+                    let c_len = ch.encode_utf8(&mut bi_buf[p_len..]).len();
+                    on_hash(fnv1a_bytes(&bi_buf[..p_len + c_len]));
+                }
+                prev_cjk = Some(ch);
+            } else {
+                prev_cjk = None;
+            }
+        }
+    }
+    if !ascii_buf.is_empty() {
+        on_hash(fnv1a_bytes(ascii_buf.as_bytes()));
     }
 }
 

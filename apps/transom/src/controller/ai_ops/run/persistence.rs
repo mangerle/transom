@@ -2,7 +2,7 @@
 
 use transom_ai::{
     AiAuditEntry, ChatRole, HookContext, HookEvent, SessionEntry, SessionEntryKind,
-    ToolExecutionCard, TurnUsageRecord, compute_context_breakdown,
+    ToolExecutionCard, TurnUsageRecord,
 };
 use transom_core::{AiAppEvent, AiToolCardDto, AiTurnMetricsDto, AppEvent};
 
@@ -22,8 +22,8 @@ pub(super) async fn handle_turn_end(
             },
         );
         *last_leaf_id = Some(entry.id.clone());
-        to_append.push(entry.clone());
-        ctx.history_entries.push(entry);
+        ctx.budget_tracker.record_entry(&entry);
+        to_append.push(entry);
     }
     if !turn.text.trim().is_empty() {
         let entry = SessionEntry::new(
@@ -44,19 +44,12 @@ pub(super) async fn handle_turn_end(
             },
         );
         *last_leaf_id = Some(entry.id.clone());
-        to_append.push(entry.clone());
-        ctx.history_entries.push(entry);
+        ctx.budget_tracker.record_entry(&entry);
+        to_append.push(entry);
     }
     let added = turn.input_tokens.saturating_add(turn.output_tokens);
     let (today_tokens, month_tokens) = ctx.recorder.append_turn(to_append, added).await?;
-    let refs: Vec<&SessionEntry> = ctx.history_entries.iter().collect();
-    let breakdown = compute_context_breakdown(
-        &ctx.preamble,
-        &ctx.memory,
-        &refs,
-        ctx.tools_tokens,
-        ctx.context_window,
-    );
+    let breakdown = ctx.budget_tracker.snapshot();
     let metrics = AiTurnMetricsDto {
         input_tokens: turn.input_tokens,
         cached_input_tokens: turn.cached_input_tokens,
@@ -142,7 +135,7 @@ pub(super) async fn handle_tool_card(
         ok: card.ok,
         duration_ms: card.duration_ms,
     };
-    ctx.history_entries.push(entry.clone());
+    ctx.budget_tracker.record_entry(&entry);
     ctx.recorder.append_tool(entry, audit).await?;
 
     let card_tool_name = card.tool_name.clone();

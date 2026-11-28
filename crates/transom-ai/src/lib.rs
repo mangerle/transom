@@ -46,7 +46,9 @@ pub use config::{
     ProviderProtocol, RunningMessageBehavior, default_acp_presets, language_instruction,
     new_provider_id, provider_from_preset, provider_model_id,
 };
-pub use context_budget::{build_local_compaction_summary, compute_context_breakdown};
+pub use context_budget::{
+    ContextBudgetTracker, build_local_compaction_summary, compute_context_breakdown,
+};
 pub use discovery::{
     ConnectionTestResult, DiscoveredModel, discover_models, infer_context_window,
     parse_models_payload, test_provider_connection,

@@ -292,6 +292,15 @@ pub(super) async fn start_ai_run(
         transom_ai::estimate_tool_schema_tokens(&input.tool_ctx)
     };
 
+    let history_refs: Vec<&SessionEntry> = history_branch.iter().collect();
+    let budget_tracker = transom_ai::ContextBudgetTracker::new(
+        &preamble_preview,
+        &memory,
+        &history_refs,
+        tools_tokens,
+        target.context_window,
+    );
+
     let pump_ctx = PumpContext {
         run_id: req.run_id,
         conversation_id,
@@ -309,11 +318,7 @@ pub(super) async fn start_ai_run(
         title,
         acp_agent,
         hook_executor,
-        preamble: preamble_preview,
-        memory,
-        tools_tokens,
-        context_window: target.context_window,
-        history_entries: history_branch,
+        budget_tracker,
         current_turn_entry_id,
         cancel,
     };
