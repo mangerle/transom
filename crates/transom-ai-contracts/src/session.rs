@@ -157,7 +157,20 @@ pub struct SessionTree {
 
 impl SessionTree {
     /// 从 JSONL 多行文本解析会话树；忽略空行，遇到损坏行则返回错误。
+    ///
+    /// 未指定活动叶节点时，以最后一条记录作为活动叶节点，兼容没有索引的旧调用方。
     pub fn from_jsonl(content: &str) -> Result<Self, AiError> {
+        Self::from_jsonl_with_active_leaf(content, None)
+    }
+
+    /// 从 JSONL 文本解析会话树，并显式恢复调用方提供的活动叶节点。
+    ///
+    /// 活动叶节点必须由会话索引提供，而不是由文件物理顺序推断；否则用户回滚到
+    /// 旧分支后，最后一条被放弃分支的记录会重新成为活动叶节点。
+    pub fn from_jsonl_with_active_leaf(
+        content: &str,
+        active_leaf_id: Option<&str>,
+    ) -> Result<Self, AiError> {
         let mut tree = Self::default();
         for (line_no, raw_line) in content.lines().enumerate() {
             let trimmed = raw_line.trim();
@@ -170,6 +183,9 @@ impl SessionTree {
                     reason: err.to_string(),
                 })?;
             tree.push(entry);
+        }
+        if let Some(leaf_id) = active_leaf_id {
+            tree.set_active_leaf(Some(leaf_id.to_owned()));
         }
         Ok(tree)
     }
@@ -266,6 +282,64 @@ pub fn extract_host_mentions(prompt: &str, available_hosts: &[&str]) -> Vec<Stri
 #[cfg(test)]
 mod tests {
     use super::{ChatRole, SessionEntry, SessionEntryKind, SessionScope, SessionTree};
+
+    #[test]
+    fn explicit_active_leaf_overrides_physical_last_entry() {
+        let header = SessionEntry::new(
+            None,
+            SessionEntryKind::Header {
+                title: "分支会话".to_owned(),
+                scope: SessionScope::Global,
+                model_id: "m1".to_owned(),
+            },
+        );
+        let user = SessionEntry::new(
+            Some(header.id.clone()),
+            SessionEntryKind::Message {
+                role: ChatRole::User,
+                text: "问题".to_owned(),
+                images: vec![],
+                model: None,
+                tokens_per_sec: None,
+                usage: None,
+            },
+        );
+        let kept = SessionEntry::new(
+            Some(user.id.clone()),
+            SessionEntryKind::Message {
+                role: ChatRole::Assistant,
+                text: "保留分支".to_owned(),
+                images: vec![],
+                model: None,
+                tokens_per_sec: None,
+                usage: None,
+            },
+        );
+        let abandoned = SessionEntry::new(
+            Some(user.id.clone()),
+            SessionEntryKind::Message {
+                role: ChatRole::Assistant,
+                text: "放弃分支".to_owned(),
+                images: vec![],
+                model: None,
+                tokens_per_sec: None,
+                usage: None,
+            },
+        );
+        let content = [&header, &user, &kept, &abandoned]
+            .into_iter()
+            .map(|entry| SessionTree::encode_entry(entry).expect("序列化失败"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let tree = SessionTree::from_jsonl_with_active_leaf(&content, Some(&kept.id))
+            .expect("解析会话失败");
+        let branch = tree.active_branch();
+        assert_eq!(
+            branch.last().map(|entry| entry.id.as_str()),
+            Some(kept.id.as_str())
+        );
+        assert!(!branch.iter().any(|entry| entry.id == abandoned.id));
+    }
 
     #[test]
     fn tree_branch_follows_parent_chain() {

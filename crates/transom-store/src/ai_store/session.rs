@@ -167,11 +167,16 @@ impl AiStore {
         if !path.exists() {
             return Ok(SessionTree::default());
         }
+        let active_leaf_id = self
+            .load_index()?
+            .into_iter()
+            .find(|summary| summary.id == conversation_id)
+            .and_then(|summary| summary.active_leaf_id);
         let text = fs::read_to_string(&path).map_err(|err| AiError::StorageFailed {
             target: path.display().to_string(),
             reason: err.to_string(),
         })?;
-        SessionTree::from_jsonl(&text)
+        SessionTree::from_jsonl_with_active_leaf(&text, active_leaf_id.as_deref())
     }
 
     /// 向指定对话的 JSONL 末尾追加一条记录。
@@ -236,6 +241,80 @@ mod tests {
             .mode()
             & 0o777;
         assert_eq!(mode, 0o600);
+    }
+
+    #[test]
+    fn session_tree_restores_active_branch_from_index() {
+        let dir = tempfile::tempdir().expect("创建临时目录失败");
+        let store = AiStore::with_root(dir.path().to_path_buf());
+        let header = transom_ai_contracts::SessionEntry::new(
+            None,
+            transom_ai_contracts::SessionEntryKind::Header {
+                title: "分支会话".to_owned(),
+                scope: SessionScope::Global,
+                model_id: "m1".to_owned(),
+            },
+        );
+        let user = transom_ai_contracts::SessionEntry::new(
+            Some(header.id.clone()),
+            transom_ai_contracts::SessionEntryKind::Message {
+                role: transom_ai_contracts::ChatRole::User,
+                text: "问题".to_owned(),
+                images: vec![],
+                model: None,
+                tokens_per_sec: None,
+                usage: None,
+            },
+        );
+        let kept = transom_ai_contracts::SessionEntry::new(
+            Some(user.id.clone()),
+            transom_ai_contracts::SessionEntryKind::Message {
+                role: transom_ai_contracts::ChatRole::Assistant,
+                text: "保留分支".to_owned(),
+                images: vec![],
+                model: None,
+                tokens_per_sec: None,
+                usage: None,
+            },
+        );
+        let abandoned = transom_ai_contracts::SessionEntry::new(
+            Some(user.id.clone()),
+            transom_ai_contracts::SessionEntryKind::Message {
+                role: transom_ai_contracts::ChatRole::Assistant,
+                text: "放弃分支".to_owned(),
+                images: vec![],
+                model: None,
+                tokens_per_sec: None,
+                usage: None,
+            },
+        );
+        for entry in [&header, &user, &kept, &abandoned] {
+            store
+                .append_session_entry("branch-conv", entry)
+                .expect("追加会话失败");
+        }
+        store
+            .upsert_conversation(ConversationSummary {
+                id: "branch-conv".to_owned(),
+                title: "分支会话".to_owned(),
+                scope: SessionScope::Global,
+                model_id: "m1".to_owned(),
+                effort: None,
+                updated_at: "2026-11-28T00:00:00Z".to_owned(),
+                active_leaf_id: Some(kept.id.clone()),
+                archived: false,
+            })
+            .expect("写入索引失败");
+
+        let tree = store
+            .load_session_tree("branch-conv")
+            .expect("加载会话失败");
+        let branch = tree.active_branch();
+        assert_eq!(
+            branch.last().map(|entry| entry.id.as_str()),
+            Some(kept.id.as_str())
+        );
+        assert!(!branch.iter().any(|entry| entry.id == abandoned.id));
     }
 
     #[test]
