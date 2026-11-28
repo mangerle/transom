@@ -33,7 +33,8 @@ use super::mcp_dispatch::{
     evaluate_tool_policy,
 };
 use crate::controller::Internal;
-use crate::controller::state::{AiApprovalMap, ControllerCtx, ControllerState};
+use crate::controller::ai_ops::control::AiApprovalMap;
+use crate::controller::state::{ControllerCtx, ControllerState};
 
 /// 单个活跃 SSH 会话在 MCP 侧的轻量执行句柄。
 #[derive(Clone)]
@@ -69,7 +70,7 @@ pub(in crate::controller) fn handle_mcp_snapshot(
         .iter()
         .filter_map(|(tab_id, managed)| {
             let remote = managed.remote.clone()?;
-            let meta = state.mcp_session_meta.get(tab_id)?.clone();
+            let meta = state.ai.mcp_session_meta.get(tab_id)?.clone();
             Some(McpLiveSession {
                 meta,
                 remote,
@@ -79,24 +80,30 @@ pub(in crate::controller) fn handle_mcp_snapshot(
         .collect();
 
     let store = state
-        .ai_output_stores
+        .ai
+        .output_stores
         .get_or_create(&transom_ai::ConversationId::from("mcp-external"));
     let settings = ctx.ai_config.snapshot();
     let timeout_secs = settings.command_timeout_secs.max(5);
     let command_timeout = Duration::from_secs(timeout_secs);
-    let app_bridge_deps =
-        AppBridgeDeps::from_controller(state, ctx, None, command_timeout, state.mcp_cancel.clone());
+    let app_bridge_deps = AppBridgeDeps::from_controller(
+        state,
+        ctx,
+        None,
+        command_timeout,
+        state.ai.mcp_cancel.clone(),
+    );
 
     if tx
         .send(McpControllerSnapshot {
             sessions,
             execution_mode: settings.execution_mode,
             exec_policy_rules: settings.exec_policy_rules.clone(),
-            approval_grants: state.ai_approval_grants.clone(),
+            approval_grants: state.ai.approval_grants.clone(),
             command_timeout,
             output_store: store,
-            approvals: state.ai_approvals.clone(),
-            terminal_reqs: state.ai_terminal_reqs.clone(),
+            approvals: state.ai.approvals.clone(),
+            terminal_reqs: state.ai.terminal_reqs.clone(),
             event_tx: ctx.event_tx.clone(),
             ai_store: ctx.ai_store.clone(),
             app_bridge_deps,
@@ -111,12 +118,12 @@ pub(in crate::controller) fn handle_mcp_snapshot(
 pub(in crate::controller) fn spawn_mcp_server(ctx: &ControllerCtx, state: &mut ControllerState) {
     let backend = Arc::new(ControllerMcpBackend {
         internal_tx: ctx.internal_tx.clone(),
-        cancel: state.mcp_cancel.clone(),
+        cancel: state.ai.mcp_cancel.clone(),
     });
     let server = Arc::new(McpServer::new(backend));
     let socket_path = ctx.ai_store.root().join("mcp.sock");
-    let cancel = state.mcp_cancel.clone();
-    state.mcp_task = Some(tokio::spawn(async move {
+    let cancel = state.ai.mcp_cancel.clone();
+    state.ai.mcp_task = Some(tokio::spawn(async move {
         if let Err(err) = serve_local_socket(server, &socket_path, cancel).await {
             log::debug!("本地 MCP Socket 未运行或已退出: {err}");
         }

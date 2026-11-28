@@ -17,7 +17,9 @@ mod sink;
 
 use super::event_pump::drive_agent_pump;
 use super::run_recorder::RunRecorder;
-use crate::controller::state::{AiApprovalMap, AiRunMap, HandoffSenderMap, SteerQueueMap};
+use crate::controller::ai_ops::control::{
+    AiApprovalMap, AiRunMap, HandoffSenderMap, SteerQueueMap,
+};
 use events::emit_ui_event;
 use sink::MainAgentPumpSink;
 

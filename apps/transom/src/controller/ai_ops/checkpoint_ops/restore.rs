@@ -118,7 +118,7 @@ pub(in crate::controller::ai_ops) fn spawn_revert_remote_file(
     let event_tx = ctx.event_tx.clone();
     let conv_id = conversation_id.unwrap_or_default();
 
-    state.ai_set.spawn(async move {
+    state.ai.run_set.spawn(async move {
         let io = ToolIoContext::new(REMOTE_RESTORE_TIMEOUT, CancellationToken::new());
         let (ok, output) = match validate_and_read_backup(&allowed_root, &backup_path).await {
             Ok(content) => match target_session {

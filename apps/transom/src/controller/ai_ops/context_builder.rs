@@ -94,7 +94,7 @@ pub(super) fn build_tool_context(
         });
         let exec = Arc::new(SshRemoteExecutor {
             remote: remote.clone(),
-            tasks: Some(state.ai_tasks.clone()),
+            tasks: Some(state.ai.managed_tasks.clone()),
             host_label: host_name.clone(),
         });
         bulk_hosts.push(BulkHostTarget {
@@ -112,7 +112,7 @@ pub(super) fn build_tool_context(
         terminal = Some(Arc::new(UiTerminalBridge {
             tab_id,
             event_tx: ctx.event_tx.clone(),
-            pending: state.ai_terminal_reqs.clone(),
+            pending: state.ai.terminal_reqs.clone(),
         }));
         runtime_inspector = Some(Arc::new(HostRuntimeBridge { remote }));
     }
@@ -135,7 +135,7 @@ pub(super) fn build_tool_context(
                 protection: extra.protection,
                 executor: Arc::new(SshRemoteExecutor {
                     remote,
-                    tasks: Some(state.ai_tasks.clone()),
+                    tasks: Some(state.ai.managed_tasks.clone()),
                     host_label: extra.host_name.clone(),
                 }),
             });
@@ -143,7 +143,8 @@ pub(super) fn build_tool_context(
     }
 
     let output_store = state
-        .ai_output_stores
+        .ai
+        .output_stores
         .get_or_create(&transom_ai::ConversationId::from(conversation_id));
 
     let command_timeout = Duration::from_secs(timeout_secs.max(5));
@@ -170,9 +171,9 @@ pub(super) fn build_tool_context(
             approval_grants: cfg.approval_grants,
             default_target: default_target.clone(),
             app_bridge_deps: bridge_deps.clone(),
-            tasks: state.ai_tasks.clone(),
-            subagent_histories: state.ai_subagent_histories.clone(),
-            approvals: state.ai_approvals.clone(),
+            tasks: state.ai.managed_tasks.clone(),
+            subagent_histories: state.ai.subagent_histories.clone(),
+            approvals: state.ai.approvals.clone(),
             event_tx: ctx.event_tx.clone(),
             parent_cancel: cancel.clone(),
         }) as Arc<dyn transom_ai::SubagentRunner>

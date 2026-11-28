@@ -94,7 +94,8 @@ pub(in crate::controller) struct AppBridgeTarget {
     pub(in crate::controller) active_sftp: Option<transom_net::SftpClient>,
     pub(in crate::controller) conversation_id: Option<String>,
     pub(in crate::controller) current_turn_entry_id: Arc<parking_lot::RwLock<Option<String>>>,
-    pub(in crate::controller) headless_remotes: crate::controller::state::AiHeadlessRemoteMap,
+    pub(in crate::controller) headless_remotes:
+        crate::controller::ai_ops::control::AiHeadlessRemoteMap,
 }
 
 impl AppBridgeDeps {
@@ -131,10 +132,10 @@ impl AppBridgeDeps {
                 local_processes: ctx.local_processes.clone(),
                 event_tx: ctx.event_tx.clone(),
                 internal_tx: ctx.internal_tx.clone(),
-                app_action_reqs: state.ai_app_action_reqs.clone(),
+                app_action_reqs: state.ai.app_action_reqs.clone(),
                 command_timeout,
                 cancel,
-                tasks: state.ai_tasks.clone(),
+                tasks: state.ai.managed_tasks.clone(),
             },
             target: AppBridgeTarget {
                 active_tab_id,
@@ -142,7 +143,7 @@ impl AppBridgeDeps {
                 active_sftp,
                 conversation_id: None,
                 current_turn_entry_id: Arc::new(parking_lot::RwLock::new(None)),
-                headless_remotes: state.ai_headless_remotes.clone(),
+                headless_remotes: state.ai.headless_remotes.clone(),
             },
         }
     }

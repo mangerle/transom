@@ -32,7 +32,7 @@ pub(in crate::controller::ai_ops) fn spawn_rollback_checkpoint(
         .collect();
     let session_catalog = ctx.session_store.load().unwrap_or_default();
 
-    state.ai_set.spawn(async move {
+    state.ai.run_set.spawn(async move {
         let io = ToolIoContext::new(
             super::REMOTE_RESTORE_TIMEOUT,
             CancellationToken::new(),

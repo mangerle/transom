@@ -386,7 +386,7 @@ async fn run_controller(wiring: ControlPlaneWiring) {
         let has_container_ops = !state.container_ops.is_empty();
         let has_cleanup = !state.cleanup_set.is_empty();
         let has_git = !state.git_set.is_empty();
-        let has_ai = !state.ai_set.is_empty();
+        let has_ai = !state.ai.run_set.is_empty();
         let has_sync = state.sync_task.is_some();
         let incoming = tokio::select! {
             command = command_rx.recv_async() => Incoming::Command(command),
@@ -419,7 +419,7 @@ async fn run_controller(wiring: ControlPlaneWiring) {
                 report_join_error("Git 请求", joined);
                 continue;
             }
-            joined = state.ai_set.join_next(), if has_ai => {
+            joined = state.ai.run_set.join_next(), if has_ai => {
                 report_join_error("AI 助手运行", joined);
                 continue;
             }

@@ -24,7 +24,7 @@ use super::app_bridge::{
 use super::event_pump::{AgentPumpSink, drive_agent_pump};
 use super::hooks_exec::ControllerHookExecutor;
 use super::task_runner::{ManagedTaskHandle, ManagedTaskRegistry};
-use crate::controller::state::AiApprovalMap;
+use crate::controller::ai_ops::control::AiApprovalMap;
 
 pub(in crate::controller) struct ControllerSubagentRunner {
     pub(in crate::controller) parent_run_id: String,

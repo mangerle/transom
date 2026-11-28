@@ -64,7 +64,7 @@ pub(super) fn spawn_discover_models(
     let event_tx = ctx.event_tx.clone();
     let store = ctx.ai_store.clone();
     let secrets = ctx.secret_store.clone();
-    state.ai_set.spawn(async move {
+    state.ai.run_set.spawn(async move {
         let api_key =
             match resolve_probe_api_key(store, secrets, params.api_key, params.provider_id).await {
                 Ok(api_key) => api_key,
@@ -109,7 +109,7 @@ pub(super) fn spawn_test_connection(
     let event_tx = ctx.event_tx.clone();
     let store = ctx.ai_store.clone();
     let secrets = ctx.secret_store.clone();
-    state.ai_set.spawn(async move {
+    state.ai.run_set.spawn(async move {
         let api_key =
             match resolve_probe_api_key(store, secrets, params.api_key, params.provider_id).await {
                 Ok(api_key) => api_key,
@@ -175,7 +175,8 @@ pub(super) async fn start_acp_only_run(
 
     let cancel = CancellationToken::new();
     state
-        .ai_runs
+        .ai
+        .runs
         .lock()
         .insert(RunId::from(req.run_id.as_str()), cancel.clone());
     let (event_tx, event_rx) = mpsc::channel(EVENT_CHANNEL_CAPACITY);
@@ -238,7 +239,7 @@ pub(super) async fn start_acp_only_run(
         plan_mode: req.plan_mode,
         exec_policy_rules: settings.exec_policy_rules.clone(),
         approval_scope,
-        approval_grants: state.ai_approval_grants.clone(),
+        approval_grants: state.ai.approval_grants.clone(),
         hook_executor: None,
         max_turns: 15,
         tool_ctx,
@@ -257,10 +258,10 @@ pub(super) async fn start_acp_only_run(
         },
         recorder,
         event_tx: ctx.event_tx.clone(),
-        approvals: state.ai_approvals.clone(),
-        handoffs: state.ai_handoffs.clone(),
-        runs_map: state.ai_runs.clone(),
-        steers_map: state.ai_steers.clone(),
+        approvals: state.ai.approvals.clone(),
+        handoffs: state.ai.handoffs.clone(),
+        runs_map: state.ai.runs.clone(),
+        steers_map: state.ai.steers.clone(),
         title,
         acp_agent: Some(agent),
         hook_executor: None,
@@ -272,7 +273,8 @@ pub(super) async fn start_acp_only_run(
         cancel,
     };
     state
-        .ai_set
+        .ai
+        .run_set
         .spawn(execute_and_pump(input, event_rx, pump_ctx));
 }
 
@@ -284,7 +286,7 @@ pub(super) fn spawn_install_acp_agent(
     install_command: String,
 ) {
     let event_tx = ctx.event_tx.clone();
-    state.ai_set.spawn(async move {
+    state.ai.run_set.spawn(async move {
         let _ = event_tx
             .send_async(AppEvent::Ai(Box::new(AiAppEvent::AcpInstallStatus {
                 agent_id: agent_id.clone(),
@@ -366,7 +368,7 @@ pub(super) fn spawn_probe_acp_models(
         return;
     };
     let event_tx = ctx.event_tx.clone();
-    state.ai_set.spawn(async move {
+    state.ai.run_set.spawn(async move {
         match probe_acp_models(&agent).await {
             Ok(res) => {
                 let _ = event_tx

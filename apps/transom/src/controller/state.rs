@@ -17,124 +17,14 @@ use parking_lot::RwLock;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
 use tokio::task::JoinSet;
-use tokio_util::sync::CancellationToken;
-use transom_ai::{ApprovalRequestId, RunId};
-use transom_core::{
-    AppEvent, ConnectionId, KnownHostsStore, SecretStore, SessionId, TabId, TransferId,
-};
+use transom_core::{AppEvent, ConnectionId, KnownHostsStore, SecretStore, TabId, TransferId};
 use transom_git::{GitConfig, Repo};
 use transom_net::SshRemote;
 use transom_store::AiStore;
 
-use super::ai_ops::AiConfigService;
+use super::ai_ops::{AiConfigService, AiControlState};
 use transom_sync::CloudSyncService;
-
-/// AI 后台静默 SSH 连接的默认空闲 TTL。
-pub(super) const HEADLESS_REMOTE_TTL: Duration = Duration::from_secs(30 * 60);
-
-/// AI 后台静默 SSH 连接的最大缓存数量。
-pub(super) const MAX_HEADLESS_REMOTES: usize = 8;
-
-/// AI 工具在后台静默建立的无标签页远端 SSH 连接 LRU/TTL 缓存。
-pub(super) type AiHeadlessRemoteMap = Arc<AiHeadlessRemoteCache>;
-
-/// 在途 AI 运行取消令牌映射。
-pub(super) type AiRunMap = Arc<parking_lot::Mutex<HashMap<RunId, CancellationToken>>>;
-
-/// 待审批请求回传通道映射。
-pub(super) type AiApprovalMap = Arc<
-    parking_lot::Mutex<
-        HashMap<ApprovalRequestId, tokio::sync::oneshot::Sender<transom_core::AiApprovalDecision>>,
-    >,
->;
-
-/// 有界、带空闲 TTL 的后台远端连接缓存。
-pub(super) struct AiHeadlessRemoteCache {
-    entries: parking_lot::Mutex<HashMap<SessionId, HeadlessRemoteEntry>>,
-    ttl: Duration,
-    max_entries: usize,
-}
-
-struct HeadlessRemoteEntry {
-    remote: SshRemote,
-    last_used: Instant,
-}
-
-impl Default for AiHeadlessRemoteCache {
-    fn default() -> Self {
-        Self::new(HEADLESS_REMOTE_TTL, MAX_HEADLESS_REMOTES)
-    }
-}
-
-impl AiHeadlessRemoteCache {
-    /// 创建指定 TTL 与容量上限的连接缓存。
-    pub(super) fn new(ttl: Duration, max_entries: usize) -> Self {
-        Self {
-            entries: parking_lot::Mutex::new(HashMap::with_capacity(max_entries.max(1))),
-            ttl,
-            max_entries: max_entries.max(1),
-        }
-    }
-
-    /// 取得仍有效的连接并刷新其 LRU/TTL 位置。
-    pub(super) fn get(&self, session_id: &SessionId) -> Option<SshRemote> {
-        let now = Instant::now();
-        let mut entries = self.entries.lock();
-        entries.retain(|_, entry| !self.expired(entry, now));
-        let entry = entries.get_mut(session_id)?;
-        if self.expired(entry, now) {
-            entries.remove(session_id);
-            return None;
-        }
-        entry.last_used = now;
-        Some(entry.remote.clone())
-    }
-
-    /// 插入连接；超容量时淘汰最久未使用的连接。
-    pub(super) fn insert(&self, session_id: SessionId, remote: SshRemote) {
-        let now = Instant::now();
-        let mut entries = self.entries.lock();
-        entries.retain(|_, entry| !self.expired(entry, now));
-        if !entries.contains_key(&session_id)
-            && entries.len() >= self.max_entries
-            && let Some(oldest) = entries
-                .iter()
-                .min_by_key(|(_, entry)| entry.last_used)
-                .map(|(id, _)| *id)
-        {
-            entries.remove(&oldest);
-        }
-        entries.insert(
-            session_id,
-            HeadlessRemoteEntry {
-                remote,
-                last_used: now,
-            },
-        );
-    }
-
-    /// 清空全部后台连接；连接句柄随 `SshRemote` 释放触发底层资源回收。
-    pub(super) fn clear(&self) {
-        self.entries.lock().clear();
-    }
-
-    fn expired(&self, entry: &HeadlessRemoteEntry, now: Instant) -> bool {
-        now.checked_duration_since(entry.last_used)
-            .is_some_and(|age| age >= self.ttl)
-    }
-}
-
-/// 在途 AI 运行的中途引导（Steer）注入队列映射表。
-pub(super) type SteerQueueMap = Arc<
-    parking_lot::Mutex<HashMap<RunId, Arc<parking_lot::Mutex<std::collections::VecDeque<String>>>>>,
->;
-
-/// 终端手动接管恢复回调映射表。
-pub(super) type HandoffSenderMap = Arc<
-    parking_lot::Mutex<HashMap<String, tokio::sync::oneshot::Sender<Result<Option<String>, ()>>>>,
->;
 
 /// 控制平面的全部可变状态表。
 pub(super) struct ControllerState {
@@ -168,37 +58,8 @@ pub(super) struct ControllerState {
     pub(super) container_ops: JoinSet<()>,
     /// Git 面板的一次性读写请求：全部子进程自带超时，停机统一限时等待。
     pub(super) git_set: JoinSet<()>,
-    /// 在途 AI 运行的取消令牌。
-    pub(super) ai_runs: AiRunMap,
-    /// 在途 AI 运行的中途引导（Steer）注入队列。
-    pub(super) ai_steers: SteerQueueMap,
-    /// 待用户审批的 AI 工具回调表。
-    pub(super) ai_approvals: AiApprovalMap,
-    /// 待用户在交互式终端完成手动操作的恢复通道。
-    pub(super) ai_handoffs: HandoffSenderMap,
-    /// 已通过审批卡片“允许同类”放行的命令前缀，按对话、主机与保护级别隔离。
-    pub(super) ai_approval_grants: Arc<parking_lot::RwLock<transom_ai::ApprovalGrantStore>>,
-    /// 待 UI 回传的终端上下文请求表。
-    pub(super) ai_terminal_reqs:
-        Arc<parking_lot::Mutex<HashMap<String, tokio::sync::oneshot::Sender<Option<String>>>>>,
-    /// 待 UI 回传的软件级动作执行结果表。
-    pub(super) ai_app_action_reqs: super::ai_ops::app_bridge::AppActionReqMap,
-    /// AI 运行后台任务集合。
-    pub(super) ai_set: JoinSet<()>,
-    /// 托管后台任务中心（本机/远端命令、传输与子 Agent）。
-    pub(super) ai_tasks: Arc<super::ai_ops::task_runner::ManagedTaskRegistry>,
-    /// 子 Agent 上下文历史缓存（`subagent_id -> SessionEntry` 分支），支持 `resume_id` 多轮追问复用。
-    pub(super) ai_subagent_histories:
-        Arc<parking_lot::Mutex<HashMap<String, Vec<transom_ai::SessionEntry>>>>,
-    /// 按对话 ID 复用的全局有界超大工具输出句柄池。
-    pub(super) ai_output_stores: transom_ai::ToolOutputStorePool,
-    /// AI 工具后台静默直连的远端 SSH 句柄缓存（不打开 UI 标签页）。
-    pub(super) ai_headless_remotes: AiHeadlessRemoteMap,
-    /// 已发起 SSH 连接的标签元数据（供反向 MCP Server 列表展示）。
-    pub(super) mcp_session_meta: HashMap<TabId, transom_core::AiHostTargetDto>,
-    /// 反向 MCP Server 取消令牌与后台任务句柄。
-    pub(super) mcp_cancel: CancellationToken,
-    pub(super) mcp_task: Option<tokio::task::JoinHandle<()>>,
+    /// AI 子系统的运行、审批、托管任务与反向 MCP 生命周期。
+    pub(super) ai: AiControlState,
 }
 
 impl ControllerState {
@@ -219,25 +80,7 @@ impl ControllerState {
             container_connects: HashMap::new(),
             container_ops: JoinSet::new(),
             git_set: JoinSet::new(),
-            ai_runs: Arc::new(parking_lot::Mutex::new(HashMap::new())),
-            ai_steers: Arc::new(parking_lot::Mutex::new(HashMap::new())),
-            ai_approvals: Arc::new(parking_lot::Mutex::new(HashMap::new())),
-            ai_handoffs: Arc::new(parking_lot::Mutex::new(HashMap::new())),
-            ai_approval_grants: Arc::new(parking_lot::RwLock::new(
-                transom_ai::ApprovalGrantStore::new(),
-            )),
-            ai_terminal_reqs: Arc::new(parking_lot::Mutex::new(HashMap::new())),
-            ai_app_action_reqs: Arc::new(parking_lot::Mutex::new(HashMap::new())),
-            ai_set: JoinSet::new(),
-            ai_tasks: Arc::new(super::ai_ops::task_runner::ManagedTaskRegistry::new(
-                event_tx,
-            )),
-            ai_subagent_histories: Arc::new(parking_lot::Mutex::new(HashMap::new())),
-            ai_output_stores: transom_ai::ToolOutputStorePool::default(),
-            ai_headless_remotes: Arc::new(AiHeadlessRemoteCache::default()),
-            mcp_session_meta: HashMap::new(),
-            mcp_cancel: CancellationToken::new(),
-            mcp_task: None,
+            ai: AiControlState::new(event_tx),
         }
     }
 
@@ -271,7 +114,7 @@ impl ControllerState {
 
     /// 销毁并安全清理指定标签的全部会话资源。
     pub(super) fn terminate_session(&mut self, tab_id: TabId, reason: &str) {
-        self.mcp_session_meta.remove(&tab_id);
+        self.ai.mcp_session_meta.remove(&tab_id);
         if let Some(session) = self.sessions.remove(&tab_id) {
             session.shutdown(&mut self.cleanup_set, reason);
         }

@@ -90,7 +90,7 @@ async fn handle_terminal_command(
                 shell_integration,
             } = *params;
             if let transom_core::Connection::Ssh(ssh) = &session.connection {
-                state.mcp_session_meta.insert(
+                state.ai.mcp_session_meta.insert(
                     tab_id,
                     transom_core::AiHostTargetDto {
                         tab_id,

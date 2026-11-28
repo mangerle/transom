@@ -1,8 +1,6 @@
 //! AI 运行调度、快模型挑选与停机清理。
 
 use std::sync::Arc;
-use std::time::Duration;
-
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 use transom_ai::RunId;
@@ -218,11 +216,13 @@ pub(super) async fn start_ai_run(
     let cancel = CancellationToken::new();
     let steer_queue = Arc::new(parking_lot::Mutex::new(std::collections::VecDeque::new()));
     state
-        .ai_runs
+        .ai
+        .runs
         .lock()
         .insert(RunId::from(req.run_id.as_str()), cancel.clone());
     state
-        .ai_steers
+        .ai
+        .steers
         .lock()
         .insert(RunId::from(req.run_id.as_str()), steer_queue.clone());
 
@@ -249,7 +249,7 @@ pub(super) async fn start_ai_run(
                 exec_policy_rules: &settings.exec_policy_rules,
                 hooks: &settings.hooks,
                 approval_scope: &approval_scope,
-                approval_grants: state.ai_approval_grants.clone(),
+                approval_grants: state.ai.approval_grants.clone(),
                 execution_mode: execution_mode.clone(),
             }),
             current_turn_entry_id: current_turn_entry_id.clone(),
@@ -277,7 +277,7 @@ pub(super) async fn start_ai_run(
         plan_mode: req.plan_mode,
         exec_policy_rules: settings.exec_policy_rules.clone(),
         approval_scope,
-        approval_grants: state.ai_approval_grants.clone(),
+        approval_grants: state.ai.approval_grants.clone(),
         hook_executor: hook_executor.clone(),
         max_turns: settings.max_turns,
         tool_ctx,
@@ -297,10 +297,10 @@ pub(super) async fn start_ai_run(
             .unwrap_or(target.model),
         recorder: recorder.clone(),
         event_tx: ctx.event_tx.clone(),
-        approvals: state.ai_approvals.clone(),
-        handoffs: state.ai_handoffs.clone(),
-        runs_map: state.ai_runs.clone(),
-        steers_map: state.ai_steers.clone(),
+        approvals: state.ai.approvals.clone(),
+        handoffs: state.ai.handoffs.clone(),
+        runs_map: state.ai.runs.clone(),
+        steers_map: state.ai.steers.clone(),
         title,
         acp_agent,
         hook_executor,
@@ -313,39 +313,12 @@ pub(super) async fn start_ai_run(
     };
 
     state
-        .ai_set
+        .ai
+        .run_set
         .spawn(execute_and_pump(input, event_rx, pump_ctx));
 }
 
 /// 停机时取消所有在途 AI 运行与反向 MCP 服务并限时等待回收。
 pub(in crate::controller) async fn shutdown_ai_runs(state: &mut ControllerState) {
-    state.mcp_cancel.cancel();
-    state.ai_tasks.cancel_all();
-    if let Some(task) = state.mcp_task.take() {
-        let _ = tokio::time::timeout(Duration::from_secs(1), task).await;
-    }
-    {
-        let runs = state.ai_runs.lock();
-        for token in runs.values() {
-            token.cancel();
-        }
-    }
-    state.ai_approvals.lock().clear();
-    state.ai_handoffs.lock().clear();
-    state.ai_terminal_reqs.lock().clear();
-    state.ai_app_action_reqs.lock().clear();
-    state.ai_output_stores.clear();
-    state.ai_approval_grants.write().clear();
-    state.ai_headless_remotes.clear();
-    let _ = tokio::time::timeout(Duration::from_secs(2), async {
-        while state.ai_set.join_next().await.is_some() {}
-    })
-    .await;
-    state.ai_tasks.close_background();
-    if tokio::time::timeout(Duration::from_secs(2), state.ai_tasks.wait_background())
-        .await
-        .is_err()
-    {
-        log::warn!("等待 AI 托管后台任务退出超过 2 秒");
-    }
+    state.ai.shutdown().await;
 }

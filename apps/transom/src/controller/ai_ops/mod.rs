@@ -7,6 +7,7 @@ mod checkpoint_ops;
 mod compact;
 mod config_service;
 mod context_builder;
+mod control;
 mod credentials;
 mod dispatch;
 mod event_pump;
@@ -30,6 +31,7 @@ use transom_core::AiCommand;
 use super::state::{ControllerCtx, ControllerState};
 pub(in crate::controller) use config_service::AiConfigService;
 use context_builder::{build_tool_context, prepare_conversation};
+pub(in crate::controller) use control::AiControlState;
 pub(in crate::controller) use dispatch::shutdown_ai_runs;
 pub(in crate::controller) use mcp_bridge::{
     McpControllerSnapshot, handle_mcp_snapshot, spawn_mcp_server,
@@ -70,7 +72,7 @@ pub(in crate::controller) async fn handle_ai_command(
     match cmd {
         AiCommand::SendPrompt(req) => dispatch::start_ai_run(state, ctx, *req).await,
         AiCommand::CancelRun { run_id } => {
-            if let Some(token) = state.ai_runs.lock().get(&RunId::from(run_id.as_str())) {
+            if let Some(token) = state.ai.runs.lock().get(&RunId::from(run_id.as_str())) {
                 token.cancel();
             }
         }
@@ -79,7 +81,8 @@ pub(in crate::controller) async fn handle_ai_command(
             decision,
         } => {
             if let Some(sender) = state
-                .ai_approvals
+                .ai
+                .approvals
                 .lock()
                 .remove(&ApprovalRequestId::from(request_id.as_str()))
             {
@@ -90,7 +93,7 @@ pub(in crate::controller) async fn handle_ai_command(
             conversation_id,
             focus_instructions,
         } => compact::spawn_compact_conversation(
-            &mut state.ai_set,
+            &mut state.ai.run_set,
             ctx.ai_store.clone(),
             ctx.ai_config.clone(),
             ctx.secret_store.clone(),
@@ -128,7 +131,7 @@ pub(in crate::controller) async fn handle_ai_command(
             terminal_output,
             cancelled,
         } => {
-            if let Some(sender) = state.ai_handoffs.lock().remove(&run_id) {
+            if let Some(sender) = state.ai.handoffs.lock().remove(&run_id) {
                 let payload = if cancelled {
                     Err(())
                 } else {
@@ -141,25 +144,27 @@ pub(in crate::controller) async fn handle_ai_command(
             request_id,
             content,
         } => {
-            if let Some(sender) = state.ai_terminal_reqs.lock().remove(&request_id) {
+            if let Some(sender) = state.ai.terminal_reqs.lock().remove(&request_id) {
                 let _ = sender.send(content);
             }
         }
         AiCommand::RespondAppAction { request_id, result } => {
-            if let Some(sender) = state.ai_app_action_reqs.lock().remove(&request_id) {
+            if let Some(sender) = state.ai.app_action_reqs.lock().remove(&request_id) {
                 let _ = sender.send(result);
             }
         }
         AiCommand::DeleteConversation { conversation_id } => {
             state
-                .ai_output_stores
+                .ai
+                .output_stores
                 .remove(&transom_ai::ConversationId::from(conversation_id.as_str()));
             state
-                .ai_approval_grants
+                .ai
+                .approval_grants
                 .write()
                 .remove_namespace(&conversation_id);
             let store = ctx.ai_store.clone();
-            state.ai_set.spawn(async move {
+            state.ai.run_set.spawn(async move {
                 let _ = tokio::task::spawn_blocking(move || {
                     if let Err(err) = store.delete_conversation(&conversation_id) {
                         log::warn!("删除 AI 对话失败（{conversation_id}）: {err}");
@@ -173,7 +178,7 @@ pub(in crate::controller) async fn handle_ai_command(
             archived,
         } => {
             let store = ctx.ai_store.clone();
-            state.ai_set.spawn(async move {
+            state.ai.run_set.spawn(async move {
                 let _ = tokio::task::spawn_blocking(move || {
                     if let Err(err) = store.set_conversation_archived(&conversation_id, archived) {
                         log::warn!("归档 AI 对话失败（{conversation_id}）: {err}");
@@ -187,7 +192,7 @@ pub(in crate::controller) async fn handle_ai_command(
             title,
         } => {
             let store = ctx.ai_store.clone();
-            state.ai_set.spawn(async move {
+            state.ai.run_set.spawn(async move {
                 let _ = tokio::task::spawn_blocking(move || {
                     if let Err(err) = store.rename_conversation(&conversation_id, &title) {
                         log::warn!("重命名 AI 对话失败（{conversation_id}）: {err}");
@@ -249,7 +254,7 @@ pub(in crate::controller) async fn handle_ai_command(
             host_markdown,
         } => {
             let store = ctx.ai_store.clone();
-            state.ai_set.spawn(async move {
+            state.ai.run_set.spawn(async move {
                 let _ = tokio::task::spawn_blocking(move || {
                     if let Some(global) = global_markdown
                         && let Err(err) = store.save_global_memory(&global)
@@ -306,22 +311,23 @@ pub(in crate::controller) async fn handle_ai_command(
         } => acp::spawn_install_acp_agent(state, ctx, agent_id, name, install_command),
         AiCommand::ProbeAcpModels { agent_id } => acp::spawn_probe_acp_models(state, ctx, agent_id),
         AiCommand::CancelManagedTask { task_id } => {
-            if let Some((remote, pid)) = state.ai_tasks.cancel_task(&task_id) {
+            if let Some((remote, pid)) = state.ai.managed_tasks.cancel_task(&task_id) {
                 state
-                    .ai_set
+                    .ai
+                    .run_set
                     .spawn(task_runner::kill_remote_pid(remote, pid));
             }
         }
         AiCommand::DismissManagedTask { .. } => {}
         AiCommand::DetachManagedTask { task_id } => {
-            state.ai_tasks.detach_task(&task_id);
+            state.ai.managed_tasks.detach_task(&task_id);
         }
         AiCommand::SteerRun { run_id, message } => {
             if !message.trim().is_empty() {
-                if let Some(queue) = state.ai_steers.lock().get(&RunId::from(run_id.as_str())) {
+                if let Some(queue) = state.ai.steers.lock().get(&RunId::from(run_id.as_str())) {
                     queue.lock().push_back(message);
                 } else {
-                    state.ai_tasks.steer_task(&run_id, message);
+                    state.ai.managed_tasks.steer_task(&run_id, message);
                 }
             }
         }

@@ -18,7 +18,7 @@ pub(super) fn spawn_inline_assist(
     let settings = ctx.ai_config.snapshot();
     let Some((provider, model_cfg)) = settings.resolve_model("") else {
         send_err(
-            &mut state.ai_set,
+            &mut state.ai.run_set,
             event_tx,
             request_id,
             "尚未配置默认 AI 模型，请先在设置中配置供应商".to_owned(),
@@ -29,7 +29,7 @@ pub(super) fn spawn_inline_assist(
     let secrets = ctx.secret_store.clone();
     let provider_id = provider.id.clone();
     let model_id = model_cfg.id.clone();
-    state.ai_set.spawn(async move {
+    state.ai.run_set.spawn(async move {
         let api_key = match load_provider_api_key(store, secrets, provider_id).await {
             Ok(Some(secret)) => secret,
             Ok(None) => String::new(),
