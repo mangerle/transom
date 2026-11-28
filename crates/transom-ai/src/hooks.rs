@@ -1,28 +1,15 @@
 //! 生命周期钩子的运行时 HTTP 适配层与契约兼容重导出。
 
-use std::sync::OnceLock;
 use std::time::Duration;
 
 pub use transom_ai_contracts::hooks::*;
 
-static WEBHOOK_CLIENT: OnceLock<Result<reqwest::Client, String>> = OnceLock::new();
-
-fn webhook_client() -> Result<&'static reqwest::Client, String> {
-    WEBHOOK_CLIENT
-        .get_or_init(|| {
-            reqwest::Client::builder()
-                .timeout(Duration::from_secs(10))
-                .build()
-                .map_err(|err| format!("构建 Webhook HTTP 客户端失败: {err}"))
-        })
-        .as_ref()
-        .map_err(Clone::clone)
-}
-
 /// 复用进程级 `reqwest::Client` 单例向 Webhook 端点发送 JSON 载荷（带 10 秒超时）。
 pub async fn send_webhook_json(url: &str, payload: &serde_json::Value) -> Result<(), String> {
-    let resp = webhook_client()?
+    let client = crate::shared_http_client()?;
+    let resp = client
         .post(url)
+        .timeout(Duration::from_secs(10))
         .json(payload)
         .send()
         .await

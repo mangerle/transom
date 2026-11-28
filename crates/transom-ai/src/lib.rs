@@ -114,3 +114,18 @@ pub use transom_ai_contracts::ids::{ApprovalRequestId, ConversationId, RunId, To
 pub use working_state::{
     SessionWorkingState, aggressive_compact_history, is_context_overflow_error,
 };
+
+/// 进程级共享 `reqwest::Client` 连接池单例（供模型发现与 Webhook 共用）。
+pub(crate) fn shared_http_client() -> Result<&'static reqwest::Client, String> {
+    static CLIENT: std::sync::OnceLock<Result<reqwest::Client, String>> =
+        std::sync::OnceLock::new();
+    CLIENT
+        .get_or_init(|| {
+            reqwest::Client::builder()
+                .timeout(std::time::Duration::from_secs(15))
+                .build()
+                .map_err(|err| format!("构建共享 HTTP 客户端失败: {err}"))
+        })
+        .as_ref()
+        .map_err(Clone::clone)
+}

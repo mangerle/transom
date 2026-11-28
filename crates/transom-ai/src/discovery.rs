@@ -1,15 +1,13 @@
 //! 模型列表自动发现、连通性测试与上下文窗口自动推断。
 //!
 //! 设计原理（Why）：
-//! - `reqwest::Client` 底层自带连接池与 `Arc` 封装，统一通过 `HTTP_CLIENT` 全局单例复用，
-//!   严禁在每次请求中临时创建 `Client::new()`；
+//! - `reqwest::Client` 底层自带连接池与 `Arc` 封装，统一复用 `crate::shared_http_client()`
+//!   进程级单例，严禁在每次请求中临时创建 `Client::new()`；
 //! - 兼容 OpenAI（`/models`）、Anthropic（`/v1/models`）与 Ollama（`/api/tags`）三种响应格式，
 //!   并在缺少上下文窗口声明时依据模型名称自动推断。
 
-use std::sync::LazyLock;
 use std::time::{Duration, Instant};
 
-use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
 use crate::config::ProviderProtocol;
@@ -18,13 +16,6 @@ use crate::error::AiError;
 const DISCOVERY_TIMEOUT: Duration = Duration::from_secs(15);
 /// 模型列表响应允许读取的最大字节数，防止异常端点耗尽进程内存。
 const MAX_DISCOVERY_RESPONSE_BYTES: u64 = 2 * 1024 * 1024;
-
-static HTTP_CLIENT: LazyLock<Result<Client, String>> = LazyLock::new(|| {
-    Client::builder()
-        .timeout(DISCOVERY_TIMEOUT)
-        .build()
-        .map_err(|err| format!("构建模型发现 HTTP 客户端失败: {err}"))
-});
 
 /// 探测到的单个远端模型摘要。
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -116,14 +107,12 @@ pub async fn discover_models(
     api_key: &str,
 ) -> Result<Vec<DiscoveredModel>, AiError> {
     let url = build_models_url(protocol, base_url)?;
-    let client = HTTP_CLIENT
-        .as_ref()
-        .map_err(|reason| AiError::ModelCallFailed {
-            protocol: protocol.as_str().to_owned(),
-            model: "models".to_owned(),
-            reason: reason.clone(),
-        })?;
-    let mut req = client.get(&url);
+    let client = crate::shared_http_client().map_err(|reason| AiError::ModelCallFailed {
+        protocol: protocol.as_str().to_owned(),
+        model: "models".to_owned(),
+        reason,
+    })?;
+    let mut req = client.get(&url).timeout(DISCOVERY_TIMEOUT);
     match protocol {
         ProviderProtocol::Anthropic => {
             if !api_key.trim().is_empty() {
