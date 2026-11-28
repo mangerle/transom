@@ -78,17 +78,17 @@ pub(super) async fn start_ai_run(
     });
 
     let Some((provider, _)) = settings.resolve_model(&req.model_id) else {
-        if acp_agent.is_none() {
-            emit_run_error(
-                ctx,
-                req.run_id,
-                req.conversation_id.unwrap_or_default(),
-                "尚未配置任何 AI 模型，请先在设置页添加供应商与模型".to_owned(),
-            )
-            .await;
-            return;
+        if let Some(agent) = acp_agent {
+            return acp::start_acp_only_run(state, ctx, req, agent).await;
         }
-        return acp::start_acp_only_run(state, ctx, req, acp_agent.expect("已检查存在")).await;
+        emit_run_error(
+            ctx,
+            req.run_id,
+            req.conversation_id.unwrap_or_default(),
+            "尚未配置任何 AI 模型，请先在设置页添加供应商与模型".to_owned(),
+        )
+        .await;
+        return;
     };
 
     let api_key = match load_provider_api_key(
