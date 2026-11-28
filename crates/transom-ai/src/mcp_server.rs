@@ -237,7 +237,7 @@ pub async fn serve_local_socket(
         })?;
     if let Err(err) = std::fs::set_permissions(socket_path, std::fs::Permissions::from_mode(0o600))
     {
-        let _ = std::fs::remove_file(socket_path);
+        remove_socket_file(socket_path, "MCP 权限收紧失败后的清理");
         return Err(AiError::McpFailed {
             server: "transom-mcp".to_owned(),
             reason: format!(
@@ -259,7 +259,16 @@ pub async fn serve_local_socket(
                         let child_cancel = cancel.child_token();
                         conn_tasks.spawn(async move {
                             let (read_half, write_half) = stream.into_split();
-                            let _ = serve_stream(srv, BufReader::new(read_half), write_half, child_cancel).await;
+                            if let Err(err) = serve_stream(
+                                srv,
+                                BufReader::new(read_half),
+                                write_half,
+                                child_cancel,
+                            )
+                            .await
+                            {
+                                log::debug!("本地 MCP 客户端连接结束并返回错误: {err}");
+                            }
                         });
                     }
                     Err(err) => {
@@ -270,12 +279,28 @@ pub async fn serve_local_socket(
         }
     }
 
-    let _ = tokio::time::timeout(std::time::Duration::from_secs(1), async {
+    if tokio::time::timeout(std::time::Duration::from_secs(1), async {
         while conn_tasks.join_next().await.is_some() {}
     })
-    .await;
-    let _ = std::fs::remove_file(socket_path);
+    .await
+    .is_err()
+    {
+        log::warn!("本地 MCP Socket 关闭时仍有连接任务未在 1 秒内退出");
+    }
+    remove_socket_file(socket_path, "MCP 服务退出清理");
     Ok(())
+}
+
+#[cfg(unix)]
+fn remove_socket_file(path: &Path, context: &str) {
+    match std::fs::remove_file(path) {
+        Ok(()) => {}
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
+        Err(err) => log::warn!(
+            "删除 MCP Socket 失败（{context}，{}）: {err}",
+            path.display()
+        ),
+    }
 }
 
 /// 非 Unix 平台占位实现。
