@@ -19,6 +19,7 @@ use super::app_bridge::{
 use super::bridge::{HostRuntimeBridge, SshRemoteExecutor, SshRemoteFsBridge, UiTerminalBridge};
 use super::subagent;
 use crate::controller::state::{ControllerCtx, ControllerState};
+use transom_store::AiStore;
 
 /// 子 Agent 继承父级上下文的配置对象。
 pub(super) struct SubagentConfig<'a> {
@@ -228,16 +229,34 @@ pub(super) async fn prepare_conversation(
     scope: &SessionScope,
     model_name: &str,
 ) -> Result<(String, String, Vec<SessionEntry>), transom_ai::AiError> {
+    let store = ctx.ai_store.clone();
+    let req = req.clone();
+    let scope = scope.clone();
+    let model_name = model_name.to_owned();
+    tokio::task::spawn_blocking(move || {
+        prepare_conversation_blocking(&store, &req, &scope, &model_name)
+    })
+    .await
+    .map_err(|error| transom_ai::AiError::StorageFailed {
+        target: "准备 AI 对话任务".to_owned(),
+        reason: error.to_string(),
+    })?
+}
+
+fn prepare_conversation_blocking(
+    store: &AiStore,
+    req: &AiPromptRequest,
+    scope: &SessionScope,
+    model_name: &str,
+) -> Result<(String, String, Vec<SessionEntry>), transom_ai::AiError> {
     if let Some(conversation_id) = &req.conversation_id {
-        let tree = ctx
-            .ai_store
-            .load_session_tree(conversation_id)
-            .map_err(|err| transom_ai::AiError::StorageFailed {
+        let tree = store.load_session_tree(conversation_id).map_err(|err| {
+            transom_ai::AiError::StorageFailed {
                 target: format!("加载 AI 对话 {conversation_id}"),
                 reason: err.to_string(),
-            })?;
-        let title = ctx
-            .ai_store
+            }
+        })?;
+        let title = store
             .load_index()
             .map_err(|err| transom_ai::AiError::StorageFailed {
                 target: "加载 AI 对话索引".to_owned(),
@@ -264,8 +283,7 @@ pub(super) async fn prepare_conversation(
             model_id: model_name.to_owned(),
         },
     );
-    ctx.ai_store
-        .append_session_entry(&conversation_id, &header)?;
+    store.append_session_entry(&conversation_id, &header)?;
     let summary = ConversationSummary {
         id: conversation_id.clone(),
         title: title.clone(),
@@ -276,8 +294,8 @@ pub(super) async fn prepare_conversation(
         active_leaf_id: Some(header.id.clone()),
         archived: false,
     };
-    if let Err(err) = ctx.ai_store.upsert_conversation(summary) {
-        let cleanup = ctx.ai_store.delete_conversation(&conversation_id);
+    if let Err(err) = store.upsert_conversation(summary) {
+        let cleanup = store.delete_conversation(&conversation_id);
         let reason = match cleanup {
             Ok(()) => err.to_string(),
             Err(cleanup_err) => {

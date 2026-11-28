@@ -7,6 +7,7 @@ mod checkpoint_ops;
 mod compact;
 mod config_service;
 mod context_builder;
+mod credentials;
 mod dispatch;
 mod event_pump;
 mod hooks_exec;

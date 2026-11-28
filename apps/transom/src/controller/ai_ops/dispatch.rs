@@ -17,39 +17,50 @@ use super::context_builder::{
 };
 use super::run::{PumpContext, execute_and_pump};
 use super::run_recorder::RunRecorder;
-use super::{acp, context_builder, hooks_exec, load_and_expand_skills};
+use super::{
+    acp, context_builder, credentials::load_provider_api_key, hooks_exec, load_and_expand_skills,
+};
 use crate::controller::state::{ControllerCtx, ControllerState};
 
 /// 从已配置模型中挑选可用的轻量快速模型供 `model_tier = "fast"` 子 Agent 使用。
-fn resolve_fast_subagent_target(
+async fn resolve_fast_subagent_target(
     settings: &transom_ai::AiSettings,
     primary: &transom_ai::ModelTarget,
     ctx: &ControllerCtx,
 ) -> Option<transom_ai::ModelTarget> {
-    let fast_keywords = ["mini", "flash", "haiku", "lite", "nano", "small"];
-    for (prov, model) in settings.models() {
-        if model.name == primary.model && prov.base_url == primary.base_url {
-            continue;
-        }
-        let low_id = model.id.to_ascii_lowercase();
-        let low_name = model.name.to_ascii_lowercase();
-        if fast_keywords
-            .iter()
-            .any(|k| low_id.contains(k) || low_name.contains(k))
-        {
-            let key = ctx
-                .ai_store
-                .load_provider_api_key(ctx.secret_store.as_ref(), &prov.id)
-                .ok()
-                .flatten()
-                .map(|s| s.to_string())
-                .unwrap_or_default();
-            if let Ok(t) = settings.build_target(&model.id, Some(ThinkingEffort::Low), key) {
-                return Some(t);
+    let settings = settings.clone();
+    let primary = primary.clone();
+    let store = ctx.ai_store.clone();
+    let secrets = ctx.secret_store.clone();
+    tokio::task::spawn_blocking(move || {
+        let fast_keywords = ["mini", "flash", "haiku", "lite", "nano", "small"];
+        for (prov, model) in settings.models() {
+            if model.name == primary.model && prov.base_url == primary.base_url {
+                continue;
+            }
+            let low_id = model.id.to_ascii_lowercase();
+            let low_name = model.name.to_ascii_lowercase();
+            if fast_keywords
+                .iter()
+                .any(|keyword| low_id.contains(keyword) || low_name.contains(keyword))
+            {
+                let key = store
+                    .load_provider_api_key(secrets.as_ref(), &prov.id)
+                    .ok()
+                    .flatten()
+                    .map(|secret| secret.to_string())
+                    .unwrap_or_default();
+                if let Ok(target) = settings.build_target(&model.id, Some(ThinkingEffort::Low), key)
+                {
+                    return Some(target);
+                }
             }
         }
-    }
-    None
+        None
+    })
+    .await
+    .ok()
+    .flatten()
 }
 
 pub(super) async fn start_ai_run(
@@ -82,18 +93,21 @@ pub(super) async fn start_ai_run(
         return acp::start_acp_only_run(state, ctx, req, acp_agent.expect("已检查存在")).await;
     };
 
-    let api_key = match ctx
-        .ai_store
-        .load_provider_api_key(ctx.secret_store.as_ref(), &provider.id)
+    let api_key = match load_provider_api_key(
+        ctx.ai_store.clone(),
+        ctx.secret_store.clone(),
+        provider.id.clone(),
+    )
+    .await
     {
-        Ok(Some(secret)) => secret.to_string(),
+        Ok(Some(secret)) => secret,
         Ok(None) => String::new(),
         Err(err) => {
             emit_run_error(
                 ctx,
                 req.run_id,
                 req.conversation_id.unwrap_or_default(),
-                err.to_string(),
+                err,
             )
             .await;
             return;
@@ -141,23 +155,45 @@ pub(super) async fn start_ai_run(
     );
     let recorder = RunRecorder::new(ctx.ai_store.clone(), conversation_id.clone());
 
-    let host_id_str = req.session_id.map(|s| s.to_string());
-    let memory = match ctx.ai_store.load_memory(host_id_str.as_deref()) {
-        Ok(memory) => memory,
+    let host_id_str = req.session_id.map(|session_id| session_id.to_string());
+    let prompt_for_skills = req.prompt.clone();
+    let disabled_skills = settings.disabled_skills.clone();
+    let store = ctx.ai_store.clone();
+    let prompt_context = tokio::task::spawn_blocking(move || {
+        let memory = store.load_memory(host_id_str.as_deref())?;
+        let (active_skill_prompt, effective_prompt, available_skills) =
+            load_and_expand_skills(&store, &prompt_for_skills, &disabled_skills);
+        Ok::<_, transom_ai::AiError>((
+            memory,
+            active_skill_prompt,
+            effective_prompt,
+            available_skills,
+        ))
+    })
+    .await;
+    let (memory, active_skill_prompt, effective_prompt, available_skills) = match prompt_context {
+        Ok(Ok(context)) => context,
+        Ok(Err(err)) => {
+            emit_run_error(
+                ctx,
+                req.run_id,
+                conversation_id,
+                format!("加载 AI 记忆或技能失败: {err}"),
+            )
+            .await;
+            return;
+        }
         Err(err) => {
             emit_run_error(
                 ctx,
                 req.run_id,
                 conversation_id,
-                format!("加载 AI 记忆失败: {err}"),
+                format!("AI 启动准备任务异常: {err}"),
             )
             .await;
             return;
         }
     };
-
-    let (active_skill_prompt, effective_prompt, available_skills) =
-        load_and_expand_skills(&ctx.ai_store, &req.prompt, &settings.disabled_skills);
 
     if let Some((label, content)) = req.attachment_text.take() {
         let parent_id = history_branch.last().map(|e| e.id.clone());
@@ -192,7 +228,7 @@ pub(super) async fn start_ai_run(
 
     let (event_tx, event_rx) = mpsc::channel(EVENT_CHANNEL_CAPACITY);
 
-    let fast_target = resolve_fast_subagent_target(&settings, &target, ctx);
+    let fast_target = resolve_fast_subagent_target(&settings, &target, ctx).await;
     let current_turn_entry_id = Arc::new(parking_lot::RwLock::new(None));
     let tool_ctx = build_tool_context(
         state,

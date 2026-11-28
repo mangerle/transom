@@ -3,6 +3,7 @@
 use transom_ai::generate_inline_command;
 use transom_core::{AiAppEvent, AppEvent};
 
+use super::credentials::load_provider_api_key;
 use crate::controller::state::{ControllerCtx, ControllerState};
 
 pub(super) fn spawn_inline_assist(
@@ -24,36 +25,52 @@ pub(super) fn spawn_inline_assist(
         );
         return;
     };
-    let api_key = match ctx
-        .ai_store
-        .load_provider_api_key(ctx.secret_store.as_ref(), &provider.id)
-    {
-        Ok(Some(secret)) => secret.to_string(),
-        Ok(None) => String::new(),
-        Err(err) => {
-            send_err(&mut state.ai_set, event_tx, request_id, err.to_string());
-            return;
-        }
-    };
-    let target = match settings.build_target(&model_cfg.id, None, api_key) {
-        Ok(t) => t,
-        Err(err) => {
-            send_err(&mut state.ai_set, event_tx, request_id, err.to_string());
-            return;
-        }
-    };
-
+    let store = ctx.ai_store.clone();
+    let secrets = ctx.secret_store.clone();
+    let provider_id = provider.id.clone();
+    let model_id = model_cfg.id.clone();
     state.ai_set.spawn(async move {
-        let evt = match generate_inline_command(&target, &prompt, &host_label, &platform).await {
+        let api_key = match load_provider_api_key(store, secrets, provider_id).await {
+            Ok(Some(secret)) => secret,
+            Ok(None) => String::new(),
+            Err(error) => {
+                let _ = event_tx
+                    .send_async(AppEvent::Ai(Box::new(AiAppEvent::InlineCommandResult {
+                        request_id,
+                        command: None,
+                        explanation: String::new(),
+                        error: Some(error),
+                    })))
+                    .await;
+                return;
+            }
+        };
+        let target = match settings.build_target(&model_id, None, api_key) {
+            Ok(target) => target,
+            Err(error) => {
+                let _ = event_tx
+                    .send_async(AppEvent::Ai(Box::new(AiAppEvent::InlineCommandResult {
+                        request_id,
+                        command: None,
+                        explanation: String::new(),
+                        error: Some(error.to_string()),
+                    })))
+                    .await;
+                return;
+            }
+        };
+        let event = match generate_inline_command(&target, &prompt, &host_label, &platform).await {
             Ok(raw) => parse_inline_response(request_id, &raw),
-            Err(err) => AiAppEvent::InlineCommandResult {
+            Err(error) => AiAppEvent::InlineCommandResult {
                 request_id,
                 command: None,
                 explanation: String::new(),
-                error: Some(err.to_string()),
+                error: Some(error.to_string()),
             },
         };
-        let _ = event_tx.send_async(AppEvent::Ai(Box::new(evt))).await;
+        if let Err(error) = event_tx.send_async(AppEvent::Ai(Box::new(event))).await {
+            log::warn!("发送内联命令生成结果失败: {error}");
+        }
     });
 }
 

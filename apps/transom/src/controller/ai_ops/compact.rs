@@ -14,6 +14,7 @@ use transom_core::{AiAppEvent, AppEvent, SecretStore};
 use transom_store::AiStore;
 
 use super::AiConfigService;
+use super::credentials::load_provider_api_key;
 
 pub(super) fn spawn_compact_conversation(
     ai_set: &mut tokio::task::JoinSet<()>,
@@ -25,16 +26,30 @@ pub(super) fn spawn_compact_conversation(
     focus_instructions: String,
 ) {
     ai_set.spawn(async move {
-        let Ok(tree) = store.load_session_tree(&conversation_id) else {
-            return;
+        let load_store = store.clone();
+        let load_conversation = conversation_id.clone();
+        let tree = match tokio::task::spawn_blocking(move || {
+            load_store.load_session_tree(&load_conversation)
+        })
+        .await
+        {
+            Ok(Ok(tree)) => tree,
+            Ok(Err(error)) => {
+                log::warn!("读取待压缩 AI 会话失败: {error}");
+                return;
+            }
+            Err(error) => {
+                log::warn!("读取待压缩 AI 会话任务异常: {error}");
+                return;
+            }
         };
         let branch: Vec<&SessionEntry> = tree.active_branch();
         let first_kept = branch.last().map(|e| e.id.clone()).unwrap_or_default();
         let local_fallback = build_local_compaction_summary(&branch, &focus_instructions);
         let settings = ai_config.snapshot();
         let summary = try_llm_summary(
-            &store,
-            secret_store.as_ref(),
+            store.clone(),
+            secret_store,
             &settings,
             &branch,
             &focus_instructions,
@@ -56,7 +71,7 @@ pub(super) fn spawn_compact_conversation(
         let append_res = tokio::task::spawn_blocking(move || {
             store_write.append_session_entry(&conv_id_write, &entry)?;
             let now = chrono::Utc::now().to_rfc3339();
-            let _ = store_write.update_conversation_leaf(&conv_id_write, Some(leaf_id), now);
+            store_write.update_conversation_leaf(&conv_id_write, Some(leaf_id), now)?;
             Ok::<(), transom_ai::AiError>(())
         })
         .await;
@@ -71,30 +86,34 @@ pub(super) fn spawn_compact_conversation(
                 return;
             }
         }
-        let _ = event_tx
+        if let Err(error) = event_tx
             .send_async(AppEvent::Ai(Box::new(AiAppEvent::ContextCompacted {
                 conversation_id,
                 summary,
             })))
-            .await;
+            .await
+        {
+            log::warn!("发送上下文压缩完成事件失败: {error}");
+        }
     });
 }
 
 async fn try_llm_summary(
-    store: &AiStore,
-    secret_store: &dyn SecretStore,
+    store: Arc<AiStore>,
+    secret_store: Arc<dyn SecretStore>,
     settings: &AiSettings,
     entries: &[&SessionEntry],
     focus: &str,
 ) -> Option<String> {
     let (provider, model_cfg) = settings.resolve_model("")?;
-    let api_key = store
-        .load_provider_api_key(secret_store, &provider.id)
+    let provider_id = provider.id.clone();
+    let model_id = model_cfg.id.clone();
+    let api_key = load_provider_api_key(store, secret_store, provider_id)
+        .await
         .ok()
         .flatten()
-        .map(|s| s.to_string())
         .unwrap_or_default();
-    let target = settings.build_target(&model_cfg.id, None, api_key).ok()?;
+    let target = settings.build_target(&model_id, None, api_key).ok()?;
     let transcript = build_local_compaction_summary(entries, focus);
     summarize_for_compaction(&target, &transcript, focus)
         .await
