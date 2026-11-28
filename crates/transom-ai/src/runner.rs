@@ -275,11 +275,18 @@ async fn run_attempt(
 
     let mut stream = agent.prompt(user_msg).history(history).stream();
     let mut run_result = Ok(());
-    while let Some(item) = stream.next().await {
-        if input.cancel.is_cancelled() {
-            run_result = Err(AiError::Cancelled);
+    loop {
+        let next = tokio::select! {
+            biased;
+            _ = input.cancel.cancelled() => {
+                run_result = Err(AiError::Cancelled);
+                break;
+            }
+            item = stream.next() => item,
+        };
+        let Some(item) = next else {
             break;
-        }
+        };
         match item {
             Ok(MultiTurnStreamItem::FinalResponse(_)) => break,
             Ok(_) => {}
