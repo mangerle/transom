@@ -268,19 +268,7 @@ impl McpServerBackend for ControllerMcpBackend {
 }
 
 fn is_app_domain_tool(name: &str) -> bool {
-    matches!(
-        name,
-        "session_catalog"
-            | "workspace_control"
-            | "sftp_transfer"
-            | "host_monitor"
-            | "port_forward_ops"
-            | "container_workspace"
-            | "git_workspace"
-            | "api_client"
-            | "app_settings_ops"
-            | "ai_memory_skills"
-    )
+    AppBridgeDomain::is_software_tool_name(name)
 }
 
 impl ControllerMcpBackend {

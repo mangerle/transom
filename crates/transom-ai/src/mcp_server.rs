@@ -400,6 +400,7 @@ mod tests {
             .await
             .expect("tools/list 必须返回响应");
         assert!(list.contains("remote_exec_bulk"));
+        assert!(!list.contains("compare_hosts"));
         assert!(list.contains("session_catalog"));
         assert!(list.contains("workspace_control"));
         assert!(list.contains("container_workspace"));

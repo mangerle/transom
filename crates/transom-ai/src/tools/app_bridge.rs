@@ -33,6 +33,27 @@ pub enum AppBridgeDomain {
 }
 
 impl AppBridgeDomain {
+    /// 面向内置 AI 的软件操作领域清单，不包含远端执行/文件/传输路由。
+    pub const SOFTWARE_DOMAINS: [Self; 10] = [
+        Self::SessionCatalog,
+        Self::WorkspaceControl,
+        Self::HostMonitor,
+        Self::PortForwardOps,
+        Self::SftpTransfer,
+        Self::ContainerWorkspace,
+        Self::GitWorkspace,
+        Self::ApiClient,
+        Self::AppSettingsOps,
+        Self::AiMemorySkills,
+    ];
+
+    /// 判断名称是否属于软件操作领域。
+    pub fn is_software_tool_name(raw: &str) -> bool {
+        Self::SOFTWARE_DOMAINS
+            .iter()
+            .any(|domain| domain.as_str() == raw)
+    }
+
     /// 返回与工具名称对齐的标准蛇形标识。
     pub const fn as_str(self) -> &'static str {
         match self {
