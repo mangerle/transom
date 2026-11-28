@@ -10760,9 +10760,6 @@ ai:
   hooks_add_webhook:
     en: + Stop Webhook
     zh-CN: + 结束通知
-  hook_preset_nginx_name:
-    en: Auto run `nginx -t` after Nginx edit
-    zh-CN: 修改 Nginx 配置后自动运行 nginx -t
   hook_webhook_name:
     en: Webhook notification on turn stop
     zh-CN: 对话结束 Webhook 通知
@@ -11162,9 +11159,6 @@ ai:
   policy_empty_hint:
     en: No custom prefix rules yet; using execution mode defaults.
     zh-CN: 暂无自定义前缀规则，当前遵循执行模式默认策略。
-  hook_nginx_preset:
-    en: Nginx Check Preset
-    zh-CN: Nginx 校验预设
   hook_shell_label:
     en: Shell Validation Hooks
     zh-CN: Shell 校验钩子

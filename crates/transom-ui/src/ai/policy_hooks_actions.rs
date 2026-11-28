@@ -108,26 +108,6 @@ impl AiAssistantView {
         self.persist_settings_reported(cx);
     }
 
-    pub(super) fn add_preset_nginx_hook(&mut self, cx: &mut Context<Self>) {
-        self.state.config.settings.hooks.push(HookRule {
-            id: Uuid::new_v4().to_string(),
-            name: rust_i18n::t!("ai.hook_preset_nginx_name").to_string(),
-            event: HookEvent::PostToolUse,
-            matcher: HookMatcher {
-                tool_name: Some("remote_fs".to_owned()),
-                path_contains: Some("nginx".to_owned()),
-                command_prefix: None,
-            },
-            action: HookAction::ShellCommand {
-                command: "nginx -t".to_owned(),
-                target: None,
-            },
-            enabled: true,
-            block_on_failure: false,
-        });
-        self.persist_settings_reported(cx);
-    }
-
     pub(super) fn add_webhook_stop_hook(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let url = self
             .policy_hooks_form

@@ -277,18 +277,10 @@ fn render_hooks_card(
     cx: &mut Context<AiAssistantView>,
 ) -> Div {
     let ev_label = view.policy_hooks_form.selected_event.label();
-    let preset_btn = Button::new("ai-add-nginx-hook")
-        .ghost()
-        .small()
-        .label(rust_i18n::t!("ai.hook_nginx_preset").to_string())
-        .on_click(cx.listener(|this, _, _, cx| {
-            this.add_preset_nginx_hook(cx);
-        }))
-        .into_any_element();
 
     section_card(
         rust_i18n::t!("ai.hooks_title").to_string(),
-        Some(preset_btn),
+        None,
         p,
     )
     .child(
