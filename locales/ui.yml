@@ -10475,6 +10475,9 @@ ai:
   send_failed:
     en: "Failed to send AI request: %{error}"
     zh-CN: "发送 AI 请求失败: %{error}"
+  command_send_failed:
+    en: "Failed to send AI control command: %{error}"
+    zh-CN: "发送 AI 控制命令失败: %{error}"
   save_key_failed:
     en: "Failed to save API Key to keyring: %{error}"
     zh-CN: "保存 API Key 到钥匙串失败: %{error}"

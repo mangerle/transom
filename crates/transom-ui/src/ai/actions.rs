@@ -13,6 +13,20 @@ use super::view::AiAssistantView;
 use crate::app::spawn_blocking_local;
 
 impl AiAssistantView {
+    /// 向控制平面提交 AI 命令；通道满或关闭时在当前面板展示错误并返回失败。
+    pub(super) fn send_ai_command(&mut self, command: AiCommand, cx: &mut Context<Self>) -> bool {
+        match self.command_tx.try_send(AppCommand::Ai(Box::new(command))) {
+            Ok(()) => true,
+            Err(err) => {
+                self.state.view.status_error = Some(
+                    rust_i18n::t!("ai.command_send_failed", error = err.to_string()).to_string(),
+                );
+                cx.notify();
+                false
+            }
+        }
+    }
+
     pub(super) fn select_conversation(&mut self, conv_id: &str, cx: &mut Context<Self>) {
         self.active_nav_dot = None;
         self.editing_title = false;
@@ -87,6 +101,14 @@ impl AiAssistantView {
     }
 
     pub(super) fn delete_conversation(&mut self, conv_id: &str, cx: &mut Context<Self>) {
+        if !self.send_ai_command(
+            AiCommand::DeleteConversation {
+                conversation_id: conv_id.to_owned(),
+            },
+            cx,
+        ) {
+            return;
+        }
         self.state
             .conversation
             .conversations
@@ -94,11 +116,6 @@ impl AiAssistantView {
         if self.state.conversation.active_conversation_id.as_deref() == Some(conv_id) {
             self.clear_conversation(cx);
         }
-        let _ = self
-            .command_tx
-            .try_send(AppCommand::Ai(Box::new(AiCommand::DeleteConversation {
-                conversation_id: conv_id.to_owned(),
-            })));
         cx.notify();
     }
 
@@ -108,6 +125,15 @@ impl AiAssistantView {
         archived: bool,
         cx: &mut Context<Self>,
     ) {
+        if !self.send_ai_command(
+            AiCommand::SetConversationArchived {
+                conversation_id: conv_id.to_owned(),
+                archived,
+            },
+            cx,
+        ) {
+            return;
+        }
         if let Some(conv) = self
             .state
             .conversation
@@ -117,12 +143,6 @@ impl AiAssistantView {
         {
             conv.archived = archived;
         }
-        let _ = self.command_tx.try_send(AppCommand::Ai(Box::new(
-            AiCommand::SetConversationArchived {
-                conversation_id: conv_id.to_owned(),
-                archived,
-            },
-        )));
         cx.notify();
     }
 
@@ -153,6 +173,15 @@ impl AiAssistantView {
         if let Some(cid) = self.state.conversation.active_conversation_id.clone()
             && !next.is_empty()
         {
+            if !self.send_ai_command(
+                AiCommand::RenameConversation {
+                    conversation_id: cid.clone(),
+                    title: next.clone(),
+                },
+                cx,
+            ) {
+                return;
+            }
             self.state.conversation.active_conversation_title = Some(next.clone());
             if let Some(conv) = self
                 .state
@@ -163,12 +192,6 @@ impl AiAssistantView {
             {
                 conv.title = next.clone();
             }
-            let _ =
-                self.command_tx
-                    .try_send(AppCommand::Ai(Box::new(AiCommand::RenameConversation {
-                        conversation_id: cid,
-                        title: next,
-                    })));
         }
         cx.notify();
     }

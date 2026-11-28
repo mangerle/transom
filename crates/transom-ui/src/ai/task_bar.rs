@@ -5,7 +5,7 @@ use gpui_kit::component::Sizable as _;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::scroll::ScrollableElement;
 use gpui_kit::*;
-use transom_core::{AiAppEvent, AiCommand, AiManagedTaskDto, AiManagedTaskStatus, AppCommand};
+use transom_core::{AiAppEvent, AiCommand, AiManagedTaskDto, AiManagedTaskStatus};
 use transom_ui_icons::{AppIcon, AppIconElement, UiIcon};
 
 use super::state::AiPanelState;
@@ -247,17 +247,6 @@ impl AiAssistantView {
                 AiManagedTaskStatus::Failed => (UiIcon::ERROR, p.danger),
                 AiManagedTaskStatus::Cancelled => (UiIcon::STOP, p.warning),
             };
-            let status_text = match item.dto.status {
-                AiManagedTaskStatus::Running => rust_i18n::t!("ai.task_status_running").to_string(),
-                AiManagedTaskStatus::Succeeded => {
-                    rust_i18n::t!("ai.task_status_succeeded").to_string()
-                }
-                AiManagedTaskStatus::Failed => rust_i18n::t!("ai.task_status_failed").to_string(),
-                AiManagedTaskStatus::Cancelled => {
-                    rust_i18n::t!("ai.task_status_cancelled").to_string()
-                }
-            };
-
             let mut row = h_flex()
                 .id(("ai-managed-task-row", idx))
                 .w_full()
@@ -323,9 +312,10 @@ impl AiAssistantView {
                             .on_click(move |_, _, cx| {
                                 let id = tid_detach.clone();
                                 v_detach.update(cx, |this, cx| {
-                                    let _ = this.command_tx.try_send(AppCommand::Ai(Box::new(
+                                    this.send_ai_command(
                                         AiCommand::DetachManagedTask { task_id: id },
-                                    )));
+                                        cx,
+                                    );
                                     cx.notify();
                                 });
                             }),
@@ -344,15 +334,14 @@ impl AiAssistantView {
                             .on_click(move |_, _, cx| {
                                 let id = tid_stop.clone();
                                 v_stop.update(cx, |this, cx| {
-                                    let _ = this.command_tx.try_send(AppCommand::Ai(Box::new(
+                                    this.send_ai_command(
                                         AiCommand::CancelManagedTask { task_id: id },
-                                    )));
+                                        cx,
+                                    );
                                     cx.notify();
                                 });
                             }),
                     );
-            } else {
-                let _ = status_text;
             }
             list = list.child(row.child(right));
         }

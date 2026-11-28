@@ -226,12 +226,15 @@ impl AiAssistantView {
             }
             RunningMessageBehavior::Steer => {
                 if let Some(run_id) = self.state.current_run_id().map(str::to_owned) {
-                    let _ =
-                        self.command_tx
-                            .try_send(AppCommand::Ai(Box::new(AiCommand::SteerRun {
-                                run_id,
-                                message: prompt,
-                            })));
+                    if !self.send_ai_command(
+                        AiCommand::SteerRun {
+                            run_id,
+                            message: prompt,
+                        },
+                        cx,
+                    ) {
+                        return;
+                    }
                     self.state.run.active_focus =
                         Some(rust_i18n::t!("ai.steer_injected").to_string());
                     cx.notify();
@@ -346,6 +349,15 @@ impl AiAssistantView {
             .as_ref()
             .map(|a| a.detail.clone())
             .unwrap_or_default();
+        if !self.send_ai_command(
+            AiCommand::RespondApproval {
+                request_id: request_id.to_owned(),
+                decision: decision.clone(),
+            },
+            cx,
+        ) {
+            return;
+        }
         if let Some(approval) = matched {
             let (approved, label) = match &decision {
                 transom_core::AiApprovalDecision::AllowOnce => (
@@ -409,12 +421,6 @@ impl AiAssistantView {
         ) {
             self.handle_handoff_focus_request(handoff_cmd, cx);
         }
-        let _ = self
-            .command_tx
-            .try_send(AppCommand::Ai(Box::new(AiCommand::RespondApproval {
-                request_id: request_id.to_owned(),
-                decision,
-            })));
         cx.notify();
     }
 

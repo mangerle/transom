@@ -3,7 +3,7 @@
 use gpui_kit::gpui::ClipboardItem;
 use gpui_kit::*;
 use transom_ai_contracts::is_acp_command_available;
-use transom_core::{AiCommand, AppCommand};
+use transom_core::AiCommand;
 
 use super::AiPanelEvent;
 use super::composer::{ComposerActions, ComposerParams, ExtraHostOption, render_composer};
@@ -18,12 +18,13 @@ impl AiAssistantView {
             return;
         };
         self.state.view.active_popup = AiActivePopup::None;
-        let _ =
-            self.command_tx
-                .try_send(AppCommand::Ai(Box::new(AiCommand::CompactConversation {
-                    conversation_id: conv_id,
-                    focus_instructions: focus,
-                })));
+        self.send_ai_command(
+            AiCommand::CompactConversation {
+                conversation_id: conv_id,
+                focus_instructions: focus,
+            },
+            cx,
+        );
         cx.notify();
     }
 
@@ -34,12 +35,13 @@ impl AiAssistantView {
         if self.state.has_active_run() {
             return;
         }
-        let _ = self
-            .command_tx
-            .try_send(AppCommand::Ai(Box::new(AiCommand::RollbackCheckpoint {
+        self.send_ai_command(
+            AiCommand::RollbackCheckpoint {
                 conversation_id: conv_id,
                 entry_id,
-            })));
+            },
+            cx,
+        );
         cx.notify();
     }
 
@@ -86,13 +88,14 @@ impl AiAssistantView {
             cx.notify();
             return;
         }
-        let _ = self
-            .command_tx
-            .try_send(AppCommand::Ai(Box::new(AiCommand::InstallAcpAgent {
+        self.send_ai_command(
+            AiCommand::InstallAcpAgent {
                 agent_id,
                 name: agent.name,
                 install_command,
-            })));
+            },
+            cx,
+        );
         cx.notify();
     }
 
@@ -155,21 +158,18 @@ impl AiAssistantView {
             }),
             on_revert_remote_file: std::rc::Rc::new(
                 move |host_label, target_path, backup_path, _, cx| {
-                    v_rev.update(cx, |this, _| {
-                        let _ = this
-                            .command_tx
-                            .try_send(transom_core::AppCommand::Ai(Box::new(
-                                transom_core::AiCommand::RevertRemoteFile {
-                                    host_label,
-                                    target_path,
-                                    backup_path,
-                                    conversation_id: this
-                                        .state
-                                        .conversation
-                                        .active_conversation_id
-                                        .clone(),
-                                },
-                            )));
+                    v_rev.update(cx, |this, cx| {
+                        let conversation_id =
+                            this.state.conversation.active_conversation_id.clone();
+                        this.send_ai_command(
+                            transom_core::AiCommand::RevertRemoteFile {
+                                host_label,
+                                target_path,
+                                backup_path,
+                                conversation_id,
+                            },
+                            cx,
+                        );
                     });
                 },
             ),
@@ -182,21 +182,22 @@ impl AiAssistantView {
                 v_sub.update(cx, |this, cx| {
                     match action.as_str() {
                         "stop" => {
-                            let _ =
-                                this.command_tx
-                                    .try_send(transom_core::AppCommand::Ai(Box::new(
-                                        transom_core::AiCommand::CancelManagedTask { task_id },
-                                    )));
+                            this.send_ai_command(
+                                transom_core::AiCommand::CancelManagedTask { task_id },
+                                cx,
+                            );
                         }
                         "followup" => {
                             let msg = this.composer_input.read(cx).value().trim().to_owned();
-                            if !msg.is_empty() {
-                                let _ = this.command_tx.try_send(transom_core::AppCommand::Ai(
-                                    Box::new(transom_core::AiCommand::SteerRun {
+                            if !msg.is_empty()
+                                && this.send_ai_command(
+                                    transom_core::AiCommand::SteerRun {
                                         run_id: task_id,
                                         message: msg,
-                                    }),
-                                ));
+                                    },
+                                    cx,
+                                )
+                            {
                                 this.composer_input
                                     .update(cx, |i, cx| i.set_value(String::new(), w, cx));
                                 this.last_composer_len = 0;

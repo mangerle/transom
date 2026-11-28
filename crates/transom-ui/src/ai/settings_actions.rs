@@ -223,14 +223,17 @@ impl AiAssistantView {
             } else {
                 (None, None)
             };
-        let _ = self
-            .command_tx
-            .try_send(AppCommand::Ai(Box::new(AiCommand::SaveMemory {
+        let sent = self.send_ai_command(
+            AiCommand::SaveMemory {
                 host_id,
                 global_markdown: Some(global_md),
                 host_markdown,
-            })));
-        self.state.view.drawer = AiDrawerTab::Chat;
+            },
+            cx,
+        );
+        if sent {
+            self.state.view.drawer = AiDrawerTab::Chat;
+        }
         cx.notify();
     }
 
@@ -336,15 +339,18 @@ impl AiAssistantView {
         let (api_key, provider_id) = self.resolve_drawer_credentials(cx);
         self.state.config.discovery_status =
             Some(rust_i18n::t!("ai.testing_connection").to_string());
-        let _ = self
-            .command_tx
-            .try_send(AppCommand::Ai(Box::new(AiCommand::TestConnection {
+        if !self.send_ai_command(
+            AiCommand::TestConnection {
                 request_id: uuid::Uuid::new_v4().to_string(),
                 provider_id,
                 protocol: self.state.config.selected_protocol.as_str().to_owned(),
                 base_url,
                 api_key,
-            })));
+            },
+            cx,
+        ) {
+            self.state.config.discovery_status = None;
+        }
         cx.notify();
     }
 
@@ -352,15 +358,18 @@ impl AiAssistantView {
         let base_url = self.config_form.base_url_input.read(cx).value().to_string();
         let (api_key, provider_id) = self.resolve_drawer_credentials(cx);
         self.state.config.discovery_status = Some(rust_i18n::t!("ai.fetching_models").to_string());
-        let _ = self
-            .command_tx
-            .try_send(AppCommand::Ai(Box::new(AiCommand::DiscoverModels {
+        if !self.send_ai_command(
+            AiCommand::DiscoverModels {
                 request_id: uuid::Uuid::new_v4().to_string(),
                 provider_id,
                 protocol: self.state.config.selected_protocol.as_str().to_owned(),
                 base_url,
                 api_key,
-            })));
+            },
+            cx,
+        ) {
+            self.state.config.discovery_status = None;
+        }
         cx.notify();
     }
 
