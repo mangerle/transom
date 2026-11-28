@@ -195,8 +195,13 @@ pub(crate) fn on_ai_panel_event(
                 .and_then(|tab| tab.terminal())
             {
                 let cmd = command.trim().to_owned();
-                if !cmd.is_empty() {
-                    let _ = view.update(cx, |v, cx| v.send_text(&cmd, cx));
+                if !cmd.is_empty() && !view.update(cx, |v, cx| v.send_text(&cmd, cx)) {
+                    log::warn!("向交接终端发送命令失败");
+                    state
+                        .ui
+                        .window_requests
+                        .push_toast(rust_i18n::t!("ai.handoff_send_failed").to_string(), false);
+                    return;
                 }
                 state
                     .ui
@@ -223,7 +228,7 @@ pub(crate) fn on_ai_panel_event(
                         }
                     })
             };
-            let _ = state
+            if let Err(err) = state
                 .runtime
                 .services
                 .command_tx
@@ -231,7 +236,14 @@ pub(crate) fn on_ai_panel_event(
                     run_id: run_id.clone(),
                     terminal_output,
                     cancelled: *cancelled,
-                })));
+                })))
+            {
+                log::warn!("发送恢复交接命令失败: {err}");
+                state.ui.window_requests.push_toast(
+                    rust_i18n::t!("ai.command_send_failed", error = err.to_string()).to_string(),
+                    false,
+                );
+            }
         }
     }
 }

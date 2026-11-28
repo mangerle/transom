@@ -243,7 +243,7 @@ impl AiAssistantView {
         }
     }
 
-    fn render_chat_body(&self, p: &Palette, rem: Pixels, cx: &mut Context<Self>) -> AnyElement {
+    fn render_chat_body(&self, p: &Palette, cx: &mut Context<Self>) -> AnyElement {
         let mut container = v_flex()
             .flex_1()
             .w_full()
@@ -306,7 +306,6 @@ impl AiAssistantView {
                     approval,
                     &self.approval_feedback_input,
                     p,
-                    rem,
                     move |decision, w, cx| {
                         let id = req_id.clone();
                         view_d.update(cx, |this, cx| this.respond_approval(&id, decision, w, cx));
@@ -359,9 +358,8 @@ impl AiAssistantView {
 }
 
 impl Render for AiAssistantView {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let p = Palette::from(cx);
-        let rem = window.rem_size();
         let header = self.render_header(&p, cx);
 
         let body = match self.state.view.drawer {
@@ -369,7 +367,7 @@ impl Render for AiAssistantView {
             AiDrawerTab::Config => self.render_config_body(&p, cx),
             AiDrawerTab::Skills => self.render_skills_body(&p, cx),
             AiDrawerTab::Memory => self.render_memory_body(&p, cx),
-            AiDrawerTab::Chat => self.render_chat_body(&p, rem, cx),
+            AiDrawerTab::Chat => self.render_chat_body(&p, cx),
         };
 
         v_flex()

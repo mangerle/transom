@@ -16,7 +16,6 @@ pub(super) fn render_approval_card(
     approval: &AiApprovalDto,
     feedback_input: &Entity<InputState>,
     p: &Palette,
-    rem: Pixels,
     on_decide: impl Fn(AiApprovalDecision, &mut Window, &mut App) + Clone + 'static,
     cx: &App,
 ) -> AnyElement {
@@ -136,7 +135,6 @@ pub(super) fn render_approval_card(
         );
     }
 
-    let _ = rem;
     let feedback_text = feedback_input.read(cx).value().trim().to_owned();
     let on_reject = on_decide.clone();
     let on_handoff = on_decide.clone();

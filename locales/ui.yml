@@ -10709,6 +10709,9 @@ ai:
   handoff_toast:
     en: Switched to terminal for manual step; click "Done, Continue AI" when finished
     zh-CN: 已切至终端手动操作，完成后请在 AI 面板点击“已完成，继续 AI”
+  handoff_send_failed:
+    en: Failed to send the handoff command to the terminal
+    zh-CN: 向终端发送交接命令失败
   inline_title:
     en: Inline Terminal AI
     zh-CN: 终端内联命令生成
