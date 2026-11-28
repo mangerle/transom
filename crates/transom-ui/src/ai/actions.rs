@@ -47,10 +47,18 @@ impl AiAssistantView {
             .find(|c| c.id == conv_id)
             .map(|c| c.title.clone());
         self.state.conversation.metrics.reset_session();
+        self.state.detach_active_run();
         if !self.state.active_run_is_current() {
             self.state.run.active_plan = None;
             self.state.run.active_focus = None;
+            self.state.run.tasks_drawer_expanded = false;
+            self.state.run.selected_task_id = None;
+            self.state.run.queued_messages.clear();
+            self.state.run.queue_paused_by_cancel = false;
+            self.state.run.pending_interrupt_send = None;
+            self.state.view.status_panel_expanded = true;
             self.state.view.status_error = None;
+            self.choice_card.dismissed_id = None;
         }
         let store = self.ai_store.clone();
         let conversation_id = conv_id.to_owned();
@@ -403,6 +411,7 @@ impl AiAssistantView {
     pub(super) fn clear_conversation(&mut self, cx: &mut Context<Self>) {
         self.active_nav_dot = None;
         self.editing_title = false;
+        self.state.detach_active_run();
         self.state.conversation.active_conversation_id = None;
         self.state.conversation.active_conversation_title = None;
         self.state.conversation.items.clear();
@@ -410,9 +419,16 @@ impl AiAssistantView {
         self.state.conversation.metrics.reset_session();
         self.state.run.active_plan = None;
         self.state.run.active_focus = None;
+        self.state.run.tasks_drawer_expanded = false;
+        self.state.run.selected_task_id = None;
+        self.state.run.queued_messages.clear();
+        self.state.run.queue_paused_by_cancel = false;
+        self.state.run.pending_interrupt_send = None;
+        self.state.view.status_panel_expanded = true;
         self.state.view.status_error = None;
         self.state.view.drawer = AiDrawerTab::Chat;
         self.state.view.active_popup = AiActivePopup::None;
+        self.choice_card.dismissed_id = None;
         cx.notify();
     }
 

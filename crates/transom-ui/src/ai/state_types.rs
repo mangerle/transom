@@ -26,6 +26,8 @@ pub(crate) struct ActiveAiRun {
     pub(crate) conversation_id: Option<String>,
     pub(crate) started_at: Instant,
     pub(crate) cancel_requested: bool,
+    /// 用户已切换/新建会话而脱离原运行视图时置为 true，防止旧运行事件篡改新视图。
+    pub(crate) detached: bool,
 }
 
 /// 面板右侧抽屉视图模式。

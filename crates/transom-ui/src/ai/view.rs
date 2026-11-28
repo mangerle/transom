@@ -286,12 +286,13 @@ impl AiAssistantView {
             .overflow_hidden()
             .child(self.render_message_stream(p, cx));
 
-        let has_plan_steps = self
-            .state
-            .run
-            .active_plan
-            .as_ref()
-            .is_some_and(|pl| !pl.steps.is_empty());
+        let has_plan_steps = self.state.active_run_is_current()
+            && self
+                .state
+                .run
+                .active_plan
+                .as_ref()
+                .is_some_and(|pl| !pl.steps.is_empty());
         if has_plan_steps && self.state.view.status_panel_expanded {
             let v_toggle = cx.entity();
             container = container.child(div().px(rems(space::SM)).pb(rems(space::XS)).child(
@@ -328,11 +329,17 @@ impl AiAssistantView {
             ));
         }
 
-        if let Some(bar) = self.render_task_bar_section(p, cx) {
+        if self.state.active_run_is_current()
+            && let Some(bar) = self.render_task_bar_section(p, cx)
+        {
             container = container.child(bar);
         }
 
-        if let Some(approval) = self.state.run.pending_approvals.first() {
+        let current_run_id = self.state.current_run_id();
+        if let Some(approval) = self.state.run.pending_approvals.iter().find(|approval| {
+            approval.owner_run_id == "mcp-external"
+                || current_run_id == Some(approval.owner_run_id.as_str())
+        }) {
             let req_id = approval.request_id.clone();
             let view_d = cx.entity();
             container = container.child(div().px(rems(space::SM)).pb(rems(space::XS)).child(

@@ -390,19 +390,27 @@ impl AiAssistantView {
             view.clone(),
         );
 
-        let running_tasks_count = self
-            .state
-            .run
-            .managed_tasks
-            .iter()
-            .filter(|t| t.dto.status == transom_core::AiManagedTaskStatus::Running)
-            .count();
+        let is_current_running = self.state.active_run_is_current();
+        let running_tasks_count = if is_current_running {
+            self.state
+                .run
+                .managed_tasks
+                .iter()
+                .filter(|t| t.dto.status == transom_core::AiManagedTaskStatus::Running)
+                .count()
+        } else {
+            0
+        };
         let v_pill_plan = view.clone();
         let v_pill_tasks = view.clone();
         let status_header = super::plan_card::render_status_pills_row(
             super::plan_card::StatusPillsParams {
-                plan: self.state.run.active_plan.as_ref(),
-                focus: self.state.run.active_focus.as_deref(),
+                plan: is_current_running
+                    .then_some(self.state.run.active_plan.as_ref())
+                    .flatten(),
+                focus: is_current_running
+                    .then_some(self.state.run.active_focus.as_deref())
+                    .flatten(),
                 plan_expanded: self.state.view.status_panel_expanded,
                 running_tasks_count,
                 tasks_expanded: self.state.run.tasks_drawer_expanded,
@@ -431,7 +439,7 @@ impl AiAssistantView {
         render_composer(
             ComposerParams {
                 input: &self.composer_input,
-                is_running: self.state.has_active_run(),
+                is_running: is_current_running,
                 model_label,
                 execution_mode: self.state.config.execution_mode,
                 session_badge,

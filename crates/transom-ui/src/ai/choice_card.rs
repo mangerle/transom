@@ -269,7 +269,12 @@ impl AiAssistantView {
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> Option<AnyElement> {
-        if self.state.has_active_run() || !self.state.run.pending_approvals.is_empty() {
+        let current_run_id = self.state.current_run_id();
+        let has_visible_approval = self.state.run.pending_approvals.iter().any(|approval| {
+            approval.owner_run_id == "mcp-external"
+                || current_run_id == Some(approval.owner_run_id.as_str())
+        });
+        if self.state.active_run_is_current() || has_visible_approval {
             return None;
         }
         let UiChatItem::AssistantText {

@@ -19,12 +19,21 @@ impl AiPanelState {
     /// 活动运行是否属于当前正在查看的对话。
     pub(crate) fn active_run_is_current(&self) -> bool {
         self.run.active_run.as_ref().is_some_and(|run| {
-            run.conversation_id
-                .as_deref()
-                .is_none_or(|conversation_id| {
-                    self.conversation.active_conversation_id.as_deref() == Some(conversation_id)
-                })
+            !run.detached
+                && run
+                    .conversation_id
+                    .as_deref()
+                    .is_none_or(|conversation_id| {
+                        self.conversation.active_conversation_id.as_deref() == Some(conversation_id)
+                    })
         })
+    }
+
+    /// 脱离当前正在运行的会话视图（打开新会话或切换历史会话时调用）。
+    pub(crate) fn detach_active_run(&mut self) {
+        if let Some(run) = &mut self.run.active_run {
+            run.detached = true;
+        }
     }
 
     /// 当前对话中运行的主键。
@@ -52,6 +61,7 @@ impl AiPanelState {
             conversation_id,
             started_at: Instant::now(),
             cancel_requested: false,
+            detached: false,
         });
     }
 
@@ -118,7 +128,7 @@ impl AiPanelState {
                 .run
                 .active_run
                 .as_ref()
-                .is_none_or(|run| run.run_id == *run_id),
+                .is_none_or(|run| !run.detached && run.run_id == *run_id),
             AiAppEvent::RunFinished { run_id, .. } => self.run_is_active(run_id),
             AiAppEvent::TextDelta {
                 run_id,

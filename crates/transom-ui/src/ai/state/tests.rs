@@ -332,3 +332,36 @@ fn stale_settings_snapshot_is_ignored() {
     );
     assert!(state.view.status_error.is_none());
 }
+
+#[test]
+fn detaching_active_run_prevents_old_run_events_from_hijacking_new_conversation() {
+    let mut state = AiPanelState::default();
+    state.begin_run("old-run".to_owned(), None);
+    assert!(state.active_run_is_current());
+
+    // 用户在 RunStarted 到达前就打开了新会话
+    state.detach_active_run();
+    state.conversation.active_conversation_id = None;
+    assert!(!state.active_run_is_current());
+
+    // 旧运行的 RunStarted / FocusUpdated / TextDelta 均不得篡改新空白对话
+    state.apply_app_event(AiAppEvent::RunStarted {
+        run_id: "old-run".to_owned(),
+        conversation_id: "old-conv".to_owned(),
+        title: "旧会话".to_owned(),
+        user_entry_id: "u-old".to_owned(),
+    });
+    state.apply_app_event(AiAppEvent::FocusUpdated {
+        run_id: "old-run".to_owned(),
+        focus: "旧焦点".to_owned(),
+    });
+    state.apply_app_event(AiAppEvent::TextDelta {
+        run_id: "old-run".to_owned(),
+        conversation_id: "old-conv".to_owned(),
+        delta: "旧文本".to_owned(),
+    });
+
+    assert!(state.conversation.active_conversation_id.is_none());
+    assert!(state.conversation.items.is_empty());
+    assert!(state.run.active_focus.is_none());
+}
