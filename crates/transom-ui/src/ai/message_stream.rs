@@ -59,6 +59,10 @@ pub(in crate::app::ai) enum MessageStreamEvent {
         task_id: String,
     },
     LoadOlderMessages,
+    PreviewImage {
+        title: String,
+        base64: String,
+    },
 }
 
 /// 由父视图单向注入的消息流完整投影快照。
@@ -398,6 +402,7 @@ impl Render for MessageStreamView {
                             && matches!(item, UiChatItem::AssistantText { .. });
                         let v_rb = cx.entity();
                         let v_full = cx.entity();
+                        let v_img = cx.entity();
                         let subagent_task = find_subagent_task(&self.managed_tasks, item);
                         let item_el = render_chat_item(
                             ChatItemRenderParams {
@@ -426,6 +431,11 @@ impl Render for MessageStreamView {
                                 on_rollback: Rc::new(move |entry_id, _, cx| {
                                     v_rb.update(cx, |_, cx| {
                                         cx.emit(MessageStreamEvent::RollbackCheckpoint(entry_id));
+                                    });
+                                }),
+                                on_preview_image: Rc::new(move |title, base64, _, cx| {
+                                    v_img.update(cx, |_, cx| {
+                                        cx.emit(MessageStreamEvent::PreviewImage { title, base64 });
                                     });
                                 }),
                                 code: code_callbacks.clone(),

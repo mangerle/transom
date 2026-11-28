@@ -6,9 +6,9 @@ use transom_core::{
     AiCommand, AiHostTargetDto, AiPromptRequest, AppCommand, HostProtection, TabId,
 };
 
-use super::attachments::pack_attachments_for_request;
+use super::attachments::{ComposerAttachment, pack_attachments_for_request};
 use super::panel_events::mention_token;
-use super::state::{ActiveAiSessionInfo, AiActivePopup, AiDrawerTab, UiChatItem};
+use super::state::{ActiveAiSessionInfo, AiActivePopup, AiDrawerTab, UiChatImage, UiChatItem};
 use super::view::AiAssistantView;
 use crate::app::spawn_blocking_local;
 
@@ -242,6 +242,19 @@ impl AiAssistantView {
             }
             prompt = rust_i18n::t!("ai.analyze_attachments_prompt").to_string();
         }
+        let ui_images: Vec<UiChatImage> = self
+            .state
+            .composer
+            .pending_attachments
+            .iter()
+            .filter_map(|att| match att {
+                ComposerAttachment::Image { base64, thumb, .. } => Some(UiChatImage {
+                    base64: base64.clone(),
+                    thumb: thumb.clone(),
+                }),
+                _ => None,
+            })
+            .collect();
         self.state.composer.pending_attachments.clear();
         let primary_tab = self
             .state
@@ -261,6 +274,7 @@ impl AiAssistantView {
         self.state.conversation.items.push(UiChatItem::UserText {
             id: local_item_id.clone(),
             text: prompt.clone(),
+            images: ui_images,
             timestamp: Some(chrono::Utc::now()),
         });
         self.state.view.status_error = None;

@@ -316,9 +316,11 @@ impl AiAssistantView {
             v_cfg,
             v_install,
             v_rm_att,
+            v_prev_img,
             v_paste,
             v_drop,
         ) = (
+            view.clone(),
             view.clone(),
             view.clone(),
             view.clone(),
@@ -435,6 +437,9 @@ impl AiAssistantView {
                 }),
                 on_remove_attachment: Box::new(move |id, _, cx| {
                     v_rm_att.update(cx, |this, cx| this.remove_attachment(&id, cx));
+                }),
+                on_preview_image: Box::new(move |title, b64, _, cx| {
+                    v_prev_img.update(cx, |this, cx| this.open_image_preview(title, b64, cx));
                 }),
                 on_paste_item: Box::new(move |item, w, cx| {
                     v_paste.update(cx, |this, cx| this.handle_paste_item(item, w, cx))

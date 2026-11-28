@@ -3,6 +3,7 @@
 use std::fs::File;
 use std::io::Read as _;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::button::{Button, ButtonVariants as _};
@@ -47,6 +48,7 @@ pub(crate) enum ComposerAttachment {
         base64: String,
         width: u32,
         height: u32,
+        thumb: Option<Arc<RenderImage>>,
     },
     /// 来自终端选区或报错命令块的紧凑上下文芯片（携带主机、目录与退出码）。
     TerminalContext {
@@ -135,6 +137,29 @@ fn is_image_ext(path: &Path) -> bool {
         .unwrap_or(false)
 }
 
+fn build_image_attachment(
+    id: String,
+    name: String,
+    prepared: PreparedImage,
+) -> ComposerAttachment {
+    let thumb = crate::sftp::preview::thumbnail::decode_thumbnail(
+        &prepared.bytes,
+        16_000_000,
+        240,
+        240,
+    )
+    .ok();
+    ComposerAttachment::Image {
+        id,
+        name,
+        media_type: prepared.media_type.clone(),
+        base64: prepared.to_base64(),
+        width: prepared.width,
+        height: prepared.height,
+        thumb,
+    }
+}
+
 /// 在后台线程池将剪贴板原始图片字节缩放编码为图片附件。
 pub(in crate::app::ai) fn load_attachment_from_image_bytes(
     bytes: &[u8],
@@ -142,14 +167,11 @@ pub(in crate::app::ai) fn load_attachment_from_image_bytes(
 ) -> Result<ComposerAttachment, String> {
     let name = format!("image-{seq}.png");
     let prepared = PreparedImage::prepare(bytes).map_err(|err| format!("{name}: {err}"))?;
-    Ok(ComposerAttachment::Image {
-        id: uuid::Uuid::new_v4().to_string(),
+    Ok(build_image_attachment(
+        uuid::Uuid::new_v4().to_string(),
         name,
-        media_type: prepared.media_type.clone(),
-        base64: prepared.to_base64(),
-        width: prepared.width,
-        height: prepared.height,
-    })
+        prepared,
+    ))
 }
 
 /// 在后台线程池安全读取本地文件或图片为附件（严格限制读取上限，防止 OOM）。
@@ -170,14 +192,7 @@ pub(in crate::app::ai) fn load_attachment_from_path(
             .read_to_end(&mut buf)
             .map_err(|err| format!("{name}: {err}"))?;
         let prepared = PreparedImage::prepare(&buf).map_err(|err| format!("{name}: {err}"))?;
-        return Ok(ComposerAttachment::Image {
-            id,
-            name,
-            media_type: prepared.media_type.clone(),
-            base64: prepared.to_base64(),
-            width: prepared.width,
-            height: prepared.height,
-        });
+        return Ok(build_image_attachment(id, name, prepared));
     }
 
     let mut buf = Vec::new();
@@ -253,11 +268,12 @@ pub(in crate::app::ai) fn pack_attachments_for_request(
     PackedAttachments { images, text }
 }
 
-/// 在输入框上方渲染待发送附件卡片预览条。
+/// 在输入框上方渲染待发送附件卡片预览条（图片支持缩略图与点击预览）。
 pub(in crate::app::ai) fn render_attachment_chips(
     attachments: &[ComposerAttachment],
     p: &Palette,
     on_remove: impl Fn(String, &mut Window, &mut App) + Clone + 'static,
+    on_preview_image: impl Fn(String, String, &mut Window, &mut App) + Clone + 'static,
 ) -> AnyElement {
     let mut row = h_flex()
         .w_full()
@@ -269,7 +285,28 @@ pub(in crate::app::ai) fn render_attachment_chips(
         let id = att.id().to_owned();
         let remove = on_remove.clone();
         let remove_label = rust_i18n::t!("ai.attachment_remove").to_string();
-        let chip = h_flex()
+        let leading: AnyElement = match att {
+            ComposerAttachment::Image {
+                thumb: Some(thumb), ..
+            } => div()
+                .w(px(26.0))
+                .h(px(26.0))
+                .flex_shrink_0()
+                .rounded(p.radius.sm)
+                .overflow_hidden()
+                .bg(p.surface.floating)
+                .child(img(ImageSource::Render(thumb.clone())).size_full().object_fit(ObjectFit::Cover))
+                .into_any_element(),
+            _ => div()
+                .p(px(4.0))
+                .rounded(p.radius.sm)
+                .bg(p.surface.floating)
+                .text_color(p.primary)
+                .child(AppIconElement::new(att.icon()).small())
+                .into_any_element(),
+        };
+        let mut chip = h_flex()
+            .id(("ai-att-chip", idx))
             .px(rems(space::XS))
             .py(rems(space::XXS))
             .gap(rems(space::XS))
@@ -277,15 +314,18 @@ pub(in crate::app::ai) fn render_attachment_chips(
             .rounded(p.radius.md)
             .bg(p.secondary)
             .border_1()
-            .border_color(p.divider(p.border))
-            .child(
-                div()
-                    .p(px(4.0))
-                    .rounded(p.radius.sm)
-                    .bg(p.surface.floating)
-                    .text_color(p.primary)
-                    .child(AppIconElement::new(att.icon()).small()),
-            )
+            .border_color(p.divider(p.border));
+        if let ComposerAttachment::Image { name, base64, .. } = att {
+            let preview = on_preview_image.clone();
+            let title = name.clone();
+            let payload = base64.clone();
+            chip = chip
+                .cursor_pointer()
+                .hover(|s| s.bg(p.surface.hover).border_color(p.primary.opacity(0.6)))
+                .on_click(move |_, w, cx| preview(title.clone(), payload.clone(), w, cx));
+        }
+        let chip = chip
+            .child(leading)
             .child(
                 v_flex().gap(px(1.0)).child(
                     div()
@@ -302,7 +342,10 @@ pub(in crate::app::ai) fn render_attachment_chips(
                     .ghost()
                     .accessibility_label(remove_label)
                     .child(AppIconElement::new(AppIcon::Ui(UiIcon::CLOSE)).small())
-                    .on_click(move |_, w, cx| remove(id.clone(), w, cx)),
+                    .on_click(move |_, w, cx| {
+                        cx.stop_propagation();
+                        remove(id.clone(), w, cx);
+                    }),
             );
         row = row.child(chip);
     }
@@ -460,6 +503,7 @@ mod tests {
                 base64: "AAAA".to_owned(),
                 width: 100,
                 height: 100,
+                thumb: None,
             },
         ];
         let packed = pack_attachments_for_request(&items);

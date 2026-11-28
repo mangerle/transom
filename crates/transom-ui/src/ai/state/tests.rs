@@ -78,6 +78,7 @@ fn run_started_resets_prior_view_state_with_real_user_entry() {
     state.conversation.items.push(UiChatItem::UserText {
         id: "local-u-run-1".to_owned(),
         text: "新问题".to_owned(),
+        images: Vec::new(),
         timestamp: None,
     });
 

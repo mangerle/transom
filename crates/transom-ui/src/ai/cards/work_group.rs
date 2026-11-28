@@ -396,6 +396,7 @@ pub(in crate::app::ai) fn render_work_group(
                     on_toggle_expand: Rc::new(move |w, cx| t(cid.clone(), w, cx)),
                     on_toggle_full_output: Rc::new(move |w, cx| t_full(full_key.clone(), w, cx)),
                     on_rollback: Rc::new(|_, _, _| {}),
+                    on_preview_image: Rc::new(|_, _, _, _| {}),
                     code: code_callbacks.clone(),
                 },
             ));
@@ -448,6 +449,7 @@ pub(in crate::app::ai) fn render_work_group(
                             t_full(full_key.clone(), w, cx)
                         }),
                         on_rollback: Rc::new(|_, _, _| {}),
+                        on_preview_image: Rc::new(|_, _, _, _| {}),
                         code: code_callbacks.clone(),
                     },
                 ));
@@ -471,6 +473,7 @@ mod tests {
             UiChatItem::UserText {
                 id: "u1".to_owned(),
                 text: "检查负载".to_owned(),
+                images: Vec::new(),
                 timestamp: None,
             },
             UiChatItem::Reasoning {

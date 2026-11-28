@@ -23,7 +23,7 @@ mod nav_actions;
 mod overlay;
 mod panel_status;
 mod panel_view;
-mod preview;
+pub(crate) mod preview;
 mod preview_actions;
 mod preview_view;
 mod properties;

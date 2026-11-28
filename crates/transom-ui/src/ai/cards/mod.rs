@@ -44,6 +44,8 @@ pub(in crate::app::ai) struct ChatItemRenderParams<'a> {
 pub(in crate::app::ai) type ToggleCardCallback = Rc<dyn Fn(&mut Window, &mut App)>;
 /// 回滚到指定轮次之前的回调类型。
 pub(in crate::app::ai) type RollbackCallback = Rc<dyn Fn(String, &mut Window, &mut App)>;
+/// 点击消息内图片缩略图触发大图预览的回调类型 `(title, base64)`。
+pub(in crate::app::ai) type PreviewImageCallback = Rc<dyn Fn(String, String, &mut Window, &mut App)>;
 
 /// 消息项交互回调集合。
 #[derive(Clone)]
@@ -51,6 +53,7 @@ pub(in crate::app::ai) struct ChatItemCallbacks {
     pub(in crate::app::ai) on_toggle_expand: ToggleCardCallback,
     pub(in crate::app::ai) on_toggle_full_output: ToggleCardCallback,
     pub(in crate::app::ai) on_rollback: RollbackCallback,
+    pub(in crate::app::ai) on_preview_image: PreviewImageCallback,
     pub(in crate::app::ai) code: CodeBlockCallbacks,
 }
 
@@ -64,8 +67,9 @@ pub(in crate::app::ai) fn render_chat_item(
         UiChatItem::UserText {
             id,
             text,
+            images,
             timestamp,
-        } => render_user_bubble(id, text, *timestamp, &params, &callbacks),
+        } => render_user_bubble(id, text, images, *timestamp, &params, &callbacks),
         UiChatItem::Reasoning {
             id,
             text,
@@ -187,6 +191,7 @@ fn copy_icon_and_tip(is_copied: bool) -> (UiIcon, String) {
 fn render_user_bubble(
     id: &str,
     text: &str,
+    images: &[crate::app::ai::state::UiChatImage],
     timestamp: Option<chrono::DateTime<chrono::Utc>>,
     params: &ChatItemRenderParams<'_>,
     callbacks: &ChatItemCallbacks,
@@ -246,26 +251,57 @@ fn render_user_bubble(
                 .on_click(move |_, w, cx| on_rb(entry_id.clone(), w, cx))
         });
 
-    v_flex()
-        .w_full()
-        .items_end()
-        .gap(px(3.0))
-        .child(
-            div()
-                .max_w(rems(32.0))
-                .px(rems(space::MD))
-                .py(rems(space::SM))
-                .rounded(p.radius.lg)
-                .bg(p.surface.subtle)
+    let mut col = v_flex().w_full().items_end().gap(px(4.0));
+    if !images.is_empty() {
+        let mut img_row = h_flex().max_w(rems(32.0)).flex_wrap().justify_end().gap(px(6.0));
+        for (idx, item_img) in images.iter().enumerate() {
+            let preview = Rc::clone(&callbacks.on_preview_image);
+            let title = format!("image-{}.png", idx + 1);
+            let payload = item_img.base64.clone();
+            let mut card = div()
+                .id(SharedString::from(format!("ai-user-img-{id}-{idx}")))
+                .w(px(120.0))
+                .h(px(88.0))
+                .rounded(p.radius.md)
                 .border_1()
                 .border_color(p.stroke.faint)
-                .text_size(rems(typography::BODY))
-                .line_height(relative(1.55))
-                .text_color(p.foreground)
-                .child(text.to_owned()),
-        )
-        .child(action_row)
-        .into_any_element()
+                .bg(p.surface.subtle)
+                .overflow_hidden()
+                .cursor_pointer()
+                .hover(|s| s.border_color(p.primary.opacity(0.7)))
+                .on_click(move |_, w, cx| preview(title.clone(), payload.clone(), w, cx));
+            if let Some(thumb) = &item_img.thumb {
+                card = card.child(
+                    img(ImageSource::Render(thumb.clone()))
+                        .size_full()
+                        .object_fit(ObjectFit::Cover),
+                );
+            } else {
+                card = card.flex().items_center().justify_center().text_color(p.text.muted).child(
+                    AppIconElement::new(AppIcon::Custom(transom_ui_icons::CustomIcon::IMAGE))
+                        .small(),
+                );
+            }
+            img_row = img_row.child(card);
+        }
+        col = col.child(img_row);
+    }
+    col.child(
+        div()
+            .max_w(rems(32.0))
+            .px(rems(space::MD))
+            .py(rems(space::SM))
+            .rounded(p.radius.lg)
+            .bg(p.surface.subtle)
+            .border_1()
+            .border_color(p.stroke.faint)
+            .text_size(rems(typography::BODY))
+            .line_height(relative(1.55))
+            .text_color(p.foreground)
+            .child(text.to_owned()),
+    )
+    .child(action_row)
+    .into_any_element()
 }
 
 fn render_reasoning_block(

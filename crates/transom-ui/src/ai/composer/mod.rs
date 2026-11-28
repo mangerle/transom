@@ -65,6 +65,7 @@ type ActionCb = Box<dyn Fn(&mut Window, &mut App)>;
 type PopupCb = Box<dyn Fn(AiActivePopup, &mut Window, &mut App)>;
 type TabCb = Box<dyn Fn(TabId, &mut Window, &mut App)>;
 type IdCb = Box<dyn Fn(String, &mut Window, &mut App)>;
+type PreviewCb = Box<dyn Fn(String, String, &mut Window, &mut App)>;
 type PasteCb = Box<dyn Fn(&ClipboardItem, &mut Window, &mut App) -> bool>;
 type DropCb = Box<dyn Fn(Vec<PathBuf>, &mut Window, &mut App)>;
 
@@ -80,6 +81,7 @@ pub(in crate::app::ai) struct ComposerActions {
     pub(in crate::app::ai) on_open_config: ActionCb,
     pub(in crate::app::ai) on_install_acp: IdCb,
     pub(in crate::app::ai) on_remove_attachment: IdCb,
+    pub(in crate::app::ai) on_preview_image: PreviewCb,
     pub(in crate::app::ai) on_paste_item: PasteCb,
     pub(in crate::app::ai) on_drop_paths: DropCb,
 }
@@ -101,6 +103,7 @@ pub(in crate::app::ai) fn render_composer(
         on_open_config,
         on_install_acp,
         on_remove_attachment,
+        on_preview_image,
         on_paste_item,
         on_drop_paths,
     } = actions;
@@ -160,10 +163,12 @@ pub(in crate::app::ai) fn render_composer(
 
     if !params.pending_attachments.is_empty() {
         let rm_rc = std::rc::Rc::new(on_remove_attachment);
+        let prev_rc = std::rc::Rc::new(on_preview_image);
         card = card.child(render_attachment_chips(
             params.pending_attachments,
             p,
             move |id, w, cx| rm_rc(id, w, cx),
+            move |title, b64, w, cx| prev_rc(title, b64, w, cx),
         ));
     }
 

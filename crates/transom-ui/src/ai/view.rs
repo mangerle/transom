@@ -48,6 +48,8 @@ pub(crate) struct AiAssistantView {
     pub(super) slash_selected_idx: usize,
     /// 用户按下 Esc 主动收起补全时的输入文本快照（输入变化后自动解除）。
     pub(super) completion_dismissed_input: Option<String>,
+    /// 当前正在大图预览的图片 `(标题, 解码后的纹理)`。
+    pub(super) preview_image: Option<(String, Arc<RenderImage>)>,
     pub(super) choice_card: ChoiceCardState,
     pub(super) popover_scroll_handle: ScrollHandle,
     pub(super) copied_key: Option<String>,
@@ -258,25 +260,18 @@ impl AiAssistantView {
                         .tokens()
                         .iter()
                         .any(|span| span.token().id().starts_with("mention:"));
-                    if this.state.conversation.active_session.is_none()
+                    let snippet = if this.state.conversation.active_session.is_none()
                         && needs_target
                         && !has_mention_target
                     {
-                        this.prefill_quick_prompt_with_mention(prompt, w, cx);
-                    } else if has_mention_target {
-                        let existing = this.composer_input.read(cx).value().trim().to_owned();
-                        this.composer_input
-                            .update(cx, |i, cx| i.set_value(String::new(), w, cx));
-                        this.last_composer_len = 0;
-                        let combined = if existing.is_empty() {
-                            prompt.clone()
-                        } else {
-                            format!("{existing} {prompt}")
-                        };
-                        this.send_prompt_text(combined, cx);
+                        format!("{prompt} @")
+                    } else if prompt.starts_with('/') {
+                        // 末尾加空格收起斜杠补全弹层，方便用户直接按 Enter 发送或继续补充条件
+                        format!("{prompt} ")
                     } else {
-                        this.send_prompt_text(prompt.clone(), cx);
-                    }
+                        prompt.clone()
+                    };
+                    this.prefill_quick_prompt(&snippet, w, cx);
                 }
                 MessageStreamEvent::CopyText { key, text } => {
                     this.copy_text_with_feedback(key.clone(), text.clone(), cx);
@@ -342,6 +337,9 @@ impl AiAssistantView {
                     }
                     cx.notify();
                 }
+                MessageStreamEvent::PreviewImage { title, base64 } => {
+                    this.open_image_preview(title.clone(), base64.clone(), cx);
+                }
                 MessageStreamEvent::LoadOlderMessages => {
                     this.state.conversation.render_window_blocks = this
                         .state
@@ -368,6 +366,7 @@ impl AiAssistantView {
             last_composer_len: 0,
             slash_selected_idx: 0,
             completion_dismissed_input: None,
+            preview_image: None,
             choice_card: ChoiceCardState::new(choice_custom_input),
             popover_scroll_handle: ScrollHandle::new(),
             copied_key: None,
@@ -587,6 +586,115 @@ impl AiAssistantView {
             .into_any_element()
     }
 
+    /// 解码并在当前面板弹出图片大图预览遮罩。
+    pub(super) fn open_image_preview(
+        &mut self,
+        title: String,
+        base64: String,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(decoded) =
+            super::composer::image::decode_base64_render_image(&base64, 1568)
+        {
+            self.preview_image = Some((title, decoded));
+            cx.notify();
+        }
+    }
+
+    fn render_image_preview_modal(
+        &self,
+        title: &str,
+        image: &Arc<RenderImage>,
+        p: &Palette,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        use gpui_kit::base::{h_flex, v_flex};
+        use gpui_kit::component::Sizable as _;
+        use gpui_kit::component::button::{Button, ButtonVariants as _};
+        use transom_ui_icons::{AppIcon, AppIconElement, UiIcon};
+
+        let v_close_bg = cx.entity();
+        let v_close_btn = cx.entity();
+        div()
+            .id("ai-image-preview-backdrop")
+            .absolute()
+            .inset_0()
+            .bg(gpui_kit::black().opacity(0.72))
+            .flex()
+            .items_center()
+            .justify_center()
+            .p(rems(space::LG))
+            .occlude()
+            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+            .on_click(move |_, _, cx| {
+                v_close_bg.update(cx, |this, cx| {
+                    this.preview_image = None;
+                    cx.notify();
+                });
+            })
+            .child(
+                v_flex()
+                    .id("ai-image-preview-dialog")
+                    .max_w(relative(0.94))
+                    .max_h(relative(0.9))
+                    .rounded(p.radius.lg)
+                    .bg(p.surface.floating)
+                    .border_1()
+                    .border_color(p.border)
+                    .shadow_lg()
+                    .overflow_hidden()
+                    .on_click(|_, _, cx| cx.stop_propagation())
+                    .child(
+                        h_flex()
+                            .w_full()
+                            .px(rems(space::SM))
+                            .py(rems(space::XS))
+                            .justify_between()
+                            .items_center()
+                            .border_b_1()
+                            .border_color(p.divider(p.border))
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .min_w_0()
+                                    .truncate()
+                                    .text_size(rems(crate::theme::tokens::typography::BODY))
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .text_color(p.foreground)
+                                    .child(title.to_owned()),
+                            )
+                            .child(
+                                Button::new("ai-image-preview-close")
+                                    .ghost()
+                                    .xsmall()
+                                    .child(AppIconElement::new(AppIcon::Ui(UiIcon::CLOSE)).small())
+                                    .on_click(move |_, _, cx| {
+                                        v_close_btn.update(cx, |this, cx| {
+                                            this.preview_image = None;
+                                            cx.notify();
+                                        });
+                                    }),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_h_0()
+                            .p(rems(space::SM))
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .child(
+                                img(ImageSource::Render(image.clone()))
+                                    .max_w_full()
+                                    .max_h_full()
+                                    .object_fit(ObjectFit::Contain),
+                            ),
+                    ),
+            )
+            .into_any_element()
+    }
+
     fn render_drawer_approval_banner(&self, p: &Palette, cx: &mut Context<Self>) -> AnyElement {
         use gpui_kit::base::h_flex;
         use gpui_kit::component::Sizable as _;
@@ -659,6 +767,7 @@ impl Render for AiAssistantView {
         };
 
         let mut root = v_flex()
+            .relative()
             .size_full()
             .min_w_0()
             .min_h_0()
@@ -679,6 +788,10 @@ impl Render for AiAssistantView {
         {
             root = root.child(self.render_drawer_approval_banner(&p, cx));
         }
-        root.child(body)
+        root = root.child(body);
+        if let Some((title, img_tex)) = &self.preview_image {
+            root = root.child(self.render_image_preview_modal(title, img_tex, &p, cx));
+        }
+        root
     }
 }

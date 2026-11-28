@@ -301,6 +301,11 @@ pub(in crate::app::ai) fn register_slash_key_interceptor(
         };
         let handled = entity.update(cx, |this, cx| {
             if key == "escape" {
+                if this.preview_image.is_some() {
+                    this.preview_image = None;
+                    cx.notify();
+                    return true;
+                }
                 if this.state.view.drawer == AiDrawerTab::Chat
                     && this.state.view.active_popup
                         != crate::app::ai::state::AiActivePopup::None

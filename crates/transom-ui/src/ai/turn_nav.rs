@@ -129,6 +129,7 @@ mod tests {
         let u1 = UiChatItem::UserText {
             id: "u1".to_owned(),
             text: "检查磁盘\n并分析大文件".to_owned(),
+            images: Vec::new(),
             timestamp: None,
         };
         let a1 = UiChatItem::AssistantText {
@@ -145,6 +146,7 @@ mod tests {
         let u2 = UiChatItem::UserText {
             id: "u2".to_owned(),
             text: long_text,
+            images: Vec::new(),
             timestamp: None,
         };
         let items = vec![u1, a1, u2];

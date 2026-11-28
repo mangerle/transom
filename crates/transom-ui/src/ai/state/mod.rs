@@ -7,7 +7,7 @@ use super::markdown_blocks::StreamingMarkdownCache;
 use super::metrics_model::AiSessionMetrics;
 pub(crate) use super::state_types::{
     ActiveAiRun, ActiveAiSessionInfo, AiActivePopup, AiConfigSection, AiDrawerTab, AiTargetMode,
-    UiChatItem,
+    UiChatImage, UiChatItem,
 };
 use transom_ai_contracts::{
     AiSettings, ConversationSummary, ExecutionMode, MemorySnapshot, ProviderProtocol, SessionScope,

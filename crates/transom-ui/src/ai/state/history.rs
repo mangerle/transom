@@ -17,6 +17,7 @@ impl AiPanelState {
                 SessionEntryKind::Message {
                     role,
                     text,
+                    images,
                     model,
                     tokens_per_sec,
                     ..
@@ -25,9 +26,26 @@ impl AiPanelState {
                         let parsed_ts = chrono::DateTime::parse_from_rfc3339(&entry.timestamp)
                             .ok()
                             .map(|dt| dt.with_timezone(&chrono::Utc));
+                        let ui_images = images
+                            .into_iter()
+                            .filter(|raw| !raw.trim().is_empty())
+                            .map(|raw| {
+                                let base64 =
+                                    crate::app::ai::composer::image::strip_image_data_url_prefix(
+                                        &raw,
+                                    )
+                                    .to_owned();
+                                let thumb =
+                                    crate::app::ai::composer::image::decode_base64_render_image(
+                                        &base64, 320,
+                                    );
+                                super::UiChatImage { base64, thumb }
+                            })
+                            .collect();
                         self.conversation.items.push(UiChatItem::UserText {
                             id: entry.id,
                             text,
+                            images: ui_images,
                             timestamp: parsed_ts,
                         });
                     }

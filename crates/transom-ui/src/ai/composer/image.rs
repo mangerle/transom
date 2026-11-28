@@ -5,8 +5,10 @@
 //! - 在后台线程统一缩放并优先编码为 PNG（超过阈值时退化为 JPEG），同时节省网络带宽与磁盘体积。
 
 use std::io::Cursor;
+use std::sync::Arc;
 
 use base64::Engine as _;
+use gpui_kit::RenderImage;
 use image::imageops::FilterType;
 use image::{DynamicImage, GenericImageView as _, ImageFormat};
 use sha2::{Digest, Sha256};
@@ -61,6 +63,27 @@ impl PreparedImage {
             height: out_h,
         })
     }
+}
+
+/// 剥离可选的 `data:<media_type>;base64,<payload>` 前缀，返回纯 Base64 字符串。
+pub(in crate::app::ai) fn strip_image_data_url_prefix(raw: &str) -> &str {
+    let trimmed = raw.trim();
+    if let Some(rest) = trimmed.strip_prefix("data:")
+        && let Some((_, payload)) = rest.split_once(',')
+    {
+        return payload.trim();
+    }
+    trimmed
+}
+
+/// 将 Base64（支持带或不带 `data:...;base64,` 前缀）解码并缩放为 GPUI `RenderImage`。
+pub(in crate::app::ai) fn decode_base64_render_image(
+    raw: &str,
+    max_edge: u32,
+) -> Option<Arc<RenderImage>> {
+    let b64 = strip_image_data_url_prefix(raw);
+    let bytes = base64::engine::general_purpose::STANDARD.decode(b64).ok()?;
+    crate::sftp::preview::thumbnail::decode_thumbnail(&bytes, 16_000_000, max_edge, max_edge).ok()
 }
 
 fn encode_compact(img: &DynamicImage) -> Result<(Vec<u8>, String), AiError> {

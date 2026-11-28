@@ -254,7 +254,7 @@ const TEXT_FILE_NAMES: &[&str] = &[
 ];
 
 mod text;
-mod thumbnail;
+pub(crate) mod thumbnail;
 
 pub(crate) use text::{read_local_text_head, text_preview_lines};
 pub(crate) use thumbnail::decode_preview_thumbnail;

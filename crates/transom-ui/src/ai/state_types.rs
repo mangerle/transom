@@ -1,7 +1,9 @@
 //! AI 助手面板的基础状态枚举、会话摘要与聊天消息项类型定义。
 
+use std::sync::Arc;
 use std::time::Instant;
 
+use gpui_kit::RenderImage;
 use transom_core::{HostProtection, SessionId, TabId};
 
 use super::markdown_blocks::StreamingMarkdownCache;
@@ -76,12 +78,20 @@ pub(crate) enum AiActivePopup {
     ContextUsage,
 }
 
+/// 用户消息中携带的单张图片缩略图与原始 Base64 载荷。
+#[derive(Clone, Debug)]
+pub(crate) struct UiChatImage {
+    pub(crate) base64: String,
+    pub(crate) thumb: Option<Arc<RenderImage>>,
+}
+
 /// 消息流中的单条展示项。
 #[derive(Clone, Debug)]
 pub(crate) enum UiChatItem {
     UserText {
         id: String,
         text: String,
+        images: Vec<UiChatImage>,
         timestamp: Option<chrono::DateTime<chrono::Utc>>,
     },
     Reasoning {
