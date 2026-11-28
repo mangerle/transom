@@ -25,9 +25,7 @@ mod runtime_bridge;
 mod subagent;
 pub(in crate::controller) mod task_runner;
 
-use transom_ai::{
-    ApprovalRequestId, RunId, SkillSummary, extract_skill_command, load_skills_with_disabled,
-};
+use transom_ai::{ApprovalRequestId, RunId, SkillSummary, extract_skill_command};
 use transom_core::{AiAppEvent, AiCommand, AppEvent};
 
 use super::state::{ControllerCtx, ControllerState};
@@ -50,13 +48,13 @@ pub(super) async fn send_ai_event(
     }
 }
 
-/// 单次扫描技能目录并同时完成斜杠技能展开与可用技能摘要构造，避免重复读盘。
+/// 单次检索技能缓存并同时完成斜杠技能展开与可用技能摘要构造，避免重复读盘。
 pub(super) fn load_and_expand_skills(
     store: &transom_store::AiStore,
     raw_prompt: &str,
     disabled_skills: &[String],
 ) -> (Option<String>, String, Vec<SkillSummary>) {
-    let skills = load_skills_with_disabled(Some(&store.custom_skills_dir()), disabled_skills);
+    let skills = store.load_skills_cached(disabled_skills);
     let (active_skill_prompt, effective_prompt) =
         if let Some((skill, rest)) = extract_skill_command(raw_prompt, &skills) {
             let user_text = if rest.is_empty() {

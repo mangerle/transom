@@ -57,6 +57,39 @@ impl AiStore {
         self.root.join("skills")
     }
 
+    /// 带目录 mtime 缓存地加载全部技能并应用禁用列表，避免每次提问重复扫描磁盘。
+    pub fn load_skills_cached(
+        &self,
+        disabled_ids: &[String],
+    ) -> Vec<transom_ai_contracts::SkillDefinition> {
+        let dir = self.custom_skills_dir();
+        let dir_mtime = fs::metadata(&dir).and_then(|m| m.modified()).ok();
+        let mut skills = {
+            let mut guard = self.skills_cache.lock();
+            if let Some((cached_mtime, cached_list)) = guard.as_ref()
+                && *cached_mtime == dir_mtime
+            {
+                cached_list.clone()
+            } else {
+                let loaded = transom_ai_contracts::load_all_skills(Some(&dir));
+                *guard = Some((dir_mtime, loaded.clone()));
+                loaded
+            }
+        };
+
+        let disabled: std::collections::HashSet<String> = disabled_ids
+            .iter()
+            .map(|s| s.trim().trim_start_matches('/').to_ascii_lowercase())
+            .filter(|s| !s.is_empty())
+            .collect();
+        for skill in &mut skills {
+            let id_lc = skill.id.to_ascii_lowercase();
+            let cmd_lc = skill.command.trim_start_matches('/').to_ascii_lowercase();
+            skill.enabled = !disabled.contains(&id_lc) && !disabled.contains(&cmd_lc);
+        }
+        skills
+    }
+
     /// 读取今日与本月累计 Token 用量（跨日/跨月自动归零）。
     ///
     /// # Errors

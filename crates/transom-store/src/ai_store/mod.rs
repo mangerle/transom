@@ -13,25 +13,33 @@ mod session;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::time::SystemTime;
 
 use parking_lot::Mutex;
-use transom_ai_contracts::{AiError, AiSettings};
+use transom_ai_contracts::{AiError, AiSettings, ConversationSummary, SkillDefinition};
 use transom_core::{AppError, SecretKey, SecretStore};
 use zeroize::Zeroizing;
 
 use crate::file_io::write_atomic;
 use crate::paths::config_dir;
 
+/// 会话 JSONL 追加锁的分片桶数量（按 `conversation_id` 哈希隔离不同对话的磁盘写入）。
+const SESSION_LOCK_STRIPES: usize = 16;
+
+type CachedIndex = Arc<Vec<ConversationSummary>>;
+type CachedSkills = (Option<SystemTime>, Vec<SkillDefinition>);
+
 /// AI 助手本地数据目录管理器。
 #[derive(Clone, Debug)]
 pub struct AiStore {
     pub(super) root: PathBuf,
     pub(super) index_lock: Arc<Mutex<()>>,
-    pub(super) index_cache: Arc<Mutex<Option<Vec<transom_ai_contracts::ConversationSummary>>>>,
+    pub(super) index_cache: Arc<Mutex<Option<CachedIndex>>>,
     pub(super) usage_lock: Arc<Mutex<()>>,
     pub(super) checkpoint_lock: Arc<Mutex<()>>,
-    pub(super) session_append_lock: Arc<Mutex<()>>,
+    pub(super) session_append_locks: Arc<[Mutex<()>; SESSION_LOCK_STRIPES]>,
     pub(super) audit_lock: Arc<Mutex<()>>,
+    pub(super) skills_cache: Arc<Mutex<Option<CachedSkills>>>,
 }
 
 impl Default for AiStore {
@@ -54,9 +62,20 @@ impl AiStore {
             index_cache: Arc::new(Mutex::new(None)),
             usage_lock: Arc::new(Mutex::new(())),
             checkpoint_lock: Arc::new(Mutex::new(())),
-            session_append_lock: Arc::new(Mutex::new(())),
+            session_append_locks: Arc::new(std::array::from_fn(|_| Mutex::new(()))),
             audit_lock: Arc::new(Mutex::new(())),
+            skills_cache: Arc::new(Mutex::new(None)),
         }
+    }
+
+    /// 按 `conversation_id` 定位会话追加分段锁，避免不同对话并发落盘互相串行阻塞。
+    pub(super) fn session_append_lock(&self, conversation_id: &str) -> &Mutex<()> {
+        let mut hash: u64 = 0xcbf29ce484222325;
+        for &b in conversation_id.as_bytes() {
+            hash ^= u64::from(b);
+            hash = hash.wrapping_mul(0x100000001b3);
+        }
+        &self.session_append_locks[(hash as usize) % SESSION_LOCK_STRIPES]
     }
 
     pub fn root(&self) -> &Path {

@@ -6,16 +6,22 @@
 //! - 用户消息、轮次结果、工具记录和最终活动叶节点按事件消费顺序被等待写入，
 //!   从结构上保证 JSONL 父子链与审计顺序一致。
 
+use std::path::PathBuf;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
+use tokio::sync::OnceCell;
 use transom_ai::{AiAuditEntry, AiError, SessionEntry};
 use transom_store::AiStore;
 
-/// 绑定单个对话的运行期落盘器。
+/// 绑定单个对话的运行期落盘器（缓存沙箱路径并聚合 Token 统计至轮次结束批量落盘）。
 #[derive(Clone)]
 pub(super) struct RunRecorder {
     store: Arc<AiStore>,
     conversation_id: String,
+    prepared_path: Arc<OnceCell<PathBuf>>,
+    baseline_totals: Arc<OnceCell<(u64, u64)>>,
+    pending_tokens: Arc<AtomicU64>,
 }
 
 impl RunRecorder {
@@ -24,7 +30,24 @@ impl RunRecorder {
         Self {
             store,
             conversation_id,
+            prepared_path: Arc::new(OnceCell::new()),
+            baseline_totals: Arc::new(OnceCell::new()),
+            pending_tokens: Arc::new(AtomicU64::new(0)),
         }
+    }
+
+    async fn ensure_path(&self, operation: &'static str) -> Result<PathBuf, AiError> {
+        let store = self.store.clone();
+        let conversation_id = self.conversation_id.clone();
+        let path = self
+            .prepared_path
+            .get_or_try_init(|| async move {
+                tokio::task::spawn_blocking(move || store.prepare_session_path(&conversation_id))
+                    .await
+                    .map_err(|err| join_error(operation, err))?
+            })
+            .await?;
+        Ok(path.clone())
     }
 
     /// 追加单条会话记录。
@@ -35,12 +58,15 @@ impl RunRecorder {
     ) -> Result<(), AiError> {
         let store = self.store.clone();
         let conversation_id = self.conversation_id.clone();
-        tokio::task::spawn_blocking(move || store.append_session_entry(&conversation_id, &entry))
-            .await
-            .map_err(|err| join_error(operation, err))?
+        let path = self.ensure_path(operation).await?;
+        tokio::task::spawn_blocking(move || {
+            store.append_session_entries_prepared(&conversation_id, &path, &[entry])
+        })
+        .await
+        .map_err(|err| join_error(operation, err))?
     }
 
-    /// 追加一轮推理产生的全部记录并累计 Token 用量。
+    /// 追加一轮推理产生的全部记录，并在内存累计 Token 用量（`finalize` 时统一写盘）。
     pub(super) async fn append_turn(
         &self,
         entries: Vec<SessionEntry>,
@@ -48,14 +74,34 @@ impl RunRecorder {
     ) -> Result<(u64, u64), AiError> {
         let store = self.store.clone();
         let conversation_id = self.conversation_id.clone();
+        let path = self.ensure_path("追加 AI 轮次记录").await?;
+        let base_cell = self.baseline_totals.clone();
+        let store_for_base = store.clone();
+
         tokio::task::spawn_blocking(move || {
-            for entry in &entries {
-                store.append_session_entry(&conversation_id, entry)?;
-            }
-            store.record_token_usage(added_tokens)
+            store.append_session_entries_prepared(&conversation_id, &path, &entries)
         })
         .await
-        .map_err(|err| join_error("追加 AI 轮次记录", err))?
+        .map_err(|err| join_error("追加 AI 轮次记录", err))??;
+
+        let (base_today, base_month) = *self
+            .baseline_totals
+            .get_or_try_init(|| async move {
+                let _ = &base_cell;
+                tokio::task::spawn_blocking(move || store_for_base.load_usage_totals())
+                    .await
+                    .map_err(|err| join_error("读取 AI Token 用量基线", err))?
+            })
+            .await?;
+
+        let total_pending = self
+            .pending_tokens
+            .fetch_add(added_tokens, Ordering::Relaxed)
+            .saturating_add(added_tokens);
+        Ok((
+            base_today.saturating_add(total_pending),
+            base_month.saturating_add(total_pending),
+        ))
     }
 
     /// 追加工具会话记录和对应审计记录。
@@ -66,20 +112,25 @@ impl RunRecorder {
     ) -> Result<(), AiError> {
         let store = self.store.clone();
         let conversation_id = self.conversation_id.clone();
+        let path = self.ensure_path("追加 AI 工具记录").await?;
         tokio::task::spawn_blocking(move || {
-            store.append_session_entry(&conversation_id, &entry)?;
+            store.append_session_entries_prepared(&conversation_id, &path, &[entry])?;
             store.append_audit(&audit)
         })
         .await
         .map_err(|err| join_error("追加 AI 工具记录", err))?
     }
 
-    /// 更新对话索引中的活动叶节点与更新时间。
+    /// 一次性落盘本次运行累计的 Token 用量并更新对话索引活动叶节点。
     pub(super) async fn finalize(&self, active_leaf_id: Option<String>) -> Result<(), AiError> {
         let store = self.store.clone();
         let conversation_id = self.conversation_id.clone();
         let updated_at = chrono::Utc::now().to_rfc3339();
+        let pending = self.pending_tokens.swap(0, Ordering::AcqRel);
         tokio::task::spawn_blocking(move || {
+            if pending > 0 {
+                store.record_token_usage(pending)?;
+            }
             store.update_conversation_leaf(&conversation_id, active_leaf_id, updated_at)
         })
         .await
