@@ -149,8 +149,10 @@ pub const MAX_BULK_TARGETS: usize = 20;
 ///
 /// 返回 `(裁决结果, 是否强制每次重新人工确认)`：
 /// - 目标为空或超过 20 台直接拒绝；
+/// - 敏感只读与单主机策略一样需要人工确认，不能在自动模式下降级为普通只读；
 /// - 写/高危操作若目标中包含任意只读保护主机，整批拒绝；
-/// - 写/高危操作无论执行模式为何，均强制要求每次重新弹窗审批（`requires_fresh_approval = true`）。
+/// - 写/高危操作无论执行模式为何，均强制要求每次重新弹窗审批（`requires_fresh_approval = true`），
+///   包括显式选择 `AllowAll` 的情况。
 pub fn evaluate_bulk_policy(
     targets: &[HostProtection],
     mode: ExecutionMode,
@@ -177,17 +179,20 @@ pub fn evaluate_bulk_policy(
                 false,
             );
         }
-        if mode == ExecutionMode::AllowAll {
-            return (PolicyDecision::Allow, false);
-        }
         return (PolicyDecision::RequireApproval, true);
     }
 
-    let decision = match mode {
-        ExecutionMode::Manual => PolicyDecision::RequireApproval,
-        ExecutionMode::SafeReadAuto | ExecutionMode::Auto | ExecutionMode::AllowAll => {
-            PolicyDecision::Allow
+    let decision = match risk {
+        ToolRisk::SensitiveRead if mode != ExecutionMode::AllowAll => {
+            PolicyDecision::RequireApproval
         }
+        ToolRisk::SafeRead | ToolRisk::SensitiveRead => match mode {
+            ExecutionMode::Manual => PolicyDecision::RequireApproval,
+            ExecutionMode::SafeReadAuto | ExecutionMode::Auto | ExecutionMode::AllowAll => {
+                PolicyDecision::Allow
+            }
+        },
+        ToolRisk::Write | ToolRisk::Destructive => unreachable!("写与高危风险已在上方处理"),
     };
     (decision, false)
 }
@@ -394,6 +399,31 @@ mod tests {
                 true
             ),
             PolicyDecision::Allow
+        );
+
+        assert_eq!(
+            evaluate_bulk_policy(
+                &[HostProtection::Normal],
+                ExecutionMode::AllowAll,
+                ToolRisk::Destructive,
+            ),
+            (PolicyDecision::RequireApproval, true)
+        );
+        assert_eq!(
+            evaluate_bulk_policy(
+                &[HostProtection::Normal],
+                ExecutionMode::Auto,
+                ToolRisk::SensitiveRead,
+            ),
+            (PolicyDecision::RequireApproval, false)
+        );
+        assert_eq!(
+            evaluate_bulk_policy(
+                &[HostProtection::Normal],
+                ExecutionMode::AllowAll,
+                ToolRisk::SensitiveRead,
+            ),
+            (PolicyDecision::Allow, false)
         );
         assert!(matches!(
             evaluate_policy(
