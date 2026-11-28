@@ -7,6 +7,7 @@ use tokio::io::{AsyncWriteExt as _, BufReader};
 use tokio_util::sync::CancellationToken;
 
 use crate::error::AiError;
+use crate::protocol_lines::{MAX_PROTOCOL_LINE_BYTES, read_bounded_line};
 use crate::tools::plan::{PlanStep, PlanStepStatus};
 
 pub(crate) fn acp_err(agent: &str, err: impl ToString) -> AiError {
@@ -255,7 +256,7 @@ fn extract_nested_error_message(raw: &str) -> Option<String> {
 }
 
 pub(crate) async fn wait_response(
-    lines: &mut tokio::io::Lines<BufReader<tokio::process::ChildStdout>>,
+    reader: &mut BufReader<tokio::process::ChildStdout>,
     expected_id: i64,
     timeout: Duration,
     cancel: &CancellationToken,
@@ -275,7 +276,10 @@ pub(crate) async fn wait_response(
         }
         let line = tokio::select! {
             _ = cancel.cancelled() => return Err(AiError::Cancelled),
-            res = tokio::time::timeout(remain, lines.next_line()) => {
+            res = tokio::time::timeout(
+                remain,
+                read_bounded_line(reader, MAX_PROTOCOL_LINE_BYTES),
+            ) => {
                 res.map_err(|_| AiError::Timeout {
                     operation: format!("等待 ACP ({server_name}) 握手响应"),
                     timeout_secs: timeout.as_secs(),

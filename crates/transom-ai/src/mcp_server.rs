@@ -12,13 +12,14 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use tokio::io::{AsyncBufRead, AsyncBufReadExt, AsyncWrite, AsyncWriteExt};
+use tokio::io::{AsyncBufRead, AsyncWrite, AsyncWriteExt};
 use tokio_util::sync::CancellationToken;
 
 use transom_platform::private_fs;
 
 use crate::error::AiError;
 use crate::policy::HostProtection;
+use crate::protocol_lines::{MAX_PROTOCOL_LINE_BYTES, read_bounded_line};
 
 /// MCP 协议版本。
 pub const MCP_PROTOCOL_VERSION: &str = "2024-11-05";
@@ -160,11 +161,11 @@ where
     R: AsyncBufRead + Unpin,
     W: AsyncWrite + Unpin,
 {
-    let mut lines = reader.lines();
+    let mut reader = reader;
     loop {
         tokio::select! {
             _ = cancel.cancelled() => return Ok(()),
-            res = lines.next_line() => {
+            res = read_bounded_line(&mut reader, MAX_PROTOCOL_LINE_BYTES) => {
                 let line = res.map_err(|err| AiError::McpFailed {
                     server: "transom-mcp".to_owned(),
                     reason: err.to_string(),

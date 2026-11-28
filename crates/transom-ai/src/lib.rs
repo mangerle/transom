@@ -26,6 +26,7 @@ pub(crate) mod mcp_tools;
 pub mod memory;
 pub mod output_store;
 pub mod policy;
+mod protocol_lines;
 pub mod redact;
 pub mod runner;
 pub(crate) mod runner_gate;

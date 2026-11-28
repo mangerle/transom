@@ -7,11 +7,12 @@ use std::process::Stdio;
 use std::time::Duration;
 
 use serde_json::{Value, json};
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+use tokio::io::{AsyncWriteExt, BufReader};
 use tokio::process::Command;
 
 use crate::config::AcpAgentConfig;
 use crate::error::AiError;
+use crate::protocol_lines::{MAX_PROTOCOL_LINE_BYTES, read_bounded_line};
 
 const ACP_PROBE_TIMEOUT: Duration = Duration::from_secs(10);
 
@@ -277,7 +278,7 @@ async fn probe_via_acp_stdio(agent: &AcpAgentConfig) -> Result<AcpModelProbeResu
         agent: agent.name.clone(),
         reason: "无法获取 ACP 探测进程 stdout".to_owned(),
     })?;
-    let mut lines = BufReader::new(stdout).lines();
+    let mut reader = BufReader::new(stdout);
 
     let cwd = env::current_dir()
         .ok()
@@ -309,10 +310,13 @@ async fn probe_via_acp_stdio(agent: &AcpAgentConfig) -> Result<AcpModelProbeResu
         })?;
 
         let mut new_sent = false;
-        while let Some(line) = lines.next_line().await.map_err(|e| AiError::AcpFailed {
-            agent: agent.name.clone(),
-            reason: format!("读取 ACP 探测响应失败: {e}"),
-        })? {
+        while let Some(line) = read_bounded_line(&mut reader, MAX_PROTOCOL_LINE_BYTES)
+            .await
+            .map_err(|e| AiError::AcpFailed {
+                agent: agent.name.clone(),
+                reason: format!("读取 ACP 探测响应失败: {e}"),
+            })?
+        {
             let Ok(msg) = serde_json::from_str::<Value>(&line) else {
                 continue;
             };

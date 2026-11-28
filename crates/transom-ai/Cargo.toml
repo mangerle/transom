@@ -13,6 +13,7 @@ publish = false
 
 [dependencies]
 transom-ai-contracts.workspace = true
+thiserror.workspace = true
 transom-core.workspace = true
 transom-platform.workspace = true
 rig-core.workspace = true

@@ -13,7 +13,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use serde_json::{Value, json};
-use tokio::io::{AsyncBufReadExt, BufReader};
+use tokio::io::BufReader;
 use tokio::process::{ChildStdin, ChildStdout, Command};
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
@@ -31,6 +31,7 @@ use crate::config::AcpAgentConfig;
 use crate::error::AiError;
 use crate::exec_policy::ExecPolicyRule;
 use crate::policy::{ExecutionMode, HostProtection};
+use crate::protocol_lines::{MAX_PROTOCOL_LINE_BYTES, read_bounded_line};
 use crate::runner::AgentEvent;
 
 const ACP_HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(20);
@@ -102,9 +103,9 @@ pub async fn run_acp_turn(input: AcpRunInput) -> Result<(), AiError> {
         agent: input.agent.name.clone(),
         reason: "无法获取 ACP 子进程 stdout".to_owned(),
     })?;
-    let mut lines = BufReader::new(stdout).lines();
+    let mut reader = BufReader::new(stdout);
 
-    let result = drive_acp_protocol(&input, &mut stdin, &mut lines).await;
+    let result = drive_acp_protocol(&input, &mut stdin, &mut reader).await;
 
     // 显式杀死并收割子进程，彻底避免僵尸进程残留。
     let _ = child.kill().await;
@@ -115,7 +116,7 @@ pub async fn run_acp_turn(input: AcpRunInput) -> Result<(), AiError> {
 async fn initialize_acp_session(
     input: &AcpRunInput,
     stdin: &mut ChildStdin,
-    lines: &mut tokio::io::Lines<BufReader<ChildStdout>>,
+    reader: &mut BufReader<ChildStdout>,
 ) -> Result<String, AiError> {
     let server_name = &input.agent.name;
     write_json_line(
@@ -133,7 +134,7 @@ async fn initialize_acp_session(
         server_name,
     )
     .await?;
-    let _ = wait_response(lines, 1, ACP_HANDSHAKE_TIMEOUT, &input.cancel, server_name).await?;
+    let _ = wait_response(reader, 1, ACP_HANDSHAKE_TIMEOUT, &input.cancel, server_name).await?;
 
     let mcp_servers = match &input.mcp_stdio_exe {
         Some(exe) if !exe.trim().is_empty() => json!([{
@@ -159,7 +160,7 @@ async fn initialize_acp_session(
     )
     .await?;
     let new_resp =
-        wait_response(lines, 2, ACP_HANDSHAKE_TIMEOUT, &input.cancel, server_name).await?;
+        wait_response(reader, 2, ACP_HANDSHAKE_TIMEOUT, &input.cancel, server_name).await?;
     let session_id = new_resp
         .pointer("/result/sessionId")
         .and_then(Value::as_str)
@@ -193,10 +194,10 @@ async fn initialize_acp_session(
 async fn drive_acp_protocol(
     input: &AcpRunInput,
     stdin: &mut ChildStdin,
-    lines: &mut tokio::io::Lines<BufReader<ChildStdout>>,
+    reader: &mut BufReader<ChildStdout>,
 ) -> Result<(), AiError> {
     let server_name = &input.agent.name;
-    let session_id = initialize_acp_session(input, stdin, lines).await?;
+    let session_id = initialize_acp_session(input, stdin, reader).await?;
 
     const MAX_RETRIES: usize = 2;
     let mut prompt_req_id: i64 = 3;
@@ -225,7 +226,10 @@ async fn drive_acp_protocol(
             }
             let next = tokio::select! {
                 _ = input.cancel.cancelled() => return Err(AiError::Cancelled),
-                res = tokio::time::timeout(ACP_TURN_TIMEOUT, lines.next_line()) => {
+                res = tokio::time::timeout(
+                    ACP_TURN_TIMEOUT,
+                    read_bounded_line(reader, MAX_PROTOCOL_LINE_BYTES),
+                ) => {
                     res.map_err(|_| AiError::Timeout {
                         operation: format!("ACP Agent ({server_name}) 响应"),
                         timeout_secs: ACP_TURN_TIMEOUT.as_secs(),
