@@ -9,6 +9,8 @@
 //! 声明续传偏移。这样“目标端已存在同名文件”永远不会被误当成断点。
 
 use std::path::PathBuf;
+
+use serde::Serialize;
 use transom_core::{
     AppError, ConnectionId, ErrorCode, SyncItem, TabId, TransferDirection, TransferId,
     TransferStart, VerifyOptions,
@@ -120,6 +122,25 @@ pub struct TransferTask {
     pub preserve_attributes: bool,
 }
 
+/// 面向 AI 工具与外部调用的传输任务只读快照。
+///
+/// 快照不直接序列化 UI 状态机，避免路径、状态枚举和内部调度字段的表示变化
+/// 意外成为外部协议；字段在传输队列领域内一次性转换，调用方只消费稳定文本。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub(crate) struct TransferQueueEntry {
+    pub(crate) id: String,
+    pub(crate) direction: &'static str,
+    pub(crate) kind: &'static str,
+    pub(crate) status: &'static str,
+    pub(crate) failure_reason: Option<String>,
+    pub(crate) local_path: String,
+    pub(crate) remote_path: String,
+    pub(crate) size: Option<u64>,
+    pub(crate) transferred: u64,
+    pub(crate) speed_bps: Option<u64>,
+    pub(crate) eta_secs: Option<u64>,
+}
+
 /// 跨远端互传任务的参数集合，避免六个平铺参数。
 #[derive(Debug, Clone)]
 pub struct RemoteCopyRequest {
@@ -207,6 +228,41 @@ impl TransferTask {
         task.target_connection_id = Some(target_connection_id);
         task.target_remote_path = Some(target_path);
         task
+    }
+
+    /// 生成不含内部调度字段的只读队列快照。
+    pub(crate) fn queue_entry(&self) -> TransferQueueEntry {
+        let (status, failure_reason) = match &self.status {
+            TransferStatus::Pending => ("pending", None),
+            TransferStatus::Transferring => ("transferring", None),
+            TransferStatus::Verifying => ("verifying", None),
+            TransferStatus::Paused => ("paused", None),
+            TransferStatus::Completed => ("completed", None),
+            TransferStatus::Failed(failure) => ("failed", Some(failure.reason().to_owned())),
+            TransferStatus::Cancelled => ("cancelled", None),
+        };
+        TransferQueueEntry {
+            id: self.id.to_string(),
+            direction: match self.direction {
+                TransferDirection::Upload => "upload",
+                TransferDirection::Download => "download",
+                TransferDirection::Sync => "sync",
+                TransferDirection::RemoteCopy => "remote_copy",
+            },
+            kind: match self.kind {
+                TransferKind::File => "file",
+                TransferKind::Directory => "directory",
+                TransferKind::Sync => "sync",
+            },
+            status,
+            failure_reason,
+            local_path: self.local_path.to_string_lossy().into_owned(),
+            remote_path: self.remote_path.clone(),
+            size: self.size,
+            transferred: self.transferred,
+            speed_bps: self.speed_bps,
+            eta_secs: self.eta_secs,
+        }
     }
 
     /// 从上次中断处继续：仅当启用断点续传且仍有进度时使用记录偏移，
@@ -323,5 +379,26 @@ mod tests {
             TransferFailure::from_error(&AppError::new(ErrorCode::SftpFailed), "连接中断".into());
         assert!(!interrupted.requires_full_restart());
         assert_eq!(interrupted.reason(), "连接中断");
+    }
+
+    #[test]
+    fn queue_snapshot_exposes_status_without_internal_scheduler_fields() {
+        let mut task = TransferTask::new(
+            TransferDirection::Upload,
+            "/tmp/a".into(),
+            "/remote/a".into(),
+            Some(100),
+        );
+        task.transferred = 40;
+        task.speed_bps = Some(20);
+        task.eta_secs = Some(3);
+        task.status = TransferStatus::Failed(TransferFailure::Interrupted("连接中断".into()));
+
+        let entry = task.queue_entry();
+        assert_eq!(entry.direction, "upload");
+        assert_eq!(entry.kind, "file");
+        assert_eq!(entry.status, "failed");
+        assert_eq!(entry.failure_reason.as_deref(), Some("连接中断"));
+        assert_eq!(entry.transferred, 40);
     }
 }

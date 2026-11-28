@@ -81,6 +81,20 @@ impl SftpPanelView {
     pub(crate) fn state(&self) -> &SftpPanelState {
         &self.state
     }
+
+    /// 返回有界传输队列快照，供 AI 工具查询而不暴露内部调度状态。
+    pub(crate) fn transfer_queue_entries(
+        &self,
+        limit: usize,
+    ) -> Vec<crate::sftp::TransferQueueEntry> {
+        self.state
+            .queue
+            .tasks
+            .iter()
+            .take(limit)
+            .map(crate::sftp::TransferTask::queue_entry)
+            .collect()
+    }
 }
 
 /// 实体渲染入口：把本实体的状态交给外壳的视图代码构建元素。

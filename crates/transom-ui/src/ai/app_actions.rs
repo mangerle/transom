@@ -14,6 +14,9 @@ use transom_core::{
 use crate::app::{AppState, update_app_settings};
 use crate::sidebar::{SessionSidebarEvent, SidebarSection};
 
+/// 单次 AI 查询返回的最大传输任务数，完整队列仍以 `total` 告知调用方。
+const MAX_AI_TRANSFER_ROWS: usize = 200;
+
 /// 在 GPUI 主线程执行来自 AI 助手的软件操作，返回面向模型的可读结果。
 pub(crate) fn handle_app_action(
     state: &mut AppState,
@@ -384,7 +387,7 @@ fn handle_sftp(
     state: &mut AppState,
     action: &str,
     args: &Value,
-    _cx: &mut App,
+    cx: &mut App,
 ) -> Result<String, String> {
     let tid = args["tab_id"]
         .as_str()
@@ -393,7 +396,7 @@ fn handle_sftp(
         .or(state.workspace.active_tab)
         .ok_or_else(|| "No active SFTP tab".to_owned())?;
     match action {
-        "list_transfers" => Ok(format!("SFTP queue ready for tab {tid}")),
+        "list_transfers" => list_sftp_transfers(state, tid, cx),
         "cancel_transfer" => {
             let op_id = args["transfer_id"]
                 .as_str()
@@ -405,6 +408,23 @@ fn handle_sftp(
         }
         other => Err(format!("Unknown sftp_transfer UI action: {other}")),
     }
+}
+
+fn list_sftp_transfers(state: &AppState, tid: TabId, cx: &App) -> Result<String, String> {
+    let view = state
+        .sftp_view(tid)
+        .ok_or_else(|| format!("No SFTP queue for tab {tid}"))?;
+    let panel = view.read(cx);
+    let total = panel.state().queue.tasks.len();
+    let transfers = panel.transfer_queue_entries(MAX_AI_TRANSFER_ROWS);
+    serde_json::to_string_pretty(&json!({
+        "tab_id": tid.to_string(),
+        "total": total,
+        "returned": transfers.len(),
+        "truncated": total > transfers.len(),
+        "transfers": transfers,
+    }))
+    .map_err(|err| format!("Failed to serialize SFTP transfer queue: {err}"))
 }
 
 fn handle_container(state: &mut AppState, action: &str) -> Result<String, String> {
