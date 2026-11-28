@@ -507,4 +507,60 @@ mod tests {
         }
         assert!(matches!(blocks[2], DisplayBlock::Single(3)));
     }
+
+    #[test]
+    fn matches_subagent_task_by_source_call_id_even_with_duplicate_titles() {
+        use super::find_subagent_task;
+        use crate::ai::task_bar::UiManagedTask;
+        use transom_core::{AiManagedTaskDto, AiManagedTaskStatus};
+
+        let tasks = vec![
+            UiManagedTask {
+                dto: AiManagedTaskDto {
+                    task_id: "task-1".to_owned(),
+                    kind: "subagent".to_owned(),
+                    title: "巡检节点".to_owned(),
+                    target_label: "web-01".to_owned(),
+                    status: AiManagedTaskStatus::Running,
+                    started_at_ms: 1,
+                    finished_at_ms: None,
+                    exit_code: None,
+                    source_call_id: Some("call-1".to_owned()),
+                },
+                log: String::new(),
+            },
+            UiManagedTask {
+                dto: AiManagedTaskDto {
+                    task_id: "task-2".to_owned(),
+                    kind: "subagent".to_owned(),
+                    title: "巡检节点".to_owned(),
+                    target_label: "web-02".to_owned(),
+                    status: AiManagedTaskStatus::Running,
+                    started_at_ms: 2,
+                    finished_at_ms: None,
+                    exit_code: None,
+                    source_call_id: Some("call-2".to_owned()),
+                },
+                log: String::new(),
+            },
+        ];
+
+        let card_1 = UiChatItem::ToolCard {
+            id: "t1".to_owned(),
+            call_id: "call-1".to_owned(),
+            running: true,
+            tool_name: "delegate_task".to_owned(),
+            host_label: "web-01".to_owned(),
+            risk_label: "只读".to_owned(),
+            summary: "巡检节点".to_owned(),
+            output: String::new(),
+            ok: true,
+            duration_ms: 0,
+            diff_preview: None,
+            revert_target_path: None,
+            revert_backup_path: None,
+        };
+        let matched = find_subagent_task(&tasks, &card_1).expect("应通过 call_id 精确匹配");
+        assert_eq!(matched.dto.task_id, "task-1");
+    }
 }
