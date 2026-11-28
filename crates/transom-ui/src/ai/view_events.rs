@@ -95,13 +95,7 @@ impl AiAssistantView {
         let outcome = self.state.apply_app_event(event);
         self.refresh_message_block_cache();
         if let Some(settings) = outcome.settings_snapshot {
-            if let Err(err) = self.config_form.apply_settings(
-                &settings,
-                self.ai_store.as_ref(),
-                self.secret_store.as_ref(),
-                window,
-                cx,
-            ) {
+            if let Err(err) = self.config_form.apply_settings(&settings, window, cx) {
                 self.state.view.status_error =
                     Some(rust_i18n::t!("ai.load_config_failed", error = err).to_string());
             }

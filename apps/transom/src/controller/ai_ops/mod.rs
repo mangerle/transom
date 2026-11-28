@@ -267,16 +267,38 @@ pub(in crate::controller) async fn handle_ai_command(
         }
         AiCommand::DiscoverModels {
             request_id,
+            provider_id,
             protocol,
             base_url,
             api_key,
-        } => acp::spawn_discover_models(state, ctx, request_id, protocol, base_url, api_key),
+        } => acp::spawn_discover_models(
+            state,
+            ctx,
+            acp::ConnectionProbeParams {
+                request_id,
+                provider_id,
+                protocol,
+                base_url,
+                api_key,
+            },
+        ),
         AiCommand::TestConnection {
             request_id,
+            provider_id,
             protocol,
             base_url,
             api_key,
-        } => acp::spawn_test_connection(state, ctx, request_id, protocol, base_url, api_key),
+        } => acp::spawn_test_connection(
+            state,
+            ctx,
+            acp::ConnectionProbeParams {
+                request_id,
+                provider_id,
+                protocol,
+                base_url,
+                api_key,
+            },
+        ),
         AiCommand::InstallAcpAgent {
             agent_id,
             name,

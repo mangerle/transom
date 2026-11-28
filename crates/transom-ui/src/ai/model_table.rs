@@ -269,16 +269,9 @@ impl AiAssistantView {
         self.config_form
             .base_url_input
             .update(cx, |i, cx| i.set_value(prov.base_url, window, cx));
-        let saved_key = self
-            .ai_store
-            .load_provider_api_key(self.secret_store.as_ref(), &prov.id)
-            .ok()
-            .flatten()
-            .map(|s| s.to_string())
-            .unwrap_or_default();
         self.config_form
             .api_key_input
-            .update(cx, |i, cx| i.set_value(saved_key, window, cx));
+            .update(cx, |input, cx| input.set_value(String::new(), window, cx));
         self.config_form.draft_models = prov
             .models
             .iter()

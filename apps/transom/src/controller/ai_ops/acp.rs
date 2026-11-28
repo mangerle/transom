@@ -13,8 +13,8 @@ use transom_ai::{
 };
 use transom_core::{AiAppEvent, AiPromptRequest, AppEvent};
 
-use super::context_builder::ToolContextBuildParams;
-use super::context_builder::emit_run_error;
+use super::context_builder::{ToolContextBuildParams, emit_run_error};
+use super::credentials::load_provider_api_key;
 use super::process::{MAX_PROCESS_CAPTURE_BYTES, capture_command_output};
 use super::run::{PumpContext, execute_and_pump};
 use super::run_recorder::RunRecorder;
@@ -29,60 +29,116 @@ pub(super) fn parse_protocol(raw: &str) -> ProviderProtocol {
     }
 }
 
+/// 供应商连通性与模型发现参数。
+pub(super) struct ConnectionProbeParams {
+    pub(super) request_id: String,
+    pub(super) provider_id: Option<String>,
+    pub(super) protocol: String,
+    pub(super) base_url: String,
+    pub(super) api_key: String,
+}
+
+async fn resolve_probe_api_key(
+    store: std::sync::Arc<transom_store::AiStore>,
+    secrets: std::sync::Arc<dyn transom_core::SecretStore>,
+    typed: String,
+    provider_id: Option<String>,
+) -> Result<String, String> {
+    if !typed.trim().is_empty() {
+        return Ok(typed);
+    }
+    let Some(provider_id) = provider_id else {
+        return Ok(String::new());
+    };
+    load_provider_api_key(store, secrets, provider_id)
+        .await
+        .map(|value| value.unwrap_or_default())
+}
+
 pub(super) fn spawn_discover_models(
     state: &mut ControllerState,
     ctx: &ControllerCtx,
-    request_id: String,
-    protocol: String,
-    base_url: String,
-    api_key: String,
+    params: ConnectionProbeParams,
 ) {
-    let proto = parse_protocol(&protocol);
+    let proto = parse_protocol(&params.protocol);
     let event_tx = ctx.event_tx.clone();
+    let store = ctx.ai_store.clone();
+    let secrets = ctx.secret_store.clone();
     state.ai_set.spawn(async move {
-        let evt = match discover_models(proto, &base_url, &api_key).await {
+        let api_key =
+            match resolve_probe_api_key(store, secrets, params.api_key, params.provider_id).await {
+                Ok(api_key) => api_key,
+                Err(error) => {
+                    let _ = event_tx
+                        .send_async(AppEvent::Ai(Box::new(AiAppEvent::ModelsDiscovered {
+                            request_id: params.request_id,
+                            models: Vec::new(),
+                            error: Some(error),
+                        })))
+                        .await;
+                    return;
+                }
+            };
+        let event = match discover_models(proto, &params.base_url, &api_key).await {
             Ok(models) => AiAppEvent::ModelsDiscovered {
-                request_id,
+                request_id: params.request_id,
                 models: models
                     .into_iter()
-                    .map(|m| (m.id, m.context_window))
+                    .map(|model| (model.id, model.context_window))
                     .collect(),
                 error: None,
             },
-            Err(err) => AiAppEvent::ModelsDiscovered {
-                request_id,
+            Err(error) => AiAppEvent::ModelsDiscovered {
+                request_id: params.request_id,
                 models: Vec::new(),
-                error: Some(err.to_string()),
+                error: Some(error.to_string()),
             },
         };
-        let _ = event_tx.send_async(AppEvent::Ai(Box::new(evt))).await;
+        if let Err(error) = event_tx.send_async(AppEvent::Ai(Box::new(event))).await {
+            log::warn!("发送模型发现结果失败: {error}");
+        }
     });
 }
 
 pub(super) fn spawn_test_connection(
     state: &mut ControllerState,
     ctx: &ControllerCtx,
-    request_id: String,
-    protocol: String,
-    base_url: String,
-    api_key: String,
+    params: ConnectionProbeParams,
 ) {
-    let proto = parse_protocol(&protocol);
+    let proto = parse_protocol(&params.protocol);
     let event_tx = ctx.event_tx.clone();
+    let store = ctx.ai_store.clone();
+    let secrets = ctx.secret_store.clone();
     state.ai_set.spawn(async move {
-        let evt = match test_provider_connection(proto, &base_url, &api_key).await {
-            Ok(res) => AiAppEvent::ConnectionTested {
-                request_id,
+        let api_key =
+            match resolve_probe_api_key(store, secrets, params.api_key, params.provider_id).await {
+                Ok(api_key) => api_key,
+                Err(error) => {
+                    let _ = event_tx
+                        .send_async(AppEvent::Ai(Box::new(AiAppEvent::ConnectionTested {
+                            request_id: params.request_id,
+                            ok: false,
+                            detail: error,
+                        })))
+                        .await;
+                    return;
+                }
+            };
+        let event = match test_provider_connection(proto, &params.base_url, &api_key).await {
+            Ok(result) => AiAppEvent::ConnectionTested {
+                request_id: params.request_id,
                 ok: true,
-                detail: res.detail,
+                detail: result.detail,
             },
-            Err(err) => AiAppEvent::ConnectionTested {
-                request_id,
+            Err(error) => AiAppEvent::ConnectionTested {
+                request_id: params.request_id,
                 ok: false,
-                detail: err.to_string(),
+                detail: error.to_string(),
             },
         };
-        let _ = event_tx.send_async(AppEvent::Ai(Box::new(evt))).await;
+        if let Err(error) = event_tx.send_async(AppEvent::Ai(Box::new(event))).await {
+            log::warn!("发送供应商连通性测试结果失败: {error}");
+        }
     });
 }
 

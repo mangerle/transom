@@ -249,6 +249,7 @@ pub enum AiCommand {
     /// 向供应商端点拉取可用模型列表。
     DiscoverModels {
         request_id: String,
+        provider_id: Option<String>,
         protocol: String,
         base_url: String,
         api_key: String,
@@ -256,6 +257,7 @@ pub enum AiCommand {
     /// 测试供应商端点连通性与延迟。
     TestConnection {
         request_id: String,
+        provider_id: Option<String>,
         protocol: String,
         base_url: String,
         api_key: String,

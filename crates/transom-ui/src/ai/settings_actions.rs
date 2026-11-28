@@ -261,8 +261,11 @@ impl AiAssistantView {
         self.persist_settings_reported(cx);
     }
 
-    /// 优先使用输入框当前填写的 API Key；为空时从系统密钥库回读匹配供应商的已保存密钥。
-    fn resolve_drawer_api_key(&self, cx: &App) -> String {
+    /// 返回输入框中的临时密钥和可用于控制平面回读 Keyring 的供应商 ID。
+    ///
+    /// UI 主线程不直接访问 Keyring；输入框为空时只传递供应商 ID，由控制平面
+    /// 在阻塞线程池读取已保存密钥。
+    fn resolve_drawer_credentials(&self, cx: &App) -> (String, Option<String>) {
         let typed = self
             .config_form
             .api_key_input
@@ -270,9 +273,6 @@ impl AiAssistantView {
             .value()
             .trim()
             .to_owned();
-        if !typed.is_empty() {
-            return typed;
-        }
         let name = self
             .config_form
             .provider_name_input
@@ -287,35 +287,31 @@ impl AiAssistantView {
             .value()
             .trim()
             .to_owned();
-        let matched = self
+        let provider_id = self
             .state
             .config
             .settings
             .providers
             .iter()
-            .find(|p| {
-                (!name.is_empty() && p.name == name) || (!url.is_empty() && p.base_url == url)
+            .find(|provider| {
+                (!name.is_empty() && provider.name == name)
+                    || (!url.is_empty() && provider.base_url == url)
             })
-            .or_else(|| self.state.config.settings.providers.first());
-        if let Some(prov) = matched
-            && let Ok(Some(saved)) = self
-                .ai_store
-                .load_provider_api_key(self.secret_store.as_ref(), &prov.id)
-        {
-            return saved.to_string();
-        }
-        String::new()
+            .or_else(|| self.state.config.settings.providers.first())
+            .map(|provider| provider.id.clone());
+        (typed, provider_id)
     }
 
     pub(super) fn test_provider_connection(&mut self, cx: &mut Context<Self>) {
         let base_url = self.config_form.base_url_input.read(cx).value().to_string();
-        let api_key = self.resolve_drawer_api_key(cx);
+        let (api_key, provider_id) = self.resolve_drawer_credentials(cx);
         self.state.config.discovery_status =
             Some(rust_i18n::t!("ai.testing_connection").to_string());
         let _ = self
             .command_tx
             .try_send(AppCommand::Ai(Box::new(AiCommand::TestConnection {
                 request_id: uuid::Uuid::new_v4().to_string(),
+                provider_id,
                 protocol: self.state.config.selected_protocol.as_str().to_owned(),
                 base_url,
                 api_key,
@@ -325,12 +321,13 @@ impl AiAssistantView {
 
     pub(super) fn discover_provider_models(&mut self, cx: &mut Context<Self>) {
         let base_url = self.config_form.base_url_input.read(cx).value().to_string();
-        let api_key = self.resolve_drawer_api_key(cx);
+        let (api_key, provider_id) = self.resolve_drawer_credentials(cx);
         self.state.config.discovery_status = Some(rust_i18n::t!("ai.fetching_models").to_string());
         let _ = self
             .command_tx
             .try_send(AppCommand::Ai(Box::new(AiCommand::DiscoverModels {
                 request_id: uuid::Uuid::new_v4().to_string(),
+                provider_id,
                 protocol: self.state.config.selected_protocol.as_str().to_owned(),
                 base_url,
                 api_key,

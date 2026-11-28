@@ -5,8 +5,6 @@ use gpui_kit::component::searchable_list::SearchableVec;
 use gpui_kit::component::select::{SelectEvent, SelectState};
 use gpui_kit::*;
 use transom_ai::{AiSettings, RunningMessageBehavior};
-use transom_core::SecretStore;
-use transom_store::AiStore;
 
 use super::config_drawer::{ConfigChoice, ConfigSelect, DraftModelRow};
 use super::model_table::make_draft_model_row;
@@ -100,15 +98,11 @@ impl ConfigFormState {
 
     /// 使用控制平面快照重建表单中的输入控件与供应商草稿。
     ///
-    /// # Errors
-    ///
-    /// 当已保存的 API Key 无法从系统钥匙串读取时返回中文错误；调用方应展示该错误，
-    /// 而不是继续显示可能属于其他供应商的旧密钥。
+    /// API Key 输入框始终以空值开始，已保存密钥只由控制平面在需要时读取：
+    /// 这样 GPUI 主线程不访问 Keyring，也不会把明文凭据重新回填到界面。
     pub(super) fn apply_settings(
         &mut self,
         settings: &AiSettings,
-        ai_store: &AiStore,
-        secret_store: &dyn SecretStore,
         window: &mut Window,
         cx: &mut Context<AiAssistantView>,
     ) -> Result<(), String> {
@@ -138,23 +132,8 @@ impl ConfigFormState {
             .update(cx, |input, cx| input.set_value(provider_name, window, cx));
         self.base_url_input
             .update(cx, |input, cx| input.set_value(base_url, window, cx));
-        let api_key = ai_store
-            .load_provider_api_key(secret_store, &provider.id)
-            .map_err(|err| {
-                rust_i18n::t!(
-                    "ai.load_provider_key_failed",
-                    provider = provider.name.as_str(),
-                    error = err.to_string()
-                )
-                .to_string()
-            })?;
-        self.api_key_input.update(cx, |input, cx| {
-            input.set_value(
-                api_key.map(|key| key.to_string()).unwrap_or_default(),
-                window,
-                cx,
-            )
-        });
+        self.api_key_input
+            .update(cx, |input, cx| input.set_value(String::new(), window, cx));
         self.draft_models
             .extend(provider.models.iter().map(|model| {
                 make_draft_model_row(
