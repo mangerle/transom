@@ -20,7 +20,6 @@ pub mod error;
 pub mod exec_policy;
 pub mod hooks;
 pub mod image;
-pub mod mcp;
 pub mod mcp_server;
 pub(crate) mod mcp_tools;
 pub mod memory;
@@ -70,7 +69,6 @@ pub use hooks::{
     rule_matches, send_webhook_json,
 };
 pub use image::PreparedImage;
-pub use mcp::{McpServerConfig, McpToolDescriptor, McpTransport};
 pub use mcp_server::{
     MCP_PROTOCOL_VERSION, McpServer, McpServerBackend, McpSessionInfo, serve_local_socket,
     serve_stream,

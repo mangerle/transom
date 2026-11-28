@@ -9,7 +9,6 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::error::AiError;
-use crate::mcp::McpServerConfig;
 use crate::policy::ExecutionMode;
 use crate::thinking::{ThinkingEffort, ThinkingSwitch, fallback_effort};
 
@@ -154,8 +153,6 @@ pub struct AiSettings {
     #[serde(default = "default_command_timeout")]
     pub command_timeout_secs: u64,
     #[serde(default)]
-    pub mcp_servers: Vec<McpServerConfig>,
-    #[serde(default)]
     pub acp_agents: Vec<AcpAgentConfig>,
     #[serde(default)]
     pub active_acp_agent_id: Option<String>,
@@ -201,7 +198,6 @@ impl Default for AiSettings {
             execution_mode: ExecutionMode::default(),
             max_turns: DEFAULT_MAX_TURNS,
             command_timeout_secs: DEFAULT_COMMAND_TIMEOUT_SECS,
-            mcp_servers: Vec::new(),
             acp_agents: Vec::new(),
             active_acp_agent_id: None,
             response_language: default_response_language(),
@@ -359,5 +355,18 @@ mod tests {
             provider_model_id(&first, "shared-model"),
             format!("{first}:shared-model")
         );
+    }
+
+    #[test]
+    fn legacy_unimplemented_mcp_servers_field_is_ignored() {
+        let settings: AiSettings = serde_json::from_value(serde_json::json!({
+            "mcp_servers": [{
+                "id": "legacy",
+                "transport": { "type": "stdio", "command": "legacy-mcp" }
+            }]
+        }))
+        .expect("旧配置中的未实现 MCP 字段不应阻止配置加载");
+
+        assert!(settings.providers.is_empty());
     }
 }
