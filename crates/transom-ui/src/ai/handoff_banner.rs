@@ -6,7 +6,10 @@ use transom_ai_contracts::is_acp_command_available;
 use transom_core::AiCommand;
 
 use super::AiPanelEvent;
-use super::composer::{ComposerActions, ComposerParams, ExtraHostOption, render_composer};
+use super::composer::{
+    ComposerActions, ComposerParams, ExtraHostKey, ExtraHostOption, render_composer,
+};
+use super::mention_menu::AiMentionKind;
 use super::state::{AiActivePopup, AiDrawerTab, AiTargetMode};
 use super::view::AiAssistantView;
 use crate::app::spawn_blocking_local;
@@ -292,25 +295,41 @@ impl AiAssistantView {
             .active_session
             .as_ref()
             .map(|s| s.tab_id);
-        let extra_host_options: Vec<ExtraHostOption> = self
+        let mut extra_host_options: Vec<ExtraHostOption> = self
             .state
             .conversation
             .connected_sessions
             .iter()
             .filter(|s| Some(s.tab_id) != primary_tab)
             .map(|s| ExtraHostOption {
-                tab_id: s.tab_id,
+                key: ExtraHostKey::Tab(s.tab_id),
                 host_name: s.host_name.clone(),
                 selected: self.state.conversation.extra_scope_tabs.contains(&s.tab_id),
             })
             .collect();
+        for sid in &self.state.conversation.extra_scope_sessions {
+            if let Some(c) = self.state.composer.mention_candidates.iter().find(|c| {
+                matches!(
+                    c.kind,
+                    AiMentionKind::SshHost {
+                        connected: false,
+                        session_id,
+                    } if session_id == *sid
+                )
+            }) {
+                extra_host_options.push(ExtraHostOption {
+                    key: ExtraHostKey::SavedSession(*sid),
+                    host_name: c.label.clone(),
+                    selected: true,
+                });
+            }
+        }
 
         let view = cx.entity();
         let (
             v_stop,
             v_popup,
             v_unpin,
-            v_mention,
             v_extra,
             v_builtin,
             v_cfg,
@@ -320,7 +339,6 @@ impl AiAssistantView {
             v_paste,
             v_drop,
         ) = (
-            view.clone(),
             view.clone(),
             view.clone(),
             view.clone(),
@@ -416,11 +434,13 @@ impl AiAssistantView {
                         this.select_target_mode(AiTargetMode::FollowActiveTab, w, cx);
                     });
                 }),
-                on_trigger_mention: Box::new(move |w, cx| {
-                    v_mention.update(cx, |this, cx| this.trigger_mention_insert(w, cx));
-                }),
-                on_toggle_extra_host: Box::new(move |tid, _, cx| {
-                    v_extra.update(cx, |this, cx| this.toggle_extra_scope_tab(tid, cx));
+                on_toggle_extra_host: Box::new(move |key, _, cx| {
+                    v_extra.update(cx, |this, cx| match key {
+                        ExtraHostKey::Tab(tid) => this.toggle_extra_scope_tab(tid, cx),
+                        ExtraHostKey::SavedSession(sid) => {
+                            this.toggle_extra_scope_session(sid, cx)
+                        }
+                    });
                 }),
                 on_switch_builtin: Box::new(move |_, cx| {
                     v_builtin.update(cx, |this, cx| this.select_acp_agent(None, cx));

@@ -5,6 +5,6 @@ mod fs;
 mod terminal;
 
 pub(super) use super::runtime_bridge::HostRuntimeBridge;
-pub(super) use exec::SshRemoteExecutor;
+pub(super) use exec::{LazyHeadlessRemoteExecutor, SshRemoteExecutor};
 pub(super) use fs::SshRemoteFsBridge;
 pub(super) use terminal::UiTerminalBridge;

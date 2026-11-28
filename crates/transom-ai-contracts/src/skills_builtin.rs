@@ -85,5 +85,20 @@ pub fn builtin_skills() -> Vec<SkillDefinition> {
             source_dir: None,
             resources: Vec::new(),
         },
+        SkillDefinition {
+            id: "sessions".to_owned(),
+            command: "/sessions".to_owned(),
+            title: "管理软件会话".to_owned(),
+            description: "列出已保存的服务器会话与分组目录，或协助快速连接与调整配置".to_owned(),
+            tags: vec!["会话".to_owned(), "SSH".to_owned(), "分组".to_owned()],
+            prompt_template: "请调用 `session_catalog` 工具列出所有已保存的服务器会话和分组目录：\n\
+                1. 按分组清晰展示会话名称、主机地址、端口与保护级别；\n\
+                2. 若用户需要连接或调整会话配置，给出对应的操作建议并协助执行。"
+                .to_owned(),
+            builtin: true,
+            enabled: true,
+            source_dir: None,
+            resources: Vec::new(),
+        },
     ]
 }

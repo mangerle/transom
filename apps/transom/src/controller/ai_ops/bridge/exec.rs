@@ -7,8 +7,10 @@ use async_trait::async_trait;
 use parking_lot::Mutex;
 use tokio_util::sync::CancellationToken;
 use transom_ai::{ExecCommandResult, RemoteExecutor, ToolError};
-use transom_core::AiManagedTaskStatus;
+use transom_core::{AiManagedTaskStatus, SessionId};
 use transom_net::SshRemote;
+
+use super::super::app_bridge::{HeadlessConnectContext, connect_headless_by_session_id};
 
 use super::super::task_runner::{
     ManagedTaskRegistry, kill_remote_pid, strip_pgid_marker, wrap_remote_command_with_pgid,
@@ -19,6 +21,62 @@ pub(in crate::controller) struct SshRemoteExecutor {
     pub(in crate::controller) remote: SshRemote,
     pub(in crate::controller) tasks: Option<Arc<ManagedTaskRegistry>>,
     pub(in crate::controller) host_label: String,
+}
+
+/// 按需后台静默建连并复用 `headless_remotes` 缓存的协同执行器（不打开终端标签页）。
+pub(in crate::controller) struct LazyHeadlessRemoteExecutor {
+    pub(in crate::controller) session_id: SessionId,
+    pub(in crate::controller) host_label: String,
+    pub(in crate::controller) tasks: Option<Arc<ManagedTaskRegistry>>,
+    pub(in crate::controller) connect_ctx: HeadlessConnectContext,
+}
+
+#[async_trait]
+impl RemoteExecutor for LazyHeadlessRemoteExecutor {
+    async fn exec(
+        &self,
+        command: &str,
+        timeout: Duration,
+        cancel: CancellationToken,
+    ) -> Result<ExecCommandResult, ToolError> {
+        let remote = connect_headless_by_session_id(
+            self.connect_ctx.clone(),
+            self.session_id,
+            &self.host_label,
+            timeout.as_secs().max(15),
+        )
+        .await?;
+        SshRemoteExecutor {
+            remote,
+            tasks: self.tasks.clone(),
+            host_label: self.host_label.clone(),
+        }
+        .exec(command, timeout, cancel)
+        .await
+    }
+
+    async fn exec_with_progress(
+        &self,
+        command: &str,
+        timeout: Duration,
+        cancel: CancellationToken,
+        on_progress: transom_ai::tools::ExecProgressCallback,
+    ) -> Result<ExecCommandResult, ToolError> {
+        let remote = connect_headless_by_session_id(
+            self.connect_ctx.clone(),
+            self.session_id,
+            &self.host_label,
+            timeout.as_secs().max(15),
+        )
+        .await?;
+        SshRemoteExecutor {
+            remote,
+            tasks: self.tasks.clone(),
+            host_label: self.host_label.clone(),
+        }
+        .exec_with_progress(command, timeout, cancel, on_progress)
+        .await
+    }
 }
 
 #[async_trait]

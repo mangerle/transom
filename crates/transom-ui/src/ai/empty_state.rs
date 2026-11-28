@@ -66,7 +66,7 @@ pub(super) fn render_empty_state(
             AppIcon::Domain(DomainIcon::TERMINAL),
             rust_i18n::t!("ai.quick_sessions_title").to_string(),
             rust_i18n::t!("ai.quick_sessions_desc").to_string(),
-            rust_i18n::t!("ai.quick_sessions_prompt").to_string(),
+            "/sessions".to_owned(),
         ),
     ];
 

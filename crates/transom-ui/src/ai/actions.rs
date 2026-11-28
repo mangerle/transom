@@ -216,6 +216,25 @@ impl AiAssistantView {
         cx.notify();
     }
 
+    pub(super) fn toggle_extra_scope_session(
+        &mut self,
+        session_id: transom_core::SessionId,
+        cx: &mut Context<Self>,
+    ) {
+        if !self
+            .state
+            .conversation
+            .extra_scope_sessions
+            .remove(&session_id)
+        {
+            self.state
+                .conversation
+                .extra_scope_sessions
+                .insert(session_id);
+        }
+        cx.notify();
+    }
+
     pub(super) fn send_prompt_text(&mut self, raw_prompt: String, cx: &mut Context<Self>) {
         let mut prompt = raw_prompt.trim().to_owned();
         if self.state.has_active_run() {
@@ -343,21 +362,7 @@ impl AiAssistantView {
             prompt,
             images_base64,
             attachment_text,
-            extra_hosts: self
-                .state
-                .conversation
-                .connected_sessions
-                .iter()
-                .filter(|s| self.state.conversation.extra_scope_tabs.contains(&s.tab_id))
-                .map(|s| AiHostTargetDto {
-                    tab_id: s.tab_id,
-                    session_id: s.session_id,
-                    host_name: s.host_name.clone(),
-                    login: s.login.clone(),
-                    platform: s.platform.clone(),
-                    protection: s.protection,
-                })
-                .collect(),
+            extra_hosts: self.collect_request_extra_hosts(),
             acp_agent_id: self.state.config.active_acp_agent_id.clone(),
             plan_mode: false,
         };
@@ -403,6 +408,54 @@ impl AiAssistantView {
             return;
         }
         self.send_prompt_text(combined, cx);
+    }
+
+    fn collect_request_extra_hosts(&self) -> Vec<AiHostTargetDto> {
+        let mut hosts: Vec<AiHostTargetDto> = self
+            .state
+            .conversation
+            .connected_sessions
+            .iter()
+            .filter(|s| self.state.conversation.extra_scope_tabs.contains(&s.tab_id))
+            .map(|s| AiHostTargetDto {
+                tab_id: s.tab_id,
+                session_id: s.session_id,
+                host_name: s.host_name.clone(),
+                login: s.login.clone(),
+                platform: s.platform.clone(),
+                protection: s.protection,
+            })
+            .collect();
+        let primary_sid = self
+            .state
+            .conversation
+            .active_session
+            .as_ref()
+            .map(|s| s.session_id);
+        for sid in &self.state.conversation.extra_scope_sessions {
+            if Some(*sid) == primary_sid || hosts.iter().any(|h| h.session_id == *sid) {
+                continue;
+            }
+            if let Some(c) = self.state.composer.mention_candidates.iter().find(|c| {
+                matches!(
+                    c.kind,
+                    super::mention_menu::AiMentionKind::SshHost {
+                        connected: false,
+                        session_id,
+                    } if session_id == *sid
+                )
+            }) {
+                hosts.push(AiHostTargetDto {
+                    tab_id: TabId::new(),
+                    session_id: *sid,
+                    host_name: c.label.clone(),
+                    login: c.detail.clone(),
+                    platform: "linux".to_owned(),
+                    protection: HostProtection::Normal,
+                });
+            }
+        }
+        hosts
     }
 
     pub(super) fn clear_conversation(&mut self, cx: &mut Context<Self>) {

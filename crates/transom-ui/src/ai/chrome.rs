@@ -116,6 +116,7 @@ impl AiAssistantView {
         }
         let view = cx.entity();
         let v_coop = view.clone();
+        let v_coop_saved = view.clone();
         let v_mention = view.clone();
         let v_connect = view.clone();
         Some(render_target_session_popup(
@@ -125,6 +126,7 @@ impl AiAssistantView {
                 active_session: self.state.conversation.active_session.as_ref(),
                 connected_sessions: &self.state.conversation.connected_sessions,
                 extra_scope_tabs: &self.state.conversation.extra_scope_tabs,
+                extra_scope_sessions: &self.state.conversation.extra_scope_sessions,
                 mention_candidates: &self.state.composer.mention_candidates,
                 p,
             },
@@ -134,6 +136,9 @@ impl AiAssistantView {
                 }),
                 on_toggle_coop: Box::new(move |tid, _, cx| {
                     v_coop.update(cx, |this, cx| this.toggle_extra_scope_tab(tid, cx));
+                }),
+                on_toggle_coop_session: Box::new(move |sid, _, cx| {
+                    v_coop_saved.update(cx, |this, cx| this.toggle_extra_scope_session(sid, cx));
                 }),
                 on_insert_mention: Box::new(move |token, w, cx| {
                     v_mention.update(cx, |this, cx| this.insert_mention_token(&token, w, cx));

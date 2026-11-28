@@ -1,14 +1,17 @@
 //! 统一目标路由（`target_resolver`）：按 `target` 区分本机（`"local"`）、已连接会话或自动触发连接。
 
+use std::sync::Arc;
 use std::time::Duration;
 
 use async_trait::async_trait;
 use serde_json::Value;
 use tokio::sync::oneshot;
+use tokio_util::sync::CancellationToken;
 use transom_ai::{HostProtection, ResolvedToolTarget, ToolError, ToolTargetResolver};
 use transom_core::{
-    AiHostTargetDto, AuthMethod, Connection, ConnectionSecrets, OutboundProxy, SecretKey,
-    SecretKind, Session, SessionCatalog, SshConnection, TabId,
+    AiHostTargetDto, AuthMethod, Connection, ConnectionSecrets, KnownHostsStore, OutboundProxy,
+    SecretKey, SecretKind, SecretStore, Session, SessionCatalog, SessionId, SessionStore,
+    SshConnection, TabId,
 };
 use transom_net::{
     PasswordPrompter, SftpClient, SshRemote, SshRemoteConnectParams, connect_ssh_remote,
@@ -16,6 +19,7 @@ use transom_net::{
 
 use super::{AppBridgeDeps, ControllerAppActionBridge};
 use crate::controller::Internal;
+use crate::controller::ai_ops::control::AiHeadlessRemoteCache;
 use crate::controller::ai_ops::mcp_bridge::{McpControllerSnapshot, McpLiveSession};
 
 const TARGET_RESOLUTION_TIMEOUT: Duration = Duration::from_secs(5);
@@ -185,7 +189,91 @@ pub(super) async fn resolve_or_connect_target(
         });
     }
 
-    let secret_store = bridge.deps.stores.secret_store.clone();
+    let remote = connect_headless_ssh_session(
+        HeadlessConnectContext {
+            session_store: bridge.deps.stores.session_store.clone(),
+            secret_store: bridge.deps.stores.secret_store.clone(),
+            known_hosts: bridge.deps.stores.known_hosts.clone(),
+            headless_remotes: bridge.deps.target.headless_remotes.clone(),
+            cancel: bridge.deps.runtime.cancel.clone(),
+        },
+        &session,
+        &ssh,
+        wanted_str,
+        timeout_secs,
+    )
+    .await?;
+    Ok(McpLiveSession {
+        meta,
+        remote,
+        sftp: None,
+    })
+}
+
+/// 后台静默建连所需的控制平面依赖上下文。
+#[derive(Clone)]
+pub(in crate::controller) struct HeadlessConnectContext {
+    pub(in crate::controller) session_store: Arc<dyn SessionStore>,
+    pub(in crate::controller) secret_store: Arc<dyn SecretStore>,
+    pub(in crate::controller) known_hosts: Arc<dyn KnownHostsStore>,
+    pub(in crate::controller) headless_remotes: Arc<AiHeadlessRemoteCache>,
+    pub(in crate::controller) cancel: CancellationToken,
+}
+
+/// 按 `session_id` 从目录读取配置并后台静默建连 SSH（不打开前端终端标签页）。
+pub(in crate::controller) async fn connect_headless_by_session_id(
+    ctx: HeadlessConnectContext,
+    session_id: SessionId,
+    host_label: &str,
+    timeout_secs: u64,
+) -> Result<SshRemote, ToolError> {
+    if let Some(cached) = ctx.headless_remotes.get(&session_id) {
+        return Ok(cached);
+    }
+    let store = ctx.session_store.clone();
+    let label = host_label.to_owned();
+    let (session, ssh) =
+        tokio::task::spawn_blocking(move || -> Result<(Session, SshConnection), ToolError> {
+            let catalog = store.load().map_err(|e| ToolError::ExecutionFailed {
+                tool: "target_resolver",
+                reason: e.to_string(),
+            })?;
+            let found = catalog
+                .sessions
+                .into_iter()
+                .find(|s| s.id == session_id)
+                .ok_or_else(|| ToolError::InvalidArguments {
+                    tool: "target_resolver",
+                    reason: format!("未找到已保存会话「{label}」({session_id})"),
+                })?;
+            match &found.connection {
+                Connection::Ssh(ssh) => Ok((found.clone(), ssh.clone())),
+                _ => Err(ToolError::InvalidArguments {
+                    tool: "target_resolver",
+                    reason: format!("会话「{label}」不是 SSH 连接，无法用于后台远程执行"),
+                }),
+            }
+        })
+        .await
+        .map_err(|e| ToolError::ExecutionFailed {
+            tool: "target_resolver",
+            reason: e.to_string(),
+        })??;
+    connect_headless_ssh_session(ctx, &session, &ssh, host_label, timeout_secs).await
+}
+
+/// 建立并缓存不绑定 UI 标签页的后台 SSH 连接。
+pub(in crate::controller) async fn connect_headless_ssh_session(
+    ctx: HeadlessConnectContext,
+    session: &Session,
+    ssh: &SshConnection,
+    label: &str,
+    timeout_secs: u64,
+) -> Result<SshRemote, ToolError> {
+    if let Some(cached) = ctx.headless_remotes.get(&session.id) {
+        return Ok(cached);
+    }
+    let secret_store = ctx.secret_store.clone();
     let owner = session.secret_owner();
     let auth = ssh.auth.clone();
     let credentials = tokio::task::spawn_blocking(move || {
@@ -218,7 +306,7 @@ pub(super) async fn resolve_or_connect_target(
         reason: e.to_string(),
     })?;
 
-    let prompter = std::sync::Arc::new(PasswordPrompter::new(
+    let prompter = Arc::new(PasswordPrompter::new(
         credentials
             .password
             .as_deref()
@@ -226,39 +314,31 @@ pub(super) async fn resolve_or_connect_target(
             .unwrap_or_default(),
     ));
     let params = SshRemoteConnectParams {
-        connection: &ssh,
+        connection: ssh,
         jumps: &[],
         credentials,
         prompter,
-        known_hosts: bridge.deps.stores.known_hosts.clone(),
+        known_hosts: ctx.known_hosts.clone(),
         proxy: OutboundProxy::default(),
         allow_sha1_publickey_auth: true,
     };
     let wait_secs = timeout_secs.clamp(10, 60);
     let remote = tokio::select! {
-        _ = bridge.deps.runtime.cancel.cancelled() => return Err(ToolError::Cancelled),
+        _ = ctx.cancel.cancelled() => return Err(ToolError::Cancelled),
         res = tokio::time::timeout(Duration::from_secs(wait_secs), connect_ssh_remote(params)) => {
             res.map_err(|_| ToolError::ExecutionFailed {
                 tool: "target_resolver",
-                reason: format!("后台静默连接「{wanted_str}」超时（{wait_secs}s），请检查网络连通性"),
+                reason: format!("后台静默连接「{label}」超时（{wait_secs}s），请检查网络连通性"),
             })?
             .map_err(|err| ToolError::ExecutionFailed {
                 tool: "target_resolver",
-                reason: format!("后台静默连接「{wanted_str}」失败（如需交互式输入密码，请先手动打开该会话或授权打开标签页）: {err}"),
+                reason: format!("后台静默连接「{label}」失败（如需交互式输入密码，请先手动打开该会话或授权打开标签页）: {err}"),
             })?
         }
     };
 
-    bridge
-        .deps
-        .target
-        .headless_remotes
-        .insert(session.id, remote.clone());
-    Ok(McpLiveSession {
-        meta,
-        remote,
-        sftp: None,
-    })
+    ctx.headless_remotes.insert(session.id, remote.clone());
+    Ok(remote)
 }
 
 fn find_saved_ssh_target(

@@ -239,28 +239,6 @@ impl AiAssistantView {
         cx.notify();
     }
 
-    /// 显式在输入框末尾触发 `@` 提及补全并聚焦输入框。
-    pub(in crate::app::ai) fn trigger_mention_insert(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        self.state.view.active_popup = crate::app::ai::state::AiActivePopup::None;
-        self.completion_dismissed_input = None;
-        let current = self.composer_input.read(cx).value().to_string();
-        let prefix = if current.is_empty() || current.ends_with(char::is_whitespace) {
-            "@"
-        } else {
-            " @"
-        };
-        self.composer_input.update(cx, |i, cx| {
-            i.insert(prefix, window, cx);
-            i.focus_handle(cx).focus(window, cx);
-        });
-        self.last_composer_len = self.composer_input.read(cx).value().len();
-        cx.notify();
-    }
-
     /// 从目标会话弹层直接向输入框插入一个 `@token` 行内胶囊并聚焦输入框。
     pub(in crate::app::ai) fn insert_mention_token(
         &mut self,

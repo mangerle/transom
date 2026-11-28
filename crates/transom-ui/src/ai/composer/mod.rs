@@ -13,13 +13,12 @@ pub(in crate::app::ai) mod target_popup;
 use std::path::PathBuf;
 
 use gpui_kit::base::{h_flex, v_flex};
-use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::input::{InlineTokenContext, Textarea, TextareaState};
 use gpui_kit::component::progress::ProgressCircle;
 use gpui_kit::gpui::{ClipboardItem, ExternalPaths};
 use gpui_kit::*;
 use transom_ai_contracts::ExecutionMode;
-use transom_core::TabId;
+use transom_core::{SessionId, TabId};
 use transom_ui_icons::{AppIcon, AppIconElement, CustomIcon, UiIcon};
 
 use crate::app::ai::acp_banner::{AcpBannerParams, render_acp_warning_banner};
@@ -32,9 +31,16 @@ use crate::app::ai::state::{ActiveAiSessionInfo, AiActivePopup, AiTargetMode};
 use crate::palette::Palette;
 use crate::theme::tokens::{space, typography};
 
+/// 多主机协同选项标识（已连接标签页或后台静默已保存会话）。
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(in crate::app::ai) enum ExtraHostKey {
+    Tab(TabId),
+    SavedSession(SessionId),
+}
+
 /// 可加入多主机协同 Scope 的主机选项。
 pub(in crate::app::ai) struct ExtraHostOption {
-    pub(in crate::app::ai) tab_id: TabId,
+    pub(in crate::app::ai) key: ExtraHostKey,
     pub(in crate::app::ai) host_name: String,
     pub(in crate::app::ai) selected: bool,
 }
@@ -63,7 +69,7 @@ pub(in crate::app::ai) struct ComposerParams<'a> {
 
 type ActionCb = Box<dyn Fn(&mut Window, &mut App)>;
 type PopupCb = Box<dyn Fn(AiActivePopup, &mut Window, &mut App)>;
-type TabCb = Box<dyn Fn(TabId, &mut Window, &mut App)>;
+type ExtraHostCb = Box<dyn Fn(ExtraHostKey, &mut Window, &mut App)>;
 type IdCb = Box<dyn Fn(String, &mut Window, &mut App)>;
 type PreviewCb = Box<dyn Fn(String, String, &mut Window, &mut App)>;
 type PasteCb = Box<dyn Fn(&ClipboardItem, &mut Window, &mut App) -> bool>;
@@ -75,8 +81,7 @@ pub(in crate::app::ai) struct ComposerActions {
     pub(in crate::app::ai) on_stop: ActionCb,
     pub(in crate::app::ai) on_toggle_popup: PopupCb,
     pub(in crate::app::ai) on_unpin_target: ActionCb,
-    pub(in crate::app::ai) on_trigger_mention: ActionCb,
-    pub(in crate::app::ai) on_toggle_extra_host: TabCb,
+    pub(in crate::app::ai) on_toggle_extra_host: ExtraHostCb,
     pub(in crate::app::ai) on_switch_builtin: ActionCb,
     pub(in crate::app::ai) on_open_config: ActionCb,
     pub(in crate::app::ai) on_install_acp: IdCb,
@@ -97,7 +102,6 @@ pub(in crate::app::ai) fn render_composer(
         on_stop,
         on_toggle_popup,
         on_unpin_target,
-        on_trigger_mention,
         on_toggle_extra_host,
         on_switch_builtin,
         on_open_config,
@@ -158,7 +162,6 @@ pub(in crate::app::ai) fn render_composer(
             move |w, cx| toggle(AiActivePopup::TargetSession, w, cx)
         },
         on_unpin_target,
-        on_trigger_mention,
     ));
 
     if !params.pending_attachments.is_empty() {
@@ -176,10 +179,12 @@ pub(in crate::app::ai) fn render_composer(
         let mut scope_row = h_flex()
             .w_full()
             .px(rems(space::SM))
-            .pt(rems(space::XXS))
-            .gap(rems(space::XXS))
+            .py(rems(space::XS))
+            .gap(px(6.0))
             .items_center()
             .flex_wrap()
+            .border_b_1()
+            .border_color(p.divider(p.border))
             .child(
                 div()
                     .text_size(rems(typography::CAPTION))
@@ -188,14 +193,42 @@ pub(in crate::app::ai) fn render_composer(
             );
         for (idx, opt) in params.extra_host_options.into_iter().enumerate() {
             let toggle = toggle_host_rc.clone();
-            let tid = opt.tab_id;
-            let btn = Button::new(("ai-extra-host", idx)).label(opt.host_name);
-            let btn = if opt.selected {
-                btn.primary()
+            let key = opt.key;
+            let mut chip = h_flex()
+                .id(("ai-extra-host", idx))
+                .px(px(8.0))
+                .py(px(2.0))
+                .gap(px(4.0))
+                .items_center()
+                .rounded_full()
+                .border_1()
+                .cursor_pointer()
+                .on_click(move |_, w, cx| toggle(key, w, cx));
+            chip = if opt.selected {
+                chip.bg(p.secondary)
+                    .border_color(p.divider(p.border))
+                    .text_color(p.foreground)
+                    .hover(|s| s.bg(p.surface.hover))
             } else {
-                btn.ghost()
+                chip.bg(p.background)
+                    .border_color(p.divider(p.border))
+                    .text_color(p.text.muted)
+                    .hover(|s| s.bg(p.surface.hover).text_color(p.foreground))
             };
-            scope_row = scope_row.child(btn.on_click(move |_, w, cx| toggle(tid, w, cx)));
+            chip = chip.child(
+                div()
+                    .text_size(rems(typography::CAPTION))
+                    .font_weight(if opt.selected {
+                        FontWeight::MEDIUM
+                    } else {
+                        FontWeight::NORMAL
+                    })
+                    .child(opt.host_name),
+            );
+            if opt.selected {
+                chip = chip.child(AppIconElement::new(AppIcon::Ui(UiIcon::CLOSE)).small());
+            }
+            scope_row = scope_row.child(chip);
         }
         card = card.child(scope_row);
     }
@@ -431,7 +464,7 @@ fn render_inline_chip(token_ctx: &InlineTokenContext, p: &Palette) -> AnyElement
         .into_any_element()
 }
 
-/// 渲染输入卡片顶部的「目标会话选择器」胶囊与右侧显式 `@` 提及入口按钮。
+/// 渲染输入卡片顶部的「目标会话选择器」胶囊。
 fn render_target_selector_bar(
     target_mode: AiTargetMode,
     active_session: Option<&ActiveAiSessionInfo>,
@@ -439,7 +472,6 @@ fn render_target_selector_bar(
     p: &Palette,
     on_toggle_popup: impl Fn(&mut Window, &mut App) + 'static,
     on_unpin: ActionCb,
-    on_trigger_mention: ActionCb,
 ) -> AnyElement {
     let is_pinned = matches!(target_mode, AiTargetMode::PinnedTab(_)) && active_session.is_some();
     let label = match (target_mode, active_session) {
@@ -551,40 +583,14 @@ fn render_target_selector_bar(
         );
     }
 
-    let mention_tip = rust_i18n::t!("ai.mention_trigger_tip").to_string();
-    let mention_btn = h_flex()
-        .id("ai-mention-trigger-btn")
-        .flex_shrink_0()
-        .px(px(6.0))
-        .py(px(2.0))
-        .gap(px(3.0))
-        .items_center()
-        .rounded(p.radius.sm)
-        .cursor_pointer()
-        .text_color(p.text.muted)
-        .hover(|s| s.bg(p.surface.hover).text_color(p.foreground))
-        .tooltip(move |w, cx| {
-            gpui_kit::component::tooltip::Tooltip::new(mention_tip.clone()).build(w, cx)
-        })
-        .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-        .on_click(move |_, w, cx| on_trigger_mention(w, cx))
-        .child(AppIconElement::new(AppIcon::Ui(UiIcon::ADD_LINK)).small())
-        .child(
-            div()
-                .text_size(rems(typography::CAPTION))
-                .child(rust_i18n::t!("ai.mention_trigger_label").to_string()),
-        );
-
     h_flex()
         .w_full()
         .px(rems(space::SM))
         .py(rems(space::XS))
-        .justify_between()
         .items_center()
         .gap(rems(space::XS))
         .border_b_1()
         .border_color(p.divider(p.border))
         .child(left_group)
-        .child(mention_btn)
         .into_any_element()
 }

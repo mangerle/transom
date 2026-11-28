@@ -20,6 +20,7 @@ pub(in crate::app::ai) struct TargetSessionPopupParams<'a> {
     pub(in crate::app::ai) active_session: Option<&'a ActiveAiSessionInfo>,
     pub(in crate::app::ai) connected_sessions: &'a [ActiveAiSessionInfo],
     pub(in crate::app::ai) extra_scope_tabs: &'a HashSet<TabId>,
+    pub(in crate::app::ai) extra_scope_sessions: &'a HashSet<SessionId>,
     pub(in crate::app::ai) mention_candidates: &'a [AiMentionCandidate],
     pub(in crate::app::ai) p: &'a Palette,
 }
@@ -28,8 +29,42 @@ pub(in crate::app::ai) struct TargetSessionPopupParams<'a> {
 pub(in crate::app::ai) struct TargetSessionPopupActions {
     pub(in crate::app::ai) on_select_mode: Box<dyn Fn(AiTargetMode, &mut Window, &mut App)>,
     pub(in crate::app::ai) on_toggle_coop: Box<dyn Fn(TabId, &mut Window, &mut App)>,
+    pub(in crate::app::ai) on_toggle_coop_session: Box<dyn Fn(SessionId, &mut Window, &mut App)>,
     pub(in crate::app::ai) on_insert_mention: Box<dyn Fn(String, &mut Window, &mut App)>,
     pub(in crate::app::ai) on_connect_and_pin: Box<dyn Fn(SessionId, &mut Window, &mut App)>,
+}
+
+fn render_coop_toggle_btn(
+    id: impl Into<ElementId>,
+    selected: bool,
+    p: &Palette,
+    on_click: impl Fn(&mut Window, &mut App) + 'static,
+) -> AnyElement {
+    let coop_label = rust_i18n::t!("ai.target_coop_btn").to_string();
+    let mut btn = h_flex()
+        .id(id)
+        .px(px(6.0))
+        .py(px(2.0))
+        .rounded(p.radius.sm)
+        .border_1()
+        .cursor_pointer()
+        .text_size(rems(typography::CAPTION))
+        .on_click(move |_, w, cx| {
+            cx.stop_propagation();
+            on_click(w, cx);
+        })
+        .child(coop_label);
+    btn = if selected {
+        btn.bg(p.tone.primary_subtle)
+            .border_color(p.primary.opacity(0.5))
+            .text_color(p.primary)
+            .font_weight(FontWeight::MEDIUM)
+    } else {
+        btn.border_color(p.divider(p.border))
+            .text_color(p.text.muted)
+            .hover(|s| s.bg(p.surface.hover).text_color(p.foreground))
+    };
+    btn.into_any_element()
 }
 
 fn section_title(label: String, p: &Palette) -> AnyElement {
@@ -126,6 +161,7 @@ pub(in crate::app::ai) fn render_target_session_popup(
     let p = params.p;
     let on_select_mode = std::rc::Rc::new(actions.on_select_mode);
     let on_toggle_coop = std::rc::Rc::new(actions.on_toggle_coop);
+    let on_toggle_coop_session = std::rc::Rc::new(actions.on_toggle_coop_session);
     let on_insert_mention = std::rc::Rc::new(actions.on_insert_mention);
     let on_connect_and_pin = std::rc::Rc::new(actions.on_connect_and_pin);
 
@@ -232,33 +268,12 @@ pub(in crate::app::ai) fn render_target_session_popup(
             );
             let mut trailing = h_flex().gap(px(4.0)).items_center().flex_shrink_0();
             if !is_primary {
-                let coop_label = rust_i18n::t!("ai.target_coop_btn").to_string();
-                let mut coop_btn = h_flex()
-                    .id(("ai-target-coop", idx))
-                    .px(px(6.0))
-                    .py(px(2.0))
-                    .rounded(p.radius.sm)
-                    .border_1()
-                    .cursor_pointer()
-                    .text_size(rems(typography::CAPTION))
-                    .on_click(move |_, w, cx| {
-                        cx.stop_propagation();
-                        toggle_coop(tid, w, cx);
-                    })
-                    .child(coop_label);
-                coop_btn = if is_coop {
-                    coop_btn
-                        .bg(p.tone.primary_subtle)
-                        .border_color(p.primary.opacity(0.5))
-                        .text_color(p.primary)
-                        .font_weight(FontWeight::MEDIUM)
-                } else {
-                    coop_btn
-                        .border_color(p.divider(p.border))
-                        .text_color(p.text.muted)
-                        .hover(|s| s.bg(p.surface.hover).text_color(p.foreground))
-                };
-                trailing = trailing.child(coop_btn);
+                trailing = trailing.child(render_coop_toggle_btn(
+                    ("ai-target-coop", idx),
+                    is_coop,
+                    p,
+                    move |w, cx| toggle_coop(tid, w, cx),
+                ));
             }
             if is_pinned {
                 trailing = trailing.child(
@@ -311,10 +326,18 @@ pub(in crate::app::ai) fn render_target_session_popup(
         for (idx, item) in other_targets.into_iter().enumerate() {
             let token = item.token.clone();
             let pick_mention = on_insert_mention.clone();
-            let icon = match item.kind {
-                AiMentionKind::Local => AppIcon::Domain(DomainIcon::TERMINAL),
-                AiMentionKind::ContainerEngine => AppIcon::Custom(CustomIcon::DOCKER),
-                AiMentionKind::SshHost { .. } => AppIcon::Ui(UiIcon::WEB_SERVER),
+            let (icon, display_name) = match item.kind {
+                AiMentionKind::Local => (
+                    AppIcon::Domain(DomainIcon::TERMINAL),
+                    format!("{} (@{})", item.detail, item.token),
+                ),
+                AiMentionKind::ContainerEngine => (
+                    AppIcon::Custom(CustomIcon::DOCKER),
+                    format!("Docker · {}", item.label),
+                ),
+                AiMentionKind::SshHost { .. } => {
+                    (AppIcon::Ui(UiIcon::WEB_SERVER), format!("@{}", item.token))
+                }
             };
             let mut trailing = h_flex().gap(px(4.0)).items_center().flex_shrink_0().child(
                 div()
@@ -329,25 +352,37 @@ pub(in crate::app::ai) fn render_target_session_popup(
                 session_id,
             } = item.kind
             {
+                let is_coop_saved = params.extra_scope_sessions.contains(&session_id);
+                let toggle_saved = on_toggle_coop_session.clone();
                 let connect_pin = on_connect_and_pin.clone();
-                trailing = trailing.child(
-                    h_flex()
-                        .id(("ai-target-connect-pin", idx))
-                        .px(px(6.0))
-                        .py(px(2.0))
-                        .rounded(p.radius.sm)
-                        .border_1()
-                        .border_color(p.divider(p.border))
-                        .cursor_pointer()
-                        .text_size(rems(typography::CAPTION))
-                        .text_color(p.primary)
-                        .hover(|s| s.bg(p.tone.primary_subtle).border_color(p.primary.opacity(0.5)))
-                        .on_click(move |_, w, cx| {
-                            cx.stop_propagation();
-                            connect_pin(session_id, w, cx);
-                        })
-                        .child(rust_i18n::t!("ai.target_connect_and_pin").to_string()),
-                );
+                trailing = trailing
+                    .child(render_coop_toggle_btn(
+                        ("ai-target-saved-coop", idx),
+                        is_coop_saved,
+                        p,
+                        move |w, cx| toggle_saved(session_id, w, cx),
+                    ))
+                    .child(
+                        h_flex()
+                            .id(("ai-target-connect-pin", idx))
+                            .px(px(6.0))
+                            .py(px(2.0))
+                            .rounded(p.radius.sm)
+                            .border_1()
+                            .border_color(p.divider(p.border))
+                            .cursor_pointer()
+                            .text_size(rems(typography::CAPTION))
+                            .text_color(p.primary)
+                            .hover(|s| {
+                                s.bg(p.tone.primary_subtle)
+                                    .border_color(p.primary.opacity(0.5))
+                            })
+                            .on_click(move |_, w, cx| {
+                                cx.stop_propagation();
+                                connect_pin(session_id, w, cx);
+                            })
+                            .child(rust_i18n::t!("ai.target_connect_and_pin").to_string()),
+                    );
             }
             scroll_list = scroll_list.child(
                 h_flex()
@@ -379,7 +414,7 @@ pub(in crate::app::ai) fn render_target_session_popup(
                                     .truncate()
                                     .text_size(rems(typography::BODY))
                                     .text_color(p.foreground)
-                                    .child(format!("@{}", item.token)),
+                                    .child(display_name),
                             ),
                     )
                     .child(trailing),

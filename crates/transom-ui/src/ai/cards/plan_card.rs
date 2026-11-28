@@ -269,7 +269,7 @@ pub(in crate::app::ai) fn render_status_pills_row(
         .items_center();
 
     if has_plan_pill {
-        let (done, total, pct) = match plan.filter(|pl| !pl.steps.is_empty()) {
+        let (done, current_phase, total, pct) = match plan.filter(|pl| !pl.steps.is_empty()) {
             Some(pl) => {
                 let d = pl
                     .steps
@@ -277,12 +277,18 @@ pub(in crate::app::ai) fn render_status_pills_row(
                     .filter(|s| s.status == AiPlanStepStatus::Done)
                     .count();
                 let t = pl.steps.len();
-                (d, t, ((d as f32 / t as f32) * 100.0).clamp(0.0, 100.0))
+                let active_pos = pl
+                    .steps
+                    .iter()
+                    .position(|s| s.status == AiPlanStepStatus::InProgress)
+                    .map(|idx| idx + 1)
+                    .unwrap_or(d);
+                (d, active_pos, t, ((d as f32 / t as f32) * 100.0).clamp(0.0, 100.0))
             }
-            None => (0, 0, 15.0),
+            None => (0, 0, 0, 15.0),
         };
         let label = if total > 0 {
-            rust_i18n::t!("ai.plan_steps_summary", done = done, total = total).to_string()
+            rust_i18n::t!("ai.plan_steps_summary", done = current_phase, total = total).to_string()
         } else {
             focus
                 .map(str::trim)

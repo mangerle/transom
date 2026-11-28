@@ -63,6 +63,8 @@ pub(crate) struct AiConversationUiState {
     pub(crate) pending_pin_session_id: Option<SessionId>,
     pub(crate) connected_sessions: Vec<ActiveAiSessionInfo>,
     pub(crate) extra_scope_tabs: HashSet<TabId>,
+    /// 未打开终端标签页、但被勾选加入后台静默协同的已保存 SSH 会话 ID。
+    pub(crate) extra_scope_sessions: HashSet<SessionId>,
     pub(crate) conversations: Vec<ConversationSummary>,
     pub(crate) show_archived_history: bool,
     pub(crate) active_conversation_id: Option<String>,
@@ -89,6 +91,7 @@ impl Default for AiConversationUiState {
             pending_pin_session_id: None,
             connected_sessions: Vec::new(),
             extra_scope_tabs: HashSet::new(),
+            extra_scope_sessions: HashSet::new(),
             conversations: Vec::new(),
             show_archived_history: false,
             active_conversation_id: None,
@@ -205,8 +208,17 @@ impl AiConversationUiState {
                 .cloned(),
         };
         let primary_tab = next_active.as_ref().map(|s| s.tab_id);
+        let primary_sid = next_active.as_ref().map(|s| s.session_id);
         self.extra_scope_tabs.retain(|tid| {
             Some(*tid) != primary_tab && self.connected_sessions.iter().any(|s| s.tab_id == *tid)
+        });
+        // 若已保存会话已在终端中打开，从静默协同集合移除，避免重复；未打开的继续保留
+        self.extra_scope_sessions.retain(|sid| {
+            Some(*sid) != primary_sid
+                && !self
+                    .connected_sessions
+                    .iter()
+                    .any(|s| s.session_id == *sid)
         });
         if self.active_session == next_active {
             return false;
