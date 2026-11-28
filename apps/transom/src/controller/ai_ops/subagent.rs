@@ -322,15 +322,18 @@ impl SubagentRunner for ControllerSubagentRunner {
                     Err(err) => (false, String::new(), err.to_string()),
                 };
                 if !conv_id.is_empty() {
-                    let _ = notify_tx
-                        .send_async(AppEvent::Ai(Box::new(AiAppEvent::SubagentCompleted {
+                    super::send_ai_event(
+                        &notify_tx,
+                        AiAppEvent::SubagentCompleted {
                             conversation_id: conv_id,
                             subagent_id: sid,
                             title: task_title,
                             ok,
                             summary,
-                        })))
-                        .await;
+                        },
+                        "子 Agent 完成",
+                    )
+                    .await;
                 }
             });
             return Ok(

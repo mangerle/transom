@@ -27,7 +27,7 @@ pub(in crate::controller) mod task_runner;
 use transom_ai::{
     ApprovalRequestId, RunId, SkillSummary, extract_skill_command, load_skills_with_disabled,
 };
-use transom_core::AiCommand;
+use transom_core::{AiAppEvent, AiCommand, AppEvent};
 
 use super::state::{ControllerCtx, ControllerState};
 pub(in crate::controller) use config_service::AiConfigService;
@@ -37,6 +37,17 @@ pub(in crate::controller) use dispatch::shutdown_ai_runs;
 pub(in crate::controller) use mcp_bridge::{
     McpControllerSnapshot, handle_mcp_snapshot, spawn_mcp_server,
 };
+
+/// 向 UI 发送 AI 事件，并在事件总线关闭时记录统一告警。
+pub(super) async fn send_ai_event(
+    event_tx: &flume::Sender<AppEvent>,
+    event: AiAppEvent,
+    context: &str,
+) {
+    if let Err(err) = event_tx.send_async(AppEvent::Ai(Box::new(event))).await {
+        log::warn!("发送 AI 事件失败（{context}）: {err}");
+    }
+}
 
 /// 单次扫描技能目录并同时完成斜杠技能展开与可用技能摘要构造，避免重复读盘。
 pub(super) fn load_and_expand_skills(

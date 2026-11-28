@@ -241,12 +241,20 @@ impl ManagedTaskHandle {
         };
 
         if !chunk.is_empty() {
-            let _ = self.registry.event_tx.try_send(AppEvent::Ai(Box::new(
+            match self.registry.event_tx.try_send(AppEvent::Ai(Box::new(
                 AiAppEvent::ManagedTaskOutput {
                     task_id: self.task_id.clone(),
                     chunk,
                 },
-            )));
+            ))) {
+                Ok(()) => {}
+                Err(flume::TrySendError::Full(_)) => {
+                    log::trace!("AI 托管任务输出事件通道已满，丢弃实时输出分片");
+                }
+                Err(flume::TrySendError::Disconnected(_)) => {
+                    log::warn!("发送 AI 托管任务输出失败，事件通道已关闭");
+                }
+            }
         }
     }
 

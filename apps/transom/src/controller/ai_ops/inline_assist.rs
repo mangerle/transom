@@ -34,28 +34,34 @@ pub(super) fn spawn_inline_assist(
             Ok(Some(secret)) => secret,
             Ok(None) => String::new(),
             Err(error) => {
-                let _ = event_tx
-                    .send_async(AppEvent::Ai(Box::new(AiAppEvent::InlineCommandResult {
+                super::send_ai_event(
+                    &event_tx,
+                    AiAppEvent::InlineCommandResult {
                         request_id,
                         command: None,
                         explanation: String::new(),
                         error: Some(error),
-                    })))
-                    .await;
+                    },
+                    "内联命令凭据读取失败",
+                )
+                .await;
                 return;
             }
         };
         let target = match settings.build_target(&model_id, None, api_key) {
             Ok(target) => target,
             Err(error) => {
-                let _ = event_tx
-                    .send_async(AppEvent::Ai(Box::new(AiAppEvent::InlineCommandResult {
+                super::send_ai_event(
+                    &event_tx,
+                    AiAppEvent::InlineCommandResult {
                         request_id,
                         command: None,
                         explanation: String::new(),
                         error: Some(error.to_string()),
-                    })))
-                    .await;
+                    },
+                    "内联命令模型配置失败",
+                )
+                .await;
                 return;
             }
         };
@@ -68,9 +74,7 @@ pub(super) fn spawn_inline_assist(
                 error: Some(error.to_string()),
             },
         };
-        if let Err(error) = event_tx.send_async(AppEvent::Ai(Box::new(event))).await {
-            log::warn!("发送内联命令生成结果失败: {error}");
-        }
+        super::send_ai_event(&event_tx, event, "内联命令生成结果").await;
     });
 }
 
@@ -81,14 +85,17 @@ fn send_err(
     error: String,
 ) {
     ai_set.spawn(async move {
-        let _ = event_tx
-            .send_async(AppEvent::Ai(Box::new(AiAppEvent::InlineCommandResult {
+        super::send_ai_event(
+            &event_tx,
+            AiAppEvent::InlineCommandResult {
                 request_id,
                 command: None,
                 explanation: String::new(),
                 error: Some(error),
-            })))
-            .await;
+            },
+            "内联命令启动失败",
+        )
+        .await;
     });
 }
 

@@ -11,7 +11,7 @@ use transom_ai::{
     AcpAgentConfig, EVENT_CHANNEL_CAPACITY, ProviderProtocol, RunInput, SessionScope,
     default_acp_presets, discover_models, probe_acp_models, test_provider_connection,
 };
-use transom_core::{AiAppEvent, AiPromptRequest, AppEvent};
+use transom_core::{AiAppEvent, AiPromptRequest};
 
 use super::context_builder::{ToolContextBuildParams, emit_run_error};
 use super::credentials::load_provider_api_key;
@@ -69,13 +69,16 @@ pub(super) fn spawn_discover_models(
             match resolve_probe_api_key(store, secrets, params.api_key, params.provider_id).await {
                 Ok(api_key) => api_key,
                 Err(error) => {
-                    let _ = event_tx
-                        .send_async(AppEvent::Ai(Box::new(AiAppEvent::ModelsDiscovered {
+                    super::send_ai_event(
+                        &event_tx,
+                        AiAppEvent::ModelsDiscovered {
                             request_id: params.request_id,
                             models: Vec::new(),
                             error: Some(error),
-                        })))
-                        .await;
+                        },
+                        "模型发现凭据读取失败",
+                    )
+                    .await;
                     return;
                 }
             };
@@ -94,9 +97,7 @@ pub(super) fn spawn_discover_models(
                 error: Some(error.to_string()),
             },
         };
-        if let Err(error) = event_tx.send_async(AppEvent::Ai(Box::new(event))).await {
-            log::warn!("发送模型发现结果失败: {error}");
-        }
+        super::send_ai_event(&event_tx, event, "模型发现结果").await;
     });
 }
 
@@ -114,13 +115,16 @@ pub(super) fn spawn_test_connection(
             match resolve_probe_api_key(store, secrets, params.api_key, params.provider_id).await {
                 Ok(api_key) => api_key,
                 Err(error) => {
-                    let _ = event_tx
-                        .send_async(AppEvent::Ai(Box::new(AiAppEvent::ConnectionTested {
+                    super::send_ai_event(
+                        &event_tx,
+                        AiAppEvent::ConnectionTested {
                             request_id: params.request_id,
                             ok: false,
                             detail: error,
-                        })))
-                        .await;
+                        },
+                        "连接测试凭据读取失败",
+                    )
+                    .await;
                     return;
                 }
             };
@@ -136,9 +140,7 @@ pub(super) fn spawn_test_connection(
                 detail: error.to_string(),
             },
         };
-        if let Err(error) = event_tx.send_async(AppEvent::Ai(Box::new(event))).await {
-            log::warn!("发送供应商连通性测试结果失败: {error}");
-        }
+        super::send_ai_event(&event_tx, event, "供应商连通性测试结果").await;
     });
 }
 
@@ -288,14 +290,17 @@ pub(super) fn spawn_install_acp_agent(
 ) {
     let event_tx = ctx.event_tx.clone();
     state.ai.run_set.spawn(async move {
-        let _ = event_tx
-            .send_async(AppEvent::Ai(Box::new(AiAppEvent::AcpInstallStatus {
+        super::send_ai_event(
+            &event_tx,
+            AiAppEvent::AcpInstallStatus {
                 agent_id: agent_id.clone(),
                 running: true,
                 ok: None,
                 detail: format!("正在安装 {name}：{install_command}"),
-            })))
-            .await;
+            },
+            "ACP 安装开始",
+        )
+        .await;
 
         let mut cmd = if cfg!(windows) {
             let mut c = Command::new("cmd");
@@ -343,14 +348,17 @@ pub(super) fn spawn_install_acp_agent(
             Err(error) => (false, format!("{name} 安装进程失败: {error}")),
         };
 
-        let _ = event_tx
-            .send_async(AppEvent::Ai(Box::new(AiAppEvent::AcpInstallStatus {
+        super::send_ai_event(
+            &event_tx,
+            AiAppEvent::AcpInstallStatus {
                 agent_id,
                 running: false,
                 ok: Some(result.0),
                 detail: result.1,
-            })))
-            .await;
+            },
+            "ACP 安装完成",
+        )
+        .await;
     });
 }
 
@@ -372,13 +380,16 @@ pub(super) fn spawn_probe_acp_models(
     state.ai.run_set.spawn(async move {
         match probe_acp_models(&agent).await {
             Ok(res) => {
-                let _ = event_tx
-                    .send_async(AppEvent::Ai(Box::new(AiAppEvent::AcpModelsProbed {
+                super::send_ai_event(
+                    &event_tx,
+                    AiAppEvent::AcpModelsProbed {
                         agent_id,
                         current_model: res.current_model,
                         models: res.models,
-                    })))
-                    .await;
+                    },
+                    "ACP 模型探测完成",
+                )
+                .await;
             }
             Err(err) => {
                 log::debug!("探测 ACP Agent（{}）模型列表失败: {err}", agent.id);
