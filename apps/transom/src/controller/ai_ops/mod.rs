@@ -13,6 +13,7 @@ mod dispatch;
 mod event_pump;
 mod hooks_exec;
 mod inline_assist;
+mod mcp_audit;
 mod mcp_bridge;
 mod mcp_dispatch;
 pub(in crate::controller) mod process;

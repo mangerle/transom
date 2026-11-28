@@ -20,7 +20,6 @@ use transom_ai::{
     RemoteExecutor, ResolvedToolTarget, SessionPromptContext, SessionScope, ToolOutputStore,
     ToolRuntimeContext, assess_shell_command, assess_tool_call, detect_blocking_command,
     format_blocking_command_hint, serve_local_socket, target_argument_for_tool,
-    truncate_tool_output,
 };
 use transom_core::{AiHostTargetDto, AppEvent};
 use transom_net::{SftpClient, SshRemote};
@@ -28,6 +27,7 @@ use transom_store::AiStore;
 
 use super::app_bridge::{AppBridgeDeps, ControllerAppActionBridge, ControllerTargetResolver};
 use super::bridge::SshRemoteExecutor;
+use super::mcp_audit::{append_mcp_audit, sanitize_audit_summary};
 use super::mcp_dispatch::{
     McpToolPolicyParams, dispatch_single_tool, enforce_decision, evaluate_bulk_tool_policy,
     evaluate_tool_policy,
@@ -279,19 +279,6 @@ impl McpServerBackend for ControllerMcpBackend {
     }
 }
 
-fn sanitize_audit_summary(raw: &str) -> String {
-    truncate_tool_output(raw, 2_000)
-}
-
-async fn append_mcp_audit(snap: &McpControllerSnapshot, entry: AiAuditEntry) {
-    let store = snap.ai_store.clone();
-    match tokio::task::spawn_blocking(move || store.append_audit(&entry)).await {
-        Ok(Ok(())) => {}
-        Ok(Err(error)) => log::warn!("写入外部 MCP 审计记录失败: {error}"),
-        Err(error) => log::warn!("外部 MCP 审计落盘任务异常: {error}"),
-    }
-}
-
 fn is_app_domain_tool(name: &str) -> bool {
     AppBridgeDomain::is_software_tool_name(name)
 }
@@ -507,24 +494,5 @@ impl ControllerMcpBackend {
         Ok(snap
             .output_store
             .store_and_preview("remote_exec_bulk", &combined, 8_000))
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::sanitize_audit_summary;
-
-    #[test]
-    fn mcp_audit_summary_redacts_and_bounds_sensitive_arguments() {
-        let raw = format!(
-            "[MCP] {}",
-            serde_json::json!({
-                "password": "super-secret",
-                "body": "x".repeat(20_000),
-            })
-        );
-        let safe = sanitize_audit_summary(&raw);
-        assert!(!safe.contains("super-secret"));
-        assert!(safe.len() <= 9_000);
     }
 }
