@@ -307,7 +307,7 @@ fn handle_forwards(state: &mut AppState, action: &str, args: &Value) -> Result<S
                 session.forwards.push(rule.clone());
                 session.touch();
                 if !state.persist_catalog() {
-                    return Err("保存会话目录失败".to_owned());
+                    return Err("Failed to save session catalog".to_owned());
                 }
             }
             state.send_command(ForwardCommand::ForwardStart {
@@ -371,7 +371,7 @@ fn handle_forwards(state: &mut AppState, action: &str, args: &Value) -> Result<S
                 session.forwards.retain(|r| r.id != fid);
                 session.touch();
                 if !state.persist_catalog() {
-                    return Err("保存会话目录失败".to_owned());
+                    return Err("Failed to save session catalog".to_owned());
                 }
             }
             Ok(format!("Deleted forward rule: {fid}"))
