@@ -77,8 +77,10 @@ impl ToolOutputStore {
         max_preview_chars: usize,
     ) -> String {
         let cleaned = redact_secrets_for_model(&strip_ansi(raw));
-        let char_count = cleaned.chars().count();
-        if char_count <= max_preview_chars || max_preview_chars < 64 {
+        if max_preview_chars < 64
+            || cleaned.len() <= max_preview_chars
+            || cleaned.chars().count() <= max_preview_chars
+        {
             return cleaned;
         }
 
@@ -137,12 +139,21 @@ impl ToolOutputStore {
         let query = pattern.map(str::trim).filter(|s| !s.is_empty());
 
         let body = if let Some(pat) = query {
-            let pat_lower = pat.to_ascii_lowercase();
+            let pat_is_ascii = pat.is_ascii();
+            let pat_lower = (!pat_is_ascii).then(|| pat.to_lowercase());
+            let pat_bytes = pat.as_bytes();
             let matched: Vec<String> = entry
                 .text
                 .lines()
                 .enumerate()
-                .filter(|(_, line)| line.to_ascii_lowercase().contains(&pat_lower))
+                .filter(|(_, line)| {
+                    if pat_is_ascii {
+                        contains_ignore_ascii_case(line.as_bytes(), pat_bytes)
+                    } else {
+                        let lower_pat = pat_lower.as_deref().unwrap_or("");
+                        line.to_lowercase().contains(lower_pat)
+                    }
+                })
                 .skip(offset_line)
                 .take(limit)
                 .map(|(idx, line)| format!("L{}: {line}", idx + 1))
@@ -213,6 +224,16 @@ impl Default for ToolOutputStore {
     fn default() -> Self {
         Self::new()
     }
+}
+
+/// 仅按 ASCII 忽略大小写匹配字节切片，避免逐行分配临时 `String`。
+fn contains_ignore_ascii_case(haystack: &[u8], needle: &[u8]) -> bool {
+    if needle.is_empty() {
+        return true;
+    }
+    haystack
+        .windows(needle.len())
+        .any(|window| window.eq_ignore_ascii_case(needle))
 }
 
 /// 进程级对话输出池 LRU，控制同时存活的对话数量。
