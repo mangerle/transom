@@ -10484,6 +10484,9 @@ ai:
   save_config_failed:
     en: "Failed to save AI config: %{error}"
     zh-CN: "保存 AI 配置失败: %{error}"
+  duplicate_model_request:
+    en: "Duplicate request model name: %{name}"
+    zh-CN: "请求模型名重复: %{name}"
   bulk_scope_label:
     en: "Multi-host:"
     zh-CN: "协同主机:"

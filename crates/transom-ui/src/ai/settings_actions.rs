@@ -1,6 +1,7 @@
 //! AI 助手面板配置、供应商、ACP、记忆与模型发现动作。
 
 use gpui_kit::*;
+use std::collections::HashSet;
 use transom_ai_contracts::{
     ExecutionMode, ModelConfig, ProviderConfig, ThinkingEffort, default_acp_presets,
     new_provider_id, provider_model_id,
@@ -81,10 +82,17 @@ impl AiAssistantView {
         let existing_provider = self.config_form.editing_provider.as_ref();
 
         let mut models = Vec::new();
+        let mut request_models = HashSet::new();
         for row in &self.config_form.draft_models {
             let req = row.request_model.read(cx).value().trim().to_owned();
             if req.is_empty() {
                 continue;
+            }
+            if !request_models.insert(req.clone()) {
+                self.state.view.status_error =
+                    Some(rust_i18n::t!("ai.duplicate_model_request", name = req).to_string());
+                cx.notify();
+                return;
             }
             let disp = row.display_name.read(cx).value().trim().to_owned();
             let ctx_win = row
