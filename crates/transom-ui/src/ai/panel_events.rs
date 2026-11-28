@@ -65,7 +65,7 @@ pub(crate) fn wrap_with_ai_panel_split(
         .into_any_element()
 }
 
-fn mention_token(raw: &str) -> Option<String> {
+pub(in crate::app::ai) fn mention_token(raw: &str) -> Option<String> {
     let trimmed = raw.trim();
     if trimmed.is_empty() {
         return None;

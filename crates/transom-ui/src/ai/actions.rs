@@ -7,7 +7,8 @@ use transom_core::{
 };
 
 use super::attachments::pack_attachments_for_request;
-use super::state::{AiActivePopup, AiDrawerTab, UiChatItem};
+use super::panel_events::mention_token;
+use super::state::{ActiveAiSessionInfo, AiActivePopup, AiDrawerTab, UiChatItem};
 use super::view::AiAssistantView;
 use crate::app::spawn_blocking_local;
 
@@ -248,27 +249,12 @@ impl AiAssistantView {
             .active_session
             .as_ref()
             .map(|s| s.tab_id);
-        let available_names: Vec<&str> = self
-            .state
-            .conversation
-            .connected_sessions
-            .iter()
-            .filter(|s| Some(s.tab_id) != primary_tab)
-            .map(|s| s.host_name.as_str())
-            .collect();
-        for mentioned in extract_host_mentions(&prompt, &available_names) {
-            if let Some(found) = self
-                .state
-                .conversation
-                .connected_sessions
-                .iter()
-                .find(|s| s.host_name == mentioned && Some(s.tab_id) != primary_tab)
-            {
-                self.state
-                    .conversation
-                    .extra_scope_tabs
-                    .insert(found.tab_id);
-            }
+        for tid in collect_mentioned_scope_tabs(
+            &prompt,
+            &self.state.conversation.connected_sessions,
+            primary_tab,
+        ) {
+            self.state.conversation.extra_scope_tabs.insert(tid);
         }
         let run_id = uuid::Uuid::new_v4().to_string();
         let local_item_id = format!("local-u-{run_id}");
@@ -462,5 +448,64 @@ impl AiAssistantView {
             },
         );
         cx.notify();
+    }
+}
+
+/// 根据 `@token`（与补全菜单同源的 `mention_token` 规范化名）匹配应纳入协同的已连接会话。
+fn collect_mentioned_scope_tabs(
+    prompt: &str,
+    connected_sessions: &[ActiveAiSessionInfo],
+    primary_tab: Option<TabId>,
+) -> Vec<TabId> {
+    let candidates: Vec<(String, TabId)> = connected_sessions
+        .iter()
+        .filter(|s| Some(s.tab_id) != primary_tab)
+        .filter_map(|s| mention_token(&s.host_name).map(|tok| (tok, s.tab_id)))
+        .collect();
+    let available_tokens: Vec<&str> = candidates.iter().map(|(tok, _)| tok.as_str()).collect();
+    let mut matched = Vec::new();
+    for mentioned in extract_host_mentions(prompt, &available_tokens) {
+        for (tok, tid) in &candidates {
+            if tok == &mentioned && !matched.contains(tid) {
+                matched.push(*tid);
+            }
+        }
+    }
+    matched
+}
+
+#[cfg(test)]
+mod tests {
+    use transom_core::{HostProtection, SessionId, TabId};
+
+    use super::collect_mentioned_scope_tabs;
+    use crate::app::ai::state::ActiveAiSessionInfo;
+
+    #[test]
+    fn matches_host_mentions_with_spaces_via_normalized_token() {
+        let primary = ActiveAiSessionInfo {
+            tab_id: TabId::new(),
+            session_id: SessionId::new(),
+            host_name: "Primary Host".to_owned(),
+            login: "root@10.0.0.1:22".to_owned(),
+            platform: "linux".to_owned(),
+            protection: HostProtection::Normal,
+            connected: true,
+        };
+        let spaced = ActiveAiSessionInfo {
+            tab_id: TabId::new(),
+            session_id: SessionId::new(),
+            host_name: "My Server".to_owned(),
+            login: "root@10.0.0.2:22".to_owned(),
+            platform: "linux".to_owned(),
+            protection: HostProtection::Normal,
+            connected: true,
+        };
+        let tabs = collect_mentioned_scope_tabs(
+            "check @My-Server disk usage",
+            &[primary.clone(), spaced.clone()],
+            Some(primary.tab_id),
+        );
+        assert_eq!(tabs, vec![spaced.tab_id]);
     }
 }
