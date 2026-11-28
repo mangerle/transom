@@ -28,6 +28,102 @@ pub(super) enum MarkdownSegment {
     },
 }
 
+/// 流式 Markdown 增量解析缓存：已闭合的代码块与稳定正文段落永不重解析，
+/// 每次 `TextDelta` 仅解析最后一个未闭合的尾部片段，将流式复杂度从 O(N²) 降至均摊 O(N)。
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(super) struct StreamingMarkdownCache {
+    segments: Vec<MarkdownSegment>,
+    committed_count: usize,
+    committed_bytes: usize,
+}
+
+impl StreamingMarkdownCache {
+    /// 从已定稿的完整 Markdown 文本直接构造缓存。
+    pub(super) fn from_complete(text: &str) -> Self {
+        let segments = parse_markdown_segments(text);
+        let committed_count = segments.len();
+        Self {
+            segments,
+            committed_count,
+            committed_bytes: text.len(),
+        }
+    }
+
+    /// 返回当前全部分段切片（零分配）。
+    pub(super) fn as_slice(&self) -> &[MarkdownSegment] {
+        &self.segments
+    }
+
+    /// 增量解析追加后的完整文本，仅重解析 `committed_bytes` 之后的尾部区间。
+    pub(super) fn update(&mut self, full_text: &str) {
+        if self.committed_bytes > full_text.len()
+            || !full_text.is_char_boundary(self.committed_bytes)
+        {
+            *self = Self::default();
+        }
+        self.segments.truncate(self.committed_count);
+
+        let tail = &full_text[self.committed_bytes..];
+        let mut prose_lines: Vec<&str> = Vec::new();
+        let mut active_fence: Option<(char, usize, Option<String>)> = None;
+        let mut code_lines: Vec<&str> = Vec::new();
+        let mut cursor = 0usize;
+        let mut safe_commit_end = 0usize;
+
+        for raw_line in tail.split_inclusive('\n') {
+            let line_end = cursor + raw_line.len();
+            let line = raw_line.strip_suffix('\n').unwrap_or(raw_line);
+            let line = line.strip_suffix('\r').unwrap_or(line);
+
+            if let Some((fence_ch, fence_len, _)) = &active_fence {
+                if is_closing_fence(line, *fence_ch, *fence_len) {
+                    let (_, _, lang) = active_fence.take().expect("checked");
+                    self.segments.push(MarkdownSegment::CodeBlock {
+                        lang,
+                        code: code_lines.join("\n"),
+                        unclosed: false,
+                    });
+                    code_lines.clear();
+                    // 只有遇到完整行结束符（\n）才推进提交边界，防止流式半行干扰
+                    if raw_line.ends_with('\n') {
+                        self.committed_count = self.segments.len();
+                        safe_commit_end = line_end;
+                    }
+                } else {
+                    code_lines.push(line);
+                }
+                cursor = line_end;
+                continue;
+            }
+
+            if let Some((ch, len, lang)) = parse_opening_fence(line) {
+                flush_prose(&mut prose_lines, &mut self.segments);
+                if raw_line.ends_with('\n') {
+                    self.committed_count = self.segments.len();
+                    safe_commit_end = cursor;
+                }
+                active_fence = Some((ch, len, lang));
+                cursor = line_end;
+                continue;
+            }
+
+            prose_lines.push(line);
+            cursor = line_end;
+        }
+
+        if let Some((_, _, lang)) = active_fence {
+            self.segments.push(MarkdownSegment::CodeBlock {
+                lang,
+                code: code_lines.join("\n"),
+                unclosed: true,
+            });
+        } else {
+            flush_prose(&mut prose_lines, &mut self.segments);
+        }
+        self.committed_bytes += safe_commit_end;
+    }
+}
+
 /// 带键与文本双参数的回调类型（用于复制、存为快捷指令）。
 pub(super) type KeyTextCallback = Rc<dyn Fn(String, String, &mut Window, &mut App)>;
 /// 单文本参数回调类型（用于填入终端）。
@@ -197,8 +293,8 @@ pub(super) fn render_markdown_content(params: MarkdownRenderParams<'_>) -> AnyEl
                 col = col.child(render_code_card(
                     &params,
                     idx,
-                    lang.clone(),
-                    code.clone(),
+                    lang.as_deref(),
+                    code,
                     *unclosed,
                 ));
             }
@@ -210,16 +306,15 @@ pub(super) fn render_markdown_content(params: MarkdownRenderParams<'_>) -> AnyEl
 fn render_code_card(
     params: &MarkdownRenderParams<'_>,
     idx: usize,
-    lang: Option<String>,
-    code: String,
+    lang: Option<&str>,
+    code: &str,
     unclosed: bool,
 ) -> AnyElement {
     let p = params.p;
     let block_key = format!("code-{}-{idx}", params.msg_id);
     let is_copied = params.copied_key == Some(block_key.as_str());
-    let is_shell = is_shell_language(lang.as_deref());
+    let is_shell = is_shell_language(lang);
     let lang_label = lang
-        .as_deref()
         .filter(|s| !s.is_empty())
         .map(str::to_owned)
         .unwrap_or_else(|| rust_i18n::t!("ai.code_block_default").to_string());
@@ -265,14 +360,14 @@ fn render_code_card(
         rust_i18n::t!("ai.copy").to_string()
     };
     let on_copy = Rc::clone(&params.callbacks.on_copy);
-    let copy_code = code.clone();
+    let copy_code = code.to_owned();
     let copy_key = block_key.clone();
 
     let mut actions = h_flex().gap(px(4.0)).items_center();
     if is_shell && !unclosed {
         if params.has_active_terminal {
             let on_send = Rc::clone(&params.callbacks.on_send_to_terminal);
-            let send_code = code.clone();
+            let send_code = code.to_owned();
             actions = actions.child(
                 Button::new(SharedString::from(format!("ai-send-term-{block_key}")))
                     .ghost()
@@ -282,7 +377,7 @@ fn render_code_card(
             );
         }
         let on_snip = Rc::clone(&params.callbacks.on_save_snippet);
-        let snip_code = code.clone();
+        let snip_code = code.to_owned();
         let snip_name = code
             .lines()
             .next()
@@ -328,7 +423,7 @@ fn render_code_card(
     let body_text = if code.is_empty() {
         " ".to_owned()
     } else {
-        code
+        code.to_owned()
     };
 
     v_flex()
@@ -356,7 +451,22 @@ fn render_code_card(
 
 #[cfg(test)]
 mod tests {
-    use super::{MarkdownSegment, is_shell_language, parse_markdown_segments};
+    use super::{
+        MarkdownSegment, StreamingMarkdownCache, is_shell_language, parse_markdown_segments,
+    };
+
+    #[test]
+    fn incremental_cache_matches_full_parse_across_chunk_boundaries() {
+        let md = "第一段诊断：\n\n```bash\ndf -h\nfree -m\n```\n\n第二段总结：\n~~~json\n{\"ok\":true}\n~~~\n完成。";
+        let mut cache = StreamingMarkdownCache::default();
+        let mut acc = String::new();
+        for ch in md.chars() {
+            acc.push(ch);
+            cache.update(&acc);
+            assert_eq!(cache.as_slice(), parse_markdown_segments(&acc).as_slice());
+        }
+        assert_eq!(cache.as_slice(), parse_markdown_segments(md).as_slice());
+    }
 
     #[test]
     fn parses_prose_and_multiple_code_blocks() {

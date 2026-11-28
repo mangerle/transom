@@ -1,10 +1,8 @@
 //! AI 面板单轮落库定稿、工具卡片增量更新与状态单元测试。
 
-use std::sync::Arc;
-
 use transom_core::AiToolCardDto;
 
-use super::markdown_blocks::parse_markdown_segments;
+use super::markdown_blocks::StreamingMarkdownCache;
 use super::state::AiPanelState;
 use super::state_types::UiChatItem;
 
@@ -43,7 +41,7 @@ impl AiPanelState {
                 .settings
                 .resolve_model(&self.config.selected_model_id)
                 .map(|(_, m)| m.name.clone());
-            let cached_segments = Some(Arc::new(parse_markdown_segments(&text)));
+            let cached_segments = Some(StreamingMarkdownCache::from_complete(&text));
             self.conversation.items.push(UiChatItem::AssistantText {
                 id: format!("turn-t-{}", self.conversation.items.len()),
                 text,

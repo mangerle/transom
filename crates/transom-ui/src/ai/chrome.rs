@@ -230,11 +230,11 @@ impl AiAssistantView {
                         }),
                 );
             }
-            for (b_idx, block) in blocks.iter().cloned().enumerate().skip(render_start) {
+            for (b_idx, block) in blocks.iter().enumerate().skip(render_start) {
                 let v_exp = cx.entity();
                 match block {
                     DisplayBlock::Single(item_index) => {
-                        let item = &items[item_index];
+                        let item = &items[*item_index];
                         let cid = chat_item_id(item).to_owned();
                         let expanded = self.state.conversation.expanded_cards.contains(&cid);
                         let full_key = format!("full-out-{cid}");
@@ -292,9 +292,9 @@ impl AiAssistantView {
                     } => {
                         msg_list = msg_list.child(render_work_group(
                             WorkGroupParams {
-                                id: &id,
-                                items: &items[start..end],
-                                in_progress,
+                                id,
+                                items: &items[*start..*end],
+                                in_progress: *in_progress,
                                 expanded_cards: &self.state.conversation.expanded_cards,
                                 active_focus: self.state.run.active_focus.as_deref(),
                                 live_elapsed_secs: live_elapsed,

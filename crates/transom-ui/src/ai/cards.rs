@@ -8,7 +8,9 @@ use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::*;
 use transom_ui_icons::{AppIcon, AppIconElement, UiIcon};
 
-use super::markdown_blocks::{CodeBlockCallbacks, MarkdownRenderParams, render_markdown_content};
+use super::markdown_blocks::{
+    CodeBlockCallbacks, MarkdownRenderParams, StreamingMarkdownCache, render_markdown_content,
+};
 use super::state::UiChatItem;
 use crate::palette::Palette;
 use crate::theme::tokens::{space, typography};
@@ -67,7 +69,9 @@ pub(super) fn render_chat_item(
             AssistantMessageParams {
                 id,
                 text,
-                cached_segments: cached_segments.as_deref().map(Vec::as_slice),
+                cached_segments: cached_segments
+                    .as_ref()
+                    .map(StreamingMarkdownCache::as_slice),
                 model: model.as_deref(),
                 tokens_per_sec: *tokens_per_sec,
                 streaming: *streaming,

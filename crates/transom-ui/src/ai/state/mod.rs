@@ -1,10 +1,9 @@
 //! AI 助手面板的本地状态模型。
 
 use std::collections::{HashMap, HashSet};
-use std::sync::Arc;
 
 use super::attachments::ComposerAttachment;
-use super::markdown_blocks::parse_markdown_segments;
+use super::markdown_blocks::StreamingMarkdownCache;
 use super::metrics_model::AiSessionMetrics;
 pub(crate) use super::state_types::{
     ActiveAiRun, ActiveAiSessionInfo, AiActivePopup, AiConfigSection, AiDrawerTab, UiChatItem,
@@ -241,18 +240,24 @@ impl AiPanelState {
                 if let Some(UiChatItem::AssistantText {
                     text,
                     streaming: true,
+                    cached_segments,
                     ..
                 }) = self.conversation.items.last_mut()
                 {
                     text.push_str(&delta);
+                    cached_segments
+                        .get_or_insert_with(StreamingMarkdownCache::default)
+                        .update(text);
                 } else {
+                    let mut cache = StreamingMarkdownCache::default();
+                    cache.update(&delta);
                     self.conversation.items.push(UiChatItem::AssistantText {
                         id: format!("stream-t-{}", self.conversation.items.len()),
                         text: delta,
                         model: None,
                         tokens_per_sec: None,
                         streaming: true,
-                        cached_segments: None,
+                        cached_segments: Some(cache),
                     });
                 }
             }
@@ -321,9 +326,11 @@ impl AiPanelState {
                                 ..
                             } => {
                                 *streaming = false;
-                                if cached_segments.is_none() {
+                                if let Some(cache) = cached_segments {
+                                    cache.update(text);
+                                } else {
                                     *cached_segments =
-                                        Some(Arc::new(parse_markdown_segments(text)));
+                                        Some(StreamingMarkdownCache::from_complete(text));
                                 }
                             }
                             UiChatItem::ToolCard { running, .. } => {

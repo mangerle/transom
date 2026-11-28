@@ -1,11 +1,10 @@
 //! AI 助手面板的基础状态枚举、会话摘要与聊天消息项类型定义。
 
-use std::sync::Arc;
 use std::time::Instant;
 
 use transom_core::{HostProtection, SessionId, TabId};
 
-use super::markdown_blocks::MarkdownSegment;
+use super::markdown_blocks::StreamingMarkdownCache;
 
 /// 外壳单向注入的活动会话摘要（无会话时为 `None`）。
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -81,8 +80,8 @@ pub(crate) enum UiChatItem {
         model: Option<String>,
         tokens_per_sec: Option<f32>,
         streaming: bool,
-        /// 已定稿消息的预解析 Markdown 分段缓存（流式过程中为 `None`，避免每 25ms 帧全量重解析）。
-        cached_segments: Option<Arc<Vec<MarkdownSegment>>>,
+        /// 增量 Markdown 分段缓存（流式过程中仅重解析未闭合尾部，定稿后直接复用）。
+        cached_segments: Option<StreamingMarkdownCache>,
     },
     ToolCard {
         id: String,

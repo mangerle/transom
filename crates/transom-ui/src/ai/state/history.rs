@@ -1,11 +1,9 @@
 //! AI 会话历史到消息流的还原逻辑。
 
-use std::sync::Arc;
-
 use transom_ai_contracts::{ChatRole, SessionEntry, SessionEntryKind};
 
 use super::{AiPanelState, UiChatItem};
-use crate::ai::markdown_blocks::parse_markdown_segments;
+use crate::ai::markdown_blocks::StreamingMarkdownCache;
 
 impl AiPanelState {
     /// 把从 JSONL 加载的树状会话主分支还原为 UI 消息列表，并恢复该会话的推理指标。
@@ -31,7 +29,7 @@ impl AiPanelState {
                         });
                     }
                     ChatRole::Assistant => {
-                        let cached_segments = Some(Arc::new(parse_markdown_segments(&text)));
+                        let cached_segments = Some(StreamingMarkdownCache::from_complete(&text));
                         self.conversation.items.push(UiChatItem::AssistantText {
                             id: entry.id,
                             text,
