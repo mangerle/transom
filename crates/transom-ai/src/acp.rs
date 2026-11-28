@@ -134,7 +134,7 @@ async fn initialize_acp_session(
         server_name,
     )
     .await?;
-    let _ = wait_response(reader, 1, ACP_HANDSHAKE_TIMEOUT, &input.cancel, server_name).await?;
+    wait_response(reader, 1, ACP_HANDSHAKE_TIMEOUT, &input.cancel, server_name).await?;
 
     let mcp_servers = match &input.mcp_stdio_exe {
         Some(exe) if !exe.trim().is_empty() => json!([{
@@ -173,7 +173,7 @@ async fn initialize_acp_session(
         .map(str::trim)
         .filter(|m| !m.is_empty())
     {
-        let _ = write_json_line(
+        write_json_line(
             stdin,
             &json!({
                 "jsonrpc": "2.0",
@@ -186,7 +186,7 @@ async fn initialize_acp_session(
             }),
             server_name,
         )
-        .await;
+        .await?;
     }
     Ok(session_id)
 }
