@@ -283,12 +283,6 @@ impl ToolRuntimeContext {
         })
         .await;
     }
-
-    /// 构造仅用于导出工具 Schema 的空上下文（不关联任何连接或任务）。
-    pub(crate) fn dummy_for_schema() -> Self {
-        let (events, _event_rx) = mpsc::channel(1);
-        Self::minimal(SessionScope::Global, events, CancellationToken::new())
-    }
 }
 
 /// 工具执行完成卡片的元数据，供 [`ToolRuntimeContext::finish_tool_result`] 与

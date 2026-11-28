@@ -62,17 +62,14 @@ impl CompareHostsTool {
     }
 }
 
-impl Tool for CompareHostsTool {
+impl super::ToolMetadata for CompareHostsTool {
     const NAME: &'static str = "compare_hosts";
-    type Error = ToolExecutionError;
-    type Args = CompareHostsArgs;
-    type Output = String;
 
-    fn description(&self) -> String {
-        "在两台已连接且在当前 Scope 内的远端主机之间并发采集指定文件或只读命令输出，生成结构化 Unified Diff 横向对比两台机器的配置/状态差异。".to_owned()
+    fn static_description() -> &'static str {
+        "在两台已连接且在当前 Scope 内的远端主机之间并发采集指定文件或只读命令输出，生成结构化 Unified Diff 横向对比两台机器的配置/状态差异。"
     }
 
-    fn parameters(&self) -> serde_json::Value {
+    fn static_parameters() -> serde_json::Value {
         json!({
             "type": "object",
             "properties": {
@@ -87,6 +84,21 @@ impl Tool for CompareHostsTool {
             },
             "required": ["host_a", "host_b", "kind", "target"]
         })
+    }
+}
+
+impl Tool for CompareHostsTool {
+    const NAME: &'static str = "compare_hosts";
+    type Error = ToolExecutionError;
+    type Args = CompareHostsArgs;
+    type Output = String;
+
+    fn description(&self) -> String {
+        <Self as super::ToolMetadata>::static_description().to_owned()
+    }
+
+    fn parameters(&self) -> serde_json::Value {
+        <Self as super::ToolMetadata>::static_parameters()
     }
 
     async fn call(

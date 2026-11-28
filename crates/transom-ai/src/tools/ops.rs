@@ -43,19 +43,15 @@ impl RemoteFsTool {
     }
 }
 
-impl Tool for RemoteFsTool {
+impl super::ToolMetadata for RemoteFsTool {
     const NAME: &'static str = "remote_fs";
-    type Error = ToolExecutionError;
-    type Args = RemoteFsArgs;
-    type Output = String;
 
-    fn description(&self) -> String {
+    fn static_description() -> &'static str {
         "操作本机（target=\"local\"）或远端主机文件系统：action 可选 list / read / search / edit / mkdir / rename / delete / chmod。\
         edit 会在写入前自动生成 Diff 并备份原文件；未连接的远端目标传入 target 会自动连接。"
-            .to_owned()
     }
 
-    fn parameters(&self) -> serde_json::Value {
+    fn static_parameters() -> serde_json::Value {
         json!({
             "type": "object",
             "properties": {
@@ -70,6 +66,21 @@ impl Tool for RemoteFsTool {
             },
             "required": ["action", "path"]
         })
+    }
+}
+
+impl Tool for RemoteFsTool {
+    const NAME: &'static str = "remote_fs";
+    type Error = ToolExecutionError;
+    type Args = RemoteFsArgs;
+    type Output = String;
+
+    fn description(&self) -> String {
+        <Self as super::ToolMetadata>::static_description().to_owned()
+    }
+
+    fn parameters(&self) -> serde_json::Value {
+        <Self as super::ToolMetadata>::static_parameters()
     }
 
     async fn call(
@@ -243,19 +254,15 @@ impl TransferFileTool {
     }
 }
 
-impl Tool for TransferFileTool {
+impl super::ToolMetadata for TransferFileTool {
     const NAME: &'static str = "transfer_file";
-    type Error = ToolExecutionError;
-    type Args = TransferFileArgs;
-    type Output = String;
 
-    fn description(&self) -> String {
+    fn static_description() -> &'static str {
         "在本机与远端主机之间通过 SFTP 上传或下载文件（upload 支持整个目录递归上传）。\
          可通过 target 指定目标服务器名/session_id/IP（未连接时自动连接）；省略 target 则使用当前活动 SSH 会话。"
-            .to_owned()
     }
 
-    fn parameters(&self) -> serde_json::Value {
+    fn static_parameters() -> serde_json::Value {
         json!({
             "type": "object",
             "properties": {
@@ -267,6 +274,21 @@ impl Tool for TransferFileTool {
             },
             "required": ["direction", "local_path", "remote_path"]
         })
+    }
+}
+
+impl Tool for TransferFileTool {
+    const NAME: &'static str = "transfer_file";
+    type Error = ToolExecutionError;
+    type Args = TransferFileArgs;
+    type Output = String;
+
+    fn description(&self) -> String {
+        <Self as super::ToolMetadata>::static_description().to_owned()
+    }
+
+    fn parameters(&self) -> serde_json::Value {
+        <Self as super::ToolMetadata>::static_parameters()
     }
 
     async fn call(

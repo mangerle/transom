@@ -88,17 +88,14 @@ macro_rules! define_app_tool {
             }
         }
 
-        impl Tool for $name {
+        impl $crate::tools::ToolMetadata for $name {
             const NAME: &'static str = $tool_name;
-            type Error = ToolExecutionError;
-            type Args = AppActionArgs;
-            type Output = String;
 
-            fn description(&self) -> String {
-                $desc.to_owned()
+            fn static_description() -> &'static str {
+                $desc
             }
 
-            fn parameters(&self) -> Value {
+            fn static_parameters() -> Value {
                 let mut props = $props;
                 if let Some(obj) = props.as_object_mut() {
                     obj.insert(
@@ -114,6 +111,21 @@ macro_rules! define_app_tool {
                     "properties": props,
                     "required": ["action"]
                 })
+            }
+        }
+
+        impl Tool for $name {
+            const NAME: &'static str = $tool_name;
+            type Error = ToolExecutionError;
+            type Args = AppActionArgs;
+            type Output = String;
+
+            fn description(&self) -> String {
+                <Self as $crate::tools::ToolMetadata>::static_description().to_owned()
+            }
+
+            fn parameters(&self) -> Value {
+                <Self as $crate::tools::ToolMetadata>::static_parameters()
             }
 
             async fn call(

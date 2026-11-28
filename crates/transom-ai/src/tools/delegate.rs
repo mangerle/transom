@@ -92,18 +92,15 @@ impl DelegateTaskTool {
     }
 }
 
-impl Tool for DelegateTaskTool {
+impl super::ToolMetadata for DelegateTaskTool {
     const NAME: &'static str = "delegate_task";
-    type Error = ToolExecutionError;
-    type Args = DelegateTaskArgs;
-    type Output = String;
 
-    fn description(&self) -> String {
+    fn static_description() -> &'static str {
         "在独立上下文中启动一个子 Agent 执行复杂只读调研（mode=\"readonly\"）或独立部署子任务（mode=\"deploy\"），\
-         避免大量中间输出撑爆主上下文；可并行多次调用以同时排查多台服务器。".to_owned()
+         避免大量中间输出撑爆主上下文；可并行多次调用以同时排查多台服务器。"
     }
 
-    fn parameters(&self) -> Value {
+    fn static_parameters() -> Value {
         json!({
             "type": "object",
             "properties": {
@@ -144,6 +141,21 @@ impl Tool for DelegateTaskTool {
             },
             "required": ["title", "task"]
         })
+    }
+}
+
+impl Tool for DelegateTaskTool {
+    const NAME: &'static str = "delegate_task";
+    type Error = ToolExecutionError;
+    type Args = DelegateTaskArgs;
+    type Output = String;
+
+    fn description(&self) -> String {
+        <Self as super::ToolMetadata>::static_description().to_owned()
+    }
+
+    fn parameters(&self) -> Value {
+        <Self as super::ToolMetadata>::static_parameters()
     }
 
     async fn call(

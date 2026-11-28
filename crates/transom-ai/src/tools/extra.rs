@@ -35,18 +35,14 @@ impl ReadToolOutputTool {
     }
 }
 
-impl Tool for ReadToolOutputTool {
+impl super::ToolMetadata for ReadToolOutputTool {
     const NAME: &'static str = "read_tool_output";
-    type Error = ToolExecutionError;
-    type Args = ReadToolOutputArgs;
-    type Output = String;
 
-    fn description(&self) -> String {
+    fn static_description() -> &'static str {
         "当工具输出被截断并附带 `output_id` 时，使用本工具按行偏移或关键字检索读取完整内容。"
-            .to_owned()
     }
 
-    fn parameters(&self) -> serde_json::Value {
+    fn static_parameters() -> serde_json::Value {
         json!({
             "type": "object",
             "properties": {
@@ -57,6 +53,21 @@ impl Tool for ReadToolOutputTool {
             },
             "required": ["output_id"]
         })
+    }
+}
+
+impl Tool for ReadToolOutputTool {
+    const NAME: &'static str = "read_tool_output";
+    type Error = ToolExecutionError;
+    type Args = ReadToolOutputArgs;
+    type Output = String;
+
+    fn description(&self) -> String {
+        <Self as super::ToolMetadata>::static_description().to_owned()
+    }
+
+    fn parameters(&self) -> serde_json::Value {
+        <Self as super::ToolMetadata>::static_parameters()
     }
 
     async fn call(
@@ -110,18 +121,14 @@ impl RemoteExecBulkTool {
     }
 }
 
-impl Tool for RemoteExecBulkTool {
+impl super::ToolMetadata for RemoteExecBulkTool {
     const NAME: &'static str = "remote_exec_bulk";
-    type Error = ToolExecutionError;
-    type Args = RemoteExecBulkArgs;
-    type Output = String;
 
-    fn description(&self) -> String {
+    fn static_description() -> &'static str {
         "在当前会话已授权的多台主机上并发执行同一条 Shell 命令并汇总各主机结果。写操作每次均需人工确认。"
-            .to_owned()
     }
 
-    fn parameters(&self) -> serde_json::Value {
+    fn static_parameters() -> serde_json::Value {
         json!({
             "type": "object",
             "properties": {
@@ -134,6 +141,21 @@ impl Tool for RemoteExecBulkTool {
             },
             "required": ["command"]
         })
+    }
+}
+
+impl Tool for RemoteExecBulkTool {
+    const NAME: &'static str = "remote_exec_bulk";
+    type Error = ToolExecutionError;
+    type Args = RemoteExecBulkArgs;
+    type Output = String;
+
+    fn description(&self) -> String {
+        <Self as super::ToolMetadata>::static_description().to_owned()
+    }
+
+    fn parameters(&self) -> serde_json::Value {
+        <Self as super::ToolMetadata>::static_parameters()
     }
 
     async fn call(
@@ -272,17 +294,14 @@ impl PortForwardTool {
     }
 }
 
-impl Tool for PortForwardTool {
+impl super::ToolMetadata for PortForwardTool {
     const NAME: &'static str = "port_forward";
-    type Error = ToolExecutionError;
-    type Args = PortForwardArgs;
-    type Output = String;
 
-    fn description(&self) -> String {
-        "查看、创建或停止当前主机的 SSH 端口转发：action 支持 list / create / stop。".to_owned()
+    fn static_description() -> &'static str {
+        "查看、创建或停止当前主机的 SSH 端口转发：action 支持 list / create / stop。"
     }
 
-    fn parameters(&self) -> serde_json::Value {
+    fn static_parameters() -> serde_json::Value {
         json!({
             "type": "object",
             "properties": {
@@ -294,6 +313,21 @@ impl Tool for PortForwardTool {
             },
             "required": ["action"]
         })
+    }
+}
+
+impl Tool for PortForwardTool {
+    const NAME: &'static str = "port_forward";
+    type Error = ToolExecutionError;
+    type Args = PortForwardArgs;
+    type Output = String;
+
+    fn description(&self) -> String {
+        <Self as super::ToolMetadata>::static_description().to_owned()
+    }
+
+    fn parameters(&self) -> serde_json::Value {
+        <Self as super::ToolMetadata>::static_parameters()
     }
 
     async fn call(

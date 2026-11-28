@@ -35,20 +35,16 @@ impl RemoteExecTool {
     }
 }
 
-impl Tool for RemoteExecTool {
+impl super::ToolMetadata for RemoteExecTool {
     const NAME: &'static str = "remote_exec";
-    type Error = ToolExecutionError;
-    type Args = RemoteExecArgs;
-    type Output = String;
 
-    fn description(&self) -> String {
+    fn static_description() -> &'static str {
         "在本机（target=\"local\"）或远端主机上执行一条 Shell 命令。\
          支持通过 target 指定已保存服务器名/session_id/IP（未连接时自动触发连接并等待就绪）；\
          省略 target 则默认在当前活动 SSH 标签页执行。"
-            .to_owned()
     }
 
-    fn parameters(&self) -> serde_json::Value {
+    fn static_parameters() -> serde_json::Value {
         json!({
             "type": "object",
             "properties": {
@@ -71,6 +67,21 @@ impl Tool for RemoteExecTool {
             },
             "required": ["command"]
         })
+    }
+}
+
+impl Tool for RemoteExecTool {
+    const NAME: &'static str = "remote_exec";
+    type Error = ToolExecutionError;
+    type Args = RemoteExecArgs;
+    type Output = String;
+
+    fn description(&self) -> String {
+        <Self as super::ToolMetadata>::static_description().to_owned()
+    }
+
+    fn parameters(&self) -> serde_json::Value {
+        <Self as super::ToolMetadata>::static_parameters()
     }
 
     async fn call(
@@ -217,17 +228,14 @@ impl GetRecentBlocksTool {
     }
 }
 
-impl Tool for GetRecentBlocksTool {
+impl super::ToolMetadata for GetRecentBlocksTool {
     const NAME: &'static str = "get_recent_blocks";
-    type Error = ToolExecutionError;
-    type Args = RecentBlocksArgs;
-    type Output = String;
 
-    fn description(&self) -> String {
-        "读取当前终端最近的 OSC 133 命令执行块（含命令、退出码、耗时与输出片段），用于快速定位失败命令。".to_owned()
+    fn static_description() -> &'static str {
+        "读取当前终端最近的 OSC 133 命令执行块（含命令、退出码、耗时与输出片段），用于快速定位失败命令。"
     }
 
-    fn parameters(&self) -> serde_json::Value {
+    fn static_parameters() -> serde_json::Value {
         json!({
             "type": "object",
             "properties": {
@@ -237,6 +245,21 @@ impl Tool for GetRecentBlocksTool {
                 }
             }
         })
+    }
+}
+
+impl Tool for GetRecentBlocksTool {
+    const NAME: &'static str = "get_recent_blocks";
+    type Error = ToolExecutionError;
+    type Args = RecentBlocksArgs;
+    type Output = String;
+
+    fn description(&self) -> String {
+        <Self as super::ToolMetadata>::static_description().to_owned()
+    }
+
+    fn parameters(&self) -> serde_json::Value {
+        <Self as super::ToolMetadata>::static_parameters()
     }
 
     async fn call(
@@ -295,18 +318,14 @@ impl ReadTerminalTool {
     }
 }
 
-impl Tool for ReadTerminalTool {
+impl super::ToolMetadata for ReadTerminalTool {
     const NAME: &'static str = "read_terminal";
-    type Error = ToolExecutionError;
-    type Args = ReadTerminalArgs;
-    type Output = String;
 
-    fn description(&self) -> String {
+    fn static_description() -> &'static str {
         "读取用户当前正在查看的终端屏幕末尾若干行。仅当用户明确要求查看终端输出时才允许调用。"
-            .to_owned()
     }
 
-    fn parameters(&self) -> serde_json::Value {
+    fn static_parameters() -> serde_json::Value {
         json!({
             "type": "object",
             "properties": {
@@ -316,6 +335,21 @@ impl Tool for ReadTerminalTool {
                 }
             }
         })
+    }
+}
+
+impl Tool for ReadTerminalTool {
+    const NAME: &'static str = "read_terminal";
+    type Error = ToolExecutionError;
+    type Args = ReadTerminalArgs;
+    type Output = String;
+
+    fn description(&self) -> String {
+        <Self as super::ToolMetadata>::static_description().to_owned()
+    }
+
+    fn parameters(&self) -> serde_json::Value {
+        <Self as super::ToolMetadata>::static_parameters()
     }
 
     async fn call(
@@ -371,18 +405,14 @@ impl ProposeHostMemoryTool {
     }
 }
 
-impl Tool for ProposeHostMemoryTool {
+impl super::ToolMetadata for ProposeHostMemoryTool {
     const NAME: &'static str = "propose_host_memory";
-    type Error = ToolExecutionError;
-    type Args = ProposeMemoryArgs;
-    type Output = String;
 
-    fn description(&self) -> String {
+    fn static_description() -> &'static str {
         "提议将当前主机的关键环境路径、服务名或运维约束写入该主机的长期记忆（需用户确认）。"
-            .to_owned()
     }
 
-    fn parameters(&self) -> serde_json::Value {
+    fn static_parameters() -> serde_json::Value {
         json!({
             "type": "object",
             "properties": {
@@ -397,6 +427,21 @@ impl Tool for ProposeHostMemoryTool {
             },
             "required": ["fact"]
         })
+    }
+}
+
+impl Tool for ProposeHostMemoryTool {
+    const NAME: &'static str = "propose_host_memory";
+    type Error = ToolExecutionError;
+    type Args = ProposeMemoryArgs;
+    type Output = String;
+
+    fn description(&self) -> String {
+        <Self as super::ToolMetadata>::static_description().to_owned()
+    }
+
+    fn parameters(&self) -> serde_json::Value {
+        <Self as super::ToolMetadata>::static_parameters()
     }
 
     async fn call(

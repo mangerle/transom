@@ -24,6 +24,18 @@ impl InspectHostRuntimeTool {
     }
 }
 
+impl super::ToolMetadata for InspectHostRuntimeTool {
+    const NAME: &'static str = "inspect_host_runtime";
+
+    fn static_description() -> &'static str {
+        "只读采集当前绑定主机的 CPU、内存、负载、磁盘占用及运行中容器概览。"
+    }
+
+    fn static_parameters() -> serde_json::Value {
+        json!({ "type": "object", "properties": {} })
+    }
+}
+
 impl Tool for InspectHostRuntimeTool {
     const NAME: &'static str = "inspect_host_runtime";
     type Error = ToolExecutionError;
@@ -31,11 +43,11 @@ impl Tool for InspectHostRuntimeTool {
     type Output = String;
 
     fn description(&self) -> String {
-        "只读采集当前绑定主机的 CPU、内存、负载、磁盘占用及运行中容器概览。".to_owned()
+        <Self as super::ToolMetadata>::static_description().to_owned()
     }
 
     fn parameters(&self) -> serde_json::Value {
-        json!({ "type": "object", "properties": {} })
+        <Self as super::ToolMetadata>::static_parameters()
     }
 
     async fn call(
@@ -91,17 +103,14 @@ impl ContainerOpsTool {
     }
 }
 
-impl Tool for ContainerOpsTool {
+impl super::ToolMetadata for ContainerOpsTool {
     const NAME: &'static str = "container_ops";
-    type Error = ToolExecutionError;
-    type Args = ContainerOpsArgs;
-    type Output = String;
 
-    fn description(&self) -> String {
-        "查看或操作当前主机上的 Docker/Podman 容器：action 支持 list / inspect / logs / stats / restart。".to_owned()
+    fn static_description() -> &'static str {
+        "查看或操作当前主机上的 Docker/Podman 容器：action 支持 list / inspect / logs / stats / restart。"
     }
 
-    fn parameters(&self) -> serde_json::Value {
+    fn static_parameters() -> serde_json::Value {
         json!({
             "type": "object",
             "properties": {
@@ -111,6 +120,21 @@ impl Tool for ContainerOpsTool {
             },
             "required": ["action"]
         })
+    }
+}
+
+impl Tool for ContainerOpsTool {
+    const NAME: &'static str = "container_ops";
+    type Error = ToolExecutionError;
+    type Args = ContainerOpsArgs;
+    type Output = String;
+
+    fn description(&self) -> String {
+        <Self as super::ToolMetadata>::static_description().to_owned()
+    }
+
+    fn parameters(&self) -> serde_json::Value {
+        <Self as super::ToolMetadata>::static_parameters()
     }
 
     async fn call(

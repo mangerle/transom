@@ -57,6 +57,22 @@ pub use assess::{assess_tool_call, assess_tool_call_value};
 pub use delegate::{DelegateMode, DelegateTaskRequest, SubagentModelTier, SubagentRunner};
 pub use skill_tool::SkillLoader;
 
+/// 工具静态元信息契约，使 MCP Schema 导出与 Token 估算无需构造 [`ToolRuntimeContext`] 实例。
+pub trait ToolMetadata {
+    const NAME: &'static str;
+    fn static_description() -> &'static str;
+    fn static_parameters() -> serde_json::Value;
+
+    /// 导出 MCP JSON Schema 条目。
+    fn mcp_schema() -> serde_json::Value {
+        serde_json::json!({
+            "name": Self::NAME,
+            "description": Self::static_description(),
+            "inputSchema": Self::static_parameters(),
+        })
+    }
+}
+
 /// 锁定在单次 Agent 运行期间的会话上下文。
 #[derive(Clone, Debug)]
 pub struct LockedSession {

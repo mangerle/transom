@@ -76,18 +76,14 @@ impl UpdatePlanTool {
     }
 }
 
-impl Tool for UpdatePlanTool {
+impl super::ToolMetadata for UpdatePlanTool {
     const NAME: &'static str = "update_plan";
-    type Error = ToolExecutionError;
-    type Args = UpdatePlanArgs;
-    type Output = String;
 
-    fn description(&self) -> String {
+    fn static_description() -> &'static str {
         "在多步部署、巡检或排障任务中更新结构化执行计划与当前步骤状态（pending / in_progress / done / failed）。"
-            .to_owned()
     }
 
-    fn parameters(&self) -> serde_json::Value {
+    fn static_parameters() -> serde_json::Value {
         json!({
             "type": "object",
             "properties": {
@@ -107,6 +103,21 @@ impl Tool for UpdatePlanTool {
             },
             "required": ["steps"]
         })
+    }
+}
+
+impl Tool for UpdatePlanTool {
+    const NAME: &'static str = "update_plan";
+    type Error = ToolExecutionError;
+    type Args = UpdatePlanArgs;
+    type Output = String;
+
+    fn description(&self) -> String {
+        <Self as super::ToolMetadata>::static_description().to_owned()
+    }
+
+    fn parameters(&self) -> serde_json::Value {
+        <Self as super::ToolMetadata>::static_parameters()
     }
 
     async fn call(
@@ -163,18 +174,14 @@ impl RequestUserInputTool {
     }
 }
 
-impl Tool for RequestUserInputTool {
+impl super::ToolMetadata for RequestUserInputTool {
     const NAME: &'static str = "request_user_input";
-    type Error = ToolExecutionError;
-    type Args = RequestUserInputArgs;
-    type Output = String;
 
-    fn description(&self) -> String {
+    fn static_description() -> &'static str {
         "当关键参数不明确或存在多种高影响方案时调用本工具记录澄清问题，并在最终回复中向用户确认后等待下一轮输入。"
-            .to_owned()
     }
 
-    fn parameters(&self) -> serde_json::Value {
+    fn static_parameters() -> serde_json::Value {
         json!({
             "type": "object",
             "properties": {
@@ -187,6 +194,21 @@ impl Tool for RequestUserInputTool {
             },
             "required": ["question"]
         })
+    }
+}
+
+impl Tool for RequestUserInputTool {
+    const NAME: &'static str = "request_user_input";
+    type Error = ToolExecutionError;
+    type Args = RequestUserInputArgs;
+    type Output = String;
+
+    fn description(&self) -> String {
+        <Self as super::ToolMetadata>::static_description().to_owned()
+    }
+
+    fn parameters(&self) -> serde_json::Value {
+        <Self as super::ToolMetadata>::static_parameters()
     }
 
     async fn call(
@@ -242,18 +264,14 @@ impl SearchKnowledgeTool {
     }
 }
 
-impl Tool for SearchKnowledgeTool {
+impl super::ToolMetadata for SearchKnowledgeTool {
     const NAME: &'static str = "search_knowledge";
-    type Error = ToolExecutionError;
-    type Args = SearchKnowledgeArgs;
-    type Output = String;
 
-    fn description(&self) -> String {
+    fn static_description() -> &'static str {
         "使用关键词检索本地保存的主机长期记忆与自定义运维 Runbook，获取历史经验或操作手册。"
-            .to_owned()
     }
 
-    fn parameters(&self) -> serde_json::Value {
+    fn static_parameters() -> serde_json::Value {
         json!({
             "type": "object",
             "properties": {
@@ -262,6 +280,21 @@ impl Tool for SearchKnowledgeTool {
             },
             "required": ["query"]
         })
+    }
+}
+
+impl Tool for SearchKnowledgeTool {
+    const NAME: &'static str = "search_knowledge";
+    type Error = ToolExecutionError;
+    type Args = SearchKnowledgeArgs;
+    type Output = String;
+
+    fn description(&self) -> String {
+        <Self as super::ToolMetadata>::static_description().to_owned()
+    }
+
+    fn parameters(&self) -> serde_json::Value {
+        <Self as super::ToolMetadata>::static_parameters()
     }
 
     async fn call(

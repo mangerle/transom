@@ -35,18 +35,14 @@ impl LoadSkillTool {
     }
 }
 
-impl Tool for LoadSkillTool {
+impl super::ToolMetadata for LoadSkillTool {
     const NAME: &'static str = "load_skill";
-    type Error = ToolExecutionError;
-    type Args = LoadSkillArgs;
-    type Output = String;
 
-    fn description(&self) -> String {
+    fn static_description() -> &'static str {
         "按需加载系统提示词中列出的某个运维技能（Skill）的完整 SOP 指令，或读取其附带的 references/ 与 scripts/ 参考文件。"
-            .to_owned()
     }
 
-    fn parameters(&self) -> serde_json::Value {
+    fn static_parameters() -> serde_json::Value {
         json!({
             "type": "object",
             "properties": {
@@ -61,6 +57,21 @@ impl Tool for LoadSkillTool {
             },
             "required": ["name"]
         })
+    }
+}
+
+impl Tool for LoadSkillTool {
+    const NAME: &'static str = "load_skill";
+    type Error = ToolExecutionError;
+    type Args = LoadSkillArgs;
+    type Output = String;
+
+    fn description(&self) -> String {
+        <Self as super::ToolMetadata>::static_description().to_owned()
+    }
+
+    fn parameters(&self) -> serde_json::Value {
+        <Self as super::ToolMetadata>::static_parameters()
     }
 
     async fn call(

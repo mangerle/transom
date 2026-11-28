@@ -6,21 +6,12 @@ use std::sync::LazyLock;
 use parking_lot::Mutex;
 
 use super::{
-    ToolRuntimeContext, app_tools, app_tools_dev, compare, delegate, extra, ops, plan, remote,
-    skill_tool,
+    ToolMetadata, ToolRuntimeContext, app_tools, app_tools_dev, compare, delegate, extra, ops,
+    plan, remote, skill_tool,
 };
 use crate::compaction::estimate_tokens;
 use transom_ai_contracts::policy::ToolRisk;
 use transom_ai_contracts::session::SessionScope;
-
-/// 构造单个工具的 MCP JSON Schema 条目。
-fn mcp_schema_entry<T: rig_agent::tool::Tool>(tool: &T) -> serde_json::Value {
-    serde_json::json!({
-        "name": T::NAME,
-        "description": tool.description(),
-        "inputSchema": tool.parameters(),
-    })
-}
 
 /// 当前运行上下文对应的工具装配计划。
 ///
@@ -89,23 +80,22 @@ pub(crate) fn app_tool_action_risk(tool_name: &str, action: &str) -> Option<Tool
     None
 }
 
-/// 从真实 `Tool` 实现中统一导出反向 MCP Server 暴露的工具 Schema 清单，杜绝双份维护漂移。
+/// 从静态元信息统一导出反向 MCP Server 暴露的工具 Schema 清单（零运行时上下文依赖）。
 pub(crate) fn export_mcp_tool_schemas() -> Vec<serde_json::Value> {
-    let ctx = ToolRuntimeContext::dummy_for_schema();
     let mut schemas = vec![
-        mcp_schema_entry(&remote::RemoteExecTool::new(ctx.clone())),
-        mcp_schema_entry(&extra::RemoteExecBulkTool::new(ctx.clone())),
-        mcp_schema_entry(&ops::RemoteFsTool::new(ctx.clone())),
-        mcp_schema_entry(&ops::TransferFileTool::new(ctx.clone())),
-        mcp_schema_entry(&ops::InspectHostRuntimeTool::new(ctx.clone())),
-        mcp_schema_entry(&ops::ContainerOpsTool::new(ctx.clone())),
-        mcp_schema_entry(&remote::GetRecentBlocksTool::new(ctx.clone())),
-        mcp_schema_entry(&remote::ReadTerminalTool::new(ctx.clone())),
-        mcp_schema_entry(&extra::ReadToolOutputTool::new(ctx.clone())),
+        <remote::RemoteExecTool as ToolMetadata>::mcp_schema(),
+        <extra::RemoteExecBulkTool as ToolMetadata>::mcp_schema(),
+        <ops::RemoteFsTool as ToolMetadata>::mcp_schema(),
+        <ops::TransferFileTool as ToolMetadata>::mcp_schema(),
+        <ops::InspectHostRuntimeTool as ToolMetadata>::mcp_schema(),
+        <ops::ContainerOpsTool as ToolMetadata>::mcp_schema(),
+        <remote::GetRecentBlocksTool as ToolMetadata>::mcp_schema(),
+        <remote::ReadTerminalTool as ToolMetadata>::mcp_schema(),
+        <extra::ReadToolOutputTool as ToolMetadata>::mcp_schema(),
     ];
     macro_rules! push_app_schemas {
         ($($tool_ty:path),+ $(,)?) => {
-            $(schemas.push(mcp_schema_entry(&<$tool_ty>::new(ctx.clone())));)+
+            $(schemas.push(<$tool_ty as ToolMetadata>::mcp_schema());)+
         };
     }
     for_each_app_bridge_tool!(push_app_schemas);
@@ -154,13 +144,12 @@ macro_rules! for_each_planned_tool {
     };
 }
 
-/// 按实际装配计划构造当前运行可用的工具 Schema。
-fn context_tool_schemas(ctx: &ToolRuntimeContext) -> Vec<serde_json::Value> {
-    let plan = ToolRegistrationPlan::from_context(ctx);
+/// 按实际装配计划构造当前运行可用的工具 Schema（零运行时上下文依赖）。
+fn context_tool_schemas(plan: ToolRegistrationPlan) -> Vec<serde_json::Value> {
     let mut schemas = Vec::with_capacity(24);
     macro_rules! push_schema {
         ($($tool_ty:path),+ $(,)?) => {
-            $(schemas.push(mcp_schema_entry(&<$tool_ty>::new(ctx.clone())));)+
+            $(schemas.push(<$tool_ty as ToolMetadata>::mcp_schema());)+
         };
     }
     for_each_planned_tool!(plan, push_schema);
@@ -176,7 +165,7 @@ pub fn estimate_tool_schema_tokens(ctx: &ToolRuntimeContext) -> u32 {
     if let Some(tokens) = TOOL_SCHEMA_TOKEN_CACHE.lock().get(&plan).copied() {
         return tokens;
     }
-    let schemas = context_tool_schemas(ctx);
+    let schemas = context_tool_schemas(plan);
     let tokens = serde_json::to_string(&schemas).map_or_else(
         |err| {
             log::warn!("序列化工具 Schema 以估算上下文占用失败: {err}");
@@ -240,8 +229,13 @@ fn every_registered_app_action_has_a_shared_risk() {
 #[cfg(test)]
 #[test]
 fn tool_schema_estimate_uses_the_actual_registration_plan() {
-    let ctx = ToolRuntimeContext::dummy_for_schema();
-    let schemas = context_tool_schemas(&ctx);
+    let (events, _rx) = tokio::sync::mpsc::channel(1);
+    let ctx = ToolRuntimeContext::minimal(
+        SessionScope::Global,
+        events,
+        tokio_util::sync::CancellationToken::new(),
+    );
+    let schemas = context_tool_schemas(ToolRegistrationPlan::from_context(&ctx));
     assert_eq!(schemas.len(), 3, "全局最小上下文只装配三个基础工具");
 
     let first = estimate_tool_schema_tokens(&ctx);
