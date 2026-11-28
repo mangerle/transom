@@ -40,6 +40,7 @@ pub(super) struct PumpContext {
     pub(super) hook_executor: Option<Arc<dyn HookExecutor>>,
     pub(super) preamble: String,
     pub(super) memory: MemorySnapshot,
+    pub(super) tools_tokens: u32,
     pub(super) context_window: u32,
     pub(super) history_entries: Vec<SessionEntry>,
     pub(super) current_turn_entry_id: Arc<parking_lot::RwLock<Option<String>>>,

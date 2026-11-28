@@ -286,6 +286,11 @@ pub(super) async fn start_ai_run(
         steer_queue,
     };
     let preamble_preview = transom_ai::build_run_preamble(&input, None);
+    let tools_tokens = if acp_agent.is_some() {
+        0
+    } else {
+        transom_ai::estimate_tool_schema_tokens(&input.tool_ctx)
+    };
 
     let pump_ctx = PumpContext {
         run_id: req.run_id,
@@ -306,6 +311,7 @@ pub(super) async fn start_ai_run(
         hook_executor,
         preamble: preamble_preview,
         memory,
+        tools_tokens,
         context_window: target.context_window,
         history_entries: history_branch,
         current_turn_entry_id,

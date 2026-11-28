@@ -105,7 +105,7 @@ pub use tools::{
     MemoryWriter, RemoteExecutor, RemoteFsExecutor, ResolvedToolTarget, RuntimeInspector,
     SkillLoader, SubagentModelTier, SubagentRunner, TerminalContextProvider, ToolCapabilities,
     ToolExecutionCard, ToolIoContext, ToolRuntimeContext, ToolTargetResolver, TransferDirection,
-    assess_tool_call,
+    assess_tool_call, estimate_tool_schema_tokens,
     plan::{PlanSnapshot, PlanStep, PlanStepStatus},
     target_argument_for_tool, with_io_guard,
 };

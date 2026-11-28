@@ -23,8 +23,8 @@ pub mod runtime_ops;
 pub mod skill_tool;
 mod target;
 
-pub use registry::attach_tools;
 pub(crate) use registry::export_mcp_tool_schemas;
+pub use registry::{attach_tools, estimate_tool_schema_tokens};
 pub use target::{ResolvedToolTarget, ToolTargetResolver, target_argument_for_tool};
 
 mod io;

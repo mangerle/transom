@@ -50,8 +50,13 @@ pub(super) async fn handle_turn_end(
     let added = turn.input_tokens.saturating_add(turn.output_tokens);
     let (today_tokens, month_tokens) = ctx.recorder.append_turn(to_append, added).await?;
     let refs: Vec<&SessionEntry> = ctx.history_entries.iter().collect();
-    let breakdown =
-        compute_context_breakdown(&ctx.preamble, &ctx.memory, &refs, ctx.context_window);
+    let breakdown = compute_context_breakdown(
+        &ctx.preamble,
+        &ctx.memory,
+        &refs,
+        ctx.tools_tokens,
+        ctx.context_window,
+    );
     let metrics = AiTurnMetricsDto {
         input_tokens: turn.input_tokens,
         cached_input_tokens: turn.cached_input_tokens,

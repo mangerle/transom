@@ -6,14 +6,12 @@ use crate::compaction::{entries_since_last_compaction, estimate_tokens};
 use crate::memory::MemorySnapshot;
 use crate::session::{SessionEntry, SessionEntryKind};
 
-/// 默认估算的工具定义 Schema 占用 Token（11 个核心工具）。
-pub const ESTIMATED_TOOLS_SCHEMA_TOKENS: u32 = 2_400;
-
 /// 计算当前会话分支各部分的 Token 构成，供 UI 透明展示。
 pub fn compute_context_breakdown(
     preamble: &str,
     memory: &MemorySnapshot,
     entries: &[&SessionEntry],
+    tools_tokens: u32,
     context_window: u32,
 ) -> AiContextBreakdownDto {
     let memory_tokens = estimate_tokens(&memory.global_markdown)
@@ -55,7 +53,7 @@ pub fn compute_context_breakdown(
     AiContextBreakdownDto {
         system_tokens,
         memory_tokens,
-        tools_tokens: ESTIMATED_TOOLS_SCHEMA_TOKENS,
+        tools_tokens,
         history_tokens,
         tool_output_tokens,
         context_window,
@@ -153,11 +151,12 @@ mod tests {
             "系统提示词\n偏好中文\nprod-01 nginx",
             &mem,
             &[&e1, &e2],
+            3_600,
             128_000,
         );
         assert!(dto.memory_tokens > 0);
         assert!(dto.history_tokens > 0);
         assert!(dto.tool_output_tokens > 0);
-        assert_eq!(dto.tools_tokens, ESTIMATED_TOOLS_SCHEMA_TOKENS);
+        assert_eq!(dto.tools_tokens, 3_600);
     }
 }
