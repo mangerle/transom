@@ -8,7 +8,7 @@
 
 use std::rc::Rc;
 
-use gpui_kit::base::{TextView, h_flex, v_flex};
+use gpui_kit::base::{TextView, TextViewStyle, h_flex, v_flex};
 use gpui_kit::component::Sizable as _;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::*;
@@ -259,6 +259,57 @@ fn trim_up_to_3_spaces(line: &str) -> &str {
     &line[idx..]
 }
 
+/// 构造对标现代文档/Agent 信息流的 Markdown 排版样式：
+/// 收窄标题字号梯度、为表格提供圆角与宽松内边距、柔化分割线与行内代码胶囊背景。
+fn build_markdown_style(p: &Palette) -> TextViewStyle {
+    let mut table = StyleRefinement::default();
+    table.overflow.x = Some(Overflow::Scroll);
+    table = table.rounded(p.radius.md).border_color(p.stroke.subtle);
+
+    let table_head = StyleRefinement::default()
+        .bg(p.surface.faint)
+        .text_color(p.text.subtle)
+        .font_weight(FontWeight::MEDIUM);
+
+    let table_cell = StyleRefinement::default()
+        .px(px(12.0))
+        .py(px(8.0))
+        .border_color(p.stroke.faint);
+
+    let blockquote_style = StyleRefinement::default()
+        .border_color(p.stroke.muted)
+        .text_color(p.text.subtle);
+
+    TextViewStyle::default()
+        .with_foreground(p.foreground)
+        .with_muted_foreground(p.muted_foreground)
+        .with_link(p.primary)
+        .with_border(p.stroke.faint)
+        .with_code_background(p.surface.faint)
+        .with_dark(p.background.l < 0.5)
+        .with_paragraph_gap(rems(0.65))
+        .with_heading(|level| {
+            let (size, weight) = match level {
+                1 => (px(16.5), FontWeight::SEMIBOLD),
+                2 => (px(15.0), FontWeight::SEMIBOLD),
+                3 => (px(14.0), FontWeight::MEDIUM),
+                _ => (px(13.5), FontWeight::MEDIUM),
+            };
+            StyleRefinement::default()
+                .text_size(size)
+                .font_weight(weight)
+        })
+        .with_table(table)
+        .with_table_head(table_head)
+        .with_table_cell(table_cell)
+        .with_table_row_hover(p.surface.ghost)
+        .with_blockquote_style(blockquote_style)
+        .with_inline_code(HighlightStyle {
+            background_color: Some(p.surface.subtle),
+            ..Default::default()
+        })
+}
+
 /// 将解析后的 Markdown 分段渲染为混排正文与代码块卡片。
 pub(super) fn render_markdown_content(params: MarkdownRenderParams<'_>) -> AnyElement {
     let owned;
@@ -271,6 +322,7 @@ pub(super) fn render_markdown_content(params: MarkdownRenderParams<'_>) -> AnyEl
     if segments.is_empty() {
         return div().into_any_element();
     }
+    let md_style = build_markdown_style(params.p);
     let mut col = v_flex().w_full().gap(rems(space::SM));
     for (idx, seg) in segments.iter().enumerate() {
         match seg {
@@ -281,6 +333,7 @@ pub(super) fn render_markdown_content(params: MarkdownRenderParams<'_>) -> AnyEl
                             SharedString::from(format!("ai-md-{}-{idx}", params.msg_id)),
                             prose.clone(),
                         )
+                        .style(md_style.clone())
                         .selectable(true),
                     ),
                 );
