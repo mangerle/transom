@@ -17,9 +17,9 @@ use tokio_util::sync::CancellationToken;
 
 use transom_platform::private_fs;
 
-use crate::error::AiError;
-use crate::policy::HostProtection;
 use crate::protocol_lines::{MAX_PROTOCOL_LINE_BYTES, read_bounded_line};
+use transom_ai_contracts::error::AiError;
+use transom_ai_contracts::policy::HostProtection;
 
 /// MCP 协议版本。
 pub const MCP_PROTOCOL_VERSION: &str = "2024-11-05";
@@ -346,7 +346,7 @@ mod tests {
     use serde_json::Value;
 
     use super::{McpServer, McpServerBackend, McpSessionInfo};
-    use crate::policy::HostProtection;
+    use transom_ai_contracts::policy::HostProtection;
 
     struct FakeBackend;
 

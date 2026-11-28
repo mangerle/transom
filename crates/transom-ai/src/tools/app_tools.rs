@@ -7,8 +7,8 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 
 use super::{AppBridgeDomain, ToolCardMeta, ToolRuntimeContext, to_rig_err};
-use crate::error::ToolError;
-use crate::policy::ToolRisk;
+use transom_ai_contracts::error::ToolError;
+use transom_ai_contracts::policy::ToolRisk;
 
 #[derive(Deserialize)]
 pub struct AppActionArgs {
@@ -281,8 +281,8 @@ mod tests {
     use tokio_util::sync::CancellationToken;
 
     use super::{AppActionArgs, SessionCatalogTool};
-    use crate::session::SessionScope;
     use crate::tools::{AppActionBridge, AppBridgeDomain, ToolError, ToolRuntimeContext};
+    use transom_ai_contracts::session::SessionScope;
 
     struct FakeBridge;
 

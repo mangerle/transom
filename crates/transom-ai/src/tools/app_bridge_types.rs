@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
 use super::AppBridgeDomain;
-use crate::error::ToolError;
+use transom_ai_contracts::error::ToolError;
 
 /// 将 `(action, args)` 合并反序列化为强类型领域动作枚举。
 ///

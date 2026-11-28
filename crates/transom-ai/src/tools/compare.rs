@@ -8,8 +8,8 @@ use serde_json::json;
 use similar::TextDiff;
 
 use super::{BulkHostTarget, ToolExecutionCard, ToolRuntimeContext, to_rig_err};
-use crate::error::ToolError;
-use crate::policy::{
+use transom_ai_contracts::error::ToolError;
+use transom_ai_contracts::policy::{
     ToolRisk, classify_shell_command, detect_blocking_command, format_blocking_command_hint,
 };
 
@@ -268,10 +268,10 @@ mod tests {
     use tokio_util::sync::CancellationToken;
 
     use super::{CompareHostsArgs, CompareHostsTool};
-    use crate::error::ToolError;
-    use crate::policy::HostProtection;
-    use crate::session::SessionScope;
     use crate::tools::{BulkHostTarget, ExecCommandResult, RemoteExecutor, ToolRuntimeContext};
+    use transom_ai_contracts::error::ToolError;
+    use transom_ai_contracts::policy::HostProtection;
+    use transom_ai_contracts::session::SessionScope;
 
     struct StaticExec(&'static str);
 

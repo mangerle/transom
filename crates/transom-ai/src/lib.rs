@@ -7,34 +7,26 @@ pub mod acp;
 pub(crate) mod acp_handlers;
 pub mod acp_parse;
 pub mod acp_probe;
-pub mod approval;
-pub mod audit;
 pub mod bm25;
-pub mod checkpoint;
 pub mod compaction;
-pub mod config;
 pub mod context_budget;
 pub mod discovery;
-pub mod error;
-pub mod exec_policy;
 pub mod hooks;
 pub mod mcp_server;
 pub(crate) mod mcp_tools;
-pub mod memory;
 pub mod output_store;
-pub mod policy;
 mod process_cleanup;
 mod protocol_lines;
 pub mod redact;
 pub mod runner;
 pub(crate) mod runner_gate;
-pub mod session;
-pub mod thinking;
 pub mod tools;
 pub mod working_state;
 
-pub use transom_ai_contracts::choices;
-pub use transom_ai_contracts::skills;
+pub use transom_ai_contracts::{
+    approval, audit, checkpoint, choices, config, error, exec_policy, memory, policy, session,
+    skills, thinking,
+};
 
 pub use acp::{AcpRunInput, is_acp_command_available, run_acp_turn};
 pub use acp_probe::{AcpModelProbeResult, probe_acp_models};

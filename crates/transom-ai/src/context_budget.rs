@@ -3,8 +3,8 @@
 use transom_core::AiContextBreakdownDto;
 
 use crate::compaction::{entries_since_last_compaction, estimate_tokens};
-use crate::memory::MemorySnapshot;
-use crate::session::{SessionEntry, SessionEntryKind};
+use transom_ai_contracts::memory::MemorySnapshot;
+use transom_ai_contracts::session::{SessionEntry, SessionEntryKind};
 
 /// 计算当前会话分支各部分的 Token 构成，供 UI 透明展示。
 pub fn compute_context_breakdown(
@@ -76,8 +76,8 @@ pub fn build_local_compaction_summary(
         match &entry.kind {
             SessionEntryKind::Message { role, text, .. } => {
                 let who = match role {
-                    crate::session::ChatRole::User => "用户",
-                    crate::session::ChatRole::Assistant => "助手",
+                    transom_ai_contracts::session::ChatRole::User => "用户",
+                    transom_ai_contracts::session::ChatRole::Assistant => "助手",
                 };
                 let snippet: String = text.chars().take(160).collect();
                 recent_msgs.push(format!("- [{who}] {snippet}"));
@@ -114,7 +114,7 @@ pub fn build_local_compaction_summary(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::session::ChatRole;
+    use transom_ai_contracts::session::ChatRole;
 
     #[test]
     fn breakdown_accounts_for_all_buckets() {

@@ -5,7 +5,7 @@ use serde_json::{Value, json};
 
 use super::ToolRuntimeContext;
 use super::app_tools::{AppActionArgs, define_app_tool, invoke_app_tool};
-use crate::policy::ToolRisk;
+use transom_ai_contracts::policy::ToolRisk;
 
 define_app_tool! {
     /// 领域 6：容器工作区管理（本地 Docker/Podman 引擎、容器/镜像/网络/卷/Compose 与进入终端）。

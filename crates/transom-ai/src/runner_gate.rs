@@ -16,20 +16,20 @@ use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 use transom_core::AiApprovalDecision;
 
-use crate::approval::{ApprovalGrantStore, ApprovalScope};
-use crate::exec_policy::{
-    ExecPolicyRule, evaluate_command_chain, explain_command_impact, extract_command_prefix,
-};
 use crate::hooks::{HookContext, HookEvent, HookExecutor};
-use crate::policy::{
-    CommandPolicyContext, ExecutionMode, HostProtection, PolicyDecision, ToolRisk,
-    detect_blocking_command, evaluate_bulk_policy, evaluate_command_policy,
-    format_blocking_command_hint,
-};
 use crate::runner::{AgentEvent, ApprovalRequest, HandoffRequest, TurnOutput};
 use crate::tools::{
     ResolvedToolTarget, ToolRiskAssessment, ToolRuntimeContext, assess_tool_call_value,
     target_argument_for_tool,
+};
+use transom_ai_contracts::approval::{ApprovalGrantStore, ApprovalScope};
+use transom_ai_contracts::exec_policy::{
+    ExecPolicyRule, evaluate_command_chain, explain_command_impact, extract_command_prefix,
+};
+use transom_ai_contracts::policy::{
+    CommandPolicyContext, ExecutionMode, HostProtection, PolicyDecision, ToolRisk,
+    detect_blocking_command, evaluate_bulk_policy, evaluate_command_policy,
+    format_blocking_command_hint,
 };
 
 /// 运行期生命周期钩子：熔断、Plan 护栏、策略引擎、Hooks 与流式增量转发。

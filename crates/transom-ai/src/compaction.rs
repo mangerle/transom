@@ -11,10 +11,10 @@ use std::sync::LazyLock;
 
 use regex::Regex;
 
-use crate::memory::MemorySnapshot;
-use crate::policy::HostProtection;
 use crate::redact::redact_secrets_for_model;
-use crate::session::{ChatRole, SessionEntry, SessionEntryKind};
+use transom_ai_contracts::memory::MemorySnapshot;
+use transom_ai_contracts::policy::HostProtection;
+use transom_ai_contracts::session::{ChatRole, SessionEntry, SessionEntryKind};
 
 /// 发给模型的单次工具输出最大字符数（保留头尾）。
 pub const DEFAULT_TOOL_OUTPUT_LIMIT: usize = 8_000;
@@ -157,8 +157,9 @@ pub fn build_system_preamble_with_extra(
     let now = chrono::Local::now().format("%Y-%m-%d %H:%M:%S %:z");
     let mut parts = Vec::with_capacity(8);
 
-    let lang_line = crate::config::language_instruction(extra.response_language.unwrap_or("zh"))
-        .unwrap_or("请使用与用户一致的语言回答，回答准确、精炼、工程化。");
+    let lang_line =
+        transom_ai_contracts::config::language_instruction(extra.response_language.unwrap_or("zh"))
+            .unwrap_or("请使用与用户一致的语言回答，回答准确、精炼、工程化。");
     parts.push(format!(
         "你是 Transom 内置的智能运维助手。\n当前本机时间: {now}。\n{lang_line}"
     ));
@@ -328,9 +329,9 @@ mod tests {
         SessionPromptContext, build_system_preamble, entries_since_last_compaction,
         truncate_tool_output,
     };
-    use crate::memory::MemorySnapshot;
-    use crate::policy::HostProtection;
-    use crate::session::{ChatRole, SessionEntry, SessionEntryKind};
+    use transom_ai_contracts::memory::MemorySnapshot;
+    use transom_ai_contracts::policy::HostProtection;
+    use transom_ai_contracts::session::{ChatRole, SessionEntry, SessionEntryKind};
 
     #[test]
     fn truncate_strips_ansi_and_keeps_head_tail() {

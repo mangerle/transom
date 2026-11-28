@@ -10,14 +10,14 @@ use tokio::sync::oneshot;
 
 use crate::acp::AcpRunInput;
 use crate::acp_parse::{AcpStreamChunk, pick_acp_allow_option, write_json_line};
-use crate::error::AiError;
-use crate::exec_policy::{explain_command_impact, extract_command_prefix};
-use crate::policy::{
-    CommandPolicyContext, PolicyDecision, ToolRisk, assess_shell_command, evaluate_command_policy,
-};
 use crate::runner::{AgentEvent, ApprovalRequest, TurnOutput};
 use crate::tools::plan::PlanSnapshot;
 use crate::tools::{ApprovalSummary, ToolExecutionCard};
+use transom_ai_contracts::error::AiError;
+use transom_ai_contracts::exec_policy::{explain_command_impact, extract_command_prefix};
+use transom_ai_contracts::policy::{
+    CommandPolicyContext, PolicyDecision, ToolRisk, assess_shell_command, evaluate_command_policy,
+};
 
 pub(crate) struct AcpPendingTool {
     pub(crate) started_at: Instant,
@@ -438,7 +438,7 @@ mod tests {
     use serde_json::json;
 
     use super::assess_acp_permission;
-    use crate::policy::ToolRisk;
+    use transom_ai_contracts::policy::ToolRisk;
 
     #[test]
     fn uses_structured_command_instead_of_misleading_title() {

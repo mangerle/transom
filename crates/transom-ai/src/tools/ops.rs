@@ -9,8 +9,8 @@ use similar::TextDiff;
 
 use super::{AppBridgeDomain, ToolCardMeta, ToolRuntimeContext, TransferDirection, to_rig_err};
 use crate::compaction::truncate_tool_output;
-use crate::error::ToolError;
-use crate::policy::ToolRisk;
+use transom_ai_contracts::error::ToolError;
+use transom_ai_contracts::policy::ToolRisk;
 
 const MAX_REMOTE_READ_BYTES: usize = 256 * 1024;
 

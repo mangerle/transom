@@ -15,6 +15,7 @@ mod hooks_exec;
 mod inline_assist;
 mod mcp_audit;
 mod mcp_bridge;
+mod mcp_bridge_exec;
 mod mcp_dispatch;
 pub(in crate::controller) mod process;
 mod remote_fs_probe;

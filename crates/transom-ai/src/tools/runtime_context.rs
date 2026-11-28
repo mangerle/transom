@@ -2,9 +2,18 @@
 //!
 //! 该模块只负责运行时状态与事件背压，不定义具体工具实现。
 
+use std::time::Duration;
+
+use tokio::sync::mpsc::{self, error::TrySendError};
+use tokio_util::sync::CancellationToken;
+
 use super::target::{ResolvedToolTarget, ToolTargetResolver};
 use super::*;
 use crate::ToolCallId;
+use crate::output_store::ToolOutputStore;
+use crate::runner::AgentEvent;
+use crate::session::SessionScope;
+use crate::tools::plan::PlanSnapshot;
 
 /// 工具运行期挂载的可选后端能力句柄集合（全部默认 `None`，按作用域装配）。
 #[derive(Clone, Default)]
@@ -341,9 +350,9 @@ mod tests {
     use tokio_util::sync::CancellationToken;
 
     use super::ToolRuntimeContext;
-    use crate::policy::HostProtection;
-    use crate::session::SessionScope;
     use crate::tools::{ResolvedToolTarget, ToolError, ToolTargetResolver};
+    use transom_ai_contracts::policy::HostProtection;
+    use transom_ai_contracts::session::SessionScope;
 
     struct FakeResolver;
 

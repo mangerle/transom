@@ -11,7 +11,7 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::error::ToolError;
+use transom_ai_contracts::error::ToolError;
 
 /// 软件操作桥接器支持的强类型领域枚举。
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]

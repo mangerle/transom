@@ -2,7 +2,7 @@
 
 use super::assess_app::assess_app_tool;
 use super::{ApprovalSummary, ResolvedToolTarget, ToolRiskAssessment, ToolRuntimeContext};
-use crate::policy::{HostProtection, ToolRisk, assess_shell_command};
+use transom_ai_contracts::policy::{HostProtection, ToolRisk, assess_shell_command};
 
 /// 根据工具名与参数 JSON 字符串动态判定本次调用的风险级别与审批卡片摘要。
 pub fn assess_tool_call(
@@ -377,9 +377,9 @@ mod tests {
     use tokio_util::sync::CancellationToken;
 
     use super::assess_tool_call_value;
-    use crate::policy::{HostProtection, ToolRisk, assess_shell_command};
-    use crate::session::SessionScope;
     use crate::tools::{ResolvedToolTarget, ToolRuntimeContext};
+    use transom_ai_contracts::policy::{HostProtection, ToolRisk, assess_shell_command};
+    use transom_ai_contracts::session::SessionScope;
 
     fn dummy_ctx() -> ToolRuntimeContext {
         let (event_tx, _event_rx) = mpsc::channel(4);

@@ -10,8 +10,8 @@ use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
 
-use crate::config::ProviderProtocol;
-use crate::error::AiError;
+use transom_ai_contracts::config::ProviderProtocol;
+use transom_ai_contracts::error::AiError;
 
 const DISCOVERY_TIMEOUT: Duration = Duration::from_secs(15);
 /// 模型列表响应允许读取的最大字节数，防止异常端点耗尽进程内存。
@@ -268,7 +268,7 @@ mod tests {
         MAX_DISCOVERY_RESPONSE_BYTES, append_bounded_chunk, infer_context_window,
         parse_models_payload,
     };
-    use crate::config::ProviderProtocol;
+    use transom_ai_contracts::config::ProviderProtocol;
 
     #[test]
     fn infers_known_context_windows() {

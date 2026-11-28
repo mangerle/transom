@@ -24,25 +24,25 @@ use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 use transom_core::AiApprovalDecision;
 
-use crate::approval::{ApprovalGrantStore, ApprovalScope};
 use crate::compaction::{
     PreambleExtra, SessionPromptContext, build_system_preamble_with_extra, extract_turn_pairs,
     needs_compaction,
 };
-use crate::config::{ModelTarget, ProviderProtocol};
-use crate::error::AiError;
-use crate::exec_policy::ExecPolicyRule;
 use crate::hooks::{HookContext, HookEvent, HookExecutor};
-use crate::memory::MemorySnapshot;
-use crate::policy::ExecutionMode;
 use crate::runner_gate::Gate;
-use crate::session::{ChatRole, SessionEntry};
-use crate::thinking::build_request_params;
 use crate::tools::plan::PlanSnapshot;
 use crate::tools::{ApprovalSummary, ToolExecutionCard, ToolRuntimeContext, attach_tools};
 use crate::working_state::{
     SessionWorkingState, aggressive_compact_history, is_context_overflow_error,
 };
+use transom_ai_contracts::approval::{ApprovalGrantStore, ApprovalScope};
+use transom_ai_contracts::config::{ModelTarget, ProviderProtocol};
+use transom_ai_contracts::error::AiError;
+use transom_ai_contracts::exec_policy::ExecPolicyRule;
+use transom_ai_contracts::memory::MemorySnapshot;
+use transom_ai_contracts::policy::ExecutionMode;
+use transom_ai_contracts::session::{ChatRole, SessionEntry};
+use transom_ai_contracts::thinking::build_request_params;
 
 /// 运行时向外泵送的事件通道容量（有界）。
 pub const EVENT_CHANNEL_CAPACITY: usize = 256;

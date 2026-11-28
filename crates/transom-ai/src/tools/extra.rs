@@ -8,8 +8,8 @@ use serde::Deserialize;
 use serde_json::json;
 
 use super::{ToolExecutionCard, ToolRuntimeContext, to_rig_err};
-use crate::error::ToolError;
-use crate::policy::{
+use transom_ai_contracts::error::ToolError;
+use transom_ai_contracts::policy::{
     ToolRisk, classify_shell_command, detect_blocking_command, format_blocking_command_hint,
 };
 

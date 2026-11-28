@@ -6,11 +6,12 @@ use std::sync::LazyLock;
 use parking_lot::Mutex;
 
 use super::{
-    SessionScope, ToolRuntimeContext, app_tools, app_tools_dev, compare, delegate, extra, ops,
-    plan, remote, skill_tool,
+    ToolRuntimeContext, app_tools, app_tools_dev, compare, delegate, extra, ops, plan, remote,
+    skill_tool,
 };
 use crate::compaction::estimate_tokens;
-use crate::policy::ToolRisk;
+use transom_ai_contracts::policy::ToolRisk;
+use transom_ai_contracts::session::SessionScope;
 
 /// 构造单个工具的 MCP JSON Schema 条目。
 fn mcp_schema_entry<T: rig_agent::tool::Tool>(tool: &T) -> serde_json::Value {

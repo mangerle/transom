@@ -3,7 +3,7 @@
 use serde_json::Value;
 
 use super::{ApprovalSummary, ResolvedToolTarget, ToolRiskAssessment};
-use crate::policy::ToolRisk;
+use transom_ai_contracts::policy::ToolRisk;
 
 /// 评估软件操作领域工具（10 大领域）的风险等级与确认摘要；非软件领域工具返回 `None`。
 pub fn assess_app_tool(
@@ -45,8 +45,8 @@ pub fn assess_app_tool(
 #[cfg(test)]
 mod tests {
     use super::assess_app_tool;
-    use crate::policy::{HostProtection, ToolRisk};
     use crate::tools::ResolvedToolTarget;
+    use transom_ai_contracts::policy::{HostProtection, ToolRisk};
 
     #[test]
     fn classifies_app_tools_risk_tiers() {

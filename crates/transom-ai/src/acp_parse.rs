@@ -6,9 +6,9 @@ use serde_json::Value;
 use tokio::io::{AsyncWriteExt as _, BufReader};
 use tokio_util::sync::CancellationToken;
 
-use crate::error::AiError;
 use crate::protocol_lines::{MAX_PROTOCOL_LINE_BYTES, read_bounded_line};
 use crate::tools::plan::{PlanStep, PlanStepStatus};
+use transom_ai_contracts::error::AiError;
 
 pub(crate) fn acp_err(agent: &str, err: impl ToString) -> AiError {
     AiError::AcpFailed {

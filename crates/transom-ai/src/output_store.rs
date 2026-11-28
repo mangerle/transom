@@ -13,8 +13,8 @@ use uuid::Uuid;
 
 use crate::ConversationId;
 use crate::compaction::{DEFAULT_TOOL_OUTPUT_LIMIT, clip_head_tail, strip_ansi};
-use crate::error::ToolError;
 use crate::redact::redact_secrets_for_model;
+use transom_ai_contracts::error::ToolError;
 
 /// 句柄池最大缓存条目数。
 pub const MAX_STORED_OUTPUTS: usize = 64;

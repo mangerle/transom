@@ -7,8 +7,8 @@
 use async_trait::async_trait;
 use serde_json::Value;
 
-use crate::error::ToolError;
-use crate::policy::HostProtection;
+use transom_ai_contracts::error::ToolError;
+use transom_ai_contracts::policy::HostProtection;
 
 /// 已完成策略解析的工具目标。
 #[derive(Clone, Debug, PartialEq, Eq)]

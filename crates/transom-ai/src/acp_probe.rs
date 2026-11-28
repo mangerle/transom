@@ -10,10 +10,10 @@ use tokio::io::{AsyncWriteExt, BufReader};
 use tokio::process::Command;
 use transom_ai_contracts::acp::{augmented_path_env, is_acp_command_available};
 
-use crate::config::AcpAgentConfig;
-use crate::error::AiError;
 use crate::process_cleanup::terminate_child_and_reap;
 use crate::protocol_lines::{MAX_PROTOCOL_LINE_BYTES, read_bounded_line};
+use transom_ai_contracts::config::AcpAgentConfig;
+use transom_ai_contracts::error::AiError;
 
 const ACP_PROBE_TIMEOUT: Duration = Duration::from_secs(10);
 

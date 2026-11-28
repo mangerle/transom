@@ -8,8 +8,8 @@ use serde::Deserialize;
 use serde_json::json;
 
 use super::{ToolRuntimeContext, to_rig_err};
-use crate::error::ToolError;
-use crate::policy::ToolRisk;
+use transom_ai_contracts::error::ToolError;
+use transom_ai_contracts::policy::ToolRisk;
 
 /// 技能按需加载后端抽象（由控制平面实现）。
 #[async_trait]

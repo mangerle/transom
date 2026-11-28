@@ -6,7 +6,7 @@
 //! - 本模块从现有分支提取轻量的 [`SessionWorkingState`]，在激进压缩后将其重注入系统提示词，确保降级重试不失忆。
 
 use crate::compaction::truncate_tool_output;
-use crate::session::{ChatRole, SessionEntry, SessionEntryKind};
+use transom_ai_contracts::session::{ChatRole, SessionEntry, SessionEntryKind};
 
 /// 供压缩重注入的轻量会话工作状态。
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -190,7 +190,7 @@ fn extract_output_handles(text: &str, out: &mut Vec<String>) {
 #[cfg(test)]
 mod tests {
     use super::{SessionWorkingState, aggressive_compact_history, is_context_overflow_error};
-    use crate::session::{ChatRole, SessionEntry, SessionEntryKind};
+    use transom_ai_contracts::session::{ChatRole, SessionEntry, SessionEntryKind};
 
     #[test]
     fn detects_context_overflow_variants() {
