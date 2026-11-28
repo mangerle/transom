@@ -31,7 +31,9 @@ use crate::compaction::{
 use crate::hooks::{HookContext, HookEvent, HookExecutor};
 use crate::runner_gate::Gate;
 use crate::tools::plan::PlanSnapshot;
-use crate::tools::{ApprovalSummary, ToolExecutionCard, ToolRuntimeContext, attach_tools};
+use crate::tools::{
+    AppToolVisibility, ApprovalSummary, ToolExecutionCard, ToolRuntimeContext, attach_tools,
+};
 use crate::working_state::{
     SessionWorkingState, aggressive_compact_history, is_context_overflow_error,
 };
@@ -255,10 +257,16 @@ async fn run_attempt(
     let preamble = build_run_preamble(input, working_state_md);
 
     let max_turns = input.max_turns.max(1);
+    let mut tool_ctx = input.tool_ctx.clone();
+    tool_ctx.caps.app_tool_visibility = AppToolVisibility::for_prompt(
+        &tool_ctx.scope,
+        &input.prompt,
+        input.active_skill_prompt.as_deref(),
+    );
     let mut builder = AgentBuilder::new(model)
         .preamble(&preamble)
         .default_max_turns(max_turns);
-    builder = attach_tools(builder, &input.tool_ctx);
+    builder = attach_tools(builder, &tool_ctx);
 
     if let Some(max_tokens) = input.target.request_max_tokens() {
         builder = builder.max_tokens(max_tokens);

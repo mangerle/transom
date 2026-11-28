@@ -6,8 +6,8 @@ use std::sync::LazyLock;
 use parking_lot::Mutex;
 
 use super::{
-    ToolMetadata, ToolRuntimeContext, app_tools, app_tools_dev, compare, delegate, extra, ops,
-    plan, remote, skill_tool,
+    AppToolVisibility, ToolMetadata, ToolRuntimeContext, app_tools, app_tools_dev, compare,
+    delegate, extra, ops, plan, remote, skill_tool,
 };
 use crate::compaction::estimate_tokens;
 use transom_ai_contracts::policy::ToolRisk;
@@ -22,6 +22,7 @@ struct ToolRegistrationPlan {
     subagent: bool,
     skill_loader: bool,
     app_bridge: bool,
+    app_visibility: AppToolVisibility,
     remote_exec: bool,
     remote_fs: bool,
     host_tools: bool,
@@ -36,6 +37,11 @@ impl ToolRegistrationPlan {
             subagent: ctx.caps.subagent_runner.is_some(),
             skill_loader: ctx.caps.skill_loader.is_some(),
             app_bridge,
+            app_visibility: if app_bridge {
+                ctx.caps.app_tool_visibility
+            } else {
+                AppToolVisibility::none()
+            },
             remote_exec: app_bridge || ctx.caps.remote_exec.is_some(),
             remote_fs: app_bridge || ctx.caps.remote_fs.is_some(),
             host_tools: matches!(ctx.scope, SessionScope::Host(_)) && ctx.locked_session.is_some(),
@@ -120,7 +126,28 @@ macro_rules! for_each_planned_tool {
             $emit!(skill_tool::LoadSkillTool);
         }
         if $plan.app_bridge {
-            for_each_app_bridge_tool!($emit);
+            $emit!(
+                app_tools::SessionCatalogTool,
+                app_tools::WorkspaceControlTool,
+                app_tools::SftpTransferTool,
+                app_tools::HostMonitorTool,
+                app_tools::PortForwardOpsTool,
+            );
+            if $plan.app_visibility.container {
+                $emit!(app_tools_dev::ContainerWorkspaceTool);
+            }
+            if $plan.app_visibility.git {
+                $emit!(app_tools_dev::GitWorkspaceTool);
+            }
+            if $plan.app_visibility.api_client {
+                $emit!(app_tools_dev::ApiClientTool);
+            }
+            if $plan.app_visibility.settings_ops {
+                $emit!(app_tools_dev::AppSettingsOpsTool);
+            }
+            if $plan.app_visibility.memory_skills {
+                $emit!(app_tools_dev::AiMemorySkillsTool);
+            }
         }
         if $plan.remote_exec {
             $emit!(remote::RemoteExecTool);
@@ -242,4 +269,22 @@ fn tool_schema_estimate_uses_the_actual_registration_plan() {
     let second = estimate_tool_schema_tokens(&ctx);
     assert!(first > 0, "动态 Schema 估算不得为零");
     assert_eq!(first, second, "相同装配计划必须命中缓存");
+}
+
+#[cfg(test)]
+#[test]
+fn host_scope_trims_unrelated_dev_app_tools_by_prompt() {
+    let host_scope = SessionScope::Host("s-1".to_owned());
+    let plain = AppToolVisibility::for_prompt(&host_scope, "查看 nginx 错误日志", None);
+    assert_eq!(plain, AppToolVisibility::none());
+
+    let git_and_docker =
+        AppToolVisibility::for_prompt(&host_scope, "检查 docker 容器状态并看 git 分支", None);
+    assert!(git_and_docker.container);
+    assert!(git_and_docker.git);
+    assert!(!git_and_docker.api_client);
+    assert!(!git_and_docker.settings_ops);
+
+    let global = AppToolVisibility::for_prompt(&SessionScope::Global, "随便问个问题", None);
+    assert_eq!(global, AppToolVisibility::all());
 }

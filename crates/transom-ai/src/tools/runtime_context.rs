@@ -15,6 +15,72 @@ use crate::runner::AgentEvent;
 use crate::session::SessionScope;
 use crate::tools::plan::PlanSnapshot;
 
+/// 按场景按需激活低频软件领域工具的可见性开关（抑制 Tool Schema 上下文膨胀）。
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
+pub struct AppToolVisibility {
+    pub container: bool,
+    pub git: bool,
+    pub api_client: bool,
+    pub settings_ops: bool,
+    pub memory_skills: bool,
+}
+
+impl Default for AppToolVisibility {
+    fn default() -> Self {
+        Self::all()
+    }
+}
+
+impl AppToolVisibility {
+    /// 全部开启（适用于全局作用域或全量能力测试）。
+    pub const fn all() -> Self {
+        Self {
+            container: true,
+            git: true,
+            api_client: true,
+            settings_ops: true,
+            memory_skills: true,
+        }
+    }
+
+    /// 全部关闭（仅保留高频核心软件工具）。
+    pub const fn none() -> Self {
+        Self {
+            container: false,
+            git: false,
+            api_client: false,
+            settings_ops: false,
+            memory_skills: false,
+        }
+    }
+
+    /// 根据当前会话作用域与用户意图动态推导需要装配的低频软件工具。
+    ///
+    /// 全局会话保持全部可用；绑定主机的运维会话默认只挂载核心远端与工作区工具，
+    /// 仅当提示词或激活技能提及对应领域关键词时按需激活，避免无关 Schema 挤占上下文。
+    pub fn for_prompt(
+        scope: &SessionScope,
+        prompt: &str,
+        active_skill_prompt: Option<&str>,
+    ) -> Self {
+        if matches!(scope, SessionScope::Global) {
+            return Self::all();
+        }
+        let combined = match active_skill_prompt {
+            Some(skill) if !skill.trim().is_empty() => format!("{prompt}\n{skill}").to_lowercase(),
+            _ => prompt.to_lowercase(),
+        };
+        let has_any = |keywords: &[&str]| keywords.iter().any(|kw| combined.contains(kw));
+        Self {
+            container: has_any(&["container", "docker", "podman", "compose", "容器", "镜像"]),
+            git: has_any(&["git", "commit", "branch", "merge", "rebase", "仓库", "分支"]),
+            api_client: has_any(&["api", "http", "endpoint", "curl", "接口", "请求"]),
+            settings_ops: has_any(&["setting", "config", "sync", "cloud", "设置", "配置", "同步"]),
+            memory_skills: has_any(&["memory", "skill", "runbook", "记忆", "技能", "知识库"]),
+        }
+    }
+}
+
 /// 工具运行期挂载的可选后端能力句柄集合（全部默认 `None`，按作用域装配）。
 #[derive(Clone, Default)]
 pub struct ToolCapabilities {
@@ -28,6 +94,8 @@ pub struct ToolCapabilities {
     pub app_bridge: Option<Arc<dyn AppActionBridge>>,
     pub subagent_runner: Option<Arc<dyn SubagentRunner>>,
     pub skill_loader: Option<Arc<dyn SkillLoader>>,
+    /// 低频软件工具的按需可见性开关。
+    pub app_tool_visibility: AppToolVisibility,
 }
 
 /// 工具运行上下文：汇集绑定会话、超时配置、取消令牌与各后端能力句柄。

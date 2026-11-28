@@ -36,7 +36,9 @@ pub use traits::{
 mod io;
 mod runtime_context;
 pub use io::{ToolIoContext, with_io_guard};
-pub use runtime_context::{ToolCapabilities, ToolCardMeta, ToolProgressParams, ToolRuntimeContext};
+pub use runtime_context::{
+    AppToolVisibility, ToolCapabilities, ToolCardMeta, ToolProgressParams, ToolRuntimeContext,
+};
 
 use std::sync::Arc;
 
