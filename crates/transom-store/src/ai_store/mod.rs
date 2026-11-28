@@ -26,7 +26,7 @@ use crate::paths::config_dir;
 /// 会话 JSONL 追加锁的分片桶数量（按 `conversation_id` 哈希隔离不同对话的磁盘写入）。
 const SESSION_LOCK_STRIPES: usize = 16;
 
-type CachedIndex = Arc<Vec<ConversationSummary>>;
+type CachedIndex = (Arc<Vec<ConversationSummary>>, usize);
 type CachedSkills = (Option<SystemTime>, Vec<SkillDefinition>);
 
 /// AI 助手本地数据目录管理器。

@@ -5,6 +5,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use serde::{Deserialize, Serialize};
 use transom_ai_contracts::{AiError, ConversationSummary, SessionEntry, SessionScope, SessionTree};
 
 use super::{AiStore, resolve_id_file_path};
@@ -13,16 +14,103 @@ use transom_platform::private_fs;
 
 /// 单个会话索引文件的最大体积。
 const MAX_INDEX_BYTES: u64 = 8 * 1024 * 1024;
+/// 增量索引日志达到该条数时自动合并回 `index.json` 并清空日志。
+const INDEX_COMPACT_THRESHOLD: usize = 64;
 /// 单个会话 JSONL 文件的最大体积。
 const MAX_SESSION_JSONL_BYTES: u64 = 32 * 1024 * 1024;
 /// 单条会话记录的最大体积，避免一次超长工具输出撑爆整份会话。
 const MAX_SESSION_ENTRY_BYTES: usize = 4 * 1024 * 1024;
 
+/// 会话索引增量操作日志条目（单行追加写入 `index.ops.jsonl`，避免每次全量重写 `index.json`）。
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(tag = "op", rename_all = "snake_case")]
+enum IndexOp {
+    Upsert {
+        summary: ConversationSummary,
+    },
+    UpdateLeaf {
+        conversation_id: String,
+        active_leaf_id: Option<String>,
+        updated_at: String,
+    },
+    SetArchived {
+        conversation_id: String,
+        archived: bool,
+    },
+    Rename {
+        conversation_id: String,
+        title: String,
+    },
+    Delete {
+        conversation_id: String,
+    },
+}
+
+/// 将单条增量操作应用到内存索引列表，返回列表是否发生实际变更。
+fn apply_op_to_list(list: &mut Vec<ConversationSummary>, op: IndexOp) -> bool {
+    match op {
+        IndexOp::Upsert { summary } => {
+            if let Some(existing) = list.iter_mut().find(|item| item.id == summary.id) {
+                *existing = summary;
+            } else {
+                list.push(summary);
+            }
+            list.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
+            true
+        }
+        IndexOp::UpdateLeaf {
+            conversation_id,
+            active_leaf_id,
+            updated_at,
+        } => {
+            let Some(pos) = list.iter().position(|item| item.id == conversation_id) else {
+                return false;
+            };
+            list[pos].active_leaf_id = active_leaf_id;
+            list[pos].updated_at = updated_at;
+            list.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
+            true
+        }
+        IndexOp::SetArchived {
+            conversation_id,
+            archived,
+        } => {
+            let Some(item) = list.iter_mut().find(|item| item.id == conversation_id) else {
+                return false;
+            };
+            if item.archived == archived {
+                return false;
+            }
+            item.archived = archived;
+            true
+        }
+        IndexOp::Rename {
+            conversation_id,
+            title,
+        } => {
+            let Some(item) = list.iter_mut().find(|item| item.id == conversation_id) else {
+                return false;
+            };
+            if item.title == title {
+                return false;
+            }
+            item.title = title;
+            true
+        }
+        IndexOp::Delete { conversation_id } => {
+            let before = list.len();
+            list.retain(|item| item.id != conversation_id);
+            list.len() != before
+        }
+    }
+}
+
 impl AiStore {
     /// 读取对话索引列表的只读共享快照（缓存命中时仅拷贝 `Arc` 指针，零整表深拷贝）。
     pub fn load_index_arc(&self) -> Result<Arc<Vec<ConversationSummary>>, AiError> {
         let _guard = self.index_lock.lock();
-        self.read_index_unlocked()
+        let (list, _) = self.read_index_unlocked()?;
+        Ok(list)
     }
 
     /// 读取对话索引列表，按 `updated_at` 降序排列（优先命中进程内索引缓存）。
@@ -30,12 +118,16 @@ impl AiStore {
         Ok((*self.load_index_arc()?).clone())
     }
 
-    fn read_index_unlocked(&self) -> Result<Arc<Vec<ConversationSummary>>, AiError> {
-        if let Some(cached) = self.index_cache.lock().as_ref() {
-            return Ok(Arc::clone(cached));
+    fn index_ops_path(&self) -> PathBuf {
+        self.root.join("index.ops.jsonl")
+    }
+
+    fn read_index_unlocked(&self) -> Result<(Arc<Vec<ConversationSummary>>, usize), AiError> {
+        if let Some((cached, ops_count)) = self.index_cache.lock().as_ref() {
+            return Ok((Arc::clone(cached), *ops_count));
         }
         let path = self.root.join("index.json");
-        let list = if !path.exists() {
+        let mut list = if !path.exists() {
             Vec::new()
         } else {
             let metadata = fs::metadata(&path).map_err(|err| AiError::StorageFailed {
@@ -55,33 +147,48 @@ impl AiStore {
                 target: path.display().to_string(),
                 reason: err.to_string(),
             })?;
-            let mut parsed: Vec<ConversationSummary> =
-                serde_json::from_str(&text).map_err(|err| AiError::StorageFailed {
-                    target: path.display().to_string(),
-                    reason: err.to_string(),
-                })?;
-            parsed.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
-            parsed
+            serde_json::from_str(&text).map_err(|err| AiError::StorageFailed {
+                target: path.display().to_string(),
+                reason: err.to_string(),
+            })?
         };
-        let arc = Arc::new(list);
-        *self.index_cache.lock() = Some(Arc::clone(&arc));
-        Ok(arc)
-    }
 
-    /// 在进程内互斥锁保护下执行 `index.json` 的内存更新与紧凑 JSON 原子写回。
-    fn update_index(
-        &self,
-        mutator: impl FnOnce(&mut Vec<ConversationSummary>) -> bool,
-    ) -> Result<(), AiError> {
-        let _guard = self.index_lock.lock();
-        let current = self.read_index_unlocked()?;
-        let mut list = (*current).clone();
-        if !mutator(&mut list) {
-            return Ok(());
+        let mut replayed_ops = 0usize;
+        let ops_path = self.index_ops_path();
+        if ops_path.exists() {
+            let ops_text = fs::read_to_string(&ops_path).map_err(|err| AiError::StorageFailed {
+                target: ops_path.display().to_string(),
+                reason: err.to_string(),
+            })?;
+            for line in ops_text.lines() {
+                let trimmed = line.trim();
+                if trimmed.is_empty() {
+                    continue;
+                }
+                match serde_json::from_str::<IndexOp>(trimmed) {
+                    Ok(op) => {
+                        apply_op_to_list(&mut list, op);
+                        replayed_ops = replayed_ops.saturating_add(1);
+                    }
+                    Err(err) => {
+                        log::warn!("回放 AI 增量索引日志时忽略损坏条目: {err}");
+                    }
+                }
+            }
         }
         list.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
+        if replayed_ops >= INDEX_COMPACT_THRESHOLD {
+            self.compact_index_unlocked(&list)?;
+            replayed_ops = 0;
+        }
+        let arc = Arc::new(list);
+        *self.index_cache.lock() = Some((Arc::clone(&arc), replayed_ops));
+        Ok((arc, replayed_ops))
+    }
+
+    fn compact_index_unlocked(&self, list: &[ConversationSummary]) -> Result<(), AiError> {
         let path = self.root.join("index.json");
-        let payload = serde_json::to_string(&list).map_err(|err| AiError::StorageFailed {
+        let payload = serde_json::to_string(list).map_err(|err| AiError::StorageFailed {
             target: path.display().to_string(),
             reason: err.to_string(),
         })?;
@@ -89,7 +196,51 @@ impl AiStore {
             target: path.display().to_string(),
             reason: err.to_string(),
         })?;
-        *self.index_cache.lock() = Some(Arc::new(list));
+        let ops_path = self.index_ops_path();
+        if ops_path.exists()
+            && let Err(err) = fs::remove_file(&ops_path)
+        {
+            log::warn!("清理已合并的 AI 增量索引日志失败: {err}");
+        }
+        Ok(())
+    }
+
+    /// 在互斥锁保护下执行单行增量日志追加，并在达到阈值时自动合并写回 `index.json`。
+    fn apply_index_op(&self, op: IndexOp) -> Result<(), AiError> {
+        let _guard = self.index_lock.lock();
+        let (current, ops_count) = self.read_index_unlocked()?;
+        let mut list = (*current).clone();
+        if !apply_op_to_list(&mut list, op.clone()) {
+            return Ok(());
+        }
+        let next_ops = ops_count.saturating_add(1);
+        if next_ops >= INDEX_COMPACT_THRESHOLD {
+            self.compact_index_unlocked(&list)?;
+            *self.index_cache.lock() = Some((Arc::new(list), 0));
+            return Ok(());
+        }
+
+        let ops_path = self.index_ops_path();
+        if let Some(parent) = ops_path.parent() {
+            private_fs::ensure_private_dir(parent).map_err(|err| AiError::StorageFailed {
+                target: parent.display().to_string(),
+                reason: err.to_string(),
+            })?;
+        }
+        let encoded = serde_json::to_string(&op).map_err(|err| AiError::StorageFailed {
+            target: ops_path.display().to_string(),
+            reason: err.to_string(),
+        })?;
+        let mut file =
+            private_fs::open_private_append(&ops_path).map_err(|err| AiError::StorageFailed {
+                target: ops_path.display().to_string(),
+                reason: err.to_string(),
+            })?;
+        writeln!(file, "{encoded}").map_err(|err| AiError::StorageFailed {
+            target: ops_path.display().to_string(),
+            reason: err.to_string(),
+        })?;
+        *self.index_cache.lock() = Some((Arc::new(list), next_ops));
         Ok(())
     }
 
@@ -113,14 +264,7 @@ impl AiStore {
 
     /// 插入或更新单个对话摘要到索引文件中。
     pub fn upsert_conversation(&self, summary: ConversationSummary) -> Result<(), AiError> {
-        self.update_index(|list| {
-            if let Some(existing) = list.iter_mut().find(|item| item.id == summary.id) {
-                *existing = summary;
-            } else {
-                list.push(summary);
-            }
-            true
-        })
+        self.apply_index_op(IndexOp::Upsert { summary })
     }
 
     /// 原子更新指定对话的活动叶节点 ID 与更新时间。
@@ -130,52 +274,41 @@ impl AiStore {
         active_leaf_id: Option<String>,
         updated_at: String,
     ) -> Result<(), AiError> {
-        self.update_index(|list| {
-            let Some(item) = list.iter_mut().find(|item| item.id == conversation_id) else {
-                return false;
-            };
-            item.active_leaf_id = active_leaf_id;
-            item.updated_at = updated_at;
-            true
+        self.apply_index_op(IndexOp::UpdateLeaf {
+            conversation_id: conversation_id.to_owned(),
+            active_leaf_id,
+            updated_at,
         })
     }
 
-    /// 切换指定对话的归档状态并写回 `index.json`。
+    /// 切换指定对话的归档状态并写入增量索引日志。
     pub fn set_conversation_archived(
         &self,
         conversation_id: &str,
         archived: bool,
     ) -> Result<(), AiError> {
-        self.update_index(|list| {
-            let Some(item) = list.iter_mut().find(|item| item.id == conversation_id) else {
-                return false;
-            };
-            item.archived = archived;
-            true
+        self.apply_index_op(IndexOp::SetArchived {
+            conversation_id: conversation_id.to_owned(),
+            archived,
         })
     }
 
-    /// 重命名指定对话标题并写回 `index.json`。
+    /// 重命名指定对话标题并写入增量索引日志。
     pub fn rename_conversation(
         &self,
         conversation_id: &str,
         new_title: &str,
     ) -> Result<(), AiError> {
-        self.update_index(|list| {
-            let Some(item) = list.iter_mut().find(|item| item.id == conversation_id) else {
-                return false;
-            };
-            item.title = new_title.to_owned();
-            true
+        self.apply_index_op(IndexOp::Rename {
+            conversation_id: conversation_id.to_owned(),
+            title: new_title.to_owned(),
         })
     }
 
     /// 删除指定对话索引及对应的 JSONL 会话文件。
     pub fn delete_conversation(&self, conversation_id: &str) -> Result<(), AiError> {
-        self.update_index(|list| {
-            let before = list.len();
-            list.retain(|item| item.id != conversation_id);
-            list.len() != before
+        self.apply_index_op(IndexOp::Delete {
+            conversation_id: conversation_id.to_owned(),
         })?;
 
         let session_path = self.session_file_path(conversation_id)?;

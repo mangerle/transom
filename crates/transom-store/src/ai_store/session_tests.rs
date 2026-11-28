@@ -216,3 +216,51 @@ fn session_index_and_jsonl_roundtrip() {
     let tree = store.load_session_tree(conv_id).expect("加载会话树失败");
     assert_eq!(tree.all_entries().len(), 1);
 }
+
+#[test]
+fn incremental_index_ops_replay_and_compact_at_threshold() {
+    let dir = tempfile::tempdir().expect("创建临时目录失败");
+    let root = dir.path().to_path_buf();
+    let store = AiStore::with_root(root.clone());
+
+    store
+        .upsert_conversation(ConversationSummary {
+            id: "c-1".to_owned(),
+            title: "初始标题".to_owned(),
+            scope: SessionScope::Global,
+            model_id: "m1".to_owned(),
+            effort: None,
+            updated_at: "2026-11-28T01:00:00Z".to_owned(),
+            active_leaf_id: None,
+            archived: false,
+        })
+        .expect("写入初始会话失败");
+    store
+        .rename_conversation("c-1", "重命名标题")
+        .expect("重命名失败");
+    assert!(root.join("index.ops.jsonl").exists());
+
+    // 新建存储实例模拟冷启动回放增量日志
+    let reopened = AiStore::with_root(root.clone());
+    let items = reopened.list_all_conversations().expect("冷启动加载失败");
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0].title, "重命名标题");
+
+    // 连续写入直到恰好触发阈值合并（前面已有 upsert + rename 共 2 条增量）
+    for idx in 0..(super::INDEX_COMPACT_THRESHOLD - 2) {
+        store
+            .update_conversation_leaf(
+                "c-1",
+                Some(format!("leaf-{idx}")),
+                format!("2026-11-28T02:00:{idx:02}Z"),
+            )
+            .expect("更新叶节点失败");
+    }
+    assert!(root.join("index.json").exists());
+    assert!(!root.join("index.ops.jsonl").exists());
+
+    let after = AiStore::with_root(root)
+        .list_all_conversations()
+        .expect("合并后读取失败");
+    assert_eq!(after[0].active_leaf_id.as_deref(), Some("leaf-61"));
+}
