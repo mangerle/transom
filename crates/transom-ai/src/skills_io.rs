@@ -1,7 +1,7 @@
 //! 技能文件沙箱读写、资源加载与本地 `SKILL.md` 文件夹一键导入。
 
 use std::fs;
-use std::io::Write;
+use std::io::{Read as _, Write};
 use std::path::{Path, PathBuf};
 
 use transom_platform::private_fs;
@@ -13,6 +13,30 @@ use crate::skills::{
 };
 
 const MAX_RESOURCE_BYTES: usize = 64 * 1024;
+
+/// 从文件开头读取有限字节，返回是否因文件更大而截断。
+fn read_file_prefix(
+    path: &Path,
+    max_bytes: usize,
+    target: &'static str,
+) -> Result<(Vec<u8>, bool), AiError> {
+    let metadata = fs::metadata(path).map_err(|error| AiError::StorageFailed {
+        target: format!("{target}:{}", path.display()),
+        reason: error.to_string(),
+    })?;
+    let file = fs::File::open(path).map_err(|error| AiError::StorageFailed {
+        target: format!("{target}:{}", path.display()),
+        reason: error.to_string(),
+    })?;
+    let mut bytes = Vec::with_capacity(max_bytes.min(64 * 1024));
+    file.take(max_bytes as u64)
+        .read_to_end(&mut bytes)
+        .map_err(|error| AiError::StorageFailed {
+            target: format!("{target}:{}", path.display()),
+            reason: error.to_string(),
+        })?;
+    Ok((bytes, metadata.len() > max_bytes as u64))
+}
 
 /// 保存自定义技能为标准 `<skills_dir>/<id>/SKILL.md` 格式。
 pub fn save_custom_skill(
@@ -103,12 +127,12 @@ pub fn read_skill_resource(skill: &SkillDefinition, rel_path: &str) -> Result<St
         });
     };
     let resolved = resolve_sandbox_path(dir, Path::new(rel_path))?;
-    let bytes = fs::read(&resolved).map_err(|e| AiError::StorageFailed {
-        target: resolved.display().to_string(),
-        reason: e.to_string(),
-    })?;
-    let slice = &bytes[..bytes.len().min(MAX_RESOURCE_BYTES)];
-    Ok(String::from_utf8_lossy(slice).into_owned())
+    let (bytes, truncated) = read_file_prefix(&resolved, MAX_RESOURCE_BYTES, "技能资源")?;
+    let mut text = String::from_utf8_lossy(&bytes).into_owned();
+    if truncated {
+        text.push_str("\n[资源文件超过 64 KiB，已截断]");
+    }
+    Ok(text)
 }
 
 /// 从本地 `SKILL.md` 文件夹或 `.md` 文件一键导入技能到 `skills_dir`。
@@ -147,10 +171,14 @@ pub fn import_skill_from_path(src: &Path, skills_dir: &Path) -> Result<SkillDefi
             .file_stem()
             .and_then(|s| s.to_str())
             .unwrap_or("imported");
-        let raw = fs::read_to_string(src).map_err(|e| AiError::StorageFailed {
-            target: src.display().to_string(),
-            reason: e.to_string(),
-        })?;
+        let (raw, truncated) = read_file_prefix(src, 128 * 1024, "导入技能")?;
+        if truncated {
+            return Err(AiError::StorageFailed {
+                target: src.display().to_string(),
+                reason: "待导入的 Markdown 技能超过 128 KiB 上限".to_owned(),
+            });
+        }
+        let raw = String::from_utf8_lossy(&raw).into_owned();
         let (_, title, desc, tags, body) = parse_skill_markdown(stem, &raw);
         let id = sanitize_skill_id(stem);
         let path = save_custom_skill(skills_dir, &id, &title, &desc, &tags, &body)?;
