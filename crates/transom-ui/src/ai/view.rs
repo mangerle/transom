@@ -14,11 +14,11 @@ use super::attachments::{ComposerAttachment, should_convert_paste_to_doc};
 use super::choice_card::{ChoiceCardState, init_choice_input};
 use super::config_form::ConfigFormState;
 use super::memory_drawer::MemoryFormState;
+use super::message_stream::{MessageStreamEvent, MessageStreamView};
 use super::plan_card::{PlanCardParams, render_plan_card};
 use super::skills_drawer::{SkillsDrawerEvent, SkillsDrawerView};
 use super::slash_menu::register_slash_key_interceptor;
 use super::state::{AiActivePopup, AiDrawerTab, AiPanelState};
-use super::work_group::MessageBlockCache;
 use crate::app::spawn_blocking_local;
 use crate::palette::Palette;
 use crate::theme::tokens::space;
@@ -47,21 +47,16 @@ pub(crate) struct AiAssistantView {
     pub(super) last_composer_len: usize,
     pub(super) slash_selected_idx: usize,
     pub(super) choice_card: ChoiceCardState,
-    pub(super) msg_scroll_handle: ScrollHandle,
     pub(super) popover_scroll_handle: ScrollHandle,
-    pub(super) active_nav_dot: Option<usize>,
     pub(super) copied_key: Option<String>,
     pub(super) tasks: AiPanelTasks,
-    pub(super) message_block_cache: Option<MessageBlockCache>,
+    pub(super) message_stream: Entity<MessageStreamView>,
     pub(super) skills_drawer: Entity<SkillsDrawerView>,
     pub(super) available_skills: Vec<transom_ai_contracts::SkillDefinition>,
     pub(super) policy_hooks_form: super::policy_hooks_drawer::PolicyHooksFormState,
     pub(super) model_picker: super::model_picker::ModelPickerState,
     pub(super) editing_title: bool,
     pub(super) title_input: Entity<InputState>,
-    /// 用户主动向上滚动时设为 true，停止自动滚底。
-    /// 点击"回到底部"按钮后重置为 false。
-    pub(super) auto_scroll_locked: bool,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -242,7 +237,94 @@ impl AiAssistantView {
             }
         });
 
-        let mut subscriptions = vec![sub, key_sub, choice_sub, title_sub, skills_sub];
+        let message_stream = cx.new(|_| MessageStreamView::new());
+        let stream_sub = cx.subscribe_in(
+            &message_stream,
+            window,
+            |this, _, event: &MessageStreamEvent, w, cx| match event {
+                MessageStreamEvent::ToggleCard(id) => this.toggle_card_id(id.clone(), cx),
+                MessageStreamEvent::RollbackCheckpoint(entry_id) => {
+                    this.rollback_checkpoint(entry_id.clone(), cx);
+                }
+                MessageStreamEvent::SendQuickPrompt(prompt) => {
+                    this.send_prompt_text(prompt.clone(), cx);
+                }
+                MessageStreamEvent::CopyText { key, text } => {
+                    this.copy_text_with_feedback(key.clone(), text.clone(), cx);
+                }
+                MessageStreamEvent::SendToTerminal(command) => {
+                    cx.emit(AiPanelEvent::SendToTerminalRequested {
+                        command: command.clone(),
+                    });
+                }
+                MessageStreamEvent::SaveSnippet { name, command } => {
+                    cx.emit(AiPanelEvent::SaveSnippetRequested {
+                        name: name.clone(),
+                        command: command.clone(),
+                    });
+                }
+                MessageStreamEvent::RevertRemoteFile {
+                    host,
+                    target,
+                    backup,
+                } => {
+                    this.send_ai_command(
+                        AiCommand::RevertRemoteFile {
+                            host_label: host.clone(),
+                            target_path: target.clone(),
+                            backup_path: backup.clone(),
+                            conversation_id: this.state.conversation.active_conversation_id.clone(),
+                        },
+                        cx,
+                    );
+                }
+                MessageStreamEvent::JumpToTerminal(host_label) => {
+                    cx.emit(AiPanelEvent::JumpToTerminal {
+                        host_label: host_label.clone(),
+                    });
+                }
+                MessageStreamEvent::SubagentAction { action, task_id } => {
+                    match action.as_str() {
+                        "stop" => {
+                            this.send_ai_command(
+                                AiCommand::CancelManagedTask {
+                                    task_id: task_id.clone(),
+                                },
+                                cx,
+                            );
+                        }
+                        "followup" => {
+                            let msg = this.composer_input.read(cx).value().trim().to_owned();
+                            if !msg.is_empty()
+                                && this.send_ai_command(
+                                    AiCommand::SteerRun {
+                                        run_id: task_id.clone(),
+                                        message: msg,
+                                    },
+                                    cx,
+                                )
+                            {
+                                this.composer_input
+                                    .update(cx, |i, cx| i.set_value(String::new(), w, cx));
+                                this.last_composer_len = 0;
+                            }
+                        }
+                        _ => {}
+                    }
+                    cx.notify();
+                }
+                MessageStreamEvent::LoadOlderMessages => {
+                    this.state.conversation.render_window_blocks = this
+                        .state
+                        .conversation
+                        .render_window_blocks
+                        .saturating_add(160);
+                    this.sync_message_stream(false, false, cx);
+                }
+            },
+        );
+
+        let mut subscriptions = vec![sub, key_sub, choice_sub, title_sub, skills_sub, stream_sub];
         subscriptions.extend(form_subs);
 
         Self {
@@ -257,22 +339,19 @@ impl AiAssistantView {
             last_composer_len: 0,
             slash_selected_idx: 0,
             choice_card: ChoiceCardState::new(choice_custom_input),
-            msg_scroll_handle: ScrollHandle::new(),
             popover_scroll_handle: ScrollHandle::new(),
-            active_nav_dot: None,
             copied_key: None,
             tasks: AiPanelTasks {
                 _init_load: Some(init_load_task),
                 ..Default::default()
             },
-            message_block_cache: None,
+            message_stream,
             skills_drawer,
             available_skills: Vec::new(),
             policy_hooks_form,
             model_picker,
             editing_title: false,
             title_input,
-            auto_scroll_locked: false,
             _subscriptions: subscriptions,
         }
     }
@@ -284,7 +363,7 @@ impl AiAssistantView {
             .min_w_0()
             .min_h_0()
             .overflow_hidden()
-            .child(self.render_message_stream(p, cx));
+            .child(self.message_stream.clone());
 
         let has_plan_steps = self.state.active_run_is_current()
             && self

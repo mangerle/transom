@@ -107,6 +107,7 @@ impl AiAssistantView {
         if !self.state.conversation.expanded_cards.remove(&id) {
             self.state.conversation.expanded_cards.insert(id);
         }
+        self.sync_message_stream(false, false, cx);
         cx.notify();
     }
 
@@ -125,92 +126,15 @@ impl AiAssistantView {
             if let Err(err) = this.update(cx, |this, cx| {
                 if this.copied_key.as_deref() == Some(key.as_str()) {
                     this.copied_key = None;
+                    this.sync_message_stream(false, false, cx);
                     cx.notify();
                 }
             }) {
                 log::debug!("复制反馈重置时 AI 面板已关闭: {err}");
             }
         }));
+        self.sync_message_stream(false, false, cx);
         cx.notify();
-    }
-
-    pub(super) fn build_code_callbacks(
-        &self,
-        cx: &mut Context<Self>,
-    ) -> super::markdown_blocks::CodeBlockCallbacks {
-        let v_copy = cx.entity();
-        let v_term = cx.entity();
-        let v_snip = cx.entity();
-        let v_rev = cx.entity();
-        let v_jump = cx.entity();
-        let v_sub = cx.entity();
-        super::markdown_blocks::CodeBlockCallbacks {
-            on_copy: std::rc::Rc::new(move |key, text, _, cx| {
-                v_copy.update(cx, |this, cx| this.copy_text_with_feedback(key, text, cx));
-            }),
-            on_send_to_terminal: std::rc::Rc::new(move |command, _, cx| {
-                v_term.update(cx, |_, cx| {
-                    cx.emit(super::AiPanelEvent::SendToTerminalRequested { command });
-                });
-            }),
-            on_save_snippet: std::rc::Rc::new(move |name, command, _, cx| {
-                v_snip.update(cx, |this, cx| {
-                    this.save_snippet_from_card(name, command, cx)
-                });
-            }),
-            on_revert_remote_file: std::rc::Rc::new(
-                move |host_label, target_path, backup_path, _, cx| {
-                    v_rev.update(cx, |this, cx| {
-                        let conversation_id =
-                            this.state.conversation.active_conversation_id.clone();
-                        this.send_ai_command(
-                            transom_core::AiCommand::RevertRemoteFile {
-                                host_label,
-                                target_path,
-                                backup_path,
-                                conversation_id,
-                            },
-                            cx,
-                        );
-                    });
-                },
-            ),
-            on_jump_to_terminal: std::rc::Rc::new(move |host_label, _, cx| {
-                v_jump.update(cx, |_, cx| {
-                    cx.emit(super::AiPanelEvent::JumpToTerminal { host_label });
-                });
-            }),
-            on_subagent_action: std::rc::Rc::new(move |action, task_id, w, cx| {
-                v_sub.update(cx, |this, cx| {
-                    match action.as_str() {
-                        "stop" => {
-                            this.send_ai_command(
-                                transom_core::AiCommand::CancelManagedTask { task_id },
-                                cx,
-                            );
-                        }
-                        "followup" => {
-                            let msg = this.composer_input.read(cx).value().trim().to_owned();
-                            if !msg.is_empty()
-                                && this.send_ai_command(
-                                    transom_core::AiCommand::SteerRun {
-                                        run_id: task_id,
-                                        message: msg,
-                                    },
-                                    cx,
-                                )
-                            {
-                                this.composer_input
-                                    .update(cx, |i, cx| i.set_value(String::new(), w, cx));
-                                this.last_composer_len = 0;
-                            }
-                        }
-                        _ => {}
-                    }
-                    cx.notify();
-                });
-            }),
-        }
     }
 
     /// 外壳在活动标签切换或连接状态变更时单向注入会话摘要与已连接 SSH 列表。

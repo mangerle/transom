@@ -6,7 +6,6 @@ use transom_core::{
     AiCommand, AiHostTargetDto, AiPromptRequest, AppCommand, HostProtection, TabId,
 };
 
-use super::AiPanelEvent;
 use super::attachments::pack_attachments_for_request;
 use super::state::{AiActivePopup, AiDrawerTab, UiChatItem};
 use super::view::AiAssistantView;
@@ -34,7 +33,6 @@ impl AiAssistantView {
     }
 
     pub(super) fn select_conversation(&mut self, conv_id: &str, cx: &mut Context<Self>) {
-        self.active_nav_dot = None;
         self.editing_title = false;
         self.state.conversation.load_seq = self.state.conversation.load_seq.wrapping_add(1);
         let load_seq = self.state.conversation.load_seq;
@@ -82,16 +80,15 @@ impl AiAssistantView {
                             let branch: Vec<_> =
                                 tree.active_branch().into_iter().cloned().collect();
                             this.state.load_entries(branch);
-                            this.refresh_message_block_cache();
                             this.state.view.status_error = this
                                 .state
                                 .run
                                 .background_run_errors
                                 .remove(&display_conversation_id);
+                            this.sync_message_stream(true, false, cx);
                         }
                         Err(err) => {
                             this.state.conversation.items.clear();
-                            this.refresh_message_block_cache();
                             this.state
                                 .run
                                 .background_run_errors
@@ -103,6 +100,7 @@ impl AiAssistantView {
                                 )
                                 .to_string(),
                             );
+                            this.sync_message_stream(true, false, cx);
                         }
                     }
                     cx.notify();
@@ -232,9 +230,8 @@ impl AiAssistantView {
             return;
         }
         self.state.run.queue_paused_by_cancel = false;
-        self.auto_scroll_locked = false;
-        self.active_nav_dot = None;
-        self.msg_scroll_handle.scroll_to_bottom();
+        self.message_stream
+            .update(cx, |stream, cx| stream.reset_and_scroll_bottom(cx));
         let packed = pack_attachments_for_request(&self.state.composer.pending_attachments);
         let images_base64 = packed.images;
         let attachment_text = packed.text;
@@ -280,7 +277,6 @@ impl AiAssistantView {
             text: prompt.clone(),
             timestamp: Some(chrono::Utc::now()),
         });
-        self.active_nav_dot = None;
         self.state.view.status_error = None;
         self.state.run.active_focus = Some(rust_i18n::t!("ai.working_default").to_string());
 
@@ -383,6 +379,7 @@ impl AiAssistantView {
                 self.state.conversation.active_conversation_id.clone(),
             );
         }
+        self.sync_message_stream(true, true, cx);
         cx.notify();
     }
 
@@ -409,13 +406,11 @@ impl AiAssistantView {
     }
 
     pub(super) fn clear_conversation(&mut self, cx: &mut Context<Self>) {
-        self.active_nav_dot = None;
         self.editing_title = false;
         self.state.detach_active_run();
         self.state.conversation.active_conversation_id = None;
         self.state.conversation.active_conversation_title = None;
         self.state.conversation.items.clear();
-        self.refresh_message_block_cache();
         self.state.conversation.metrics.reset_session();
         self.state.run.active_plan = None;
         self.state.run.active_focus = None;
@@ -429,6 +424,7 @@ impl AiAssistantView {
         self.state.view.drawer = AiDrawerTab::Chat;
         self.state.view.active_popup = AiActivePopup::None;
         self.choice_card.dismissed_id = None;
+        self.sync_message_stream(true, false, cx);
         cx.notify();
     }
 
@@ -466,14 +462,5 @@ impl AiAssistantView {
             },
         );
         cx.notify();
-    }
-
-    pub(super) fn save_snippet_from_card(
-        &mut self,
-        name: String,
-        command: String,
-        cx: &mut Context<Self>,
-    ) {
-        cx.emit(AiPanelEvent::SaveSnippetRequested { name, command });
     }
 }
