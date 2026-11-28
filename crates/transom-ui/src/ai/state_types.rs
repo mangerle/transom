@@ -50,11 +50,24 @@ pub(crate) enum AiConfigSection {
     PolicyHooks,
 }
 
+/// AI 主目标会话选择模式。
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) enum AiTargetMode {
+    /// 默认跟随工作区当前激活的标签页。
+    #[default]
+    FollowActiveTab,
+    /// 强制使用全局上下文，不绑定任何主机。
+    GlobalOnly,
+    /// 手动锁定到指定标签页对应的已连接会话。
+    PinnedTab(TabId),
+}
+
 /// 底部控制条当前展开的浮层菜单。
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(crate) enum AiActivePopup {
     #[default]
     None,
+    TargetSession,
     Backend,
     Mode,
     Model,

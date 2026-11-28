@@ -3,6 +3,9 @@
 use gpui_kit::*;
 use transom_ai_contracts::{AcpAgentConfig, default_acp_presets};
 
+use super::composer::target_popup::{
+    TargetSessionPopupActions, TargetSessionPopupParams, render_target_session_popup,
+};
 use super::metrics::{
     render_context_usage_popup, render_session_stats_popup, render_token_usage_popup,
 };
@@ -25,7 +28,7 @@ impl AiAssistantView {
         let view = cx.entity();
         let kind = self.state.view.active_popup;
         let pop = match kind {
-            AiActivePopup::None => return None,
+            AiActivePopup::None | AiActivePopup::TargetSession => return None,
             AiActivePopup::Backend => {
                 let v_cfg = view.clone();
                 Some(render_backend_popup(
@@ -100,6 +103,42 @@ impl AiAssistantView {
             }
         }?;
         Some((kind, pop))
+    }
+
+    /// 渲染输入卡片正上方的「目标会话选择器」弹层。
+    pub(super) fn render_target_session_popover(
+        &self,
+        p: &Palette,
+        cx: &mut Context<Self>,
+    ) -> Option<AnyElement> {
+        if self.state.view.active_popup != AiActivePopup::TargetSession {
+            return None;
+        }
+        let view = cx.entity();
+        let v_coop = view.clone();
+        let v_mention = view.clone();
+        Some(render_target_session_popup(
+            TargetSessionPopupParams {
+                target_mode: self.state.conversation.target_mode,
+                workspace_active_session: self.state.conversation.workspace_active_session.as_ref(),
+                active_session: self.state.conversation.active_session.as_ref(),
+                connected_sessions: &self.state.conversation.connected_sessions,
+                extra_scope_tabs: &self.state.conversation.extra_scope_tabs,
+                mention_candidates: &self.state.composer.mention_candidates,
+                p,
+            },
+            TargetSessionPopupActions {
+                on_select_mode: Box::new(move |mode, w, cx| {
+                    view.update(cx, |this, cx| this.select_target_mode(mode, w, cx));
+                }),
+                on_toggle_coop: Box::new(move |tid, _, cx| {
+                    v_coop.update(cx, |this, cx| this.toggle_extra_scope_tab(tid, cx));
+                }),
+                on_insert_mention: Box::new(move |token, w, cx| {
+                    v_mention.update(cx, |this, cx| this.insert_mention_token(&token, w, cx));
+                }),
+            },
+        ))
     }
 
     pub(super) fn active_acp_agent(&self) -> Option<AcpAgentConfig> {

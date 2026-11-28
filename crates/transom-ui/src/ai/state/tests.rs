@@ -365,3 +365,58 @@ fn detaching_active_run_prevents_old_run_events_from_hijacking_new_conversation(
     assert!(state.conversation.items.is_empty());
     assert!(state.run.active_focus.is_none());
 }
+
+fn mock_session(host: &str) -> crate::app::ai::state::ActiveAiSessionInfo {
+    crate::app::ai::state::ActiveAiSessionInfo {
+        tab_id: transom_core::TabId::new(),
+        session_id: transom_core::SessionId::new(),
+        host_name: host.to_owned(),
+        login: format!("root@{host}:22"),
+        platform: "linux".to_owned(),
+        protection: transom_core::HostProtection::Normal,
+        connected: true,
+    }
+}
+
+#[test]
+fn target_mode_resolves_follow_global_pinned_and_disconnect_fallback() {
+    use crate::app::ai::state::AiTargetMode;
+
+    let s1 = mock_session("prod-01");
+    let s2 = mock_session("prod-02");
+    let mut state = AiPanelState::default();
+    state.conversation.connected_sessions = vec![s1.clone(), s2.clone()];
+    state.conversation.workspace_active_session = Some(s1.clone());
+
+    assert!(state.conversation.sync_resolved_session());
+    assert_eq!(
+        state.conversation.active_session.as_ref().map(|s| s.tab_id),
+        Some(s1.tab_id)
+    );
+
+    // 锁定到 s2 后，即使工作区活动标签仍是 s1，有效主目标仍保持 s2
+    state.conversation.target_mode = AiTargetMode::PinnedTab(s2.tab_id);
+    assert!(state.conversation.sync_resolved_session());
+    assert_eq!(
+        state.conversation.active_session.as_ref().map(|s| s.tab_id),
+        Some(s2.tab_id)
+    );
+
+    // 切换到全局模式并勾选协同主机 s1：active_session 为 None，但协同主机保留
+    state.conversation.extra_scope_tabs.insert(s1.tab_id);
+    state.conversation.target_mode = AiTargetMode::GlobalOnly;
+    assert!(state.conversation.sync_resolved_session());
+    assert!(state.conversation.active_session.is_none());
+    assert!(state.conversation.extra_scope_tabs.contains(&s1.tab_id));
+
+    // 若锁定的会话断开（从 connected_sessions 移除），自动回退到跟随模式
+    state.conversation.target_mode = AiTargetMode::PinnedTab(s2.tab_id);
+    assert!(state.conversation.sync_resolved_session());
+    state.conversation.connected_sessions = vec![s1.clone()];
+    assert!(state.conversation.sync_resolved_session());
+    assert_eq!(state.conversation.target_mode, AiTargetMode::FollowActiveTab);
+    assert_eq!(
+        state.conversation.active_session.as_ref().map(|s| s.tab_id),
+        Some(s1.tab_id)
+    );
+}

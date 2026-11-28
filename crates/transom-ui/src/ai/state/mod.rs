@@ -6,7 +6,8 @@ use super::attachments::ComposerAttachment;
 use super::markdown_blocks::StreamingMarkdownCache;
 use super::metrics_model::AiSessionMetrics;
 pub(crate) use super::state_types::{
-    ActiveAiRun, ActiveAiSessionInfo, AiActivePopup, AiConfigSection, AiDrawerTab, UiChatItem,
+    ActiveAiRun, ActiveAiSessionInfo, AiActivePopup, AiConfigSection, AiDrawerTab, AiTargetMode,
+    UiChatItem,
 };
 use transom_ai_contracts::{
     AiSettings, ConversationSummary, ExecutionMode, MemorySnapshot, ProviderProtocol, SessionScope,
@@ -52,7 +53,12 @@ pub(crate) struct AiConfigUiState {
 
 /// 会话选择、消息流与统计状态。
 pub(crate) struct AiConversationUiState {
+    /// 外壳注入的当前活动标签页会话快照（不代表最终锁定目标）。
+    pub(crate) workspace_active_session: Option<ActiveAiSessionInfo>,
+    /// 当前生效的主目标会话（由 `target_mode` 与可用会话共同解析）。
     pub(crate) active_session: Option<ActiveAiSessionInfo>,
+    /// 目标会话选择模式（跟随标签页 / 仅全局 / 手动锁定）。
+    pub(crate) target_mode: AiTargetMode,
     pub(crate) connected_sessions: Vec<ActiveAiSessionInfo>,
     pub(crate) extra_scope_tabs: HashSet<TabId>,
     pub(crate) conversations: Vec<ConversationSummary>,
@@ -75,7 +81,9 @@ pub(crate) struct AiConversationUiState {
 impl Default for AiConversationUiState {
     fn default() -> Self {
         Self {
+            workspace_active_session: None,
             active_session: None,
+            target_mode: AiTargetMode::FollowActiveTab,
             connected_sessions: Vec::new(),
             extra_scope_tabs: HashSet::new(),
             conversations: Vec::new(),
@@ -164,6 +172,37 @@ mod run;
 mod settings;
 #[cfg(test)]
 mod tests;
+
+impl AiConversationUiState {
+    /// 根据当前选择模式、活动标签页与已连接会话列表，解析并同步有效主目标会话。
+    ///
+    /// 返回 `true` 表示最终生效的 `active_session` 发生了变化（需要刷新主机记忆）。
+    pub(crate) fn sync_resolved_session(&mut self) -> bool {
+        if let AiTargetMode::PinnedTab(tid) = self.target_mode
+            && !self.connected_sessions.iter().any(|s| s.tab_id == tid)
+        {
+            self.target_mode = AiTargetMode::FollowActiveTab;
+        }
+        let next_active = match self.target_mode {
+            AiTargetMode::FollowActiveTab => self.workspace_active_session.clone(),
+            AiTargetMode::GlobalOnly => None,
+            AiTargetMode::PinnedTab(tid) => self
+                .connected_sessions
+                .iter()
+                .find(|s| s.tab_id == tid)
+                .cloned(),
+        };
+        let primary_tab = next_active.as_ref().map(|s| s.tab_id);
+        self.extra_scope_tabs.retain(|tid| {
+            Some(*tid) != primary_tab && self.connected_sessions.iter().any(|s| s.tab_id == *tid)
+        });
+        if self.active_session == next_active {
+            return false;
+        }
+        self.active_session = next_active;
+        true
+    }
+}
 
 impl AiPanelState {
     /// 当前对话的作用域。

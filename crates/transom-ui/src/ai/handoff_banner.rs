@@ -7,7 +7,7 @@ use transom_core::AiCommand;
 
 use super::AiPanelEvent;
 use super::composer::{ComposerActions, ComposerParams, ExtraHostOption, render_composer};
-use super::state::{AiActivePopup, AiDrawerTab};
+use super::state::{AiActivePopup, AiDrawerTab, AiTargetMode};
 use super::view::AiAssistantView;
 use crate::app::spawn_blocking_local;
 use crate::palette::Palette;
@@ -145,27 +145,33 @@ impl AiAssistantView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let active_changed = self.state.conversation.active_session != session;
+        let ws_changed = self.state.conversation.workspace_active_session != session;
         let list_changed = self.state.conversation.connected_sessions != connected_sessions;
-        if !active_changed && !list_changed {
+        if !ws_changed && !list_changed {
             return;
         }
+        self.state.conversation.workspace_active_session = session;
         self.state.conversation.connected_sessions = connected_sessions;
-        let primary_tab = session.as_ref().map(|s| s.tab_id);
-        self.state.conversation.extra_scope_tabs.retain(|tid| {
-            Some(*tid) != primary_tab
-                && self
-                    .state
-                    .conversation
-                    .connected_sessions
-                    .iter()
-                    .any(|s| s.tab_id == *tid)
-        });
-        if !active_changed {
+        self.apply_resolved_session(window, cx);
+    }
+
+    /// 切换目标会话选择模式（跟随活动标签页 / 仅全局 / 锁定指定标签页）。
+    pub(super) fn select_target_mode(
+        &mut self,
+        mode: AiTargetMode,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.state.view.active_popup = AiActivePopup::None;
+        self.state.conversation.target_mode = mode;
+        self.apply_resolved_session(window, cx);
+    }
+
+    fn apply_resolved_session(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.state.conversation.sync_resolved_session() {
             cx.notify();
             return;
         }
-        self.state.conversation.active_session = session;
         let scope = self.state.current_scope();
         let host_id = match scope {
             transom_ai_contracts::SessionScope::Host(id) => Some(id),
@@ -259,17 +265,6 @@ impl AiAssistantView {
         } else {
             base_model_label
         };
-        let session_badge = self.state.conversation.active_session.as_ref().map(|s| {
-            format!(
-                "{} · {}",
-                s.host_name,
-                if s.connected {
-                    rust_i18n::t!("ai.connected").to_string()
-                } else {
-                    rust_i18n::t!("ai.disconnected").to_string()
-                }
-            )
-        });
         let active_acp_id = self.state.config.active_acp_agent_id.clone();
         let acp_missing_warning = active_acp.as_ref().and_then(|agent| {
             (!is_acp_command_available(&agent.command))
@@ -278,31 +273,41 @@ impl AiAssistantView {
         let acp_label = active_acp
             .map(|a| a.name)
             .unwrap_or_else(|| rust_i18n::t!("ai.acp_builtin_mode").to_string());
-
         let primary_tab = self
             .state
             .conversation
             .active_session
             .as_ref()
             .map(|s| s.tab_id);
-        let extra_host_options: Vec<ExtraHostOption> = if primary_tab.is_some() {
-            self.state
-                .conversation
-                .connected_sessions
-                .iter()
-                .filter(|s| Some(s.tab_id) != primary_tab)
-                .map(|s| ExtraHostOption {
-                    tab_id: s.tab_id,
-                    host_name: s.host_name.clone(),
-                    selected: self.state.conversation.extra_scope_tabs.contains(&s.tab_id),
-                })
-                .collect()
-        } else {
-            Vec::new()
-        };
+        let extra_host_options: Vec<ExtraHostOption> = self
+            .state
+            .conversation
+            .connected_sessions
+            .iter()
+            .filter(|s| Some(s.tab_id) != primary_tab)
+            .map(|s| ExtraHostOption {
+                tab_id: s.tab_id,
+                host_name: s.host_name.clone(),
+                selected: self.state.conversation.extra_scope_tabs.contains(&s.tab_id),
+            })
+            .collect();
 
         let view = cx.entity();
-        let (v_stop, v_popup, v_extra, v_builtin, v_cfg, v_install, v_rm_att, v_paste, v_drop) = (
+        let (
+            v_stop,
+            v_popup,
+            v_unpin,
+            v_mention,
+            v_extra,
+            v_builtin,
+            v_cfg,
+            v_install,
+            v_rm_att,
+            v_paste,
+            v_drop,
+        ) = (
+            view.clone(),
+            view.clone(),
             view.clone(),
             view.clone(),
             view.clone(),
@@ -366,7 +371,8 @@ impl AiAssistantView {
                 is_running: is_current_running,
                 model_label,
                 execution_mode: self.state.config.execution_mode,
-                session_badge,
+                target_mode: self.state.conversation.target_mode,
+                active_session: self.state.conversation.active_session.as_ref(),
                 acp_label,
                 active_acp_id,
                 acp_missing_warning,
@@ -389,6 +395,14 @@ impl AiAssistantView {
                 }),
                 on_toggle_popup: Box::new(move |popup, _, cx| {
                     v_popup.update(cx, |this, cx| this.toggle_popup(popup, cx));
+                }),
+                on_unpin_target: Box::new(move |w, cx| {
+                    v_unpin.update(cx, |this, cx| {
+                        this.select_target_mode(AiTargetMode::FollowActiveTab, w, cx);
+                    });
+                }),
+                on_trigger_mention: Box::new(move |w, cx| {
+                    v_mention.update(cx, |this, cx| this.trigger_mention_insert(w, cx));
                 }),
                 on_toggle_extra_host: Box::new(move |tid, _, cx| {
                     v_extra.update(cx, |this, cx| this.toggle_extra_scope_tab(tid, cx));

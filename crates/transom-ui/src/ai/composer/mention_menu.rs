@@ -231,6 +231,54 @@ impl AiAssistantView {
         cx.notify();
     }
 
+    /// 显式在输入框末尾触发 `@` 提及补全并聚焦输入框。
+    pub(in crate::app::ai) fn trigger_mention_insert(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.state.view.active_popup = crate::app::ai::state::AiActivePopup::None;
+        let current = self.composer_input.read(cx).value().to_string();
+        let prefix = if current.is_empty() || current.ends_with(char::is_whitespace) {
+            "@"
+        } else {
+            " @"
+        };
+        self.composer_input.update(cx, |i, cx| {
+            i.insert(prefix, window, cx);
+            i.focus_handle(cx).focus(window, cx);
+        });
+        self.last_composer_len = self.composer_input.read(cx).value().len();
+        cx.notify();
+    }
+
+    /// 从目标会话弹层直接向输入框插入一个 `@token` 行内胶囊并聚焦输入框。
+    pub(in crate::app::ai) fn insert_mention_token(
+        &mut self,
+        token: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.state.view.active_popup = crate::app::ai::state::AiActivePopup::None;
+        let label = format!("@{token}");
+        let inline = InlineToken::new(format!("mention:{label}"), label);
+        self.composer_input.update(cx, |i, cx| {
+            let cur = i.value().to_string();
+            if !cur.is_empty() && !cur.ends_with(char::is_whitespace) {
+                i.insert(" ", window, cx);
+            }
+            let len = i.value().len();
+            if i.replace_range_with_token(len..len, inline, window, cx)
+                .is_ok()
+            {
+                i.insert(" ", window, cx);
+            }
+            i.focus_handle(cx).focus(window, cx);
+        });
+        self.last_composer_len = self.composer_input.read(cx).value().len();
+        cx.notify();
+    }
+
     /// 若 `@` 提及弹层当前可见，则应用高亮项并返回 `true`。
     pub(in crate::app::ai) fn try_apply_selected_mention(
         &mut self,

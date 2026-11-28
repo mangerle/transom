@@ -441,6 +441,9 @@ impl AiAssistantView {
         } else if let Some(popover) = self.render_mention_floating_popover(p, cx) {
             container =
                 container.child(div().px(rems(space::SM)).pb(rems(space::XS)).child(popover));
+        } else if let Some(popover) = self.render_target_session_popover(p, cx) {
+            container =
+                container.child(div().px(rems(space::SM)).pb(rems(space::XS)).child(popover));
         } else if let Some(choice_card) = self.maybe_render_choice_card(p, cx) {
             container = container.child(
                 div()

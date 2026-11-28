@@ -319,7 +319,7 @@ pub(super) fn anchor_toolbar_popover(kind: AiActivePopup, pop: AnyElement) -> An
         AiActivePopup::SessionStats => div().left(px(175.0)).w(px(250.0)),
         AiActivePopup::TokenUsage => div().left(px(235.0)).w(px(270.0)),
         AiActivePopup::ContextUsage => div().right(px(52.0)).w(px(250.0)),
-        AiActivePopup::None => div(),
+        AiActivePopup::TargetSession | AiActivePopup::None => div(),
     };
     deferred(
         anchor

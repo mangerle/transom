@@ -10889,6 +10889,51 @@ ai:
   mention_hint:
     en: "Tip: @host in prompt"
     zh-CN: "支持 @主机名"
+  target_follow_badge:
+    en: "Follow: %{host}"
+    zh-CN: "跟随：%{host}"
+  target_follow_global:
+    en: "Follow: Global (no host)"
+    zh-CN: "跟随：全局（未绑定主机）"
+  target_pinned_badge:
+    en: "Pinned: %{host}"
+    zh-CN: "锁定：%{host}"
+  target_global_badge:
+    en: "Global (no host)"
+    zh-CN: "全局（不绑定主机）"
+  target_unpin_tip:
+    en: "Unpin and follow active tab"
+    zh-CN: "取消锁定，恢复跟随当前标签页"
+  target_popup_auto_section:
+    en: "Scope Mode"
+    zh-CN: "作用域模式"
+  target_follow_tab:
+    en: "Follow Active Tab"
+    zh-CN: "跟随当前活动标签页"
+  target_follow_tab_none:
+    en: "No active SSH tab (uses Global)"
+    zh-CN: "当前无活动 SSH 标签页（将使用全局）"
+  target_global_only:
+    en: "Global Only (unbound)"
+    zh-CN: "仅全局（不绑定特定主机）"
+  target_global_only_desc:
+    en: "No default SSH host context; best for general Q&A or orchestration"
+    zh-CN: "不默认注入 SSH 主机上下文，适用于通用问答或跨环境编排"
+  target_connected_section:
+    en: "Connected SSH Sessions"
+    zh-CN: "已连接 SSH 会话"
+  target_coop_btn:
+    en: "Co-op"
+    zh-CN: "协同"
+  target_other_section:
+    en: "Quick @ Mention Targets"
+    zh-CN: "快速插入 @ 提及目标"
+  mention_trigger_tip:
+    en: "Mention host, container, or local (@)"
+    zh-CN: "提及主机、容器或本机 (@)"
+  mention_trigger_label:
+    en: "Mention"
+    zh-CN: "提及目标"
   explain_prompt_empty:
     en: Check recent terminal output and explain any errors.
     zh-CN: 请查看当前终端最近的输出并解释异常原因。

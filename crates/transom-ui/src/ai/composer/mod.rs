@@ -8,6 +8,7 @@ pub(in crate::app::ai) mod image;
 pub(in crate::app::ai) mod mention_menu;
 pub(in crate::app::ai) mod popups;
 pub(in crate::app::ai) mod slash_menu;
+pub(in crate::app::ai) mod target_popup;
 
 use std::path::PathBuf;
 
@@ -27,7 +28,7 @@ use crate::app::ai::composer_triggers::{
     mode_icon, render_icon_popup_trigger, render_metric_chip, render_popup_trigger,
 };
 use crate::app::ai::metrics::{AiSessionMetrics, anchor_toolbar_popover, format_compact_tokens};
-use crate::app::ai::state::AiActivePopup;
+use crate::app::ai::state::{ActiveAiSessionInfo, AiActivePopup, AiTargetMode};
 use crate::palette::Palette;
 use crate::theme::tokens::{space, typography};
 
@@ -44,7 +45,8 @@ pub(in crate::app::ai) struct ComposerParams<'a> {
     pub(in crate::app::ai) is_running: bool,
     pub(in crate::app::ai) model_label: String,
     pub(in crate::app::ai) execution_mode: ExecutionMode,
-    pub(in crate::app::ai) session_badge: Option<String>,
+    pub(in crate::app::ai) target_mode: AiTargetMode,
+    pub(in crate::app::ai) active_session: Option<&'a ActiveAiSessionInfo>,
     pub(in crate::app::ai) acp_label: String,
     pub(in crate::app::ai) active_acp_id: Option<String>,
     pub(in crate::app::ai) acp_missing_warning: Option<(String, String, String)>,
@@ -71,6 +73,8 @@ pub(in crate::app::ai) struct ComposerActions {
     pub(in crate::app::ai) on_send: ActionCb,
     pub(in crate::app::ai) on_stop: ActionCb,
     pub(in crate::app::ai) on_toggle_popup: PopupCb,
+    pub(in crate::app::ai) on_unpin_target: ActionCb,
+    pub(in crate::app::ai) on_trigger_mention: ActionCb,
     pub(in crate::app::ai) on_toggle_extra_host: TabCb,
     pub(in crate::app::ai) on_switch_builtin: ActionCb,
     pub(in crate::app::ai) on_open_config: ActionCb,
@@ -90,6 +94,8 @@ pub(in crate::app::ai) fn render_composer(
         on_send,
         on_stop,
         on_toggle_popup,
+        on_unpin_target,
+        on_trigger_mention,
         on_toggle_extra_host,
         on_switch_builtin,
         on_open_config,
@@ -107,7 +113,7 @@ pub(in crate::app::ai) fn render_composer(
         .rounded(p.radius.lg)
         .border_1()
         .border_color(p.divider(p.border))
-        .bg(p.surface.floating)
+        .bg(p.background)
         .shadow_sm()
         .overflow_hidden()
         .drag_over::<ExternalPaths>(move |style, _, _, _| style.border_color(drag_border))
@@ -139,37 +145,18 @@ pub(in crate::app::ai) fn render_composer(
         ));
     }
 
-    if let Some(badge) = params.session_badge {
-        let dot_color = if params.extra_host_options.is_empty() && !badge.contains('@') {
-            p.text.muted
-        } else {
-            p.success
-        };
-        card = card.child(
-            h_flex()
-                .w_full()
-                .px(rems(space::SM))
-                .pt(rems(space::XS))
-                .items_center()
-                .gap(rems(space::XS))
-                .child(
-                    h_flex()
-                        .px(px(8.0))
-                        .py(px(2.0))
-                        .gap(px(5.0))
-                        .items_center()
-                        .rounded_full()
-                        .bg(p.secondary)
-                        .child(div().w(px(6.0)).h(px(6.0)).rounded_full().bg(dot_color))
-                        .child(
-                            div()
-                                .text_size(rems(typography::CAPTION))
-                                .text_color(p.text.muted)
-                                .child(badge),
-                        ),
-                ),
-        );
-    }
+    card = card.child(render_target_selector_bar(
+        params.target_mode,
+        params.active_session,
+        params.active_popup == AiActivePopup::TargetSession,
+        p,
+        {
+            let toggle = toggle_popup_rc.clone();
+            move |w, cx| toggle(AiActivePopup::TargetSession, w, cx)
+        },
+        on_unpin_target,
+        on_trigger_mention,
+    ));
 
     if !params.pending_attachments.is_empty() {
         let rm_rc = std::rc::Rc::new(on_remove_attachment);
@@ -436,5 +423,163 @@ fn render_inline_chip(token_ctx: &InlineTokenContext, p: &Palette) -> AnyElement
                 .text_color(p.primary)
                 .child(token_ctx.token().label().clone()),
         )
+        .into_any_element()
+}
+
+/// 渲染输入卡片顶部的「目标会话选择器」胶囊与右侧显式 `@` 提及入口按钮。
+fn render_target_selector_bar(
+    target_mode: AiTargetMode,
+    active_session: Option<&ActiveAiSessionInfo>,
+    popup_open: bool,
+    p: &Palette,
+    on_toggle_popup: impl Fn(&mut Window, &mut App) + 'static,
+    on_unpin: ActionCb,
+    on_trigger_mention: ActionCb,
+) -> AnyElement {
+    let is_pinned = matches!(target_mode, AiTargetMode::PinnedTab(_)) && active_session.is_some();
+    let label = match (target_mode, active_session) {
+        (AiTargetMode::PinnedTab(_), Some(s)) => {
+            rust_i18n::t!("ai.target_pinned_badge", host = s.host_name.as_str()).to_string()
+        }
+        (AiTargetMode::GlobalOnly, _) => rust_i18n::t!("ai.target_global_badge").to_string(),
+        (_, Some(s)) => {
+            rust_i18n::t!("ai.target_follow_badge", host = s.host_name.as_str()).to_string()
+        }
+        (_, None) => rust_i18n::t!("ai.target_follow_global").to_string(),
+    };
+
+    let leading: AnyElement = if is_pinned {
+        div()
+            .flex_shrink_0()
+            .text_color(p.primary)
+            .child(AppIconElement::new(AppIcon::Ui(UiIcon::LOCKED)).small())
+            .into_any_element()
+    } else if let Some(s) = active_session {
+        let dot_color = if s.connected { p.success } else { p.text.muted };
+        div()
+            .w(px(6.0))
+            .h(px(6.0))
+            .flex_shrink_0()
+            .rounded_full()
+            .bg(dot_color)
+            .into_any_element()
+    } else {
+        div()
+            .w(px(6.0))
+            .h(px(6.0))
+            .flex_shrink_0()
+            .rounded_full()
+            .bg(p.text.muted)
+            .into_any_element()
+    };
+
+    let mut selector = h_flex()
+        .id("ai-target-session-btn")
+        .min_w_0()
+        .px(px(8.0))
+        .py(px(2.0))
+        .gap(px(5.0))
+        .items_center()
+        .rounded_full()
+        .cursor_pointer()
+        .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+        .on_click(move |_, w, cx| on_toggle_popup(w, cx));
+
+    selector = if popup_open {
+        selector.bg(p.surface.selected)
+    } else if is_pinned {
+        selector
+            .bg(p.tone.primary_subtle)
+            .hover(|s| s.bg(p.primary.opacity(0.18)))
+    } else {
+        selector
+            .bg(p.secondary)
+            .hover(|s| s.bg(p.surface.hover))
+    };
+
+    selector = selector
+        .child(leading)
+        .child(
+            div()
+                .min_w_0()
+                .truncate()
+                .text_size(rems(typography::CAPTION))
+                .font_weight(if is_pinned || popup_open {
+                    FontWeight::MEDIUM
+                } else {
+                    FontWeight::NORMAL
+                })
+                .text_color(if is_pinned { p.primary } else { p.foreground })
+                .child(label),
+        )
+        .child(
+            div()
+                .flex_shrink_0()
+                .text_color(p.text.muted)
+                .child(AppIconElement::new(AppIcon::Ui(UiIcon::CHEVRON_DOWN)).small()),
+        );
+
+    let mut left_group = h_flex().flex_1().min_w_0().gap(px(4.0)).items_center().child(selector);
+    if is_pinned {
+        let unpin_tip = rust_i18n::t!("ai.target_unpin_tip").to_string();
+        left_group = left_group.child(
+            h_flex()
+                .id("ai-target-unpin-btn")
+                .w(px(18.0))
+                .h(px(18.0))
+                .flex_shrink_0()
+                .items_center()
+                .justify_center()
+                .rounded_full()
+                .cursor_pointer()
+                .text_color(p.text.muted)
+                .hover(|s| s.bg(p.surface.hover).text_color(p.foreground))
+                .tooltip(move |w, cx| {
+                    gpui_kit::component::tooltip::Tooltip::new(unpin_tip.clone()).build(w, cx)
+                })
+                .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                .on_click(move |_, w, cx| {
+                    cx.stop_propagation();
+                    on_unpin(w, cx);
+                })
+                .child(AppIconElement::new(AppIcon::Ui(UiIcon::CLOSE)).small()),
+        );
+    }
+
+    let mention_tip = rust_i18n::t!("ai.mention_trigger_tip").to_string();
+    let mention_btn = h_flex()
+        .id("ai-mention-trigger-btn")
+        .flex_shrink_0()
+        .px(px(6.0))
+        .py(px(2.0))
+        .gap(px(3.0))
+        .items_center()
+        .rounded(p.radius.sm)
+        .cursor_pointer()
+        .text_color(p.text.muted)
+        .hover(|s| s.bg(p.surface.hover).text_color(p.foreground))
+        .tooltip(move |w, cx| {
+            gpui_kit::component::tooltip::Tooltip::new(mention_tip.clone()).build(w, cx)
+        })
+        .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+        .on_click(move |_, w, cx| on_trigger_mention(w, cx))
+        .child(AppIconElement::new(AppIcon::Ui(UiIcon::ADD_LINK)).small())
+        .child(
+            div()
+                .text_size(rems(typography::CAPTION))
+                .child(rust_i18n::t!("ai.mention_trigger_label").to_string()),
+        );
+
+    h_flex()
+        .w_full()
+        .px(rems(space::SM))
+        .py(rems(space::XS))
+        .justify_between()
+        .items_center()
+        .gap(rems(space::XS))
+        .border_b_1()
+        .border_color(p.divider(p.border))
+        .child(left_group)
+        .child(mention_btn)
         .into_any_element()
 }
