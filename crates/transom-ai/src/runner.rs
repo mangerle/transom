@@ -309,7 +309,10 @@ async fn run_attempt(
             tool_ok: Some(run_result.is_ok()),
             summary,
         };
-        let _ = exec.execute(HookEvent::Stop, &hook_ctx).await;
+        let outcome = exec.execute(HookEvent::Stop, &hook_ctx).await;
+        if let Some(reason) = outcome.blocked_reason {
+            log::warn!("AI 停止 Hook 返回失败信息: {reason}");
+        }
     }
 
     run_result

@@ -188,6 +188,12 @@ pub(super) async fn handle_tool_card(
             summary: card_summary_text,
         };
         let outcome = exec.execute(HookEvent::PostToolUse, &hook_ctx).await;
+        if let Some(reason) = outcome.blocked_reason {
+            log::warn!(
+                "AI 工具完成 Hook 返回失败信息（工具: {}）: {reason}",
+                hook_ctx.tool_name.as_deref().unwrap_or("unknown")
+            );
+        }
         for note in outcome.notes {
             if let Err(err) = ctx
                 .event_tx
