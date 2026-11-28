@@ -10,6 +10,7 @@ use transom_core::{
 };
 
 use super::ControllerAppActionBridge;
+use super::file_io::read_text_prefix;
 
 pub(super) async fn handle(
     bridge: &ControllerAppActionBridge,
@@ -405,13 +406,14 @@ async fn deploy_public_key(
             tool: "session_catalog",
             reason: "deploy_public_key 必须提供本机公钥路径 public_key_path".to_owned(),
         })?;
-    let key_text =
-        tokio::fs::read_to_string(pub_path)
-            .await
-            .map_err(|e| ToolError::ExecutionFailed {
-                tool: "session_catalog",
-                reason: format!("读取本机公钥失败: {e}"),
-            })?;
+    let (key_text, truncated) =
+        read_text_prefix(std::path::Path::new(pub_path), 64 * 1024, "session_catalog").await?;
+    if truncated {
+        return Err(ToolError::InvalidArguments {
+            tool: "session_catalog",
+            reason: "本机公钥文件超过 64 KiB 上限".to_owned(),
+        });
+    }
     let trimmed = key_text.trim();
     if !trimmed.starts_with("ssh-") && !trimmed.starts_with("ecdsa-") {
         return Err(ToolError::InvalidArguments {

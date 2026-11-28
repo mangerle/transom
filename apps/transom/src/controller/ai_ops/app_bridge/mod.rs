@@ -3,6 +3,7 @@
 mod api_client;
 mod container_deploy;
 mod dev;
+mod file_io;
 pub(in crate::controller::ai_ops) mod local_ops;
 mod memory;
 mod sessions;

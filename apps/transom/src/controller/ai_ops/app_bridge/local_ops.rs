@@ -10,6 +10,7 @@ use transom_ai::ToolError;
 use transom_core::AiManagedTaskStatus;
 
 use super::ControllerAppActionBridge;
+use super::file_io::read_text_prefix;
 use crate::controller::ai_ops::process::{MAX_PROCESS_CAPTURE_BYTES, append_bounded_text};
 
 pub(super) const MAX_LOCAL_READ_BYTES: usize = 256 * 1024;
@@ -207,13 +208,17 @@ pub(super) async fn handle_local_fs(
             Ok(lines.join("\n"))
         }
         "read" => {
-            let bytes = tokio::fs::read(p).await.map_err(map_fs_err)?;
-            let slice = &bytes[..bytes.len().min(MAX_LOCAL_READ_BYTES)];
-            Ok(String::from_utf8_lossy(slice).into_owned())
+            let (mut content, truncated) =
+                read_text_prefix(p, MAX_LOCAL_READ_BYTES, "remote_fs").await?;
+            if truncated {
+                content.push_str("\n[文件超过读取上限，仅显示开头部分]");
+            }
+            Ok(content)
         }
         "search" => {
             let pat = args["pattern"].as_str().unwrap_or("");
-            let content = tokio::fs::read_to_string(p).await.map_err(map_fs_err)?;
+            let (content, truncated) =
+                read_text_prefix(p, MAX_LOCAL_READ_BYTES, "remote_fs").await?;
             let hits: Vec<String> = content
                 .lines()
                 .enumerate()
@@ -221,7 +226,14 @@ pub(super) async fn handle_local_fs(
                 .take(120)
                 .map(|(i, line)| format!("{}:{line}", i + 1))
                 .collect();
-            Ok(hits.join("\n"))
+            let mut output = hits.join("\n");
+            if truncated {
+                if !output.is_empty() {
+                    output.push('\n');
+                }
+                output.push_str("[文件超过读取上限，仅搜索开头部分]");
+            }
+            Ok(output)
         }
         "mkdir" => {
             tokio::fs::create_dir_all(p).await.map_err(map_fs_err)?;
