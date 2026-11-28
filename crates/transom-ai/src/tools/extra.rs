@@ -237,7 +237,7 @@ impl Tool for RemoteExecBulkTool {
                 host_label: bulk_host_label,
                 risk,
                 summary: args.command,
-                output: combined,
+                output: clipped.clone(),
                 ok: all_ok,
                 approved: true,
                 duration_ms: started.elapsed().as_millis() as u64,

@@ -129,18 +129,21 @@ pub(crate) async fn handle_acp_update(
                 let out_text = done.output.unwrap_or_else(|| format!("状态: {status}"));
                 if let Err(err) = input
                     .events
-                    .send(AgentEvent::ToolCard(ToolExecutionCard {
-                        tool_name: tool_label,
-                        host_label: input.agent.name.clone(),
-                        risk: ToolRisk::Write,
-                        summary,
-                        output: out_text,
-                        ok: status == "completed",
-                        approved: true,
-                        duration_ms: done.started_at.elapsed().as_millis() as u64,
-                        diff_preview: None,
-                        ..Default::default()
-                    }))
+                    .send(AgentEvent::ToolCard(
+                        ToolExecutionCard {
+                            tool_name: tool_label,
+                            host_label: input.agent.name.clone(),
+                            risk: ToolRisk::Write,
+                            summary,
+                            output: out_text,
+                            ok: status == "completed",
+                            approved: true,
+                            duration_ms: done.started_at.elapsed().as_millis() as u64,
+                            diff_preview: None,
+                            ..Default::default()
+                        }
+                        .sanitized(),
+                    ))
                     .await
                 {
                     log::warn!("发送 ACP 工具卡片失败: {err}");

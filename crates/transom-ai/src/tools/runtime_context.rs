@@ -140,7 +140,11 @@ impl ToolRuntimeContext {
         if card.host_label.is_empty() {
             card.host_label = self.host_label();
         }
-        if let Err(err) = self.events.send(AgentEvent::ToolCard(card)).await {
+        if let Err(err) = self
+            .events
+            .send(AgentEvent::ToolCard(card.sanitized()))
+            .await
+        {
             log::warn!("发送 AI 工具执行卡片失败: {err}");
         }
     }
@@ -205,7 +209,7 @@ impl ToolRuntimeContext {
             ..Default::default()
         };
         // 进度预览是可合并的尽力事件；通道饱和时允许丢弃，但最终卡片始终通过异步背压发送。
-        match self.events.try_send(AgentEvent::ToolCard(card)) {
+        match self.events.try_send(AgentEvent::ToolCard(card.sanitized())) {
             Ok(()) | Err(TrySendError::Full(_)) => {}
             Err(TrySendError::Closed(_)) => {
                 log::warn!("AI 工具进度事件通道已关闭");

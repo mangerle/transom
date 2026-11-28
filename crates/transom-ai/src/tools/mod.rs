@@ -41,7 +41,7 @@ use tokio::sync::mpsc::{self, error::TrySendError};
 use tokio_util::sync::CancellationToken;
 
 use crate::ToolCallId;
-use crate::compaction::{DEFAULT_TOOL_OUTPUT_LIMIT, SessionPromptContext};
+use crate::compaction::{DEFAULT_TOOL_OUTPUT_LIMIT, SessionPromptContext, truncate_tool_output};
 use crate::error::ToolError;
 use crate::memory::MemoryProposal;
 use crate::output_store::ToolOutputStore;
@@ -101,6 +101,23 @@ pub struct ToolExecutionCard {
     /// 远端文件修改前在本机保存的快照路径（用于一键还原）。
     #[serde(default)]
     pub revert_backup_path: Option<String>,
+}
+
+impl ToolExecutionCard {
+    /// 生成可进入 UI、会话记录、审计与 Hook 的安全快照。
+    ///
+    /// 所有工具输出都在这里统一完成敏感信息脱敏和长度限制，避免某个工具忘记调用
+    /// `format_tool_output` 就把完整命令输出写入 JSONL。调用方仍可保留原始输出用于
+    /// 本地 `output_id` 存储，但不能再把原始内容直接交给跨模块记录链路。
+    pub fn sanitized(mut self) -> Self {
+        self.summary = truncate_tool_output(&self.summary, 2_000);
+        self.output = truncate_tool_output(&self.output, DEFAULT_TOOL_OUTPUT_LIMIT);
+        self.diff_preview = self
+            .diff_preview
+            .as_deref()
+            .map(|preview| truncate_tool_output(preview, 6_000));
+        self
+    }
 }
 
 impl Default for ToolExecutionCard {
@@ -427,7 +444,30 @@ mod tests {
 
     use tokio_util::sync::CancellationToken;
 
-    use super::{ToolError, ToolIoContext, clip_tail_lines, with_io_guard};
+    use super::{ToolError, ToolExecutionCard, ToolIoContext, clip_tail_lines, with_io_guard};
+
+    #[test]
+    fn sanitizes_card_summary_output_and_diff() {
+        let card = ToolExecutionCard {
+            summary: "DB_PASSWORD=super-secret".to_owned(),
+            output: format!(
+                "Authorization: Bearer abcdefghijklmnopqrstuvwxyz\n{}",
+                "x".repeat(20_000)
+            ),
+            diff_preview: Some("token=abcdefghijklmnopqrstuvwxyz".to_owned()),
+            ..Default::default()
+        }
+        .sanitized();
+
+        assert!(!card.summary.contains("super-secret"));
+        assert!(!card.output.contains("abcdefghijklmnopqrstuvwxyz"));
+        assert!(card.output.len() <= 9_000);
+        assert!(
+            card.diff_preview
+                .as_deref()
+                .is_some_and(|preview| !preview.contains("abcdefghijklmnopqrstuvwxyz"))
+        );
+    }
 
     #[test]
     fn clips_tail_lines_and_long_line() {
