@@ -19,11 +19,11 @@ const DISCOVERY_TIMEOUT: Duration = Duration::from_secs(15);
 /// 模型列表响应允许读取的最大字节数，防止异常端点耗尽进程内存。
 const MAX_DISCOVERY_RESPONSE_BYTES: u64 = 2 * 1024 * 1024;
 
-static HTTP_CLIENT: LazyLock<Client> = LazyLock::new(|| {
+static HTTP_CLIENT: LazyLock<Result<Client, String>> = LazyLock::new(|| {
     Client::builder()
         .timeout(DISCOVERY_TIMEOUT)
         .build()
-        .unwrap_or_else(|_| Client::new())
+        .map_err(|err| format!("构建模型发现 HTTP 客户端失败: {err}"))
 });
 
 /// 探测到的单个远端模型摘要。
@@ -114,7 +114,14 @@ pub async fn discover_models(
     api_key: &str,
 ) -> Result<Vec<DiscoveredModel>, AiError> {
     let url = build_models_url(protocol, base_url)?;
-    let mut req = HTTP_CLIENT.get(&url);
+    let client = HTTP_CLIENT
+        .as_ref()
+        .map_err(|reason| AiError::ModelCallFailed {
+            protocol: protocol.as_str().to_owned(),
+            model: "models".to_owned(),
+            reason: reason.clone(),
+        })?;
+    let mut req = client.get(&url);
     match protocol {
         ProviderProtocol::Anthropic => {
             if !api_key.trim().is_empty() {
