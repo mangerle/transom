@@ -86,24 +86,23 @@ impl ToolOutputStore {
         let line_count = text.lines().count().max(1);
         let byte_len = text.len();
         let id = format!("out-{}", &Uuid::new_v4().simple().to_string()[..8]);
+        let preview = clip_head_tail(&text, max_preview_chars);
 
         let inserted = self.insert(
             id.clone(),
             StoredOutput {
                 tool_name: tool_name.to_owned(),
-                text: text.clone(),
+                text,
                 line_count,
                 byte_len,
             },
         );
         if !inserted {
-            let preview = clip_head_tail(&text, max_preview_chars);
             return format!(
                 "{preview}\n\n[完整输出超过缓存上限: {line_count} 行 / {byte_len} 字节，未生成 output_id]"
             );
         }
 
-        let preview = clip_head_tail(&text, max_preview_chars);
         format!(
             "{preview}\n\n[完整输出已缓存: output_id={id}，共 {line_count} 行 / {byte_len} 字节；\
             如需查看中间片段或检索关键字，请调用 read_tool_output(output_id=\"{id}\")]"
