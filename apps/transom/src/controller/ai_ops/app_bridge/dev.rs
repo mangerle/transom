@@ -2,8 +2,10 @@
 
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::Duration;
 
 use serde_json::{Value, json};
+use tokio_util::sync::CancellationToken;
 use transom_ai::ToolError;
 use transom_container::{Engine, discover_all};
 use transom_core::ContainerLifecycleAction;
@@ -11,6 +13,7 @@ use transom_git::{LogQuery, Repo, Side};
 
 use super::ControllerAppActionBridge;
 use super::container_deploy;
+use crate::controller::ai_ops::process::{MAX_PROCESS_CAPTURE_BYTES, capture_command_output};
 
 pub(super) async fn handle_container(
     bridge: &ControllerAppActionBridge,
@@ -53,7 +56,7 @@ pub(super) async fn handle_container(
     }
 
     let engine = pick_engine(args["engine_id"].as_str()).await?;
-    dispatch_engine_action(&engine, action, args).await
+    dispatch_engine_action(&engine, action, args, bridge.deps.runtime.cancel.clone()).await
 }
 
 async fn pick_engine(wanted: Option<&str>) -> Result<Engine, ToolError> {
@@ -84,6 +87,7 @@ async fn dispatch_engine_action(
     engine: &Engine,
     action: &str,
     args: &Value,
+    cancel: CancellationToken,
 ) -> Result<String, ToolError> {
     match action {
         "list_containers" => {
@@ -108,19 +112,21 @@ async fn dispatch_engine_action(
                 transom_core::ContainerEngineKind::Podman => "podman",
                 _ => "docker",
             };
-            let raw = tokio::process::Command::new(cli_bin)
-                .args(["logs", "--tail", &tail.to_string(), cid])
-                .output()
-                .await
-                .map_err(|e| ToolError::ExecutionFailed {
-                    tool: "container_workspace",
-                    reason: e.to_string(),
-                })?;
-            Ok(format!(
-                "{}{}",
-                String::from_utf8_lossy(&raw.stdout),
-                String::from_utf8_lossy(&raw.stderr)
-            ))
+            let mut command = tokio::process::Command::new(cli_bin);
+            command.args(["logs", "--tail", &tail.to_string(), cid]);
+            let output = capture_command_output(
+                &mut command,
+                "container_workspace",
+                Duration::from_secs(30),
+                cancel,
+                MAX_PROCESS_CAPTURE_BYTES,
+            )
+            .await?;
+            let mut text = format!("{}{}", output.stdout_lossy(), output.stderr_lossy());
+            if output.stdout_truncated || output.stderr_truncated {
+                text.push_str("\n[容器日志超过上限，已截断]");
+            }
+            Ok(text)
         }
         "start_container" | "stop_container" | "restart_container" | "remove_container" => {
             let cid = req_arg(args, "container_id", "container_workspace")?;

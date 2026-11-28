@@ -13,6 +13,7 @@ mod hooks_exec;
 mod inline_assist;
 mod mcp_bridge;
 mod mcp_dispatch;
+pub(in crate::controller) mod process;
 mod remote_fs_probe;
 mod run;
 mod run_recorder;

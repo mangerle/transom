@@ -10,6 +10,7 @@ use transom_ai::ToolError;
 use transom_core::AiManagedTaskStatus;
 
 use super::ControllerAppActionBridge;
+use crate::controller::ai_ops::process::{MAX_PROCESS_CAPTURE_BYTES, append_bounded_text};
 
 pub(super) const MAX_LOCAL_READ_BYTES: usize = 256 * 1024;
 
@@ -56,6 +57,8 @@ pub(super) async fn exec_local_shell(
     let mut stderr_pipe = child.stderr.take();
     let mut stdout_buf = String::new();
     let mut stderr_buf = String::new();
+    let mut stdout_truncated = false;
+    let mut stderr_truncated = false;
     let mut out_chunk = [0u8; 4096];
     let mut err_chunk = [0u8; 4096];
 
@@ -130,7 +133,11 @@ pub(super) async fn exec_local_shell(
                     Ok(0) | Err(_) => stdout_pipe = None,
                     Ok(n) => {
                         let s = String::from_utf8_lossy(&out_chunk[..n]);
-                        stdout_buf.push_str(&s);
+                        stdout_truncated |= append_bounded_text(
+                            &mut stdout_buf,
+                            &s,
+                            MAX_PROCESS_CAPTURE_BYTES,
+                        );
                         task.emit_chunk(&s);
                     }
                 }
@@ -145,7 +152,11 @@ pub(super) async fn exec_local_shell(
                     Ok(0) | Err(_) => stderr_pipe = None,
                     Ok(n) => {
                         let s = String::from_utf8_lossy(&err_chunk[..n]);
-                        stderr_buf.push_str(&s);
+                        stderr_truncated |= append_bounded_text(
+                            &mut stderr_buf,
+                            &s,
+                            MAX_PROCESS_CAPTURE_BYTES,
+                        );
                         task.emit_chunk(&s);
                     }
                 }
@@ -164,7 +175,11 @@ pub(super) async fn exec_local_shell(
         AiManagedTaskStatus::Failed
     };
     task.finish(task_status, Some(code), format!("退出码: {code}"));
-    Ok(format_exit_output(code, &stdout_buf, &stderr_buf))
+    let mut output = format_exit_output(code, &stdout_buf, &stderr_buf);
+    if stdout_truncated || stderr_truncated {
+        output.push_str("\n[本机命令输出超过上限，已截断]");
+    }
+    Ok(output)
 }
 
 pub(super) async fn handle_local_fs(

@@ -1,6 +1,5 @@
 //! 控制平面 ACP 外部 Agent 独立调度与模型探测辅助。
 
-use std::process::Stdio;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -16,6 +15,7 @@ use transom_core::{AiAppEvent, AiPromptRequest, AppEvent};
 
 use super::context_builder::ToolContextBuildParams;
 use super::context_builder::emit_run_error;
+use super::process::{MAX_PROCESS_CAPTURE_BYTES, capture_command_output};
 use super::run::{PumpContext, execute_and_pump};
 use super::run_recorder::RunRecorder;
 use super::{build_tool_context, prepare_conversation};
@@ -247,49 +247,41 @@ pub(super) fn spawn_install_acp_agent(
             c.args(["-lc", &install_command]);
             c
         };
-        cmd.stdin(Stdio::null())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .kill_on_drop(true);
-
-        let result = match cmd.spawn() {
-            Ok(child) => {
-                match tokio::time::timeout(Duration::from_secs(300), child.wait_with_output()).await
-                {
-                    Ok(Ok(output)) => {
-                        let ok = output.status.success();
-                        let combined = format!(
-                            "{}{}",
-                            String::from_utf8_lossy(&output.stdout),
-                            String::from_utf8_lossy(&output.stderr)
-                        );
-                        let tail: String = combined
-                            .lines()
-                            .rev()
-                            .take(4)
-                            .collect::<Vec<_>>()
-                            .into_iter()
-                            .rev()
-                            .collect::<Vec<_>>()
-                            .join(" | ");
-                        let summary: String = tail.chars().take(400).collect();
-                        let detail = if ok {
-                            format!("{name} 安装完成")
-                        } else if summary.is_empty() {
-                            format!("{name} 安装失败（退出码 {:?}）", output.status.code())
-                        } else {
-                            format!("{name} 安装失败：{summary}")
-                        };
-                        (ok, detail)
-                    }
-                    Ok(Err(err)) => (false, format!("{name} 安装进程异常: {err}")),
-                    Err(_) => (false, format!("{name} 安装超时（超过 300 秒）")),
+        let result = match capture_command_output(
+            &mut cmd,
+            "acp_install",
+            Duration::from_secs(300),
+            CancellationToken::new(),
+            MAX_PROCESS_CAPTURE_BYTES,
+        )
+        .await
+        {
+            Ok(output) => {
+                let ok = output.status.success();
+                let mut combined = format!("{}{}", output.stdout_lossy(), output.stderr_lossy());
+                if output.stdout_truncated || output.stderr_truncated {
+                    combined.push_str("\n[安装输出超过上限，已截断]");
                 }
+                let tail: String = combined
+                    .lines()
+                    .rev()
+                    .take(4)
+                    .collect::<Vec<_>>()
+                    .into_iter()
+                    .rev()
+                    .collect::<Vec<_>>()
+                    .join(" | ");
+                let summary: String = tail.chars().take(400).collect();
+                let detail = if ok {
+                    format!("{name} 安装完成")
+                } else if summary.is_empty() {
+                    format!("{name} 安装失败（退出码 {:?}）", output.status.code())
+                } else {
+                    format!("{name} 安装失败：{summary}")
+                };
+                (ok, detail)
             }
-            Err(err) => (
-                false,
-                format!("无法启动安装命令（{install_command}）: {err}"),
-            ),
+            Err(error) => (false, format!("{name} 安装进程失败: {error}")),
         };
 
         let _ = event_tx

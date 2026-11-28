@@ -2,10 +2,10 @@
 //! 支持本机（`target` 省略或 `"local"`）与远端服务器（自动连接目标 SSH 会话后执行）。
 
 use std::path::PathBuf;
-use std::process::Stdio;
 use std::time::Duration;
 
 use serde_json::Value;
+use tokio_util::sync::CancellationToken;
 use transom_ai::{RemoteExecutor, RemoteFsExecutor, ToolError};
 use transom_container::ContainerError;
 use transom_core::{ContainerCreateSpec, ContainerEngineKind};
@@ -17,6 +17,7 @@ use super::target_resolver::{
     ensure_remote_dir, ensure_sftp, guard_readonly, resolve_or_connect_target, shell_quote,
 };
 use crate::controller::ai_ops::bridge::{SshRemoteExecutor, SshRemoteFsBridge};
+use crate::controller::ai_ops::process::{MAX_PROCESS_CAPTURE_BYTES, capture_command_output};
 use build::{
     build_create_spec, build_run_args, map_err, pick_local_engine, remote_target, req_str,
     sanitize_project_name,
@@ -56,7 +57,12 @@ pub(super) async fn create_and_start_container(
             cid, spec.image
         )),
         Err(ContainerError::Unsupported { .. }) => {
-            create_local_via_cli(engine.info.engine.kind, &spec).await
+            create_local_via_cli(
+                engine.info.engine.kind,
+                &spec,
+                bridge.deps.runtime.cancel.clone(),
+            )
+            .await
         }
         Err(err) => Err(map_err(err)),
     }
@@ -171,7 +177,7 @@ pub(super) async fn deploy_compose_yaml(
             tool: "container_workspace",
             reason: format!("写入 docker-compose.yml 失败: {e}"),
         })?;
-    run_local_compose_action(&dir, "compose_up", pull).await
+    run_local_compose_action(&dir, "compose_up", pull, bridge.deps.runtime.cancel.clone()).await
 }
 
 /// 在本机或远端执行 `compose_up` / `compose_down`。
@@ -209,13 +215,20 @@ pub(super) async fn handle_compose_lifecycle(
             })
         };
     }
-    run_local_compose_action(&PathBuf::from(dir), action, false).await
+    run_local_compose_action(
+        &PathBuf::from(dir),
+        action,
+        false,
+        bridge.deps.runtime.cancel.clone(),
+    )
+    .await
 }
 
 async fn run_local_compose_action(
     dir: &PathBuf,
     action: &str,
     pull: bool,
+    cancel: CancellationToken,
 ) -> Result<String, ToolError> {
     let mut cmd = tokio::process::Command::new("docker");
     cmd.arg("compose");
@@ -227,27 +240,24 @@ async fn run_local_compose_action(
     } else {
         cmd.arg("down").arg("--remove-orphans");
     }
-    cmd.current_dir(dir)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .kill_on_drop(true);
-    let child = cmd.spawn().map_err(|e| ToolError::ExecutionFailed {
-        tool: "container_workspace",
-        reason: e.to_string(),
-    })?;
-    let out = tokio::time::timeout(Duration::from_secs(180), child.wait_with_output())
-        .await
-        .map_err(|_| ToolError::ExecutionTimeout { timeout_secs: 180 })?
-        .map_err(|e| ToolError::ExecutionFailed {
-            tool: "container_workspace",
-            reason: e.to_string(),
-        })?;
-    let text = format!(
+    cmd.current_dir(dir);
+    let out = capture_command_output(
+        &mut cmd,
+        "container_workspace",
+        Duration::from_secs(180),
+        cancel,
+        MAX_PROCESS_CAPTURE_BYTES,
+    )
+    .await?;
+    let mut text = format!(
         "目录: {}\n{}\n{}",
         dir.display(),
-        String::from_utf8_lossy(&out.stdout),
-        String::from_utf8_lossy(&out.stderr)
+        out.stdout_lossy(),
+        out.stderr_lossy()
     );
+    if out.stdout_truncated || out.stderr_truncated {
+        text.push_str("\n[Compose 输出超过上限，已截断]");
+    }
     if out.status.success() {
         Ok(text)
     } else {
@@ -261,6 +271,7 @@ async fn run_local_compose_action(
 async fn create_local_via_cli(
     kind: ContainerEngineKind,
     spec: &ContainerCreateSpec,
+    cancel: CancellationToken,
 ) -> Result<String, ToolError> {
     let bin = match kind {
         ContainerEngineKind::Podman => "podman",
@@ -272,22 +283,16 @@ async fn create_local_via_cli(
     for a in args.drain(..) {
         cmd.arg(a);
     }
-    cmd.stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .kill_on_drop(true);
-    let child = cmd.spawn().map_err(|e| ToolError::ExecutionFailed {
-        tool: "container_workspace",
-        reason: e.to_string(),
-    })?;
-    let out = tokio::time::timeout(Duration::from_secs(120), child.wait_with_output())
-        .await
-        .map_err(|_| ToolError::ExecutionTimeout { timeout_secs: 120 })?
-        .map_err(|e| ToolError::ExecutionFailed {
-            tool: "container_workspace",
-            reason: e.to_string(),
-        })?;
+    let out = capture_command_output(
+        &mut cmd,
+        "container_workspace",
+        Duration::from_secs(120),
+        cancel,
+        MAX_PROCESS_CAPTURE_BYTES,
+    )
+    .await?;
     if out.status.success() {
-        let cid = String::from_utf8_lossy(&out.stdout).trim().to_owned();
+        let cid = out.stdout_lossy().trim().to_owned();
         Ok(format!(
             "已在本机创建并启动容器: {cid}（镜像: {}）",
             spec.image
@@ -295,7 +300,7 @@ async fn create_local_via_cli(
     } else {
         Err(ToolError::ExecutionFailed {
             tool: "container_workspace",
-            reason: String::from_utf8_lossy(&out.stderr).to_string(),
+            reason: out.stderr_lossy().to_string(),
         })
     }
 }

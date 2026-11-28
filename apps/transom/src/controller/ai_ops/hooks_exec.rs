@@ -16,7 +16,13 @@ use transom_ai::{
     RemoteExecutor, ToolError, rule_matches, send_webhook_json,
 };
 
-async fn exec_hook_local(cmd: &str, timeout: Duration) -> Result<ExecCommandResult, ToolError> {
+use super::process::{MAX_PROCESS_CAPTURE_BYTES, capture_command_output};
+
+async fn exec_hook_local(
+    cmd: &str,
+    timeout: Duration,
+    cancel: CancellationToken,
+) -> Result<ExecCommandResult, ToolError> {
     let mut command = if cfg!(windows) {
         let mut c = tokio::process::Command::new("cmd");
         c.args(["/C", cmd]);
@@ -26,19 +32,25 @@ async fn exec_hook_local(cmd: &str, timeout: Duration) -> Result<ExecCommandResu
         c.args(["-c", cmd]);
         c
     };
-    let out = tokio::time::timeout(timeout, command.output())
-        .await
-        .map_err(|_| ToolError::ExecutionTimeout {
-            timeout_secs: timeout.as_secs(),
-        })?
-        .map_err(|e| ToolError::ExecutionFailed {
-            tool: "hook",
-            reason: e.to_string(),
-        })?;
+    let out = capture_command_output(
+        &mut command,
+        "hook",
+        timeout,
+        cancel,
+        MAX_PROCESS_CAPTURE_BYTES,
+    )
+    .await?;
+    let mut stderr = out.stderr_lossy().into_owned();
+    if out.stdout_truncated || out.stderr_truncated {
+        if !stderr.is_empty() {
+            stderr.push('\n');
+        }
+        stderr.push_str("[输出超过上限，已截断]");
+    }
     Ok(ExecCommandResult {
         exit_code: out.status.code().unwrap_or(-1),
-        stdout: String::from_utf8_lossy(&out.stdout).into_owned(),
-        stderr: String::from_utf8_lossy(&out.stderr).into_owned(),
+        stdout: out.stdout_lossy().into_owned(),
+        stderr,
     })
 }
 
@@ -70,7 +82,7 @@ impl HookExecutor for ControllerHookExecutor {
                         let run_local =
                             target.as_deref() == Some("local") || self.remote_exec.is_none();
                         let res = if run_local {
-                            exec_hook_local(cmd, Duration::from_secs(15)).await
+                            exec_hook_local(cmd, Duration::from_secs(15), self.cancel.clone()).await
                         } else if let Some(remote) = &self.remote_exec {
                             remote
                                 .exec(cmd, Duration::from_secs(15), self.cancel.clone())
