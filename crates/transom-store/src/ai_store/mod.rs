@@ -29,6 +29,7 @@ pub struct AiStore {
     pub(super) index_cache: Arc<Mutex<Option<Vec<transom_ai_contracts::ConversationSummary>>>>,
     pub(super) usage_lock: Arc<Mutex<()>>,
     pub(super) checkpoint_lock: Arc<Mutex<()>>,
+    pub(super) session_append_lock: Arc<Mutex<()>>,
 }
 
 impl Default for AiStore {
@@ -51,6 +52,7 @@ impl AiStore {
             index_cache: Arc::new(Mutex::new(None)),
             usage_lock: Arc::new(Mutex::new(())),
             checkpoint_lock: Arc::new(Mutex::new(())),
+            session_append_lock: Arc::new(Mutex::new(())),
         }
     }
 

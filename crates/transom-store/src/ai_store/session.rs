@@ -12,6 +12,13 @@ use super::{AiStore, sanitize_id_filename};
 use crate::file_io::write_atomic;
 use transom_platform::private_fs;
 
+/// 单个会话索引文件的最大体积。
+const MAX_INDEX_BYTES: u64 = 8 * 1024 * 1024;
+/// 单个会话 JSONL 文件的最大体积。
+const MAX_SESSION_JSONL_BYTES: u64 = 32 * 1024 * 1024;
+/// 单条会话记录的最大体积，避免一次超长工具输出撑爆整份会话。
+const MAX_SESSION_ENTRY_BYTES: usize = 4 * 1024 * 1024;
+
 impl AiStore {
     /// 读取对话索引列表，按 `updated_at` 降序排列（优先命中进程内索引缓存）。
     pub fn load_index(&self) -> Result<Vec<ConversationSummary>, AiError> {
@@ -27,6 +34,19 @@ impl AiStore {
         let list = if !path.exists() {
             Vec::new()
         } else {
+            let metadata = fs::metadata(&path).map_err(|err| AiError::StorageFailed {
+                target: path.display().to_string(),
+                reason: err.to_string(),
+            })?;
+            if metadata.len() > MAX_INDEX_BYTES {
+                return Err(AiError::StorageFailed {
+                    target: path.display().to_string(),
+                    reason: format!(
+                        "AI 会话索引超过体积上限（实际 {} 字节，上限 {MAX_INDEX_BYTES} 字节）",
+                        metadata.len()
+                    ),
+                });
+            }
             let text = fs::read_to_string(&path).map_err(|err| AiError::StorageFailed {
                 target: path.display().to_string(),
                 reason: err.to_string(),
@@ -172,6 +192,19 @@ impl AiStore {
             .into_iter()
             .find(|summary| summary.id == conversation_id)
             .and_then(|summary| summary.active_leaf_id);
+        let metadata = fs::metadata(&path).map_err(|err| AiError::StorageFailed {
+            target: path.display().to_string(),
+            reason: err.to_string(),
+        })?;
+        if metadata.len() > MAX_SESSION_JSONL_BYTES {
+            return Err(AiError::StorageFailed {
+                target: path.display().to_string(),
+                reason: format!(
+                    "会话文件超过体积上限（实际 {} 字节，上限 {MAX_SESSION_JSONL_BYTES} 字节）",
+                    metadata.len()
+                ),
+            });
+        }
         let text = fs::read_to_string(&path).map_err(|err| AiError::StorageFailed {
             target: path.display().to_string(),
             reason: err.to_string(),
@@ -185,6 +218,7 @@ impl AiStore {
         conversation_id: &str,
         entry: &SessionEntry,
     ) -> Result<(), AiError> {
+        let _guard = self.session_append_lock.lock();
         let path = self.session_file_path(conversation_id)?;
         if let Some(parent) = path.parent() {
             private_fs::ensure_private_dir(parent).map_err(|err| AiError::StorageFailed {
@@ -193,6 +227,36 @@ impl AiStore {
             })?;
         }
         let line = SessionTree::encode_entry(entry)?;
+        if line.len() > MAX_SESSION_ENTRY_BYTES {
+            return Err(AiError::StorageFailed {
+                target: path.display().to_string(),
+                reason: format!(
+                    "单条会话记录超过体积上限（实际 {} 字节，上限 {MAX_SESSION_ENTRY_BYTES} 字节）",
+                    line.len()
+                ),
+            });
+        }
+        let existing_bytes = match fs::metadata(&path) {
+            Ok(metadata) => metadata.len(),
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => 0,
+            Err(err) => {
+                return Err(AiError::StorageFailed {
+                    target: path.display().to_string(),
+                    reason: err.to_string(),
+                });
+            }
+        };
+        let next_bytes = existing_bytes
+            .saturating_add(line.len() as u64)
+            .saturating_add(1);
+        if next_bytes > MAX_SESSION_JSONL_BYTES {
+            return Err(AiError::StorageFailed {
+                target: path.display().to_string(),
+                reason: format!(
+                    "会话文件写入后将超过体积上限（预计 {next_bytes} 字节，上限 {MAX_SESSION_JSONL_BYTES} 字节）"
+                ),
+            });
+        }
         let mut file =
             private_fs::open_private_append(&path).map_err(|err| AiError::StorageFailed {
                 target: path.display().to_string(),
@@ -241,6 +305,44 @@ mod tests {
             .mode()
             & 0o777;
         assert_eq!(mode, 0o600);
+    }
+
+    #[test]
+    fn rejects_oversized_session_entry_before_write() {
+        let dir = tempfile::tempdir().expect("创建临时目录失败");
+        let store = AiStore::with_root(dir.path().to_path_buf());
+        let entry = transom_ai_contracts::SessionEntry::new(
+            None,
+            transom_ai_contracts::SessionEntryKind::Message {
+                role: transom_ai_contracts::ChatRole::User,
+                text: "x".repeat(super::MAX_SESSION_ENTRY_BYTES + 1),
+                images: vec![],
+                model: None,
+                tokens_per_sec: None,
+                usage: None,
+            },
+        );
+        let error = store
+            .append_session_entry("oversized", &entry)
+            .expect_err("超长记录必须被拒绝");
+        assert!(error.to_string().contains("单条会话记录超过体积上限"));
+        assert!(!dir.path().join("sessions").join("oversized.jsonl").exists());
+    }
+
+    #[test]
+    fn rejects_oversized_session_file_before_read() {
+        let dir = tempfile::tempdir().expect("创建临时目录失败");
+        let store = AiStore::with_root(dir.path().to_path_buf());
+        let sessions = dir.path().join("sessions");
+        std::fs::create_dir_all(&sessions).expect("创建会话目录失败");
+        let path = sessions.join("oversized.jsonl");
+        let file = std::fs::File::create(&path).expect("创建会话文件失败");
+        file.set_len(super::MAX_SESSION_JSONL_BYTES + 1)
+            .expect("扩展会话文件失败");
+        let error = store
+            .load_session_tree("oversized")
+            .expect_err("超大文件必须被拒绝");
+        assert!(error.to_string().contains("会话文件超过体积上限"));
     }
 
     #[test]
