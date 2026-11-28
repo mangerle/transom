@@ -163,8 +163,21 @@ impl AiAssistantView {
         cx: &mut Context<Self>,
     ) {
         self.state.view.active_popup = AiActivePopup::None;
+        self.state.conversation.pending_pin_session_id = None;
         self.state.conversation.target_mode = mode;
         self.apply_resolved_session(window, cx);
+    }
+
+    /// 触发连接未在线的已保存会话，并在连接就绪后自动锁定为 AI 主目标。
+    pub(super) fn connect_and_pin_session(
+        &mut self,
+        session_id: transom_core::SessionId,
+        cx: &mut Context<Self>,
+    ) {
+        self.state.view.active_popup = AiActivePopup::None;
+        self.state.conversation.pending_pin_session_id = Some(session_id);
+        cx.emit(AiPanelEvent::ConnectAndPinSession { session_id });
+        cx.notify();
     }
 
     fn apply_resolved_session(&mut self, window: &mut Window, cx: &mut Context<Self>) {

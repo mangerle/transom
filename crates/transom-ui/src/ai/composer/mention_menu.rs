@@ -3,6 +3,7 @@
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::input::InlineToken;
 use gpui_kit::*;
+use transom_core::SessionId;
 use transom_ui_icons::{AppIcon, AppIconElement, CustomIcon, DomainIcon, UiIcon};
 
 use crate::app::ai::slash_menu::step_slash_index;
@@ -15,7 +16,7 @@ use crate::theme::tokens::{space, typography};
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum AiMentionKind {
     Local,
-    SshHost { connected: bool },
+    SshHost { connected: bool, session_id: SessionId },
     ContainerEngine,
 }
 
@@ -64,12 +65,16 @@ pub(in crate::app::ai) fn filter_mention_items(
 
 fn mention_icon_and_badge(kind: AiMentionKind) -> (AppIcon, String, bool) {
     match kind {
-        AiMentionKind::SshHost { connected: true } => (
+        AiMentionKind::SshHost {
+            connected: true, ..
+        } => (
             AppIcon::Ui(UiIcon::WEB_SERVER),
             rust_i18n::t!("ai.mention_badge_ssh_online").to_string(),
             true,
         ),
-        AiMentionKind::SshHost { connected: false } => (
+        AiMentionKind::SshHost {
+            connected: false, ..
+        } => (
             AppIcon::Ui(UiIcon::WEB_SERVER),
             rust_i18n::t!("ai.mention_badge_ssh").to_string(),
             false,
@@ -364,7 +369,10 @@ mod tests {
                 token: "prod-01".to_owned(),
                 label: "prod-01".to_owned(),
                 detail: "root@10.0.0.1:22".to_owned(),
-                kind: AiMentionKind::SshHost { connected: true },
+                kind: AiMentionKind::SshHost {
+                    connected: true,
+                    session_id: transom_core::SessionId::new(),
+                },
             },
             AiMentionCandidate {
                 token: "local".to_owned(),

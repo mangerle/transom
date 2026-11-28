@@ -419,4 +419,19 @@ fn target_mode_resolves_follow_global_pinned_and_disconnect_fallback() {
         state.conversation.active_session.as_ref().map(|s| s.tab_id),
         Some(s1.tab_id)
     );
+
+    // 连接并锁定闭环：设置 pending_pin_session_id 后，新会话出现在 connected_sessions 时自动锁定
+    let s3 = mock_session("prod-03");
+    state.conversation.pending_pin_session_id = Some(s3.session_id);
+    state.conversation.connected_sessions.push(s3.clone());
+    assert!(state.conversation.sync_resolved_session());
+    assert!(state.conversation.pending_pin_session_id.is_none());
+    assert_eq!(
+        state.conversation.target_mode,
+        AiTargetMode::PinnedTab(s3.tab_id)
+    );
+    assert_eq!(
+        state.conversation.active_session.as_ref().map(|s| s.tab_id),
+        Some(s3.tab_id)
+    );
 }

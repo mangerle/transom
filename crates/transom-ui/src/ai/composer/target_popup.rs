@@ -5,7 +5,7 @@ use std::collections::HashSet;
 use gpui_kit::base::{h_flex, v_flex};
 use gpui_kit::component::scroll::ScrollableElement;
 use gpui_kit::*;
-use transom_core::TabId;
+use transom_core::{SessionId, TabId};
 use transom_ui_icons::{AppIcon, AppIconElement, CustomIcon, DomainIcon, UiIcon};
 
 use crate::app::ai::mention_menu::{AiMentionCandidate, AiMentionKind};
@@ -29,6 +29,7 @@ pub(in crate::app::ai) struct TargetSessionPopupActions {
     pub(in crate::app::ai) on_select_mode: Box<dyn Fn(AiTargetMode, &mut Window, &mut App)>,
     pub(in crate::app::ai) on_toggle_coop: Box<dyn Fn(TabId, &mut Window, &mut App)>,
     pub(in crate::app::ai) on_insert_mention: Box<dyn Fn(String, &mut Window, &mut App)>,
+    pub(in crate::app::ai) on_connect_and_pin: Box<dyn Fn(SessionId, &mut Window, &mut App)>,
 }
 
 fn section_title(label: String, p: &Palette) -> AnyElement {
@@ -126,6 +127,7 @@ pub(in crate::app::ai) fn render_target_session_popup(
     let on_select_mode = std::rc::Rc::new(actions.on_select_mode);
     let on_toggle_coop = std::rc::Rc::new(actions.on_toggle_coop);
     let on_insert_mention = std::rc::Rc::new(actions.on_insert_mention);
+    let on_connect_and_pin = std::rc::Rc::new(actions.on_connect_and_pin);
 
     let follow_sub = params
         .workspace_active_session
@@ -280,7 +282,15 @@ pub(in crate::app::ai) fn render_target_session_popup(
         params
             .mention_candidates
             .iter()
-            .filter(|c| matches!(c.kind, AiMentionKind::SshHost { connected: false }))
+            .filter(|c| {
+                matches!(
+                    c.kind,
+                    AiMentionKind::SshHost {
+                        connected: false,
+                        ..
+                    }
+                )
+            })
             .take(6),
     );
     if !other_targets.is_empty() {
@@ -306,6 +316,39 @@ pub(in crate::app::ai) fn render_target_session_popup(
                 AiMentionKind::ContainerEngine => AppIcon::Custom(CustomIcon::DOCKER),
                 AiMentionKind::SshHost { .. } => AppIcon::Ui(UiIcon::WEB_SERVER),
             };
+            let mut trailing = h_flex().gap(px(4.0)).items_center().flex_shrink_0().child(
+                div()
+                    .max_w(px(130.0))
+                    .truncate()
+                    .text_size(rems(typography::CAPTION))
+                    .text_color(p.text.muted)
+                    .child(item.detail.clone()),
+            );
+            if let AiMentionKind::SshHost {
+                connected: false,
+                session_id,
+            } = item.kind
+            {
+                let connect_pin = on_connect_and_pin.clone();
+                trailing = trailing.child(
+                    h_flex()
+                        .id(("ai-target-connect-pin", idx))
+                        .px(px(6.0))
+                        .py(px(2.0))
+                        .rounded(p.radius.sm)
+                        .border_1()
+                        .border_color(p.divider(p.border))
+                        .cursor_pointer()
+                        .text_size(rems(typography::CAPTION))
+                        .text_color(p.primary)
+                        .hover(|s| s.bg(p.tone.primary_subtle).border_color(p.primary.opacity(0.5)))
+                        .on_click(move |_, w, cx| {
+                            cx.stop_propagation();
+                            connect_pin(session_id, w, cx);
+                        })
+                        .child(rust_i18n::t!("ai.target_connect_and_pin").to_string()),
+                );
+            }
             scroll_list = scroll_list.child(
                 h_flex()
                     .id(("ai-target-other", idx))
@@ -339,14 +382,7 @@ pub(in crate::app::ai) fn render_target_session_popup(
                                     .child(format!("@{}", item.token)),
                             ),
                     )
-                    .child(
-                        div()
-                            .max_w(px(150.0))
-                            .truncate()
-                            .text_size(rems(typography::CAPTION))
-                            .text_color(p.text.muted)
-                            .child(item.detail.clone()),
-                    ),
+                    .child(trailing),
             );
         }
     }

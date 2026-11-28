@@ -10928,6 +10928,12 @@ ai:
   target_other_section:
     en: "Quick @ Mention Targets"
     zh-CN: "快速插入 @ 提及目标"
+  target_connect_and_pin:
+    en: "Connect & Pin"
+    zh-CN: "连接并锁定"
+  target_connecting_toast:
+    en: "Connecting and pinning session…"
+    zh-CN: "正在连接并锁定会话…"
   mention_trigger_tip:
     en: "Mention host, container, or local (@)"
     zh-CN: "提及主机、容器或本机 (@)"

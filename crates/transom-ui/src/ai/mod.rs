@@ -157,4 +157,6 @@ pub(crate) enum AiPanelEvent {
     ResumeHandoffRequested { run_id: String, cancelled: bool },
     /// 请求工作区切换到指定主机名关联的终端 Tab。
     JumpToTerminal { host_label: String },
+    /// 请求连接指定已保存会话并在就绪后自动锁定为 AI 主目标。
+    ConnectAndPinSession { session_id: transom_core::SessionId },
 }

@@ -13,7 +13,7 @@ use transom_ai_contracts::{
     AiSettings, ConversationSummary, ExecutionMode, MemorySnapshot, ProviderProtocol, SessionScope,
     ThinkingEffort,
 };
-use transom_core::{AiAppEvent, AiApprovalDto, AiPlanDto, TabId};
+use transom_core::{AiAppEvent, AiApprovalDto, AiPlanDto, SessionId, TabId};
 
 pub(crate) use super::mention_menu::{AiMentionCandidate, AiMentionKind};
 
@@ -59,6 +59,8 @@ pub(crate) struct AiConversationUiState {
     pub(crate) active_session: Option<ActiveAiSessionInfo>,
     /// 目标会话选择模式（跟随标签页 / 仅全局 / 手动锁定）。
     pub(crate) target_mode: AiTargetMode,
+    /// 等待连接完成后自动锁定的目标会话 ID。
+    pub(crate) pending_pin_session_id: Option<SessionId>,
     pub(crate) connected_sessions: Vec<ActiveAiSessionInfo>,
     pub(crate) extra_scope_tabs: HashSet<TabId>,
     pub(crate) conversations: Vec<ConversationSummary>,
@@ -84,6 +86,7 @@ impl Default for AiConversationUiState {
             workspace_active_session: None,
             active_session: None,
             target_mode: AiTargetMode::FollowActiveTab,
+            pending_pin_session_id: None,
             connected_sessions: Vec::new(),
             extra_scope_tabs: HashSet::new(),
             conversations: Vec::new(),
@@ -178,6 +181,15 @@ impl AiConversationUiState {
     ///
     /// 返回 `true` 表示最终生效的 `active_session` 发生了变化（需要刷新主机记忆）。
     pub(crate) fn sync_resolved_session(&mut self) -> bool {
+        if let Some(pending_sid) = self.pending_pin_session_id
+            && let Some(found) = self
+                .connected_sessions
+                .iter()
+                .find(|s| s.session_id == pending_sid)
+        {
+            self.target_mode = AiTargetMode::PinnedTab(found.tab_id);
+            self.pending_pin_session_id = None;
+        }
         if let AiTargetMode::PinnedTab(tid) = self.target_mode
             && !self.connected_sessions.iter().any(|s| s.tab_id == tid)
         {

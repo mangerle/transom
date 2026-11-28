@@ -117,6 +117,7 @@ impl AiAssistantView {
         let view = cx.entity();
         let v_coop = view.clone();
         let v_mention = view.clone();
+        let v_connect = view.clone();
         Some(render_target_session_popup(
             TargetSessionPopupParams {
                 target_mode: self.state.conversation.target_mode,
@@ -136,6 +137,9 @@ impl AiAssistantView {
                 }),
                 on_insert_mention: Box::new(move |token, w, cx| {
                     v_mention.update(cx, |this, cx| this.insert_mention_token(&token, w, cx));
+                }),
+                on_connect_and_pin: Box::new(move |sid, _, cx| {
+                    v_connect.update(cx, |this, cx| this.connect_and_pin_session(sid, cx));
                 }),
             },
         ))

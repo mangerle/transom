@@ -97,7 +97,10 @@ fn build_mention_candidates(state: &crate::app::AppState) -> Vec<super::state::A
                 token,
                 label: session.name.clone(),
                 detail: format!("{}@{}:{}", ssh.username, ssh.host, ssh.port),
-                kind: AiMentionKind::SshHost { connected: true },
+                kind: AiMentionKind::SshHost {
+                    connected: true,
+                    session_id: session.id,
+                },
             });
         }
     }
@@ -114,7 +117,10 @@ fn build_mention_candidates(state: &crate::app::AppState) -> Vec<super::state::A
                 token,
                 label: session.name.clone(),
                 detail: format!("{}@{}:{}", ssh.username, ssh.host, ssh.port),
-                kind: AiMentionKind::SshHost { connected: false },
+                kind: AiMentionKind::SshHost {
+                    connected: false,
+                    session_id: session.id,
+                },
             });
         }
     }
@@ -186,6 +192,18 @@ pub(crate) fn on_ai_panel_event(
                     false,
                 );
             }
+        }
+        AiPanelEvent::ConnectAndPinSession { session_id } => {
+            state
+                .ui
+                .window_requests
+                .push_session_sidebar(crate::sidebar::SessionSidebarEvent::ConnectSession(
+                    *session_id,
+                ));
+            state
+                .ui
+                .window_requests
+                .push_toast(rust_i18n::t!("ai.target_connecting_toast").to_string(), true);
         }
         AiPanelEvent::FocusTerminalForHandoff { command } => {
             if let Some(view) = state
