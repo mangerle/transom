@@ -10964,6 +10964,12 @@ ai:
   bg_run_stop:
     en: "Stop Run"
     zh-CN: "停止运行"
+  pending_approval_banner:
+    en: "%{count} command approval(s) waiting for confirmation"
+    zh-CN: "有 %{count} 项命令审批等待确认"
+  pending_approval_back:
+    en: "Review Now"
+    zh-CN: "立即处理"
   empty_greeting_acp:
     en: "Send a message to %{agent}"
     zh-CN: "给 %{agent} 发送消息"

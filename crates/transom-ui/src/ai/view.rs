@@ -566,6 +566,63 @@ impl AiAssistantView {
             )
             .into_any_element()
     }
+
+    fn render_drawer_approval_banner(&self, p: &Palette, cx: &mut Context<Self>) -> AnyElement {
+        use gpui_kit::base::h_flex;
+        use gpui_kit::component::Sizable as _;
+        use gpui_kit::component::button::{Button, ButtonVariants as _};
+        use transom_ui_icons::{AppIcon, AppIconElement, UiIcon};
+
+        let count = self.state.run.pending_approvals.len();
+        let view = cx.entity();
+        h_flex()
+            .w_full()
+            .px(rems(space::SM))
+            .py(rems(space::XS))
+            .gap(rems(space::XS))
+            .justify_between()
+            .items_center()
+            .bg(p.warning.opacity(0.12))
+            .border_b_1()
+            .border_color(p.warning.opacity(0.4))
+            .child(
+                h_flex()
+                    .flex_1()
+                    .min_w_0()
+                    .gap(px(6.0))
+                    .items_center()
+                    .child(
+                        div()
+                            .flex_shrink_0()
+                            .text_color(p.warning)
+                            .child(AppIconElement::new(AppIcon::Ui(UiIcon::LOCKED)).small()),
+                    )
+                    .child(
+                        div()
+                            .truncate()
+                            .text_size(rems(crate::theme::tokens::typography::CAPTION))
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(p.foreground)
+                            .child(
+                                rust_i18n::t!("ai.pending_approval_banner", count = count)
+                                    .to_string(),
+                            ),
+                    ),
+            )
+            .child(
+                Button::new("ai-drawer-review-approval")
+                    .primary()
+                    .xsmall()
+                    .label(rust_i18n::t!("ai.pending_approval_back").to_string())
+                    .on_click(move |_, _, cx| {
+                        view.update(cx, |this, cx| {
+                            this.state.view.drawer = AiDrawerTab::Chat;
+                            cx.notify();
+                        });
+                    }),
+            )
+            .into_any_element()
+    }
 }
 
 impl Render for AiAssistantView {
@@ -581,7 +638,7 @@ impl Render for AiAssistantView {
             AiDrawerTab::Chat => self.render_chat_body(&p, cx),
         };
 
-        v_flex()
+        let mut root = v_flex()
             .size_full()
             .min_w_0()
             .min_h_0()
@@ -596,7 +653,12 @@ impl Render for AiAssistantView {
                     }
                 }),
             )
-            .child(header)
-            .child(body)
+            .child(header);
+        if self.state.view.drawer != AiDrawerTab::Chat
+            && !self.state.run.pending_approvals.is_empty()
+        {
+            root = root.child(self.render_drawer_approval_banner(&p, cx));
+        }
+        root.child(body)
     }
 }
