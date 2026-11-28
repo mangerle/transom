@@ -178,16 +178,17 @@ impl AiAssistantView {
                 .current_run_started_at()
                 .map(|time| time.elapsed().as_secs());
             let items = &self.state.conversation.items;
-            let blocks = self
-                .message_block_cache
-                .as_ref()
-                .filter(|cache| {
-                    cache.item_count == items.len()
-                        && cache.is_running == is_running
-                        && cache.group_revision == self.state.conversation.group_revision
-                })
-                .map(|cache| cache.blocks.clone())
-                .unwrap_or_else(|| group_chat_items(items, is_running));
+            let fallback_blocks;
+            let blocks = if let Some(cache) = self.message_block_cache.as_ref().filter(|cache| {
+                cache.item_count == items.len()
+                    && cache.is_running == is_running
+                    && cache.group_revision == self.state.conversation.group_revision
+            }) {
+                cache.blocks.as_slice()
+            } else {
+                fallback_blocks = group_chat_items(items, is_running);
+                fallback_blocks.as_slice()
+            };
             let render_start = blocks
                 .len()
                 .saturating_sub(self.state.conversation.render_window_blocks);
@@ -229,7 +230,7 @@ impl AiAssistantView {
                         }),
                 );
             }
-            for (b_idx, block) in blocks.into_iter().enumerate().skip(render_start) {
+            for (b_idx, block) in blocks.iter().cloned().enumerate().skip(render_start) {
                 let v_exp = cx.entity();
                 match block {
                     DisplayBlock::Single(item_index) => {

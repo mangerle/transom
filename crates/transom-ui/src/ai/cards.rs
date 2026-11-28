@@ -334,11 +334,16 @@ fn render_assistant_message(
         streaming,
     } = msg;
     let p = params.p;
-    let mut col = v_flex()
-        .w_full()
-        .py(rems(space::XS))
-        .gap(rems(space::XS))
-        .child(render_markdown_content(MarkdownRenderParams {
+    // 流式阶段每 25ms 更新一次，避免对不断增长的文本重复执行完整 Markdown
+    // 分段与代码块构建；终态由 finalize_turn 一次解析并缓存。
+    let content = if streaming {
+        div()
+            .w_full()
+            .line_height(relative(1.5))
+            .child(text.to_owned())
+            .into_any_element()
+    } else {
+        render_markdown_content(MarkdownRenderParams {
             msg_id: id,
             text,
             cached_segments,
@@ -346,7 +351,13 @@ fn render_assistant_message(
             has_active_terminal: params.has_active_terminal,
             p,
             callbacks: &callbacks.code,
-        }));
+        })
+    };
+    let mut col = v_flex()
+        .w_full()
+        .py(rems(space::XS))
+        .gap(rems(space::XS))
+        .child(content);
 
     if !streaming {
         let mut footer_parts = Vec::new();
