@@ -9,7 +9,7 @@ use transom_ai_contracts::{
     AiError, MemorySnapshot, read_memory_file_limited, resolve_sandbox_path,
 };
 
-use super::{AiStore, sanitize_id_filename};
+use super::{AiStore, resolve_id_file_path};
 use crate::file_io::write_atomic;
 
 impl AiStore {
@@ -20,9 +20,8 @@ impl AiStore {
         let global_markdown = read_memory_file_limited(&global_path)?;
 
         let host_markdown = if let Some(id) = host_id {
-            let safe_name = sanitize_id_filename(id, "md");
             let host_dir = mem_root.join("hosts");
-            let host_path = resolve_sandbox_path(&host_dir, Path::new(&safe_name))?;
+            let host_path = resolve_id_file_path(&host_dir, id, "md")?;
             read_memory_file_limited(&host_path)?
         } else {
             String::new()
@@ -46,8 +45,7 @@ impl AiStore {
     /// 保存指定主机的长期记忆 Markdown。
     pub fn save_host_memory(&self, host_id: &str, markdown: &str) -> Result<(), AiError> {
         let host_dir = self.root.join("memory").join("hosts");
-        let safe_name = sanitize_id_filename(host_id, "md");
-        let path = resolve_sandbox_path(&host_dir, Path::new(&safe_name))?;
+        let path = resolve_id_file_path(&host_dir, host_id, "md")?;
         write_atomic(&path, markdown.as_bytes()).map_err(|err| AiError::StorageFailed {
             target: path.display().to_string(),
             reason: err.to_string(),

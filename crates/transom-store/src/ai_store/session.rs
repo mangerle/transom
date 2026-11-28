@@ -2,13 +2,11 @@
 
 use std::fs;
 use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
-use transom_ai_contracts::{
-    AiError, ConversationSummary, SessionEntry, SessionScope, SessionTree, resolve_sandbox_path,
-};
+use transom_ai_contracts::{AiError, ConversationSummary, SessionEntry, SessionScope, SessionTree};
 
-use super::{AiStore, sanitize_id_filename};
+use super::{AiStore, resolve_id_file_path};
 use crate::file_io::write_atomic;
 use transom_platform::private_fs;
 
@@ -270,8 +268,7 @@ impl AiStore {
 
     fn session_file_path(&self, conversation_id: &str) -> Result<PathBuf, AiError> {
         let sessions_dir = self.root.join("sessions");
-        let file_name = sanitize_id_filename(conversation_id, "jsonl");
-        resolve_sandbox_path(&sessions_dir, Path::new(&file_name))
+        resolve_id_file_path(&sessions_dir, conversation_id, "jsonl")
     }
 }
 

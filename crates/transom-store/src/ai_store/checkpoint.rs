@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 use transom_ai_contracts::{AiError, CheckpointManifest, FileBackupRecord};
 use transom_core::AppError;
 
-use super::{AiStore, sanitize_id_filename};
+use super::{AiStore, resolve_id_file_path};
 use crate::file_io::write_atomic;
 
 /// 单个对话检查点清单允许的最大体积。
@@ -96,8 +96,7 @@ impl AiStore {
 
     fn checkpoint_manifest_path(&self, conversation_id: &str) -> Result<PathBuf, AiError> {
         let checkpoint_dir = self.root.join("checkpoints");
-        let file_name = sanitize_id_filename(conversation_id, "json");
-        transom_ai_contracts::resolve_sandbox_path(&checkpoint_dir, Path::new(&file_name))
+        resolve_id_file_path(&checkpoint_dir, conversation_id, "json")
     }
 }
 
