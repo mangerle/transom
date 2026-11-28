@@ -18,10 +18,14 @@ const CHOICE_CUE_KEYWORDS: &[&str] = &[
     "多选",
     "可多选",
     "选择以下",
+    "以下选项",
+    "选项中选择",
     "以下哪种",
     "以下哪些",
+    "以下方案",
     "请选择",
     "请确认",
+    "请指定",
     "需要你确认",
     "需要您确认",
     "choose",
@@ -90,20 +94,25 @@ pub fn extract_prompt_choices(text: &str) -> Option<ExtractedChoices> {
 
     let mut options: Vec<String> = Vec::new();
     let mut expected_num = 1usize;
+    let mut saw_blank_after_option = false;
     for raw in &tail[(cue_idx + 1)..] {
         let trimmed = raw.trim();
         if trimmed.is_empty() {
+            if !options.is_empty() {
+                saw_blank_after_option = true;
+            }
             continue;
         }
         if let Some((num, body)) = parse_numbered_item(trimmed) {
             if num == expected_num {
                 options.push(body.to_owned());
                 expected_num += 1;
+                saw_blank_after_option = false;
             } else {
                 break;
             }
         } else if let Some(last) = options.last_mut() {
-            if trimmed.starts_with('#') || trimmed.starts_with("```") {
+            if saw_blank_after_option || trimmed.starts_with('#') || trimmed.starts_with("```") {
                 break;
             }
             last.push(' ');
@@ -151,5 +160,13 @@ mod tests {
         let res = extract_prompt_choices(multi).expect("应识别多选列表");
         assert!(res.multi_select);
         assert_eq!(res.options.len(), 3);
+    }
+
+    #[test]
+    fn extracts_select_from_options_with_trailing_note() {
+        let reply = "请从以下选项中选择：\n\n1. 仅本机\n2. 全部 8 台 SSH 服务器\n3. 仅 Agree 组\n4. 仅 POC 组\n\n也可以直接告诉我具体某台服务器的 IP 或名称。\n";
+        let res = extract_prompt_choices(reply).expect("应识别“请从以下选项中选择”并截断尾部说明");
+        assert_eq!(res.options.len(), 4);
+        assert_eq!(res.options[3], "仅 POC 组");
     }
 }
