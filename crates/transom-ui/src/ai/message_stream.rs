@@ -88,6 +88,7 @@ pub(in crate::app::ai) struct MessageStreamView {
     active_acp: Option<(String, String)>,
     managed_tasks: Vec<UiManagedTask>,
     block_cache: Option<MessageBlockCache>,
+    code_callbacks: Option<CodeBlockCallbacks>,
     scroll_handle: ScrollHandle,
     auto_scroll_locked: bool,
     active_nav_dot: Option<usize>,
@@ -108,6 +109,7 @@ impl MessageStreamView {
             active_acp: None,
             managed_tasks: Vec::new(),
             block_cache: None,
+            code_callbacks: None,
             scroll_handle: ScrollHandle::new(),
             auto_scroll_locked: false,
             active_nav_dot: None,
@@ -262,6 +264,15 @@ impl MessageStreamView {
         });
     }
 
+    fn cached_code_callbacks(&mut self, cx: &mut Context<Self>) -> CodeBlockCallbacks {
+        if let Some(cb) = &self.code_callbacks {
+            return cb.clone();
+        }
+        let cb = self.build_code_callbacks(cx);
+        self.code_callbacks = Some(cb.clone());
+        cb
+    }
+
     fn build_code_callbacks(&self, cx: &mut Context<Self>) -> CodeBlockCallbacks {
         let v_copy = cx.entity();
         let v_send = cx.entity();
@@ -357,6 +368,7 @@ impl Render for MessageStreamView {
                 },
             ));
         } else {
+            let code_callbacks = self.cached_code_callbacks(cx);
             let is_running = self.is_running;
             let live_elapsed = self.run_started_at.map(|t| t.elapsed().as_secs());
             let items = self.model.items();
@@ -403,7 +415,6 @@ impl Render for MessageStreamView {
                     }
                 )
             });
-            let code_callbacks = self.build_code_callbacks(cx);
             let copied_key = self.copied_key.as_deref();
             let has_active_terminal = self.has_active_terminal;
             let frame_now = chrono::Utc::now();

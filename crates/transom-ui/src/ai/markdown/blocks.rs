@@ -1,5 +1,6 @@
 //! AI 消息流 Markdown 排版样式与混合分段渲染（纯解析状态机见 [`crate::app::ai::markdown_parser`]）。
 
+use std::cell::RefCell;
 use std::rc::Rc;
 use std::time::Duration;
 
@@ -117,6 +118,45 @@ fn build_markdown_style(p: &Palette) -> TextViewStyle {
         })
 }
 
+#[derive(Clone, PartialEq)]
+struct MarkdownStyleKey {
+    background: Hsla,
+    foreground: Hsla,
+    primary: Hsla,
+    mono_font_family: SharedString,
+}
+
+impl MarkdownStyleKey {
+    fn from_palette(p: &Palette) -> Self {
+        Self {
+            background: p.background,
+            foreground: p.foreground,
+            primary: p.primary,
+            mono_font_family: p.mono_font_family.clone(),
+        }
+    }
+}
+
+/// 获取与当前主题调色板匹配的缓存 [`TextViewStyle`]，避免流式重绘每帧重建样式树。
+fn cached_markdown_style(p: &Palette) -> TextViewStyle {
+    thread_local! {
+        static STYLE_CACHE: RefCell<Option<(MarkdownStyleKey, TextViewStyle)>> =
+            const { RefCell::new(None) };
+    }
+    let key = MarkdownStyleKey::from_palette(p);
+    STYLE_CACHE.with(|cell| {
+        let mut guard = cell.borrow_mut();
+        if let Some((cached_key, style)) = guard.as_ref()
+            && *cached_key == key
+        {
+            return style.clone();
+        }
+        let built = build_markdown_style(p);
+        *guard = Some((key, built.clone()));
+        built
+    })
+}
+
 /// 将解析后的 Markdown 分段渲染为混排正文与代码块卡片。
 pub(in crate::app::ai) fn render_markdown_content(params: MarkdownRenderParams<'_>) -> AnyElement {
     let owned;
@@ -129,7 +169,7 @@ pub(in crate::app::ai) fn render_markdown_content(params: MarkdownRenderParams<'
     if segments.is_empty() {
         return div().into_any_element();
     }
-    let md_style = build_markdown_style(params.p);
+    let md_style = cached_markdown_style(params.p);
     let mut col = v_flex().w_full().gap(rems(space::SM));
     for (idx, seg) in segments.iter().enumerate() {
         match seg {
