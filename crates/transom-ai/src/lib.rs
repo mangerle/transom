@@ -21,6 +21,7 @@ mod protocol_lines;
 pub mod redact;
 pub mod runner;
 pub(crate) mod runner_gate;
+pub mod runner_single;
 pub mod tools;
 pub mod working_state;
 
@@ -80,8 +81,11 @@ pub use policy::{
 pub use redact::redact_secrets_for_model;
 pub use runner::{
     AgentEvent, ApprovalRequest, EVENT_CHANNEL_CAPACITY, HandoffRequest, RunInput, TurnOutput,
-    build_run_preamble, generate_inline_command, run, run_with_model, run_with_model_factory,
-    summarize_for_compaction,
+    build_run_preamble, run, run_with_model, run_with_model_factory,
+};
+pub use runner_single::{
+    generate_inline_command, generate_inline_command_with_cancel, summarize_for_compaction,
+    summarize_for_compaction_with_cancel,
 };
 pub use session::{
     ChatRole, ConversationSummary, SessionEntry, SessionEntryKind, SessionScope, SessionTree,
