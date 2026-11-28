@@ -242,4 +242,17 @@ fn unknown_commands_require_confirmation_even_in_auto_mode() {
         approval_grants: &grants,
     });
     assert_eq!(decision, PolicyDecision::RequireApproval);
+
+    let allow_all_decision = evaluate_command_policy(&CommandPolicyContext {
+        protection: HostProtection::Production,
+        mode: ExecutionMode::AllowAll,
+        plan_mode: false,
+        base_risk: ToolRisk::Write,
+        force_confirm: false,
+        command: Some("curl -o /tmp/body https://example.com"),
+        exec_policy_rules: &[],
+        approval_scope: &scope,
+        approval_grants: &grants,
+    });
+    assert_eq!(allow_all_decision, PolicyDecision::Allow);
 }

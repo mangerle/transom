@@ -230,7 +230,8 @@ pub fn evaluate_command_policy(ctx: &CommandPolicyContext<'_>) -> PolicyDecision
 
     let mut effective_risk = ctx.base_risk;
     let mut chain_allowlisted = false;
-    let mut force_ask = ctx.force_confirm;
+    let mut explicit_ask = false;
+    let mut default_confirm = ctx.force_confirm;
 
     if let Some(cmd) = ctx.command {
         let chain = crate::exec_policy::evaluate_command_chain(
@@ -246,7 +247,8 @@ pub fn evaluate_command_policy(ctx: &CommandPolicyContext<'_>) -> PolicyDecision
             effective_risk = chain.worst_risk;
         }
         chain_allowlisted = chain.all_allowlisted;
-        force_ask = force_ask || chain.force_ask || chain.requires_confirmation;
+        explicit_ask = chain.force_ask;
+        default_confirm = default_confirm || chain.requires_confirmation;
         if ctx.plan_mode && matches!(effective_risk, ToolRisk::Write | ToolRisk::Destructive) {
             return PolicyDecision::Deny {
                 reason: "当前处于只读规划（Plan）模式，已拦截变更命令。".to_owned(),
@@ -254,11 +256,13 @@ pub fn evaluate_command_policy(ctx: &CommandPolicyContext<'_>) -> PolicyDecision
         }
     }
 
-    if force_ask {
+    // 用户显式配置的 Ask 规则优先级最高；默认未知命令确认（default_confirm）
+    // 交给 evaluate_policy 统一裁决，确保 ExecutionMode::AllowAll 不会被默认确认拦截。
+    if explicit_ask {
         return PolicyDecision::RequireApproval;
     }
 
-    let base = evaluate_policy(ctx.protection, ctx.mode, effective_risk, false);
+    let base = evaluate_policy(ctx.protection, ctx.mode, effective_risk, default_confirm);
     if base == PolicyDecision::RequireApproval
         && chain_allowlisted
         && ctx.protection != HostProtection::ReadOnly
