@@ -255,6 +255,10 @@ pub fn attach_tools(
 #[cfg(test)]
 #[test]
 fn every_registered_app_action_has_a_shared_risk() {
+    use super::AppBridgeDomain;
+    use super::app_bridge_types::validate_software_action;
+
+    let empty_args = serde_json::json!({});
     macro_rules! assert_actions {
         ($($tool_ty:path),+ $(,)?) => {
             $(
@@ -262,10 +266,17 @@ fn every_registered_app_action_has_a_shared_risk() {
                     <$tool_ty>::NAME,
                     <$tool_ty as rig_agent::tool::Tool>::NAME
                 );
+                let domain = AppBridgeDomain::parse(<$tool_ty>::NAME)
+                    .expect("软件工具必须有对应的 AppBridgeDomain");
                 for action in <$tool_ty>::ACTIONS {
                     assert!(
                         app_tool_action_risk(<$tool_ty>::NAME, action).is_some(),
                         "工具 {} 的动作 {action} 缺少风险定义",
+                        <$tool_ty>::NAME
+                    );
+                    assert!(
+                        validate_software_action(domain, action, &empty_args).is_ok(),
+                        "工具 {} 的动作 {action} 缺少强类型 Action 枚举定义",
                         <$tool_ty>::NAME
                     );
                 }

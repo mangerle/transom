@@ -44,6 +44,8 @@ pub(crate) async fn invoke_app_tool(
     let domain = AppBridgeDomain::parse(tool_name).map_err(to_rig_err)?;
     let started = Instant::now();
     let payload = Value::Object(args.extra);
+    super::app_bridge_types::validate_software_action(domain, &args.action, &payload)
+        .map_err(to_rig_err)?;
     let summary = format!("{tool_name}({})", args.action);
     let res = bridge.invoke(domain, &args.action, payload).await;
     let elapsed = started.elapsed().as_millis() as u64;

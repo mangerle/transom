@@ -8,6 +8,7 @@
 //!   使得本 crate 可在无网络、无 GUI 的单元测试中完整运行与验证。
 
 pub mod app_bridge;
+pub mod app_bridge_types;
 pub mod app_tools;
 pub mod app_tools_dev;
 pub mod assess;
@@ -51,6 +52,11 @@ use crate::session::SessionScope;
 use crate::tools::plan::PlanSnapshot;
 
 pub use app_bridge::{AppActionBridge, AppBridgeDomain};
+pub use app_bridge_types::{
+    AiMemorySkillsAction, ApiClientAction, AppSettingsOpsAction, ContainerWorkspaceAction,
+    GitWorkspaceAction, HostMonitorAction, PortForwardOpsAction, SessionCatalogAction,
+    SftpTransferAction, WorkspaceControlAction, parse_app_action,
+};
 pub use assess::{assess_tool_call, assess_tool_call_value};
 pub use delegate::{DelegateMode, DelegateTaskRequest, SubagentModelTier, SubagentRunner};
 pub use skill_tool::SkillLoader;

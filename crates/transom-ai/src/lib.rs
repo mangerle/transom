@@ -101,12 +101,14 @@ pub use thinking::{
     ThinkingEffort, ThinkingSwitch, build_request_params, fallback_effort, request_params,
 };
 pub use tools::{
-    AppActionBridge, AppBridgeDomain, ApprovalSummary, BulkHostTarget, DelegateMode,
-    DelegateTaskRequest, ExecCommandResult, ForwardExecutor, KnowledgeSearcher, LockedSession,
-    MemoryWriter, RemoteExecutor, RemoteFsExecutor, ResolvedToolTarget, RuntimeInspector,
-    SkillLoader, SubagentModelTier, SubagentRunner, TerminalContextProvider, ToolCapabilities,
+    AiMemorySkillsAction, ApiClientAction, AppActionBridge, AppBridgeDomain, AppSettingsOpsAction,
+    ApprovalSummary, BulkHostTarget, ContainerWorkspaceAction, DelegateMode, DelegateTaskRequest,
+    ExecCommandResult, ForwardExecutor, GitWorkspaceAction, HostMonitorAction, KnowledgeSearcher,
+    LockedSession, MemoryWriter, PortForwardOpsAction, RemoteExecutor, RemoteFsExecutor,
+    ResolvedToolTarget, RuntimeInspector, SessionCatalogAction, SftpTransferAction, SkillLoader,
+    SubagentModelTier, SubagentRunner, TerminalContextProvider, ToolCapabilities,
     ToolExecutionCard, ToolIoContext, ToolRuntimeContext, ToolTargetResolver, TransferDirection,
-    assess_tool_call, estimate_tool_schema_tokens,
+    WorkspaceControlAction, assess_tool_call, estimate_tool_schema_tokens, parse_app_action,
     plan::{PlanSnapshot, PlanStep, PlanStepStatus},
     target_argument_for_tool, with_io_guard,
 };

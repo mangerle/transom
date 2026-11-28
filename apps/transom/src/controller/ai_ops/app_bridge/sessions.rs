@@ -3,7 +3,7 @@
 use std::path::PathBuf;
 
 use serde_json::{Value, json};
-use transom_ai::ToolError;
+use transom_ai::{SessionCatalogAction, ToolError, parse_app_action};
 use transom_core::{
     AuthMethod, Connection, FolderId, HostProtection, LocalConnection, ProxyJumpConfig,
     RdpConnection, SerialConnection, Session, SessionFolder, SessionId, SshConnection,
@@ -17,20 +17,17 @@ pub(super) async fn handle(
     action: &str,
     args: &Value,
 ) -> Result<String, ToolError> {
-    match action {
-        "list" => list_catalog(bridge).await,
-        "create" => create_session(bridge, args).await,
-        "update" => update_session(bridge, args).await,
-        "delete" => delete_session(bridge, args).await,
-        "create_folder" => create_folder(bridge, args).await,
-        "delete_folder" => delete_folder(bridge, args).await,
-        "list_known_hosts" => list_known_hosts(bridge).await,
-        "remove_known_host" => remove_known_host(bridge, args).await,
-        "deploy_public_key" => deploy_public_key(bridge, args).await,
-        other => Err(ToolError::InvalidArguments {
-            tool: "session_catalog",
-            reason: format!("未知动作: {other}"),
-        }),
+    let parsed: SessionCatalogAction = parse_app_action("session_catalog", action, args)?;
+    match parsed {
+        SessionCatalogAction::List => list_catalog(bridge).await,
+        SessionCatalogAction::Create { .. } => create_session(bridge, args).await,
+        SessionCatalogAction::Update { .. } => update_session(bridge, args).await,
+        SessionCatalogAction::Delete { .. } => delete_session(bridge, args).await,
+        SessionCatalogAction::CreateFolder { .. } => create_folder(bridge, args).await,
+        SessionCatalogAction::DeleteFolder { .. } => delete_folder(bridge, args).await,
+        SessionCatalogAction::ListKnownHosts => list_known_hosts(bridge).await,
+        SessionCatalogAction::RemoveKnownHost { .. } => remove_known_host(bridge, args).await,
+        SessionCatalogAction::DeployPublicKey { .. } => deploy_public_key(bridge, args).await,
     }
 }
 

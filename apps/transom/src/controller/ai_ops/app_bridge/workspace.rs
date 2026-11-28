@@ -1,7 +1,7 @@
 //! 领域 2（工作区/标签/面板）、领域 4（监控/进程）与领域 5（端口转发）。
 
 use serde_json::{Value, json};
-use transom_ai::ToolError;
+use transom_ai::{HostMonitorAction, ToolError, parse_app_action};
 
 use super::{ControllerAppActionBridge, port_or};
 
@@ -30,20 +30,17 @@ pub(super) async fn handle_monitor(
     action: &str,
     args: &Value,
 ) -> Result<String, ToolError> {
-    match action {
-        "toggle_sampling" => {
+    let parsed: HostMonitorAction = parse_app_action("host_monitor", action, args)?;
+    match parsed {
+        HostMonitorAction::ToggleSampling { .. } => {
             bridge
                 .request_ui_action("host_monitor", "toggle_sampling", args)
                 .await
         }
-        "snapshot" => monitor_snapshot(bridge).await,
-        "list_processes" => list_processes(bridge).await,
-        "kill_process" => kill_process(bridge, args).await,
-        "probe_host" => probe_host(args).await,
-        other => Err(ToolError::InvalidArguments {
-            tool: "host_monitor",
-            reason: format!("未知监控动作: {other}"),
-        }),
+        HostMonitorAction::Snapshot => monitor_snapshot(bridge).await,
+        HostMonitorAction::ListProcesses => list_processes(bridge).await,
+        HostMonitorAction::KillProcess { .. } => kill_process(bridge, args).await,
+        HostMonitorAction::ProbeHost { .. } => probe_host(args).await,
     }
 }
 
