@@ -29,6 +29,7 @@ use crate::config::AcpAgentConfig;
 use crate::error::AiError;
 use crate::exec_policy::ExecPolicyRule;
 use crate::policy::{ExecutionMode, HostProtection};
+use crate::process_cleanup::terminate_child_and_reap;
 use crate::protocol_lines::{MAX_PROTOCOL_LINE_BYTES, read_bounded_line};
 use crate::runner::AgentEvent;
 use transom_ai_contracts::acp::augmented_path_env;
@@ -108,8 +109,7 @@ pub async fn run_acp_turn(input: AcpRunInput) -> Result<(), AiError> {
     let result = drive_acp_protocol(&input, &mut stdin, &mut reader).await;
 
     // 显式杀死并收割子进程，彻底避免僵尸进程残留。
-    let _ = child.kill().await;
-    let _ = tokio::time::timeout(Duration::from_secs(2), child.wait()).await;
+    terminate_child_and_reap(&mut child, &format!("ACP Agent {}", input.agent.name)).await;
     result
 }
 

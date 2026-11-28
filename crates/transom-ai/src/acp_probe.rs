@@ -12,6 +12,7 @@ use transom_ai_contracts::acp::{augmented_path_env, is_acp_command_available};
 
 use crate::config::AcpAgentConfig;
 use crate::error::AiError;
+use crate::process_cleanup::terminate_child_and_reap;
 use crate::protocol_lines::{MAX_PROTOCOL_LINE_BYTES, read_bounded_line};
 
 const ACP_PROBE_TIMEOUT: Duration = Duration::from_secs(10);
@@ -302,8 +303,7 @@ async fn probe_via_acp_stdio(agent: &AcpAgentConfig) -> Result<AcpModelProbeResu
     .await;
 
     drop(stdin);
-    let _ = child.kill().await;
-    let _ = child.wait().await;
+    terminate_child_and_reap(&mut child, &format!("ACP 模型探测 {}", agent.name)).await;
 
     match res {
         Ok(inner) => inner,
