@@ -6,15 +6,14 @@ use std::time::{Duration, Instant};
 use serde_json::Value as JsonValue;
 use serde_json::{Value, json};
 use tokio::process::ChildStdin;
-use tokio::sync::oneshot;
 
 use crate::acp::AcpRunInput;
 use crate::acp_parse::{AcpStreamChunk, pick_acp_allow_option, write_json_line};
-use crate::runner::{AgentEvent, ApprovalRequest, TurnOutput};
+use crate::approval_flow::{PolicyApprovalOutcome, PolicyApprovalParams, request_policy_approval};
+use crate::runner::{AgentEvent, TurnOutput};
 use crate::tools::plan::PlanSnapshot;
 use crate::tools::{ApprovalSummary, ToolExecutionCard};
 use transom_ai_contracts::error::AiError;
-use transom_ai_contracts::exec_policy::{explain_command_impact, extract_command_prefix};
 use transom_ai_contracts::policy::{
     CommandPolicyContext, PolicyDecision, ToolRisk, assess_shell_command, evaluate_command_policy,
 };
@@ -291,15 +290,6 @@ pub(crate) async fn handle_acp_permission(
         PolicyDecision::Allow => true,
         PolicyDecision::Deny { .. } => false,
         PolicyDecision::RequireApproval => {
-            let suggested_prefix = assessment
-                .command
-                .as_deref()
-                .and_then(extract_command_prefix);
-            let impact_note = assessment
-                .command
-                .as_deref()
-                .and_then(explain_command_impact);
-            let (tx, rx) = oneshot::channel();
             let summary = ApprovalSummary {
                 tool_name: format!("acp:{}", input.agent.id),
                 host_label: input.agent.name.clone(),
@@ -310,47 +300,37 @@ pub(crate) async fn handle_acp_permission(
                 diff_preview: None,
                 requires_fresh_approval: false,
             };
-            if let Err(err) = input
-                .events
-                .send(AgentEvent::Approval(ApprovalRequest {
-                    summary,
-                    suggested_prefix,
-                    impact_note,
-                    respond: tx,
-                }))
-                .await
+            match request_policy_approval(PolicyApprovalParams {
+                events: &input.events,
+                cancel: &input.cancel,
+                summary,
+                command: assessment.command.as_deref(),
+                approval_scope: &input.approval_scope,
+                approval_grants: &input.approval_grants,
+                timeout: Some(ACP_APPROVAL_TIMEOUT),
+            })
+            .await
             {
-                return Err(AiError::AcpFailed {
-                    agent: input.agent.name.clone(),
-                    reason: format!("无法把 ACP 权限请求发送到界面: {err}"),
-                });
-            }
-            let reply = tokio::select! {
-                _ = input.cancel.cancelled() => return Err(AiError::Cancelled),
-                res = tokio::time::timeout(ACP_APPROVAL_TIMEOUT, rx) => match res {
-                    Ok(reply) => reply.ok(),
-                    Err(_) => {
-                        log::warn!(
-                            "ACP Agent（{}）权限请求等待用户确认超时（{} 秒）",
-                            input.agent.name,
-                            ACP_APPROVAL_TIMEOUT.as_secs()
-                        );
-                        None
-                    }
-                },
-            };
-            match reply {
-                Some(transom_core::AiApprovalDecision::AllowOnce) => true,
-                Some(transom_core::AiApprovalDecision::AllowPrefix { prefix }) => {
-                    if let Some(prefix) = extract_command_prefix(&prefix) {
-                        input
-                            .approval_grants
-                            .write()
-                            .grant_prefix(&input.approval_scope, &prefix);
-                    }
-                    true
+                PolicyApprovalOutcome::Decision(
+                    transom_core::AiApprovalDecision::AllowOnce
+                    | transom_core::AiApprovalDecision::AllowPrefix { .. },
+                ) => true,
+                PolicyApprovalOutcome::Decision(_) => false,
+                PolicyApprovalOutcome::Cancelled => return Err(AiError::Cancelled),
+                PolicyApprovalOutcome::TimedOut => {
+                    log::warn!(
+                        "ACP Agent（{}）权限请求等待用户确认超时（{} 秒）",
+                        input.agent.name,
+                        ACP_APPROVAL_TIMEOUT.as_secs()
+                    );
+                    false
                 }
-                _ => false,
+                PolicyApprovalOutcome::ChannelClosed => {
+                    return Err(AiError::AcpFailed {
+                        agent: input.agent.name.clone(),
+                        reason: "无法把 ACP 权限请求发送到界面: 事件通道已关闭".to_owned(),
+                    });
+                }
             }
         }
     };

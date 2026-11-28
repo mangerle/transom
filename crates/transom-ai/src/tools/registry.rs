@@ -112,71 +112,58 @@ pub(crate) fn export_mcp_tool_schemas() -> Vec<serde_json::Value> {
     schemas
 }
 
+/// 按运行计划统一遍历全部待装配工具（`attach_tools` 与 `context_tool_schemas` 共用，杜绝双份条件漂移）。
+macro_rules! for_each_planned_tool {
+    ($plan:expr, $emit:ident) => {
+        $emit!(
+            extra::ReadToolOutputTool,
+            plan::UpdatePlanTool,
+            plan::RequestUserInputTool,
+        );
+        if $plan.knowledge_search {
+            $emit!(plan::SearchKnowledgeTool);
+        }
+        if $plan.subagent {
+            $emit!(delegate::DelegateTaskTool);
+        }
+        if $plan.skill_loader {
+            $emit!(skill_tool::LoadSkillTool);
+        }
+        if $plan.app_bridge {
+            for_each_app_bridge_tool!($emit);
+        }
+        if $plan.remote_exec {
+            $emit!(remote::RemoteExecTool);
+        }
+        if $plan.remote_fs {
+            $emit!(ops::RemoteFsTool, ops::TransferFileTool);
+        }
+        if $plan.host_tools {
+            $emit!(
+                remote::GetRecentBlocksTool,
+                remote::ReadTerminalTool,
+                remote::ProposeHostMemoryTool,
+                ops::InspectHostRuntimeTool,
+                ops::ContainerOpsTool,
+                extra::PortForwardTool,
+            );
+        }
+        if $plan.bulk_tools {
+            $emit!(extra::RemoteExecBulkTool, compare::CompareHostsTool);
+        }
+    };
+}
+
 /// 按实际装配计划构造当前运行可用的工具 Schema。
 fn context_tool_schemas(ctx: &ToolRuntimeContext) -> Vec<serde_json::Value> {
     let plan = ToolRegistrationPlan::from_context(ctx);
     let mut schemas = Vec::with_capacity(24);
-    schemas.push(mcp_schema_entry(&extra::ReadToolOutputTool::new(
-        ctx.clone(),
-    )));
-    schemas.push(mcp_schema_entry(&plan::UpdatePlanTool::new(ctx.clone())));
-    schemas.push(mcp_schema_entry(&plan::RequestUserInputTool::new(
-        ctx.clone(),
-    )));
-    if plan.knowledge_search {
-        schemas.push(mcp_schema_entry(&plan::SearchKnowledgeTool::new(
-            ctx.clone(),
-        )));
+    macro_rules! push_schema {
+        ($($tool_ty:path),+ $(,)?) => {
+            $(schemas.push(mcp_schema_entry(&<$tool_ty>::new(ctx.clone())));)+
+        };
     }
-    if plan.subagent {
-        schemas.push(mcp_schema_entry(&delegate::DelegateTaskTool::new(
-            ctx.clone(),
-        )));
-    }
-    if plan.skill_loader {
-        schemas.push(mcp_schema_entry(&skill_tool::LoadSkillTool::new(
-            ctx.clone(),
-        )));
-    }
-    if plan.app_bridge {
-        macro_rules! push_app_schemas {
-            ($($tool_ty:path),+ $(,)?) => {
-                $(schemas.push(mcp_schema_entry(&<$tool_ty>::new(ctx.clone())));)+
-            };
-        }
-        for_each_app_bridge_tool!(push_app_schemas);
-    }
-    if plan.remote_exec {
-        schemas.push(mcp_schema_entry(&remote::RemoteExecTool::new(ctx.clone())));
-    }
-    if plan.remote_fs {
-        schemas.push(mcp_schema_entry(&ops::RemoteFsTool::new(ctx.clone())));
-        schemas.push(mcp_schema_entry(&ops::TransferFileTool::new(ctx.clone())));
-    }
-    if plan.host_tools {
-        schemas.push(mcp_schema_entry(&remote::GetRecentBlocksTool::new(
-            ctx.clone(),
-        )));
-        schemas.push(mcp_schema_entry(&remote::ReadTerminalTool::new(
-            ctx.clone(),
-        )));
-        schemas.push(mcp_schema_entry(&remote::ProposeHostMemoryTool::new(
-            ctx.clone(),
-        )));
-        schemas.push(mcp_schema_entry(&ops::InspectHostRuntimeTool::new(
-            ctx.clone(),
-        )));
-        schemas.push(mcp_schema_entry(&ops::ContainerOpsTool::new(ctx.clone())));
-        schemas.push(mcp_schema_entry(&extra::PortForwardTool::new(ctx.clone())));
-    }
-    if plan.bulk_tools {
-        schemas.push(mcp_schema_entry(&extra::RemoteExecBulkTool::new(
-            ctx.clone(),
-        )));
-        schemas.push(mcp_schema_entry(&compare::CompareHostsTool::new(
-            ctx.clone(),
-        )));
-    }
+    for_each_planned_tool!(plan, push_schema);
     schemas
 }
 
@@ -207,49 +194,12 @@ pub fn attach_tools(
     ctx: &ToolRuntimeContext,
 ) -> rig_agent::AgentBuilder {
     let plan = ToolRegistrationPlan::from_context(ctx);
-    builder = builder
-        .tool(extra::ReadToolOutputTool::new(ctx.clone()))
-        .tool(plan::UpdatePlanTool::new(ctx.clone()))
-        .tool(plan::RequestUserInputTool::new(ctx.clone()));
-    if plan.knowledge_search {
-        builder = builder.tool(plan::SearchKnowledgeTool::new(ctx.clone()));
+    macro_rules! attach_tool {
+        ($($tool_ty:path),+ $(,)?) => {
+            $(builder = builder.tool(<$tool_ty>::new(ctx.clone()));)+
+        };
     }
-    if plan.subagent {
-        builder = builder.tool(delegate::DelegateTaskTool::new(ctx.clone()));
-    }
-    if plan.skill_loader {
-        builder = builder.tool(skill_tool::LoadSkillTool::new(ctx.clone()));
-    }
-    if plan.app_bridge {
-        macro_rules! attach_app_tools {
-            ($($tool_ty:path),+ $(,)?) => {
-                $(builder = builder.tool(<$tool_ty>::new(ctx.clone()));)+
-            };
-        }
-        for_each_app_bridge_tool!(attach_app_tools);
-    }
-    if plan.remote_exec {
-        builder = builder.tool(remote::RemoteExecTool::new(ctx.clone()));
-    }
-    if plan.remote_fs {
-        builder = builder
-            .tool(ops::RemoteFsTool::new(ctx.clone()))
-            .tool(ops::TransferFileTool::new(ctx.clone()));
-    }
-    if plan.host_tools {
-        builder = builder
-            .tool(remote::GetRecentBlocksTool::new(ctx.clone()))
-            .tool(remote::ReadTerminalTool::new(ctx.clone()))
-            .tool(remote::ProposeHostMemoryTool::new(ctx.clone()))
-            .tool(ops::InspectHostRuntimeTool::new(ctx.clone()))
-            .tool(ops::ContainerOpsTool::new(ctx.clone()))
-            .tool(extra::PortForwardTool::new(ctx.clone()));
-    }
-    if plan.bulk_tools {
-        builder = builder
-            .tool(extra::RemoteExecBulkTool::new(ctx.clone()))
-            .tool(compare::CompareHostsTool::new(ctx.clone()));
-    }
+    for_each_planned_tool!(plan, attach_tool);
     builder
 }
 

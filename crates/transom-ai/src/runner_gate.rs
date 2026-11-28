@@ -16,16 +16,15 @@ use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 use transom_core::AiApprovalDecision;
 
+use crate::approval_flow::{PolicyApprovalOutcome, PolicyApprovalParams, request_policy_approval};
 use crate::hooks::{HookContext, HookEvent, HookExecutor};
-use crate::runner::{AgentEvent, ApprovalRequest, HandoffRequest, TurnOutput};
+use crate::runner::{AgentEvent, HandoffRequest, TurnOutput};
 use crate::tools::{
     ResolvedToolTarget, ToolRiskAssessment, ToolRuntimeContext, assess_tool_call_value,
     target_argument_for_tool,
 };
 use transom_ai_contracts::approval::{ApprovalGrantStore, ApprovalScope};
-use transom_ai_contracts::exec_policy::{
-    ExecPolicyRule, evaluate_command_chain, explain_command_impact, extract_command_prefix,
-};
+use transom_ai_contracts::exec_policy::{ExecPolicyRule, evaluate_command_chain};
 use transom_ai_contracts::policy::{
     CommandPolicyContext, ExecutionMode, HostProtection, PolicyDecision, ToolRisk,
     detect_blocking_command, evaluate_bulk_policy, evaluate_command_policy,
@@ -367,43 +366,34 @@ impl Gate {
         cmd_str: Option<&str>,
         target: &ResolvedToolTarget,
     ) -> DispatchAction {
-        let suggested_prefix = cmd_str.and_then(extract_command_prefix);
-        let impact_note = cmd_str.and_then(explain_command_impact);
         let command_preview = cmd_str
             .map(str::to_owned)
             .unwrap_or_else(|| assessment.summary.detail.clone());
         let host_label = assessment.summary.host_label.clone();
+        let scope = self
+            .approval_scope
+            .with_target(target.host_id.clone(), target.protection);
 
-        let (tx, rx) = oneshot::channel();
-        if self
-            .events
-            .send(AgentEvent::Approval(ApprovalRequest {
-                summary: assessment.summary,
-                suggested_prefix,
-                impact_note,
-                respond: tx,
-            }))
-            .await
-            .is_err()
+        let decision = match request_policy_approval(PolicyApprovalParams {
+            events: &self.events,
+            cancel: &self.cancel,
+            summary: assessment.summary,
+            command: cmd_str,
+            approval_scope: &scope,
+            approval_grants: &self.approval_grants,
+            timeout: None,
+        })
+        .await
         {
-            return DispatchAction::stop("事件通道已关闭");
-        }
-        let reply = tokio::select! {
-            _ = self.cancel.cancelled() => return DispatchAction::stop("用户已取消"),
-            res = rx => match res {
-                Ok(val) => val,
-                Err(_) => return DispatchAction::stop("审批通道已断开"),
+            PolicyApprovalOutcome::Decision(decision) => decision,
+            PolicyApprovalOutcome::Cancelled => return DispatchAction::stop("用户已取消"),
+            PolicyApprovalOutcome::ChannelClosed | PolicyApprovalOutcome::TimedOut => {
+                return DispatchAction::stop("审批通道已断开");
             }
         };
-        match reply {
-            AiApprovalDecision::AllowOnce => DispatchAction::proceed(),
-            AiApprovalDecision::AllowPrefix { prefix } => {
-                if let Some(prefix) = extract_command_prefix(&prefix) {
-                    let scope = self
-                        .approval_scope
-                        .with_target(target.host_id.clone(), target.protection);
-                    self.approval_grants.write().grant_prefix(&scope, &prefix);
-                }
+
+        match decision {
+            AiApprovalDecision::AllowOnce | AiApprovalDecision::AllowPrefix { .. } => {
                 DispatchAction::proceed()
             }
             AiApprovalDecision::RejectWithFeedback { reason } => {

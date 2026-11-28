@@ -7,6 +7,7 @@ pub mod acp;
 pub(crate) mod acp_handlers;
 pub mod acp_parse;
 pub mod acp_probe;
+pub(crate) mod approval_flow;
 pub mod bm25;
 pub mod compaction;
 pub mod context_budget;
