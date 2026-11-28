@@ -12,7 +12,7 @@ use gpui_kit::*;
 
 use super::cards::{ChatItemCallbacks, ChatItemRenderParams, render_chat_item};
 use super::markdown_blocks::{CodeBlockCallbacks, StreamingMarkdownCache};
-use super::message_stream::MessageStreamEvent;
+use super::message_stream_types::MessageStreamEvent;
 use super::state::UiChatItem;
 use crate::palette::Palette;
 use crate::theme::tokens::space;

@@ -1,80 +1,34 @@
 //! 独立的 AI 消息流 GPUI 实体：承载消息列表渲染、流式局部增量更新、滚动跟踪与导航点。
 //!
 //! 设计原理（Why）：
-//! - 将高频流式 `TextDelta` / `ReasoningDelta` 重绘隔离在 [`MessageStreamView`] 内部，
-//!   流式输出期间仅调用本实体的 `cx.notify()`，避免顶栏、抽屉、任务栏与输入区陪跑重绘；
-//! - 严格遵循单向数据流：父视图 [`super::view::AiAssistantView`] 通过 `sync_snapshot` /
-//!   `apply_streaming_delta` 向下推送投影数据，用户交互通过 [`MessageStreamEvent`] 向上冒泡，
-//!   渲染链路严禁任何 `read_entity` 反向读取。
+//! - 高频流式 `TextDelta` / `ReasoningDelta` 重绘隔离在本实体内，顶栏、抽屉与输入区不陪跑重绘；
+//! - 单向数据流：父视图经 `sync_snapshot` / `apply_streaming_delta` 向下推送数据，
+//!   交互经 [`MessageStreamEvent`] 向上冒泡，渲染链路严禁 `read_entity` 反向读取。
 
-use std::rc::Rc;
 use std::time::Instant;
 
-use gpui_kit::base::{h_flex, v_flex};
+use gpui_kit::base::v_flex;
 use gpui_kit::component::Sizable as _;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::*;
 use transom_core::AiAppEvent;
 
-use super::cards::{ChatItemCallbacks, ChatItemRenderParams, render_chat_item};
 use super::empty_state::render_empty_state;
 use super::markdown_blocks::CodeBlockCallbacks;
-use super::message_stream_render::{render_running_focus_row, render_status_error_banner};
-use super::plan_card::render_scroll_bottom_button;
+use super::message_stream_render::{
+    build_code_callbacks, render_running_focus_row, render_single_stream_block,
+    render_status_error_banner, wrap_stream_with_nav_and_scroll,
+};
+use super::message_stream_types::{MessageStreamEvent, MessageStreamSnapshot};
 use super::state::{MessageStreamModel, UiChatItem};
 use super::streaming_tail::{StreamingTailView, build_tail_callbacks};
 use super::task_bar::UiManagedTask;
-use super::turn_nav::{collect_turn_nav_entries, render_turn_nav_rail, resolve_active_nav_dot};
+use super::turn_nav::collect_turn_nav_entries;
 use super::work_group::{
-    DisplayBlock, MessageBlockCache, WorkGroupParams, chat_item_id, find_subagent_task,
-    group_chat_items, render_work_group,
+    DisplayBlock, MessageBlockCache, WorkGroupParams, group_chat_items, render_work_group,
 };
 use crate::palette::Palette;
 use crate::theme::tokens::space;
-
-/// 消息流实体向父视图发出的交互意图事件。
-#[derive(Debug, Clone)]
-pub(in crate::app::ai) enum MessageStreamEvent {
-    ToggleCard(String),
-    RollbackCheckpoint(String),
-    SendQuickPrompt(String),
-    CopyText {
-        key: String,
-        text: String,
-    },
-    SendToTerminal(String),
-    SaveSnippet {
-        name: String,
-        command: String,
-    },
-    RevertRemoteFile {
-        host: String,
-        target: String,
-        backup: String,
-    },
-    JumpToTerminal(String),
-    SubagentAction {
-        action: String,
-        task_id: String,
-    },
-    LoadOlderMessages,
-    PreviewImage {
-        title: String,
-        base64: String,
-    },
-}
-
-/// 由父视图单向注入的消息流运行态元信息快照（不含消息列表深拷贝）。
-pub(in crate::app::ai) struct MessageStreamSnapshot {
-    pub(in crate::app::ai) is_running: bool,
-    pub(in crate::app::ai) run_started_at: Option<Instant>,
-    pub(in crate::app::ai) active_focus: Option<String>,
-    pub(in crate::app::ai) status_error: Option<String>,
-    pub(in crate::app::ai) copied_key: Option<String>,
-    pub(in crate::app::ai) has_active_terminal: bool,
-    pub(in crate::app::ai) active_acp: Option<(String, String)>,
-    pub(in crate::app::ai) managed_tasks: Vec<UiManagedTask>,
-}
 
 /// 独立的 AI 消息流视图实体（消息流单一数据源的唯一持有者）。
 pub(in crate::app::ai) struct MessageStreamView {
@@ -318,16 +272,26 @@ impl MessageStreamView {
         cx.notify();
     }
 
+    /// 跳转到指定导航点对应的消息块并锁定自动滚底。
+    pub(in crate::app::ai) fn jump_to_nav_dot(
+        &mut self,
+        dot_idx: usize,
+        block_idx: usize,
+        cx: &mut Context<Self>,
+    ) {
+        self.auto_scroll_locked = true;
+        self.scroll_handle.scroll_to_item(block_idx);
+        self.active_nav_dot = Some(dot_idx);
+        cx.notify();
+    }
+
     fn refresh_block_cache(&mut self) {
         let is_running = self.is_running;
         let item_count = self.model.item_count();
         let group_revision = self.model.group_revision();
-        let cache_is_valid = self.block_cache.as_ref().is_some_and(|cache| {
-            cache.item_count == item_count
-                && cache.is_running == is_running
-                && cache.group_revision == group_revision
-        });
-        if cache_is_valid {
+        if (self.block_cache.as_ref())
+            .is_some_and(|cache| cache.is_fresh(item_count, is_running, group_revision))
+        {
             return;
         }
         let blocks = group_chat_items(self.model.items(), is_running);
@@ -343,54 +307,9 @@ impl MessageStreamView {
         if let Some(cb) = &self.code_callbacks {
             return cb.clone();
         }
-        let cb = self.build_code_callbacks(cx);
+        let cb = build_code_callbacks(cx.entity());
         self.code_callbacks = Some(cb.clone());
         cb
-    }
-
-    fn build_code_callbacks(&self, cx: &mut Context<Self>) -> CodeBlockCallbacks {
-        let v_copy = cx.entity();
-        let v_send = cx.entity();
-        let v_snip = cx.entity();
-        let v_rev = cx.entity();
-        let v_jump = cx.entity();
-        let v_sub = cx.entity();
-        CodeBlockCallbacks {
-            on_copy: Rc::new(move |key, text, _, cx| {
-                v_copy.update(cx, |_, cx| {
-                    cx.emit(MessageStreamEvent::CopyText { key, text });
-                });
-            }),
-            on_send_to_terminal: Rc::new(move |command, _, cx| {
-                v_send.update(cx, |_, cx| {
-                    cx.emit(MessageStreamEvent::SendToTerminal(command));
-                });
-            }),
-            on_save_snippet: Rc::new(move |name, command, _, cx| {
-                v_snip.update(cx, |_, cx| {
-                    cx.emit(MessageStreamEvent::SaveSnippet { name, command });
-                });
-            }),
-            on_revert_remote_file: Rc::new(move |host, target, backup, _, cx| {
-                v_rev.update(cx, |_, cx| {
-                    cx.emit(MessageStreamEvent::RevertRemoteFile {
-                        host,
-                        target,
-                        backup,
-                    });
-                });
-            }),
-            on_jump_to_terminal: Rc::new(move |host, _, cx| {
-                v_jump.update(cx, |_, cx| {
-                    cx.emit(MessageStreamEvent::JumpToTerminal(host));
-                });
-            }),
-            on_subagent_action: Rc::new(move |action, task_id, _, cx| {
-                v_sub.update(cx, |_, cx| {
-                    cx.emit(MessageStreamEvent::SubagentAction { action, task_id });
-                });
-            }),
-        }
     }
 }
 
@@ -451,11 +370,9 @@ impl Render for MessageStreamView {
             let group_revision = self.model.group_revision();
             let render_window_blocks = self.model.render_window_blocks();
             let fallback_blocks;
-            let blocks = if let Some(cache) = self.block_cache.as_ref().filter(|cache| {
-                cache.item_count == items.len()
-                    && cache.is_running == is_running
-                    && cache.group_revision == group_revision
-            }) {
+            let blocks = if let Some(cache) = (self.block_cache.as_ref())
+                .filter(|cache| cache.is_fresh(items.len(), is_running, group_revision))
+            {
                 cache.blocks.as_slice()
             } else {
                 fallback_blocks = group_chat_items(items, is_running);
@@ -505,65 +422,20 @@ impl Render for MessageStreamView {
                 let v_exp = cx.entity();
                 match block {
                     DisplayBlock::Single(item_index) => {
-                        let item = &items[*item_index];
-                        let cid = chat_item_id(item).to_owned();
-                        let expanded = expanded_cards.contains(&cid);
-                        let full_key = format!("full-out-{cid}");
-                        let full_output_expanded = expanded_cards.contains(&full_key);
-                        let is_follow_user =
-                            b_idx > 0 && matches!(item, UiChatItem::UserText { .. });
-                        let after_work_group = b_idx > 0
-                            && matches!(blocks[b_idx - 1], DisplayBlock::WorkGroup { .. })
-                            && matches!(item, UiChatItem::AssistantText { .. });
-                        let v_rb = cx.entity();
-                        let v_full = cx.entity();
-                        let v_img = cx.entity();
-                        let subagent_task = find_subagent_task(&self.managed_tasks, item);
-                        let item_el = render_chat_item(
-                            ChatItemRenderParams {
-                                item,
-                                expanded,
-                                full_output_expanded,
-                                copied_key,
-                                has_active_terminal,
-                                now: frame_now,
-                                subagent_task,
-                                p,
-                            },
-                            ChatItemCallbacks {
-                                on_toggle_expand: Rc::new(move |_, cx| {
-                                    let id = cid.clone();
-                                    v_exp.update(cx, |_, cx| {
-                                        cx.emit(MessageStreamEvent::ToggleCard(id));
-                                    });
-                                }),
-                                on_toggle_full_output: Rc::new(move |_, cx| {
-                                    let key = full_key.clone();
-                                    v_full.update(cx, |_, cx| {
-                                        cx.emit(MessageStreamEvent::ToggleCard(key));
-                                    });
-                                }),
-                                on_rollback: Rc::new(move |entry_id, _, cx| {
-                                    v_rb.update(cx, |_, cx| {
-                                        cx.emit(MessageStreamEvent::RollbackCheckpoint(entry_id));
-                                    });
-                                }),
-                                on_preview_image: Rc::new(move |title, base64, _, cx| {
-                                    v_img.update(cx, |_, cx| {
-                                        cx.emit(MessageStreamEvent::PreviewImage { title, base64 });
-                                    });
-                                }),
-                                code: code_callbacks.clone(),
-                            },
-                        );
-                        if is_follow_user {
-                            msg_list =
-                                msg_list.child(div().w_full().pt(rems(space::SM)).child(item_el));
-                        } else if after_work_group {
-                            msg_list = msg_list.child(div().w_full().pt(px(4.0)).child(item_el));
-                        } else {
-                            msg_list = msg_list.child(item_el);
-                        }
+                        msg_list = msg_list.child(render_single_stream_block(
+                            b_idx,
+                            *item_index,
+                            items,
+                            blocks,
+                            expanded_cards,
+                            copied_key,
+                            has_active_terminal,
+                            frame_now,
+                            &self.managed_tasks,
+                            code_callbacks.clone(),
+                            p,
+                            v_exp,
+                        ));
                     }
                     DisplayBlock::WorkGroup {
                         id,
@@ -613,62 +485,15 @@ impl Render for MessageStreamView {
             msg_list = msg_list.child(render_status_error_banner(err, p));
         }
 
-        let auto_following = self.is_running && !self.auto_scroll_locked;
-        if auto_following {
-            self.scroll_handle.scroll_to_bottom();
-        }
-        let max_y = self.scroll_handle.max_offset().y;
-        let off_y = -self.scroll_handle.offset().y;
-        let show_scroll_bottom = !auto_following && max_y > px(40.0) && (max_y - off_y) > px(40.0);
-
-        let mut body_row = h_flex()
-            .flex_1()
-            .w_full()
-            .h_full()
-            .min_w_0()
-            .min_h_0()
-            .overflow_hidden();
-        if !nav_entries.is_empty() {
-            let view = cx.entity();
-            let top_item = self.scroll_handle.top_item();
-            let computed_dot = resolve_active_nav_dot(&nav_entries, top_item, !show_scroll_bottom);
-            let active_dot = self.active_nav_dot.or(computed_dot);
-            let rail = render_turn_nav_rail(
-                &nav_entries,
-                active_dot,
-                p,
-                move |dot_idx, block_idx, _, cx| {
-                    view.update(cx, |this, cx| {
-                        this.auto_scroll_locked = true;
-                        this.scroll_handle.scroll_to_item(block_idx);
-                        this.active_nav_dot = Some(dot_idx);
-                        cx.notify();
-                    });
-                },
-            );
-            body_row = body_row.child(rail);
-        }
-        body_row = body_row.child(msg_list);
-
-        let mut wrapper = v_flex()
-            .relative()
-            .flex_1()
-            .w_full()
-            .min_w_0()
-            .min_h_0()
-            .overflow_hidden()
-            .child(body_row);
-        if show_scroll_bottom {
-            let v_btm = cx.entity();
-            wrapper = wrapper.child(render_scroll_bottom_button(p, move |_, cx| {
-                v_btm.update(cx, |this, cx| {
-                    this.auto_scroll_locked = false;
-                    this.active_nav_dot = None;
-                    this.scroll_handle.scroll_to_bottom();
-                    cx.notify();
-                });
-            }));
-        }
-        wrapper
+        wrap_stream_with_nav_and_scroll(
+            msg_list.into_any_element(),
+            &nav_entries,
+            &self.scroll_handle,
+            self.is_running,
+            self.auto_scroll_locked,
+            self.active_nav_dot,
+            p,
+            cx.entity(),
+        )
     }
 }

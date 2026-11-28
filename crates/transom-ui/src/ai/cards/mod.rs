@@ -1,6 +1,7 @@
 //! AI 消息流气泡、可折叠思考块与工具结果卡片渲染。
 
 pub(in crate::app::ai) mod approval;
+mod assistant_card;
 pub(in crate::app::ai) mod bulk_matrix;
 pub(in crate::app::ai) mod choice_card;
 pub(in crate::app::ai) mod diff_view;
@@ -20,12 +21,11 @@ use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::*;
 use transom_ui_icons::{AppIcon, AppIconElement, UiIcon};
 
-use crate::app::ai::markdown_blocks::{
-    CodeBlockCallbacks, MarkdownRenderParams, StreamingMarkdownCache, render_markdown_content,
-};
+use crate::app::ai::markdown_blocks::{CodeBlockCallbacks, StreamingMarkdownCache};
 use crate::app::ai::state::UiChatItem;
 use crate::palette::Palette;
 use crate::theme::tokens::{space, typography};
+use assistant_card::{AssistantMessageParams, render_assistant_message};
 
 /// 单条消息项渲染参数。
 pub(in crate::app::ai) struct ChatItemRenderParams<'a> {
@@ -46,7 +46,8 @@ pub(in crate::app::ai) type ToggleCardCallback = Rc<dyn Fn(&mut Window, &mut App
 /// 回滚到指定轮次之前的回调类型。
 pub(in crate::app::ai) type RollbackCallback = Rc<dyn Fn(String, &mut Window, &mut App)>;
 /// 点击消息内图片缩略图触发大图预览的回调类型 `(title, base64)`。
-pub(in crate::app::ai) type PreviewImageCallback = Rc<dyn Fn(String, String, &mut Window, &mut App)>;
+pub(in crate::app::ai) type PreviewImageCallback =
+    Rc<dyn Fn(String, String, &mut Window, &mut App)>;
 
 /// 消息项交互回调集合。
 #[derive(Clone)]
@@ -181,7 +182,7 @@ fn format_relative_timestamp(
     }
 }
 
-fn copy_icon_and_tip(is_copied: bool) -> (UiIcon, String) {
+pub(super) fn copy_icon_and_tip(is_copied: bool) -> (UiIcon, String) {
     if is_copied {
         (UiIcon::CHECK, rust_i18n::t!("ai.copied").to_string())
     } else {
@@ -254,7 +255,11 @@ fn render_user_bubble(
 
     let mut col = v_flex().w_full().items_end().gap(px(4.0));
     if !images.is_empty() {
-        let mut img_row = h_flex().max_w(rems(32.0)).flex_wrap().justify_end().gap(px(6.0));
+        let mut img_row = h_flex()
+            .max_w(rems(32.0))
+            .flex_wrap()
+            .justify_end()
+            .gap(px(6.0));
         for (idx, item_img) in images.iter().enumerate() {
             let preview = Rc::clone(&callbacks.on_preview_image);
             let title = format!("image-{}.png", idx + 1);
@@ -278,10 +283,15 @@ fn render_user_bubble(
                         .object_fit(ObjectFit::Cover),
                 );
             } else {
-                card = card.flex().items_center().justify_center().text_color(p.text.muted).child(
-                    AppIconElement::new(AppIcon::Custom(transom_ui_icons::CustomIcon::IMAGE))
-                        .small(),
-                );
+                card = card
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .text_color(p.text.muted)
+                    .child(
+                        AppIconElement::new(AppIcon::Custom(transom_ui_icons::CustomIcon::IMAGE))
+                            .small(),
+                    );
             }
             img_row = img_row.child(card);
         }
@@ -396,154 +406,4 @@ fn render_reasoning_block(
         );
     }
     box_el.into_any_element()
-}
-
-/// 助手文本消息渲染参数。
-struct AssistantMessageParams<'a> {
-    id: &'a str,
-    text: &'a str,
-    cached_segments: Option<&'a [crate::app::ai::markdown_blocks::MarkdownSegment]>,
-    model: Option<&'a str>,
-    tokens_per_sec: Option<f32>,
-    streaming: bool,
-}
-
-fn render_assistant_message(
-    msg: AssistantMessageParams<'_>,
-    params: &ChatItemRenderParams<'_>,
-    callbacks: &ChatItemCallbacks,
-) -> AnyElement {
-    let AssistantMessageParams {
-        id,
-        text,
-        cached_segments,
-        model,
-        tokens_per_sec,
-        streaming,
-    } = msg;
-    let p = params.p;
-    // 依托 StreamingMarkdownCache 的 O(N) 增量解析，流式阶段即可直接呈现完整
-    // Markdown 排版与代码块卡片，彻底消除流式结束时的视觉跳变。
-    let content = render_markdown_content(MarkdownRenderParams {
-        msg_id: id,
-        text,
-        cached_segments,
-        streaming,
-        copied_key: params.copied_key,
-        has_active_terminal: params.has_active_terminal,
-        p,
-        callbacks: &callbacks.code,
-    });
-    let mut col = v_flex()
-        .w_full()
-        .py(rems(space::XS))
-        .gap(rems(space::XS))
-        .child(content);
-
-    if streaming {
-        col = col.child(
-            h_flex()
-                .pt(px(4.0))
-                .gap(px(6.0))
-                .items_center()
-                .child(
-                    div()
-                        .w(px(12.0))
-                        .h(px(12.0))
-                        .rounded_full()
-                        .bg(p.tone.primary_subtle)
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .child(div().w(px(5.0)).h(px(5.0)).rounded_full().bg(p.primary)),
-                )
-                .child(
-                    div()
-                        .text_size(rems(typography::CAPTION))
-                        .text_color(p.text.muted)
-                        .child(rust_i18n::t!("ai.streaming_code").to_string()),
-                ),
-        );
-    } else {
-        let mut meta_bar = h_flex().gap(px(8.0)).items_center();
-        if let Some(m) = model {
-            meta_bar = meta_bar.child(
-                div()
-                    .px(px(6.0))
-                    .py(px(1.5))
-                    .rounded(p.radius.sm)
-                    .bg(p.surface.faint)
-                    .text_size(rems(typography::CAPTION))
-                    .text_color(p.text.muted)
-                    .child(m.to_owned()),
-            );
-        }
-        if let Some(tps) = tokens_per_sec {
-            meta_bar = meta_bar.child(
-                div()
-                    .font_family(p.mono_font_family.clone())
-                    .text_size(rems(typography::CAPTION))
-                    .text_color(p.text.disabled)
-                    .child(format!("{tps:.1} tok/s")),
-            );
-        }
-        let copy_key = format!("asst-{id}");
-        let is_copied = params.copied_key == Some(copy_key.as_str());
-        let (copy_icon, copy_tip) = copy_icon_and_tip(is_copied);
-        let on_copy = Rc::clone(&callbacks.code.on_copy);
-        let full_text = text.to_owned();
-
-        col = col.child(
-            h_flex()
-                .w_full()
-                .pt(px(2.0))
-                .justify_between()
-                .items_center()
-                .child(meta_bar)
-                .child(
-                    Button::new(SharedString::from(format!("ai-copy-asst-{id}")))
-                        .ghost()
-                        .xsmall()
-                        .accessibility_label(copy_tip.clone())
-                        .tooltip(copy_tip)
-                        .child(
-                            div()
-                                .text_color(if is_copied { p.success } else { p.text.muted })
-                                .child(AppIconElement::new(AppIcon::Ui(copy_icon)).small()),
-                        )
-                        .on_click(move |_, w, cx| {
-                            on_copy(copy_key.clone(), full_text.clone(), w, cx);
-                        }),
-                ),
-        );
-    }
-    col.into_any_element()
-}
-
-#[cfg(test)]
-mod tests {
-    use chrono::{TimeZone as _, Utc};
-
-    use super::format_relative_timestamp;
-
-    #[test]
-    fn formats_relative_timestamps_across_ranges() {
-        let now = Utc.with_ymd_and_hms(2026, 11, 27, 10, 0, 0).unwrap();
-
-        assert_eq!(
-            format_relative_timestamp(Utc.with_ymd_and_hms(2026, 11, 27, 9, 59, 30).unwrap(), now),
-            rust_i18n::t!("ai.time_just_now").as_ref()
-        );
-        assert_eq!(
-            format_relative_timestamp(Utc.with_ymd_and_hms(2026, 11, 27, 9, 45, 0).unwrap(), now),
-            rust_i18n::t!("ai.time_mins_ago", count = 15).as_ref()
-        );
-        assert_eq!(
-            format_relative_timestamp(Utc.with_ymd_and_hms(2026, 11, 27, 7, 0, 0).unwrap(), now),
-            rust_i18n::t!("ai.time_hours_ago", count = 3).as_ref()
-        );
-        let older =
-            format_relative_timestamp(Utc.with_ymd_and_hms(2026, 11, 25, 8, 30, 0).unwrap(), now);
-        assert!(!older.is_empty() && older.contains(':'));
-    }
 }

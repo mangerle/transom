@@ -23,6 +23,20 @@ pub(in crate::app::ai) struct MessageBlockCache {
     pub(in crate::app::ai) blocks: Vec<DisplayBlock>,
 }
 
+impl MessageBlockCache {
+    /// 缓存是否仍与当前条目数、运行态与分组版本一致。
+    pub(in crate::app::ai) fn is_fresh(
+        &self,
+        item_count: usize,
+        is_running: bool,
+        group_revision: u64,
+    ) -> bool {
+        self.item_count == item_count
+            && self.is_running == is_running
+            && self.group_revision == group_revision
+    }
+}
+
 /// 根据工具卡片的 `call_id` 精确匹配对应的子代理托管任务；若任务缺少 `source_call_id`（历史兼容）则回退按标题匹配。
 pub(in crate::app::ai) fn find_subagent_task<'a>(
     tasks: &'a [crate::app::ai::task_bar::UiManagedTask],

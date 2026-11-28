@@ -6,6 +6,7 @@
 //! - 按 `state` / `cards` / `approval` / `composer` / `config_drawer` / `view` 拆分为小文件。
 
 mod actions;
+mod actions_terminal;
 mod app_actions;
 mod cards;
 mod chrome;
@@ -19,9 +20,11 @@ pub(crate) mod inline_assist;
 mod markdown;
 mod message_stream;
 mod message_stream_render;
+mod message_stream_types;
 mod metrics;
 mod metrics_model;
 pub(crate) mod panel_events;
+mod panel_tasks;
 mod state;
 mod state_types;
 mod streaming_tail;
@@ -29,6 +32,7 @@ mod task_bar;
 mod turn_nav;
 mod view;
 mod view_events;
+mod view_overlays;
 
 use cards::{
     approval, bulk_matrix, choice_card, diff_view, plan_card, queue_card, tool_card,

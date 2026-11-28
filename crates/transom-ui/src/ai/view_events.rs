@@ -3,7 +3,7 @@
 use gpui_kit::*;
 use transom_core::AiAppEvent;
 
-use super::message_stream::MessageStreamSnapshot;
+use super::message_stream_types::MessageStreamSnapshot;
 use super::view::AiAssistantView;
 use crate::app::spawn_blocking_local;
 
