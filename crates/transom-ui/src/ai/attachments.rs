@@ -330,7 +330,7 @@ impl AiAssistantView {
             return false;
         }
         let seq_base = self.state.composer.pending_attachments.len() + 1;
-        self._attachment_task = Some(cx.spawn_in(window, async move |this, cx| {
+        self.tasks.attachment = Some(cx.spawn_in(window, async move |this, cx| {
             let loaded = spawn_blocking_local(move || {
                 let mut out = Vec::new();
                 for (i, bytes) in image_payloads.into_iter().enumerate() {
@@ -378,7 +378,7 @@ impl AiAssistantView {
         if paths.is_empty() {
             return;
         }
-        self._attachment_task = Some(cx.spawn_in(window, async move |this, cx| {
+        self.tasks.attachment = Some(cx.spawn_in(window, async move |this, cx| {
             let loaded = spawn_blocking_local(move || {
                 paths
                     .into_iter()

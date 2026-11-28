@@ -166,7 +166,11 @@ impl AiAssistantView {
                                 if this.state.view.drawer == AiDrawerTab::Skills {
                                     this.state.view.drawer = AiDrawerTab::Chat;
                                 } else {
-                                    this.refresh_skills_list(cx);
+                                    let disabled =
+                                        this.state.config.settings.disabled_skills.clone();
+                                    this.skills_drawer.update(cx, |drawer, cx| {
+                                        drawer.set_disabled_and_refresh(disabled, cx);
+                                    });
                                     this.state.view.drawer = AiDrawerTab::Skills;
                                 }
                                 cx.notify();

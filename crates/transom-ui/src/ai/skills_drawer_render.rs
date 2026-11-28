@@ -10,11 +10,11 @@ use transom_ai_contracts::SkillDefinition;
 use transom_ui_icons::{AppIcon, AppIconElement, UiIcon};
 
 use super::config_drawer::{field_group, section_card};
-use super::view::AiAssistantView;
+use super::skills_drawer::SkillsDrawerView;
 use crate::palette::Palette;
 use crate::theme::tokens::{space, typography};
 
-impl AiAssistantView {
+impl SkillsDrawerView {
     pub(super) fn render_skills_body(&self, p: &Palette, cx: &mut Context<Self>) -> AnyElement {
         let v_import = cx.entity();
         let v_new = cx.entity();
@@ -67,7 +67,7 @@ impl AiAssistantView {
                 ),
         );
 
-        if let Some((ok, msg)) = &self.skills_drawer.status_notice {
+        if let Some((ok, msg)) = &self.status_notice {
             root = root.child(
                 div()
                     .w_full()
@@ -83,7 +83,7 @@ impl AiAssistantView {
             );
         }
 
-        if self.skills_drawer.editing_id.is_some() {
+        if self.editing_id.is_some() {
             return root
                 .child(self.render_skill_editor_form(p, cx))
                 .into_any_element();
@@ -95,7 +95,7 @@ impl AiAssistantView {
             .gap(rems(space::XS))
             .overflow_y_scrollbar();
 
-        if self.skills_drawer.skills.is_empty() {
+        if self.skills.is_empty() {
             list = list.child(
                 div()
                     .p(rems(space::MD))
@@ -104,7 +104,7 @@ impl AiAssistantView {
                     .child(rust_i18n::t!("ai.skills_empty").to_string()),
             );
         } else {
-            for (idx, skill) in self.skills_drawer.skills.iter().enumerate() {
+            for (idx, skill) in self.skills.iter().enumerate() {
                 list = list.child(self.render_skill_row(idx, skill, p, cx));
             }
         }
@@ -247,11 +247,7 @@ impl AiAssistantView {
     fn render_skill_editor_form(&self, p: &Palette, cx: &mut Context<Self>) -> AnyElement {
         let v_save = cx.entity();
         let v_cancel = cx.entity();
-        let is_new = self
-            .skills_drawer
-            .editing_id
-            .as_deref()
-            .is_some_and(str::is_empty);
+        let is_new = self.editing_id.as_deref().is_some_and(str::is_empty);
         let form_title = if is_new {
             rust_i18n::t!("ai.skill_form_new").to_string()
         } else {
@@ -266,23 +262,23 @@ impl AiAssistantView {
                     .items_start()
                     .child(div().flex_1().min_w_0().child(field_group(
                         rust_i18n::t!("ai.skill_form_id").to_string(),
-                        Input::new(&self.skills_drawer.id_input).small(),
+                        Input::new(&self.id_input).small(),
                         p,
                     )))
                     .child(div().flex_1().min_w_0().child(field_group(
                         rust_i18n::t!("ai.skill_form_title").to_string(),
-                        Input::new(&self.skills_drawer.title_input).small(),
+                        Input::new(&self.title_input).small(),
                         p,
                     ))),
             )
             .child(field_group(
                 rust_i18n::t!("ai.skill_form_desc").to_string(),
-                Input::new(&self.skills_drawer.desc_input).small(),
+                Input::new(&self.desc_input).small(),
                 p,
             ))
             .child(field_group(
                 rust_i18n::t!("ai.skill_form_tags").to_string(),
-                Input::new(&self.skills_drawer.tags_input).small(),
+                Input::new(&self.tags_input).small(),
                 p,
             ))
             .child(field_group(
@@ -295,7 +291,7 @@ impl AiAssistantView {
                     .border_1()
                     .border_color(p.divider(p.border))
                     .child(
-                        Textarea::new(&self.skills_drawer.body_input)
+                        Textarea::new(&self.body_input)
                             .appearance(false)
                             .bordered(false)
                             .h(rems(16.0)),
@@ -315,7 +311,7 @@ impl AiAssistantView {
                             .label(rust_i18n::t!("ai.skills_cancel").to_string())
                             .on_click(move |_, _, cx| {
                                 v_cancel.update(cx, |this, cx| {
-                                    this.skills_drawer.editing_id = None;
+                                    this.editing_id = None;
                                     cx.notify();
                                 });
                             }),

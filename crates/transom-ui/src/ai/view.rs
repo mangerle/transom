@@ -15,13 +15,24 @@ use super::choice_card::{ChoiceCardState, init_choice_input};
 use super::config_form::ConfigFormState;
 use super::memory_drawer::MemoryFormState;
 use super::plan_card::{PlanCardParams, render_plan_card};
-use super::skills_drawer::SkillsDrawerState;
+use super::skills_drawer::{SkillsDrawerEvent, SkillsDrawerView};
 use super::slash_menu::register_slash_key_interceptor;
 use super::state::{AiActivePopup, AiDrawerTab, AiPanelState};
 use super::work_group::MessageBlockCache;
 use crate::app::spawn_blocking_local;
 use crate::palette::Palette;
 use crate::theme::tokens::space;
+
+/// AI 面板主视图持有的后台异步任务槽位（覆盖式取消旧任务）。
+#[derive(Default)]
+pub(super) struct AiPanelTasks {
+    pub(super) copy_reset: Option<Task<()>>,
+    pub(super) attachment: Option<Task<()>>,
+    pub(super) _init_load: Option<Task<()>>,
+    pub(super) refresh_index: Option<Task<()>>,
+    pub(super) conversation_load: Option<Task<()>>,
+    pub(super) memory_load: Option<Task<()>>,
+}
 
 /// AI 助手独立面板实体。
 pub(crate) struct AiAssistantView {
@@ -40,15 +51,10 @@ pub(crate) struct AiAssistantView {
     pub(super) popover_scroll_handle: ScrollHandle,
     pub(super) active_nav_dot: Option<usize>,
     pub(super) copied_key: Option<String>,
-    pub(super) _copy_reset_task: Option<Task<()>>,
-    pub(super) _attachment_task: Option<Task<()>>,
-    pub(super) _init_load_task: Option<Task<()>>,
-    pub(super) _refresh_index_task: Option<Task<()>>,
-    pub(super) _conversation_load_task: Option<Task<()>>,
-    pub(super) _memory_load_task: Option<Task<()>>,
-    pub(super) _skills_load_task: Option<Task<()>>,
+    pub(super) tasks: AiPanelTasks,
     pub(super) message_block_cache: Option<MessageBlockCache>,
-    pub(super) skills_drawer: SkillsDrawerState,
+    pub(super) skills_drawer: Entity<SkillsDrawerView>,
+    pub(super) available_skills: Vec<transom_ai_contracts::SkillDefinition>,
     pub(super) policy_hooks_form: super::policy_hooks_drawer::PolicyHooksFormState,
     pub(super) model_picker: super::model_picker::ModelPickerState,
     pub(super) editing_title: bool,
@@ -94,7 +100,37 @@ impl AiAssistantView {
                 .placeholder(rust_i18n::t!("ai.approval_feedback_placeholder").to_string())
         });
         let (choice_custom_input, choice_sub) = init_choice_input(window, cx);
-        let skills_drawer = SkillsDrawerState::new(window, cx);
+        let skills_store = ai_store.clone();
+        let skills_drawer = cx.new(|cx| SkillsDrawerView::new(skills_store, window, cx));
+        let skills_sub =
+            cx.subscribe(
+                &skills_drawer,
+                |this, _, event: &SkillsDrawerEvent, cx| match event {
+                    SkillsDrawerEvent::ToggleSkillRequested(clean) => {
+                        if let Some(pos) = this
+                            .state
+                            .config
+                            .settings
+                            .disabled_skills
+                            .iter()
+                            .position(|s| s.eq_ignore_ascii_case(clean))
+                        {
+                            this.state.config.settings.disabled_skills.remove(pos);
+                        } else {
+                            this.state
+                                .config
+                                .settings
+                                .disabled_skills
+                                .push(clean.clone());
+                        }
+                        this.persist_settings_reported(cx);
+                    }
+                    SkillsDrawerEvent::SkillsLoaded(skills) => {
+                        this.available_skills = skills.clone();
+                        cx.notify();
+                    }
+                },
+            );
         let policy_hooks_form = super::policy_hooks_drawer::PolicyHooksFormState::new(window, cx);
         let model_picker = super::model_picker::ModelPickerState::new(window, cx);
 
@@ -206,7 +242,7 @@ impl AiAssistantView {
             }
         });
 
-        let mut subscriptions = vec![sub, key_sub, choice_sub, title_sub];
+        let mut subscriptions = vec![sub, key_sub, choice_sub, title_sub, skills_sub];
         subscriptions.extend(form_subs);
 
         Self {
@@ -225,15 +261,13 @@ impl AiAssistantView {
             popover_scroll_handle: ScrollHandle::new(),
             active_nav_dot: None,
             copied_key: None,
-            _copy_reset_task: None,
-            _attachment_task: None,
-            _init_load_task: Some(init_load_task),
-            _refresh_index_task: None,
-            _conversation_load_task: None,
-            _memory_load_task: None,
-            _skills_load_task: None,
+            tasks: AiPanelTasks {
+                _init_load: Some(init_load_task),
+                ..Default::default()
+            },
             message_block_cache: None,
             skills_drawer,
+            available_skills: Vec::new(),
             policy_hooks_form,
             model_picker,
             editing_title: false,
@@ -365,7 +399,7 @@ impl Render for AiAssistantView {
         let body = match self.state.view.drawer {
             AiDrawerTab::History => self.render_history_body(&p, cx),
             AiDrawerTab::Config => self.render_config_body(&p, cx),
-            AiDrawerTab::Skills => self.render_skills_body(&p, cx),
+            AiDrawerTab::Skills => self.skills_drawer.clone().into_any_element(),
             AiDrawerTab::Memory => self.render_memory_body(&p, cx),
             AiDrawerTab::Chat => self.render_chat_body(&p, cx),
         };

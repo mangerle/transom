@@ -1,16 +1,37 @@
-//! AI 面板「技能（Skills）」抽屉：浏览内置/自定义技能、开关启用、在线编辑与一键导入 `SKILL.md`。
+//! AI 面板「技能（Skills）」独立子实体：浏览内置/自定义技能、开关启用、在线编辑与导入 `SKILL.md`。
+//!
+//! 设计原理（Why）：
+//! - 将技能列表、5 个表单输入实体与后台导入/保存任务隔离到独立的 GPUI `Entity` 中，
+//!   避免编辑技能表单或异步加载技能时触发主聊天面板全量重绘；
+//! - 通过 [`SkillsDrawerEvent`] 向父视图冒泡“开关启用状态”和“技能列表更新”事件，
+//!   严格遵循单向数据流。
 
-use super::view::AiAssistantView;
-use crate::app::spawn_blocking_local;
+use std::sync::Arc;
+
 use gpui_kit::component::input::{InputState, TextareaState};
 use gpui_kit::*;
 use transom_ai_contracts::{
     SkillDefinition, delete_custom_skill, import_skill_from_path, load_skills_with_disabled,
     save_custom_skill,
 };
+use transom_store::AiStore;
 
-/// 技能管理抽屉内部状态。
-pub(super) struct SkillsDrawerState {
+use crate::app::spawn_blocking_local;
+use crate::palette::Palette;
+
+/// 技能抽屉向父视图冒泡的事件。
+#[derive(Clone, Debug)]
+pub(super) enum SkillsDrawerEvent {
+    /// 用户切换了指定技能的启用状态，需由父视图持久化 `disabled_skills`。
+    ToggleSkillRequested(String),
+    /// 技能列表加载或变更完成，同步最新可用技能快照供 Slash 菜单使用。
+    SkillsLoaded(Vec<SkillDefinition>),
+}
+
+/// 技能管理独立子视图实体。
+pub(super) struct SkillsDrawerView {
+    pub(super) ai_store: Arc<AiStore>,
+    pub(super) disabled_skills: Vec<String>,
     pub(super) skills: Vec<SkillDefinition>,
     pub(super) editing_id: Option<String>,
     pub(super) id_input: Entity<InputState>,
@@ -20,13 +41,16 @@ pub(super) struct SkillsDrawerState {
     pub(super) body_input: Entity<TextareaState>,
     pub(super) status_notice: Option<(bool, String)>,
     pub(super) load_seq: u64,
+    pub(super) _load_task: Option<Task<()>>,
     pub(super) _mutation_task: Option<Task<()>>,
     pub(super) _import_task: Option<Task<()>>,
 }
 
-impl SkillsDrawerState {
-    pub(super) fn new(window: &mut Window, cx: &mut Context<AiAssistantView>) -> Self {
-        let mk_input = |key: &str, window: &mut Window, cx: &mut Context<AiAssistantView>| {
+impl EventEmitter<SkillsDrawerEvent> for SkillsDrawerView {}
+
+impl SkillsDrawerView {
+    pub(super) fn new(ai_store: Arc<AiStore>, window: &mut Window, cx: &mut Context<Self>) -> Self {
+        let mk_input = |key: &str, window: &mut Window, cx: &mut Context<Self>| {
             let ph = rust_i18n::t!(key).to_string();
             cx.new(|cx| InputState::new(window, cx).placeholder(ph))
         };
@@ -39,6 +63,8 @@ impl SkillsDrawerState {
                 .placeholder(rust_i18n::t!("ai.skills_body_placeholder").to_string())
         });
         Self {
+            ai_store,
+            disabled_skills: Vec::new(),
             skills: Vec::new(),
             editing_id: None,
             id_input,
@@ -48,31 +74,40 @@ impl SkillsDrawerState {
             body_input,
             status_notice: None,
             load_seq: 0,
+            _load_task: None,
             _mutation_task: None,
             _import_task: None,
         }
     }
-}
 
-impl AiAssistantView {
+    pub(super) fn set_disabled_and_refresh(
+        &mut self,
+        disabled_skills: Vec<String>,
+        cx: &mut Context<Self>,
+    ) {
+        self.disabled_skills = disabled_skills;
+        self.refresh_skills_list(cx);
+    }
+
     pub(super) fn refresh_skills_list(&mut self, cx: &mut Context<Self>) {
-        self.skills_drawer.load_seq = self.skills_drawer.load_seq.wrapping_add(1);
-        let load_seq = self.skills_drawer.load_seq;
+        self.load_seq = self.load_seq.wrapping_add(1);
+        let load_seq = self.load_seq;
         let dir = self.ai_store.custom_skills_dir();
-        let disabled = self.state.config.settings.disabled_skills.clone();
-        self._skills_load_task = Some(cx.spawn(async move |this, cx| {
+        let disabled = self.disabled_skills.clone();
+        self._load_task = Some(cx.spawn(async move |this, cx| {
             let loaded =
                 spawn_blocking_local(move || load_skills_with_disabled(Some(&dir), &disabled))
                     .await;
             if this
                 .update(cx, |this, cx| {
-                    if this.skills_drawer.load_seq != load_seq {
+                    if this.load_seq != load_seq {
                         return;
                     }
                     if let Some(skills) = loaded {
-                        this.skills_drawer.skills = skills;
+                        this.skills = skills.clone();
+                        cx.emit(SkillsDrawerEvent::SkillsLoaded(skills));
                     } else {
-                        this.skills_drawer.status_notice = Some((
+                        this.status_notice = Some((
                             false,
                             rust_i18n::t!("ai.background_task_failed").to_string(),
                         ));
@@ -89,19 +124,16 @@ impl AiAssistantView {
     pub(super) fn toggle_skill_enabled(&mut self, skill_id: &str, cx: &mut Context<Self>) {
         let clean = skill_id.trim().to_ascii_lowercase();
         if let Some(pos) = self
-            .state
-            .config
-            .settings
             .disabled_skills
             .iter()
             .position(|s| s.eq_ignore_ascii_case(&clean))
         {
-            self.state.config.settings.disabled_skills.remove(pos);
+            self.disabled_skills.remove(pos);
         } else {
-            self.state.config.settings.disabled_skills.push(clean);
+            self.disabled_skills.push(clean.clone());
         }
         self.refresh_skills_list(cx);
-        self.persist_settings_reported(cx);
+        cx.emit(SkillsDrawerEvent::ToggleSkillRequested(clean));
     }
 
     pub(super) fn open_skill_editor(
@@ -110,36 +142,34 @@ impl AiAssistantView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.skills_drawer.status_notice = None;
+        self.status_notice = None;
         match skill {
             Some(s) => {
-                self.skills_drawer.editing_id = Some(s.id.clone());
+                self.editing_id = Some(s.id.clone());
                 let pairs = [
-                    (&self.skills_drawer.id_input, s.id.clone()),
-                    (&self.skills_drawer.title_input, s.title.clone()),
-                    (&self.skills_drawer.desc_input, s.description.clone()),
-                    (&self.skills_drawer.tags_input, s.tags.join(", ")),
+                    (&self.id_input, s.id.clone()),
+                    (&self.title_input, s.title.clone()),
+                    (&self.desc_input, s.description.clone()),
+                    (&self.tags_input, s.tags.join(", ")),
                 ];
                 for (input, val) in pairs {
                     input.update(cx, |i, cx| i.set_value(val, window, cx));
                 }
                 let body = s.prompt_template.clone();
-                self.skills_drawer
-                    .body_input
+                self.body_input
                     .update(cx, |i, cx| i.set_value(body, window, cx));
             }
             None => {
-                self.skills_drawer.editing_id = Some(String::new());
+                self.editing_id = Some(String::new());
                 for input in [
-                    &self.skills_drawer.id_input,
-                    &self.skills_drawer.title_input,
-                    &self.skills_drawer.desc_input,
-                    &self.skills_drawer.tags_input,
+                    &self.id_input,
+                    &self.title_input,
+                    &self.desc_input,
+                    &self.tags_input,
                 ] {
                     input.update(cx, |i, cx| i.set_value(String::new(), window, cx));
                 }
-                self.skills_drawer
-                    .body_input
+                self.body_input
                     .update(cx, |i, cx| i.set_value(String::new(), window, cx));
             }
         }
@@ -147,11 +177,11 @@ impl AiAssistantView {
     }
 
     pub(super) fn save_skill_from_drawer(&mut self, cx: &mut Context<Self>) {
-        let id = self.skills_drawer.id_input.read(cx).value().to_string();
-        let title = self.skills_drawer.title_input.read(cx).value().to_string();
-        let desc = self.skills_drawer.desc_input.read(cx).value().to_string();
-        let tags_raw = self.skills_drawer.tags_input.read(cx).value().to_string();
-        let body = self.skills_drawer.body_input.read(cx).value().to_string();
+        let id = self.id_input.read(cx).value().to_string();
+        let title = self.title_input.read(cx).value().to_string();
+        let desc = self.desc_input.read(cx).value().to_string();
+        let tags_raw = self.tags_input.read(cx).value().to_string();
+        let body = self.body_input.read(cx).value().to_string();
         let tags: Vec<String> = tags_raw
             .split(',')
             .map(str::trim)
@@ -160,7 +190,7 @@ impl AiAssistantView {
             .collect();
 
         let dir = self.ai_store.custom_skills_dir();
-        self.skills_drawer._mutation_task = Some(cx.spawn(async move |this, cx| {
+        self._mutation_task = Some(cx.spawn(async move |this, cx| {
             let result = spawn_blocking_local(move || {
                 save_custom_skill(&dir, &id, &title, &desc, &tags, &body)
             })
@@ -169,16 +199,16 @@ impl AiAssistantView {
                 .update(cx, |this, cx| {
                     match result {
                         Some(Ok(_)) => {
-                            this.skills_drawer.editing_id = None;
-                            this.skills_drawer.status_notice =
+                            this.editing_id = None;
+                            this.status_notice =
                                 Some((true, rust_i18n::t!("ai.skills_saved_ok").to_string()));
                             this.refresh_skills_list(cx);
                         }
                         Some(Err(err)) => {
-                            this.skills_drawer.status_notice = Some((false, err.to_string()));
+                            this.status_notice = Some((false, err.to_string()));
                         }
                         None => {
-                            this.skills_drawer.status_notice = Some((
+                            this.status_notice = Some((
                                 false,
                                 rust_i18n::t!("ai.background_task_failed").to_string(),
                             ));
@@ -196,23 +226,23 @@ impl AiAssistantView {
     pub(super) fn delete_skill_from_drawer(&mut self, skill_id: &str, cx: &mut Context<Self>) {
         let dir = self.ai_store.custom_skills_dir();
         let skill_id = skill_id.to_owned();
-        self.skills_drawer._mutation_task = Some(cx.spawn(async move |this, cx| {
+        self._mutation_task = Some(cx.spawn(async move |this, cx| {
             let result = spawn_blocking_local(move || delete_custom_skill(&dir, &skill_id)).await;
             if this
                 .update(cx, |this, cx| {
                     match result {
                         Some(Ok(true)) => this.refresh_skills_list(cx),
                         Some(Ok(false)) => {
-                            this.skills_drawer.status_notice = Some((
+                            this.status_notice = Some((
                                 false,
                                 rust_i18n::t!("ai.skills_delete_missing").to_string(),
                             ));
                         }
                         Some(Err(err)) => {
-                            this.skills_drawer.status_notice = Some((false, err.to_string()));
+                            this.status_notice = Some((false, err.to_string()));
                         }
                         None => {
-                            this.skills_drawer.status_notice = Some((
+                            this.status_notice = Some((
                                 false,
                                 rust_i18n::t!("ai.background_task_failed").to_string(),
                             ));
@@ -235,7 +265,7 @@ impl AiAssistantView {
             prompt: None,
         });
         let dir = self.ai_store.custom_skills_dir();
-        self.skills_drawer._import_task = Some(cx.spawn_in(window, async move |this, cx| {
+        self._import_task = Some(cx.spawn_in(window, async move |this, cx| {
             let Ok(Ok(Some(paths))) = picked.await else {
                 return;
             };
@@ -247,7 +277,7 @@ impl AiAssistantView {
                 .update_in(cx, |this, _window, cx| {
                     match result {
                         Some(Ok(skill)) => {
-                            this.skills_drawer.status_notice = Some((
+                            this.status_notice = Some((
                                 true,
                                 rust_i18n::t!("ai.skills_imported_ok", name = skill.title)
                                     .to_string(),
@@ -255,10 +285,10 @@ impl AiAssistantView {
                             this.refresh_skills_list(cx);
                         }
                         Some(Err(err)) => {
-                            this.skills_drawer.status_notice = Some((false, err.to_string()));
+                            this.status_notice = Some((false, err.to_string()));
                         }
                         None => {
-                            this.skills_drawer.status_notice = Some((
+                            this.status_notice = Some((
                                 false,
                                 rust_i18n::t!("ai.background_task_failed").to_string(),
                             ));
@@ -271,5 +301,12 @@ impl AiAssistantView {
                 log::debug!("AI 技能导入完成时视图已关闭，结果被丢弃");
             }
         }));
+    }
+}
+
+impl Render for SkillsDrawerView {
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let p = Palette::from(cx);
+        self.render_skills_body(&p, cx)
     }
 }

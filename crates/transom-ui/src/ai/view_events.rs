@@ -99,7 +99,10 @@ impl AiAssistantView {
                 self.state.view.status_error =
                     Some(rust_i18n::t!("ai.load_config_failed", error = err).to_string());
             }
-            self.refresh_skills_list(cx);
+            let disabled = settings.disabled_skills.clone();
+            self.skills_drawer.update(cx, |drawer, cx| {
+                drawer.set_disabled_and_refresh(disabled, cx)
+            });
             self.probe_active_acp_agent(cx);
         }
         if should_scroll_bottom && !self.auto_scroll_locked {
@@ -113,7 +116,7 @@ impl AiAssistantView {
         }
         if refresh_index {
             let store = self.ai_store.clone();
-            self._refresh_index_task = Some(cx.spawn(async move |this, cx| {
+            self.tasks.refresh_index = Some(cx.spawn(async move |this, cx| {
                 let conversations =
                     spawn_blocking_local(move || store.list_all_conversations()).await;
                 if this

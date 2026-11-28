@@ -218,7 +218,7 @@ impl AiAssistantView {
         {
             return Vec::new();
         }
-        filter_slash_items(&current_input, &self.skills_drawer.skills)
+        filter_slash_items(&current_input, &self.available_skills)
     }
 
     /// 将选中的斜杠命令替换为行内胶囊芯片（开头的 `/clear` 且无前置内容时直接清空会话）。

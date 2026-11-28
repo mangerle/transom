@@ -118,7 +118,7 @@ impl AiAssistantView {
     ) {
         cx.write_to_clipboard(ClipboardItem::new_string(text));
         self.copied_key = Some(key.clone());
-        self._copy_reset_task = Some(cx.spawn(async move |this, cx| {
+        self.tasks.copy_reset = Some(cx.spawn(async move |this, cx| {
             cx.background_executor()
                 .timer(std::time::Duration::from_millis(1500))
                 .await;
@@ -251,7 +251,7 @@ impl AiAssistantView {
             self.state.conversation.memory_load_seq.wrapping_add(1);
         let load_seq = self.state.conversation.memory_load_seq;
         let store = self.ai_store.clone();
-        self._memory_load_task = Some(cx.spawn_in(window, async move |this, cx| {
+        self.tasks.memory_load = Some(cx.spawn_in(window, async move |this, cx| {
             let loaded = spawn_blocking_local(move || store.load_memory(host_id.as_deref())).await;
             let loaded = loaded.unwrap_or_else(|| {
                 Err(transom_ai_contracts::AiError::StorageFailed {

@@ -55,7 +55,7 @@ impl AiAssistantView {
         let store = self.ai_store.clone();
         let conversation_id = conv_id.to_owned();
         let display_conversation_id = conv_id.to_owned();
-        self._conversation_load_task = Some(cx.spawn(async move |this, cx| {
+        self.tasks.conversation_load = Some(cx.spawn(async move |this, cx| {
             let loaded =
                 spawn_blocking_local(move || store.load_session_tree(&conversation_id)).await;
             let loaded = loaded.unwrap_or_else(|| {
