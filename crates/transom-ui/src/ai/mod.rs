@@ -30,6 +30,7 @@ mod image;
 pub(crate) mod inline_assist;
 mod markdown_blocks;
 mod markdown_code_card;
+mod markdown_parser;
 mod memory_drawer;
 mod mention_menu;
 mod metrics;

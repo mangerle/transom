@@ -1,17 +1,51 @@
 //! AI 消息流 Markdown 围栏代码块卡片渲染：支持语言徽章、行数统计、流式标识、
 //! 一键复制、填入终端与保存为快捷指令。
 
+use std::collections::HashMap;
+use std::fmt::Write as _;
 use std::rc::Rc;
+use std::sync::LazyLock;
 
 use gpui_kit::base::h_flex;
 use gpui_kit::base::v_flex;
 use gpui_kit::component::Sizable as _;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::*;
+use parking_lot::Mutex;
 use transom_ui_icons::{AppIcon, AppIconElement, CustomIcon, DomainIcon, UiIcon};
 
 use super::markdown_blocks::{MarkdownRenderParams, is_shell_language};
 use crate::theme::tokens::{space, typography};
+
+const MAX_CACHED_LINE_NUMBERS: usize = 512;
+
+static LINE_NUMBERS_CACHE: LazyLock<Mutex<HashMap<usize, SharedString>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
+
+fn format_line_numbers(line_count: usize) -> SharedString {
+    let mut buf = String::with_capacity(line_count.saturating_mul(4));
+    for n in 1..=line_count {
+        if n > 1 {
+            buf.push('\n');
+        }
+        let _ = write!(&mut buf, "{n}");
+    }
+    SharedString::from(buf)
+}
+
+fn cached_line_numbers(line_count: usize) -> SharedString {
+    if line_count > MAX_CACHED_LINE_NUMBERS {
+        return format_line_numbers(line_count);
+    }
+    if let Some(hit) = LINE_NUMBERS_CACHE.lock().get(&line_count) {
+        return hit.clone();
+    }
+    let formatted = format_line_numbers(line_count);
+    LINE_NUMBERS_CACHE
+        .lock()
+        .insert(line_count, formatted.clone());
+    formatted
+}
 
 /// 渲染 Markdown 围栏代码块为轻量化交互卡片。
 pub(super) fn render_code_card(
@@ -153,10 +187,7 @@ pub(super) fn render_code_card(
         .child(left)
         .child(actions);
 
-    let line_numbers: String = (1..=line_count)
-        .map(|n| n.to_string())
-        .collect::<Vec<_>>()
-        .join("\n");
+    let line_numbers = cached_line_numbers(line_count);
     let body_text = if code.is_empty() {
         " ".to_owned()
     } else {
