@@ -172,12 +172,8 @@ fn handle_workspace(
         }
         "open_panel" => open_panel(state, args, cx),
         "send_terminal_input" => {
-            let tid = args["tab_id"]
-                .as_str()
-                .and_then(|s| uuid::Uuid::parse_str(s).ok())
-                .map(TabId::from)
-                .or(state.workspace.active_tab)
-                .ok_or_else(|| "No active terminal tab".to_owned())?;
+            let tid = resolve_optional_tab_id(args, state.workspace.active_tab)
+                .map_err(|err| format!("send_terminal_input: {err}"))?;
             let text = args["input"]
                 .as_str()
                 .ok_or_else(|| "send_terminal_input requires input".to_owned())?;
@@ -239,12 +235,8 @@ fn handle_monitor(
 }
 
 fn handle_forwards(state: &mut AppState, action: &str, args: &Value) -> Result<String, String> {
-    let tid = args["tab_id"]
-        .as_str()
-        .and_then(|s| uuid::Uuid::parse_str(s).ok())
-        .map(TabId::from)
-        .or(state.workspace.active_tab)
-        .ok_or_else(|| "No active SSH tab".to_owned())?;
+    let tid = resolve_optional_tab_id(args, state.workspace.active_tab)
+        .map_err(|err| format!("port_forward_ops: {err}"))?;
     let tab = state
         .workspace
         .tab(tid)
@@ -389,12 +381,8 @@ fn handle_sftp(
     args: &Value,
     cx: &mut App,
 ) -> Result<String, String> {
-    let tid = args["tab_id"]
-        .as_str()
-        .and_then(|s| uuid::Uuid::parse_str(s).ok())
-        .map(TabId::from)
-        .or(state.workspace.active_tab)
-        .ok_or_else(|| "No active SFTP tab".to_owned())?;
+    let tid = resolve_optional_tab_id(args, state.workspace.active_tab)
+        .map_err(|err| format!("sftp_transfer: {err}"))?;
     match action {
         "list_transfers" => list_sftp_transfers(state, tid, cx),
         "cancel_transfer" => {
@@ -446,10 +434,51 @@ fn parse_tab_id(args: &Value) -> Result<TabId, String> {
         .ok_or_else(|| "Missing valid tab_id".to_owned())
 }
 
+/// 解析可选标签 ID；参数缺省时才回退活动标签，显式非法值必须失败关闭。
+fn resolve_optional_tab_id(args: &Value, active: Option<TabId>) -> Result<TabId, String> {
+    match args.get("tab_id") {
+        None | Some(Value::Null) => active.ok_or_else(|| "No active tab".to_owned()),
+        Some(Value::String(raw)) => uuid::Uuid::parse_str(raw.trim())
+            .map(TabId::from)
+            .map_err(|err| format!("Invalid tab_id `{raw}`: {err}")),
+        Some(_) => Err("tab_id must be a UUID string".to_owned()),
+    }
+}
+
 fn parse_forward_id(args: &Value) -> Result<transom_core::ForwardId, String> {
     args["forward_id"]
         .as_str()
         .and_then(|s| uuid::Uuid::parse_str(s).ok())
         .map(transom_core::ForwardId::from)
         .ok_or_else(|| "Missing valid forward_id".to_owned())
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::resolve_optional_tab_id;
+    use transom_core::TabId;
+
+    #[test]
+    fn explicit_invalid_tab_id_never_falls_back_to_active_tab() {
+        let active = TabId::new();
+        assert_eq!(
+            resolve_optional_tab_id(&json!({}), Some(active)).expect("缺省应回退活动标签"),
+            active
+        );
+        assert!(resolve_optional_tab_id(&json!({ "tab_id": "not-a-uuid" }), Some(active)).is_err());
+        assert!(resolve_optional_tab_id(&json!({ "tab_id": 42 }), Some(active)).is_err());
+    }
+
+    #[test]
+    fn explicit_valid_tab_id_wins_over_active_tab() {
+        let active = TabId::new();
+        let explicit = TabId::new();
+        assert_eq!(
+            resolve_optional_tab_id(&json!({ "tab_id": explicit.to_string() }), Some(active))
+                .expect("显式标签 ID 应解析成功"),
+            explicit
+        );
+    }
 }
