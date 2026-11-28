@@ -241,6 +241,11 @@ pub(super) fn build_tool_context(
                 store: ctx.ai_store.clone(),
                 ai_config: ctx.ai_config.clone(),
             })),
+            app_tool_visibility: transom_ai::AppToolVisibility::for_prompt(
+                scope,
+                &req.prompt,
+                None,
+            ),
         },
         target_resolver: Some(target_resolver),
     }

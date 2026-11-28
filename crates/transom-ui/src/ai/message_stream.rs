@@ -15,22 +15,21 @@ use gpui_kit::component::Sizable as _;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::*;
 use transom_core::AiAppEvent;
-use transom_ui_icons::{AppIcon, AppIconElement, UiIcon};
 
 use super::cards::{ChatItemCallbacks, ChatItemRenderParams, render_chat_item};
 use super::empty_state::render_empty_state;
 use super::markdown_blocks::CodeBlockCallbacks;
-use super::metrics::format_duration_zh;
+use super::message_stream_render::{render_running_focus_row, render_status_error_banner};
 use super::plan_card::render_scroll_bottom_button;
 use super::state::{MessageStreamModel, UiChatItem};
 use super::task_bar::UiManagedTask;
 use super::turn_nav::{collect_turn_nav_entries, render_turn_nav_rail, resolve_active_nav_dot};
 use super::work_group::{
     DisplayBlock, MessageBlockCache, WorkGroupParams, chat_item_id, find_subagent_task,
-    format_running_focus, group_chat_items, render_work_group,
+    group_chat_items, render_work_group,
 };
 use crate::palette::Palette;
-use crate::theme::tokens::{space, typography};
+use crate::theme::tokens::space;
 
 /// 消息流实体向父视图发出的交互意图事件。
 #[derive(Debug, Clone)]
@@ -515,88 +514,16 @@ impl Render for MessageStreamView {
             }
 
             if is_running && !has_active_wg {
-                let focus = self
-                    .active_focus
-                    .as_deref()
-                    .map(str::trim)
-                    .filter(|s| !s.is_empty())
-                    .map(str::to_owned)
-                    .unwrap_or_else(|| rust_i18n::t!("ai.working_default").to_string());
-                let elapsed_str = live_elapsed
-                    .filter(|&s| s > 0)
-                    .map(|s| format_duration_zh(s.saturating_mul(1000)))
-                    .unwrap_or_default();
-                let label = format_running_focus(&focus);
-                let mut row =
-                    h_flex()
-                        .w_full()
-                        .min_w_0()
-                        .py(px(4.0))
-                        .gap(rems(space::XS))
-                        .justify_between()
-                        .items_center()
-                        .child(
-                            h_flex()
-                                .flex_1()
-                                .min_w_0()
-                                .gap(px(6.0))
-                                .items_center()
-                                .overflow_hidden()
-                                .child(div().flex_shrink_0().text_color(p.primary).child(
-                                    AppIconElement::new(AppIcon::Ui(UiIcon::REFRESH)).small(),
-                                ))
-                                .child(
-                                    div()
-                                        .flex_1()
-                                        .min_w_0()
-                                        .truncate()
-                                        .text_size(rems(typography::CAPTION))
-                                        .text_color(p.text.muted)
-                                        .child(label),
-                                ),
-                        );
-                if !elapsed_str.is_empty() {
-                    row = row.child(
-                        div()
-                            .flex_shrink_0()
-                            .text_size(rems(typography::CAPTION))
-                            .text_color(p.text.muted)
-                            .child(elapsed_str),
-                    );
-                }
-                msg_list = msg_list.child(row);
+                msg_list = msg_list.child(render_running_focus_row(
+                    self.active_focus.as_deref(),
+                    live_elapsed,
+                    p,
+                ));
             }
         }
 
         if let Some(err) = &self.status_error {
-            msg_list = msg_list.child(
-                h_flex()
-                    .w_full()
-                    .min_w_0()
-                    .px(rems(space::SM))
-                    .py(rems(space::XS))
-                    .gap(px(6.0))
-                    .items_start()
-                    .rounded(p.radius.md)
-                    .bg(p.secondary)
-                    .border_1()
-                    .border_color(p.danger)
-                    .child(
-                        div()
-                            .flex_shrink_0()
-                            .mt(px(2.0))
-                            .text_color(p.danger)
-                            .child(AppIconElement::new(AppIcon::Ui(UiIcon::ERROR)).small()),
-                    )
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w_0()
-                            .text_size(rems(typography::CAPTION))
-                            .text_color(p.danger)
-                            .child(err.clone()),
-                    ),
-            );
+            msg_list = msg_list.child(render_status_error_banner(err, p));
         }
 
         let auto_following = self.is_running && !self.auto_scroll_locked;

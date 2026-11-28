@@ -97,7 +97,7 @@ pub use thinking::{
 };
 pub use tools::{
     AiMemorySkillsAction, ApiClientAction, AppActionBridge, AppBridgeDomain, AppSettingsOpsAction,
-    ApprovalSummary, BulkHostTarget, ContainerWorkspaceAction, DelegateMode, DelegateTaskRequest,
+    AppToolVisibility, ApprovalSummary, BulkHostTarget, ContainerWorkspaceAction, DelegateMode, DelegateTaskRequest,
     ExecCommandResult, ForwardExecutor, GitWorkspaceAction, HostMonitorAction, KnowledgeSearcher,
     LockedSession, MemoryWriter, PortForwardOpsAction, RemoteExecutor, RemoteFsExecutor,
     ResolvedToolTarget, RuntimeInspector, SessionCatalogAction, SftpTransferAction, SkillLoader,

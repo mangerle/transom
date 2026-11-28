@@ -18,6 +18,7 @@ mod handoff_render;
 pub(crate) mod inline_assist;
 mod markdown;
 mod message_stream;
+mod message_stream_render;
 mod metrics;
 mod metrics_model;
 pub(crate) mod panel_events;

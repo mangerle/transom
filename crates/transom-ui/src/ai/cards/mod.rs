@@ -9,6 +9,7 @@ pub(in crate::app::ai) mod queue_card;
 pub(in crate::app::ai) mod tool_card;
 pub(in crate::app::ai) mod tool_card_body;
 pub(in crate::app::ai) mod work_group;
+pub(in crate::app::ai) mod work_group_model;
 pub(in crate::app::ai) mod work_group_summary;
 
 use std::rc::Rc;
