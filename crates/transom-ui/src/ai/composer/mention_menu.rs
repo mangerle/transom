@@ -192,6 +192,9 @@ pub(in crate::app::ai) fn render_mention_popover(
 impl AiAssistantView {
     /// 获取当前输入框匹配的 `@` 提及候选项（跳过已转换为行内胶囊的片段）。
     pub(in crate::app::ai) fn current_mention_items(&self, cx: &App) -> Vec<AiMentionCandidate> {
+        if self.is_completion_dismissed(cx) {
+            return Vec::new();
+        }
         let input = self.composer_input.read(cx);
         let current_input = input.value().to_string();
         if let Some((pos, _)) = extract_active_mention(&current_input)
@@ -238,6 +241,7 @@ impl AiAssistantView {
         cx: &mut Context<Self>,
     ) {
         self.state.view.active_popup = crate::app::ai::state::AiActivePopup::None;
+        self.completion_dismissed_input = None;
         let current = self.composer_input.read(cx).value().to_string();
         let prefix = if current.is_empty() || current.ends_with(char::is_whitespace) {
             "@"

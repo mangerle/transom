@@ -210,7 +210,18 @@ pub(in crate::app::ai) fn render_slash_popover(
 
 impl AiAssistantView {
     /// 获取当前输入框匹配的斜杠命令候选项（跳过已转换为行内胶囊的片段）。
+    /// 判断当前输入是否处于按 Esc 手动收起补全的状态。
+    pub(in crate::app::ai) fn is_completion_dismissed(&self, cx: &App) -> bool {
+        let Some(snapshot) = &self.completion_dismissed_input else {
+            return false;
+        };
+        self.composer_input.read(cx).value() == snapshot.as_str()
+    }
+
     pub(in crate::app::ai) fn current_slash_items(&self, cx: &App) -> Vec<SlashItem> {
+        if self.is_completion_dismissed(cx) {
+            return Vec::new();
+        }
         let input = self.composer_input.read(cx);
         let current_input = input.value().to_string();
         if let Some((pos, _)) = extract_active_slash(&current_input)
@@ -282,13 +293,38 @@ pub(in crate::app::ai) fn register_slash_key_interceptor(
             return;
         }
         let key = event.keystroke.key.as_str();
-        if !matches!(key, "up" | "down" | "tab" | "enter") {
+        if !matches!(key, "up" | "down" | "tab" | "enter" | "escape") {
             return;
         }
         let Some(entity) = weak_keys.upgrade() else {
             return;
         };
         let handled = entity.update(cx, |this, cx| {
+            if key == "escape" {
+                if this.state.view.drawer == AiDrawerTab::Chat
+                    && this.state.view.active_popup
+                        != crate::app::ai::state::AiActivePopup::None
+                {
+                    this.state.view.active_popup = crate::app::ai::state::AiActivePopup::None;
+                    cx.notify();
+                    return true;
+                }
+                if this.state.view.drawer == AiDrawerTab::Chat
+                    && this
+                        .composer_input
+                        .read(cx)
+                        .focus_handle(cx)
+                        .is_focused(window)
+                    && (!this.current_slash_items(cx).is_empty()
+                        || !this.current_mention_items(cx).is_empty())
+                {
+                    this.completion_dismissed_input =
+                        Some(this.composer_input.read(cx).value().to_string());
+                    cx.notify();
+                    return true;
+                }
+                return false;
+            }
             if this.state.view.drawer != AiDrawerTab::Chat
                 || !this
                     .composer_input

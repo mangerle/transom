@@ -46,6 +46,8 @@ pub(crate) struct AiAssistantView {
     pub(super) memory_form: MemoryFormState,
     pub(super) last_composer_len: usize,
     pub(super) slash_selected_idx: usize,
+    /// 用户按下 Esc 主动收起补全时的输入文本快照（输入变化后自动解除）。
+    pub(super) completion_dismissed_input: Option<String>,
     pub(super) choice_card: ChoiceCardState,
     pub(super) popover_scroll_handle: ScrollHandle,
     pub(super) copied_key: Option<String>,
@@ -142,6 +144,7 @@ impl AiAssistantView {
                 }
                 InputEvent::Change => {
                     this.slash_selected_idx = 0;
+                    this.completion_dismissed_input = None;
                     let current = this.composer_input.read(cx).value().to_string();
                     if should_convert_paste_to_doc(this.last_composer_len, &current) {
                         this.state.composer.pasted_doc_seq += 1;
@@ -338,6 +341,7 @@ impl AiAssistantView {
             memory_form,
             last_composer_len: 0,
             slash_selected_idx: 0,
+            completion_dismissed_input: None,
             choice_card: ChoiceCardState::new(choice_custom_input),
             popover_scroll_handle: ScrollHandle::new(),
             copied_key: None,
