@@ -73,11 +73,19 @@ impl AiAssistantView {
             .chars()
             .filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_')
             .collect();
-        let prov_id = if slug.is_empty() {
-            protocol.as_str().to_owned()
-        } else {
-            slug.to_lowercase()
-        };
+        let prov_id = self
+            .config_form
+            .editing_provider
+            .as_ref()
+            .map(|provider| provider.id.clone())
+            .unwrap_or_else(|| {
+                if slug.is_empty() {
+                    protocol.as_str().to_owned()
+                } else {
+                    slug.to_lowercase()
+                }
+            });
+        let existing_provider = self.config_form.editing_provider.as_ref();
 
         let mut models = Vec::new();
         for row in &self.config_form.draft_models {
@@ -94,13 +102,31 @@ impl AiAssistantView {
                 .parse::<u32>()
                 .ok()
                 .or(Some(128_000));
+            let existing_model = existing_provider.and_then(|provider| {
+                provider
+                    .models
+                    .iter()
+                    .find(|model| model.name == req)
+                    .cloned()
+            });
+            let efforts = match &existing_model {
+                Some(model)
+                    if model.efforts.first().copied() == row.effort && model.efforts.len() > 1 =>
+                {
+                    model.efforts.clone()
+                }
+                _ => row.effort.into_iter().collect(),
+            };
             models.push(ModelConfig {
-                id: format!("{prov_id}:{req}"),
+                id: existing_model
+                    .as_ref()
+                    .map(|model| model.id.clone())
+                    .unwrap_or_else(|| format!("{prov_id}:{req}")),
                 display_name: disp,
                 name: req,
-                vision: true,
-                efforts: row.effort.into_iter().collect(),
-                max_tokens: None,
+                vision: existing_model.as_ref().is_none_or(|model| model.vision),
+                efforts,
+                max_tokens: existing_model.and_then(|model| model.max_tokens),
                 context_window: ctx_win,
             });
         }
@@ -119,8 +145,9 @@ impl AiAssistantView {
             name: display_name,
             protocol,
             base_url: base_url.trim().to_owned(),
-            thinking_switch: Default::default(),
-            secret_key_id: format!("ai-provider:{prov_id}"),
+            thinking_switch: existing_provider
+                .map(|provider| provider.thinking_switch)
+                .unwrap_or_default(),
             models,
         };
 
@@ -142,6 +169,7 @@ impl AiAssistantView {
             .settings
             .providers
             .retain(|p| p.id != provider.id);
+        self.config_form.editing_provider = Some(provider.clone());
         self.state.config.settings.providers.push(provider);
         if let Err(err) = self.persist_settings() {
             self.state.view.status_error =
@@ -154,6 +182,14 @@ impl AiAssistantView {
     }
 
     pub(super) fn delete_provider(&mut self, provider_id: &str, cx: &mut Context<Self>) {
+        if self
+            .config_form
+            .editing_provider
+            .as_ref()
+            .is_some_and(|provider| provider.id == provider_id)
+        {
+            self.config_form.editing_provider = None;
+        }
         self.state
             .config
             .settings

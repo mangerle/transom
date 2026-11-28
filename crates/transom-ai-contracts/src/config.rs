@@ -2,7 +2,7 @@
 //!
 //! 设计原理（Why）：
 //! - 采用“供应商（连接与协议）-> 模型列表（能力与窗口）”两层结构，同一中转站下的多模型共享地址与密钥；
-//! - API Key 绝不以明文存入配置文件，统一通过 `secret_key_id` 引用 OS Keyring（由 `transom-store` 托管），
+//! - API Key 绝不以明文存入配置文件，统一通过稳定的供应商 ID 引用 OS Keyring（由 `transom-store` 托管），
 //!   仅在运行时构造 [`ModelTarget`] 时注入。
 
 use serde::{Deserialize, Serialize};
@@ -111,22 +111,8 @@ pub struct ProviderConfig {
     pub base_url: String,
     #[serde(default)]
     pub thinking_switch: ThinkingSwitch,
-    /// Keyring 中的凭证键名；为空时默认使用 `ai-provider:<id>`。
-    #[serde(default)]
-    pub secret_key_id: String,
     #[serde(default)]
     pub models: Vec<ModelConfig>,
-}
-
-impl ProviderConfig {
-    /// 获取此供应商在 Keyring 中的标准存储键名。
-    pub fn keyring_key(&self) -> String {
-        if self.secret_key_id.trim().is_empty() {
-            format!("ai-provider:{}", self.id)
-        } else {
-            self.secret_key_id.clone()
-        }
-    }
 }
 
 pub use crate::config_presets::{

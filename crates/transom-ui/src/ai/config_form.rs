@@ -4,7 +4,7 @@ use gpui_kit::component::input::InputState;
 use gpui_kit::component::searchable_list::SearchableVec;
 use gpui_kit::component::select::{SelectEvent, SelectState};
 use gpui_kit::*;
-use transom_ai::{AiSettings, RunningMessageBehavior};
+use transom_ai::{AiSettings, ProviderConfig, RunningMessageBehavior};
 
 use super::config_drawer::{ConfigChoice, ConfigSelect, DraftModelRow};
 use super::model_table::make_draft_model_row;
@@ -20,6 +20,8 @@ pub(super) struct ConfigFormState {
     pub(super) selected_acp_idx: usize,
     pub(super) lang_select: Entity<ConfigSelect>,
     pub(super) running_behavior_select: Entity<ConfigSelect>,
+    /// 正在编辑的完整供应商快照，用于保存时回写未在表单中展示的能力字段。
+    pub(super) editing_provider: Option<ProviderConfig>,
 }
 
 impl ConfigFormState {
@@ -92,6 +94,7 @@ impl ConfigFormState {
             selected_acp_idx: 0,
             lang_select,
             running_behavior_select,
+            editing_provider: None,
         };
         (form, vec![lang_sub, beh_sub])
     }
@@ -122,10 +125,12 @@ impl ConfigFormState {
                 window,
                 cx,
             ));
+            self.editing_provider = None;
             self.apply_selects(settings, window, cx);
             return Ok(());
         };
 
+        self.editing_provider = Some(provider.clone());
         let provider_name = provider.name.clone();
         let base_url = provider.base_url.clone();
         self.provider_name_input

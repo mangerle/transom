@@ -214,7 +214,6 @@ pub fn provider_from_preset(preset: &ProviderPreset, unique_suffix: &str) -> Pro
         protocol: preset.protocol,
         base_url: preset.base_url.to_owned(),
         thinking_switch: preset.thinking_switch,
-        secret_key_id: format!("ai-provider:{provider_id}"),
         models,
     }
 }

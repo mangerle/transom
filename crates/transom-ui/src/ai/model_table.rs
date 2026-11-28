@@ -262,6 +262,7 @@ impl AiAssistantView {
         else {
             return;
         };
+        self.config_form.editing_provider = Some(prov.clone());
         self.state.config.selected_protocol = prov.protocol;
         self.config_form
             .provider_name_input
