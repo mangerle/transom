@@ -114,7 +114,7 @@ pub(crate) fn dispatch_ai_event(
                 request_id: request_id.clone(),
                 content,
             },
-            "终端上下文",
+            "terminal_context",
         );
         return;
     }
@@ -133,7 +133,7 @@ pub(crate) fn dispatch_ai_event(
                 request_id: request_id.clone(),
                 result,
             },
-            "软件动作结果",
+            "app_action_result",
         );
         return;
     }
