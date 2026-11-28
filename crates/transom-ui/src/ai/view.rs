@@ -252,8 +252,28 @@ impl AiAssistantView {
                 MessageStreamEvent::SendQuickPrompt(prompt) => {
                     let needs_target =
                         matches!(prompt.as_str(), "/inspect" | "/disk" | "/docker");
-                    if this.state.conversation.active_session.is_none() && needs_target {
+                    let has_mention_target = this
+                        .composer_input
+                        .read(cx)
+                        .tokens()
+                        .iter()
+                        .any(|span| span.token().id().starts_with("mention:"));
+                    if this.state.conversation.active_session.is_none()
+                        && needs_target
+                        && !has_mention_target
+                    {
                         this.prefill_quick_prompt_with_mention(prompt, w, cx);
+                    } else if has_mention_target {
+                        let existing = this.composer_input.read(cx).value().trim().to_owned();
+                        this.composer_input
+                            .update(cx, |i, cx| i.set_value(String::new(), w, cx));
+                        this.last_composer_len = 0;
+                        let combined = if existing.is_empty() {
+                            prompt.clone()
+                        } else {
+                            format!("{existing} {prompt}")
+                        };
+                        this.send_prompt_text(combined, cx);
                     } else {
                         this.send_prompt_text(prompt.clone(), cx);
                     }

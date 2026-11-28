@@ -288,7 +288,7 @@ impl AiAssistantView {
         cx.notify();
     }
 
-    /// 全局未绑定主机时，将依赖目标主机的快捷指令预填到输入框并唤起 `@` 提及菜单。
+    /// 全局未绑定主机时，将依赖目标主机的快捷指令预填到输入框并唤起 `@` 提及菜单（保留已有输入）。
     pub(in crate::app::ai) fn prefill_quick_prompt_with_mention(
         &mut self,
         command: &str,
@@ -297,9 +297,14 @@ impl AiAssistantView {
     ) {
         self.state.view.active_popup = crate::app::ai::state::AiActivePopup::None;
         self.completion_dismissed_input = None;
-        let text = format!("{command} @");
         self.composer_input.update(cx, |i, cx| {
-            i.set_value(text, window, cx);
+            let cur = i.value().to_string();
+            let snippet = if cur.is_empty() || cur.ends_with(char::is_whitespace) {
+                format!("{command} @")
+            } else {
+                format!(" {command} @")
+            };
+            i.insert(&snippet, window, cx);
             i.focus_handle(cx).focus(window, cx);
         });
         self.last_composer_len = self.composer_input.read(cx).value().len();
